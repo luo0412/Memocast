@@ -74,6 +74,10 @@
     "webfontloader": "^1.6.28"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-optional-chaining": "^7.21.0",
+    "@babel/plugin-transform-nullish-coalescing-operator": "^7.28.6",
+    "@babel/plugin-transform-optional-chaining": "^7.28.6",
+    "@babel/preset-env": "^7.29.2",
     "@quasar/app": "^2.0.0",
     "babel-eslint": "^10.0.1",
     "consola": "^2.15.0",

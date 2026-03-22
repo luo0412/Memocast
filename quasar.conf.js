@@ -47,12 +47,12 @@ module.exports = function (/* ctx */) {
     build: {
       vueRouterMode: 'hash', // available values: 'hash', 'history'
 
-      // transpile: false,
+      transpile: true,
 
       // Add dependencies for transpiling with Babel (Array of string/regex)
       // (from node_modules, which are by default not transpiled).
       // Applies only if "transpile" is set to true.
-      // transpileDependencies: [],
+      transpileDependencies: [/vega.*/],
 
       // rtl: false, // https://quasar.dev/options/rtl-support
       // preloadChunks: true,
@@ -71,6 +71,21 @@ module.exports = function (/* ctx */) {
           loader: 'eslint-loader',
           exclude: /node_modules/
         })
+        // Add babel loader for vega modules
+        // cfg.module.rules.push({
+        //   test: /\.js$/,
+        //   include: /node_modules\/vega/,
+        //   use: {
+        //     loader: 'babel-loader',
+        //     options: {
+        //       presets: [['@babel/preset-env', { targets: 'Chrome 70' }]],
+        //       plugins: [
+        //         '@babel/plugin-transform-optional-chaining',
+        //         '@babel/plugin-transform-nullish-coalescing-operator'
+        //       ]
+        //     }
+        //   }
+        // })
       }
     },
 
