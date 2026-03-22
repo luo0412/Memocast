@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme, dialog, shell, protocol, Menu } from 'electron'
+import { app, BrowserWindow, nativeTheme, dialog, shell, protocol, Menu, ipcMain } from 'electron'
 import Api from './api'
 import windowStateKeeper from 'electron-window-state'
 import unhandled from 'electron-unhandled'
@@ -159,6 +159,21 @@ function createWindow () {
 
   require('@electron/remote/main').initialize()
   require('@electron/remote/main').enable(mainWindow.webContents)
+
+  // Reliable window control via IPC — avoids getFocusedWindow() returning null
+  ipcMain.on('window-minimize', () => mainWindow.minimize())
+  ipcMain.on('window-maximize', () => {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize()
+    } else {
+      mainWindow.maximize()
+    }
+  })
+  ipcMain.on('window-close', () => mainWindow.close())
+  ipcMain.handle('window-is-maximized', () => mainWindow.isMaximized())
+
+  mainWindow.on('maximize', () => mainWindow.webContents.send('window-maximized', true))
+  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window-maximized', false))
 }
 
 app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors')

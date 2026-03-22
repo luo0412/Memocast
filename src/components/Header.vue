@@ -121,7 +121,7 @@
     </q-avatar>
     <div v-if="!$q.platform.is.mac">
       <q-btn dense flat icon="minimize" @click="minimize" />
-      <q-btn dense flat icon="crop_square" @click="maximize" />
+      <q-btn dense flat :icon="isMaximized ? 'open_in_full' : 'crop_square'" @click="maximize" />
       <q-btn dense flat icon="close" class="close-button" @click="closeApp" />
     </div>
     <LoginDialog ref="loginDialog" />
@@ -143,6 +143,7 @@ import TagDialog from 'components/ui/dialog/TagDialog'
 import bus from 'components/bus'
 import events from 'src/constants/events'
 import SearchDialog from 'components/ui/dialog/SearchDialog'
+import { ipcRenderer } from 'electron'
 const {
   mapState: mapServerState,
   mapGetters: mapServerGetters,
@@ -202,26 +203,26 @@ export default {
   components: { SearchDialog, TagDialog, SideDrawer, SettingsDialog, LoginDialog },
   data () {
     return {
-      drawerType: 'category'
+      drawerType: 'category',
+      isMaximized: false
     }
   },
   methods: {
     minimize () {
-      this.$q.electron.remote.BrowserWindow.getFocusedWindow().minimize()
+      ipcRenderer.send('window-minimize')
     },
 
     maximize () {
-      const win = this.$q.electron.remote.BrowserWindow.getFocusedWindow()
-      if (win.isMaximized()) {
-        win.unmaximize()
-      } else {
-        win.maximize()
-      }
+      ipcRenderer.send('window-maximize')
+    },
+
+    async updateMaximizeIcon () {
+      this.isMaximized = await ipcRenderer.invoke('window-is-maximized')
     },
 
     closeApp () {
       // this.$q.electron.remote.BrowserWindow.getFocusedWindow().close()
-      this.$q.electron.remote.app.quit()
+      ipcRenderer.send('window-close')
     },
     loginHandler: function () {
       if (!this.isLogin) {
@@ -259,6 +260,8 @@ export default {
     ...mapClientActions(['toggleChanged'])
   },
   mounted () {
+    this.updateMaximizeIcon()
+    ipcRenderer.on('window-maximized', (_, val) => { this.isMaximized = val })
     if (!this.autoLogin && !this.isLogin) {
       this.$refs.loginDialog.toggle()
     }

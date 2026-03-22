@@ -154,8 +154,8 @@ export default {
       }
     },
     quitHandler: function () {
-      this.$q.electron.remote.BrowserWindow.getFocusedWindow().close()
-      // this.$q.electron.remote.app.quit()
+      const { ipcRenderer } = require('electron')
+      ipcRenderer.send('window-close')
     },
     signUpHandler: function () {
       this.$q.electron.shell.openExternal(
