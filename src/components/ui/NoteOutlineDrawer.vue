@@ -98,7 +98,8 @@ export default {
   mounted () {
     const that = this
     document.addEventListener('click', (e) => {
-      if (e.path[1] && e.path[1].className && e.path[1].className.indexOf && e.path[1].className.indexOf('q-tree__node') !== -1) return
+      const path = e.path || e.composedPath && e.composedPath()
+      if (path && path[1] && path[1].className && path[1].className.indexOf && path[1].className.indexOf('q-tree__node') !== -1) return
       if (this.$refs.drawer) that.hide()
     })
   },
