@@ -65,12 +65,10 @@ module.exports = function (/* ctx */) {
 
       // https://quasar.dev/quasar-cli/handling-webpack
       extendWebpack (cfg) {
-        cfg.module.rules.push({
-          enforce: 'pre',
-          test: /\.(js|vue)$/,
-          loader: 'eslint-loader',
-          exclude: /node_modules/
-        })
+        // ESLint is run separately via `npm run lint`.
+        // eslint-loader v4 is incompatible with eslint v8 (removed getFormatter API),
+        // so it has been removed from the webpack build pipeline.
+      
         // Add babel loader for vega modules
         // cfg.module.rules.push({
         //   test: /\.js$/,
