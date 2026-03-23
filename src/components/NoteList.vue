@@ -1,6 +1,6 @@
 
 <template>
-  <div>
+  <div class="full-height column note-list-root">
     <q-pull-to-refresh @refresh="refreshNoteListHandler">
       <q-scroll-area
         :thumb-style="thumbStyle"
@@ -314,6 +314,11 @@ export default {
 </script>
 
 <style scoped>
+.note-list-root {
+  min-height: 0;
+  position: relative;
+}
+
 .note-list-bottom {
   max-height: 4.5vh;
   padding: 4px !important;

@@ -4,19 +4,36 @@
       v-model='splitterWidthValue'
       :limits='splitterLimits'
       class='full-width'
-      unit='%'
+      unit='px'
       separator-class='custom-splitter'
       before-class='overflow-hidden'
       after-class='hide-scrollbar'
+      :min="300"
     >
       <template v-slot:before>
-        <transition
-          appear
-          enter-active-class='animated fadeIn'
-          leave-active-class='animated fadeOut'
+        <q-splitter
+          v-model='leftInnerSplitterValue'
+          :limits='leftInnerSplitterLimits'
+          class='full-width full-height index-left-inner-splitter'
+          unit='px'
+          separator-class='custom-splitter'
+          before-class='overflow-hidden full-height'
+          after-class='overflow-hidden full-height'
+          :min="300"
         >
-          <NoteList v-show='noteListVisible' />
-        </transition>
+          <template v-slot:before>
+            <CategoryTreePanel class='full-height' />
+          </template>
+          <template v-slot:after>
+            <transition
+              appear
+              enter-active-class='animated fadeIn'
+              leave-active-class='animated fadeOut'
+            >
+              <NoteList v-show='noteListVisible' class='full-height' />
+            </transition>
+          </template>
+        </q-splitter>
       </template>
       <template v-slot:after>
         <div class='full-height'>
@@ -131,6 +148,7 @@
 
 <script>
 import NoteList from '../components/NoteList.vue'
+import CategoryTreePanel from '../components/CategoryTreePanel.vue'
 import bus from 'components/bus'
 import events from 'src/constants/events'
 import helper from 'src/utils/helper'
@@ -159,6 +177,7 @@ export default {
     Loading,
     NoteOutlineDrawer,
     NoteList,
+    CategoryTreePanel,
     Illustration
   },
   computed: {
@@ -189,15 +208,24 @@ export default {
     },
     ...mapServerGetters(['currentNote', 'currentNoteInfo']),
     ...mapServerState(['contentsList', 'isCurrentNoteLoading', 'noteState']),
-    ...mapClientState(['noteListVisible', 'enablePreviewEditor', 'splitterWidth'])
+    ...mapClientState([
+      'noteListVisible',
+      'enablePreviewEditor',
+      'splitterWidth',
+      'leftInnerSplitterRatio'
+    ])
   },
   data () {
     return {
       isOutlineShow: false,
       isSourceMode: false,
       isMindmapMode: false,
-      splitterWidthValue: 35,
-      splitterLimits: [0, 60],
+      splitterWidthValue: 580,
+      splitterLimits: [300, Infinity],
+      leftInnerSplitterValue: 280,
+      leftInnerSplitterLimits: [150, Infinity],
+      leftInnerSplitterSaveTimer: null,
+      splitterWidthSaveTimer: null,
       tempNoteData: {},
       wordCount: {
         word: '0',
@@ -251,6 +279,12 @@ export default {
         message: this.enablePreviewEditor ? this.$t('lockModeOff') : this.$t('lockModeOn')
       })
     },
+    persistLeftInnerSplitter () {
+      this.updateStateAndStore({ leftInnerSplitterRatio: this.leftInnerSplitterValue })
+    },
+    persistSplitterWidth () {
+      this.updateStateAndStore({ splitterWidth: this.splitterWidthValue })
+    },
     ...mapClientActions(['toggleChanged', 'updateStateAndStore'])
   },
   mounted () {
@@ -259,9 +293,36 @@ export default {
     bus.$on(events.GENERATE_MINDMAP, this.generateMindmapHandler)
     bus.$on(events.UPDATE_WORD_COUNT, this.wordCountUpdateHandler)
     this.$nextTick(this.hideInitLoadingPage)
-    this.splitterWidthValue = this.splitterWidth
+    this.splitterWidthValue = this.splitterWidth || 580
+    this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 280
+  },
+  beforeDestroy () {
+    if (this.leftInnerSplitterSaveTimer) {
+      clearTimeout(this.leftInnerSplitterSaveTimer)
+    }
+    if (this.splitterWidthSaveTimer) {
+      clearTimeout(this.splitterWidthSaveTimer)
+    }
   },
   watch: {
+    splitterWidthValue (val) {
+      if (this.splitterWidthSaveTimer) {
+        clearTimeout(this.splitterWidthSaveTimer)
+      }
+      this.splitterWidthSaveTimer = setTimeout(() => {
+        this.persistSplitterWidth()
+        this.splitterWidthSaveTimer = null
+      }, 350)
+    },
+    leftInnerSplitterValue (val) {
+      if (this.leftInnerSplitterSaveTimer) {
+        clearTimeout(this.leftInnerSplitterSaveTimer)
+      }
+      this.leftInnerSplitterSaveTimer = setTimeout(() => {
+        this.persistLeftInnerSplitter()
+        this.leftInnerSplitterSaveTimer = null
+      }, 350)
+    },
     isSourceMode: function (val) {
       if (!val) {
         this.tempNoteData = {
@@ -285,18 +346,24 @@ export default {
     },
     noteListVisible: function (val) {
       if (!val) {
-        this.updateStateAndStore({ splitterWidth: this.splitterWidthValue })
-        this.splitterLimits = [0, 0]
+        this.persistSplitterWidth()
+        this.persistLeftInnerSplitter()
+        this.splitterLimits = [0, Infinity]
         this.splitterWidthValue = 0
       } else {
-        this.splitterLimits = [10, 60]
-        this.splitterWidthValue = this.splitterWidth
+        this.splitterLimits = [300, Infinity]
+        this.splitterWidthValue = this.splitterWidth || 580
+        this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 280
       }
     }
   }
 }
 </script>
 <style lang="scss">
+.index-left-inner-splitter {
+  min-height: 0;
+}
+
 .editor-component {
   height: 100%;
   overflow: auto;

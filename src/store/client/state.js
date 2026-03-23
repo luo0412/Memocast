@@ -23,6 +23,10 @@ export default function () {
     theme: 'Default-Light',
     themes: [],
     autoSaveGap: 0,
-    splitterWidth: 15
+    splitterWidth: 580,
+    /** 左侧第一栏：分类树 / 标签树（与 Header 文件夹、标签按钮同步） */
+    sidebarTreeType: 'category',
+    /** 左侧内部分割：分类树宽度 px */
+    leftInnerSplitterRatio: 280
   }
 }

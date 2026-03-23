@@ -28,7 +28,7 @@
       <!-- 文件夹图标 -->
       <div
         class="header-icon-btn q-electron-drag--exception"
-        :class="{ 'is-active': drawerType === 'category' }"
+        :class="{ 'is-active': sidebarTreeType === 'category' }"
         :title="$t('noteCategory')"
         @click="toggleCategoryDrawer"
       >
@@ -38,7 +38,7 @@
       <!-- 标签图标 -->
       <div
         class="header-icon-btn q-electron-drag--exception"
-        :class="{ 'is-active': drawerType === 'tag' }"
+        :class="{ 'is-active': sidebarTreeType === 'tag' }"
         :title="$t('tag')"
         @click="toggleTagDrawer"
       >
@@ -134,14 +134,12 @@
     <SettingsDialog ref="settingsDialog" />
     <SearchDialog ref='searchDialog' />
     <TagDialog ref="tagDialog" />
-    <SideDrawer ref="sideDrawer" :type="drawerType" />
   </q-bar>
 </template>
 
 <script>
 import LoginDialog from './ui/dialog/LoginDialog'
 import SettingsDialog from './ui/dialog/SettingsDialog'
-import SideDrawer from './ui/SideDrawer'
 import { createNamespacedHelpers } from 'vuex'
 import helper from 'src/utils/helper'
 import TagDialog from 'components/ui/dialog/TagDialog'
@@ -170,7 +168,8 @@ export default {
       'shrinkInTray',
       'autoLogin',
       'noteListVisible',
-      'enablePreviewEditor'
+      'enablePreviewEditor',
+      'sidebarTreeType'
     ]),
     darkMode: function () {
       return this.$q.dark.isActive
@@ -194,10 +193,9 @@ export default {
       return this.tagsOfCurrentNote.map(t => t.name)
     }
   },
-  components: { SearchDialog, TagDialog, SideDrawer, SettingsDialog, LoginDialog },
+  components: { SearchDialog, TagDialog, SettingsDialog, LoginDialog },
   data () {
     return {
-      drawerType: 'category',
       isMaximized: false
     }
   },
@@ -219,24 +217,18 @@ export default {
     },
 
     toggleCategoryDrawer () {
-      if (this.isLogin) {
-        if (this.drawerType !== 'category') {
-          this.drawerType = 'category'
-          this.$refs.sideDrawer.show()
-        } else {
-          this.$refs.sideDrawer.toggle()
-        }
+      if (!this.isLogin) return
+      this.toggleChanged({ key: 'sidebarTreeType', value: 'category' })
+      if (!this.noteListVisible) {
+        this.toggleChanged({ key: 'noteListVisible', value: true })
       }
     },
 
     toggleTagDrawer () {
-      if (this.isLogin) {
-        if (this.drawerType !== 'tag') {
-          this.drawerType = 'tag'
-          this.$refs.sideDrawer.show()
-        } else {
-          this.$refs.sideDrawer.toggle()
-        }
+      if (!this.isLogin) return
+      this.toggleChanged({ key: 'sidebarTreeType', value: 'tag' })
+      if (!this.noteListVisible) {
+        this.toggleChanged({ key: 'noteListVisible', value: true })
       }
     },
 
@@ -260,7 +252,6 @@ export default {
         key: 'noteListVisible',
         value: !this.noteListVisible
       })
-      this.$refs.sideDrawer.hide()
     },
 
     macDoubleClickHandler: function () {

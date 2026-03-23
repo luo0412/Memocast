@@ -1,16 +1,11 @@
 <template>
-  <q-drawer
-    ref="drawer"
-    :value="false"
-    :mini-width="200"
-    :breakpoint="700"
-    content-class="hide-scrollbar"
-  >
+  <div class="category-tree-panel full-height column">
     <q-scroll-area
       :thumb-style="thumbStyle"
       :bar-style="barStyle"
       :class="`exclude-header note-list${$q.dark.isActive ? '-dark' : ''}`"
-      @contextmenu='drawerContextMenuHandler'
+      class="col"
+      @contextmenu="drawerContextMenuHandler"
     >
       <el-tree
         ref="tree"
@@ -28,17 +23,20 @@
       >
         <span class="memocast-tree-node" slot-scope="{ node }">
           <i :class="nodeIconName(node)" class="node-icon"></i>
-          <span class="node-label" :style="isNodeSelected(node) ? 'color: var(--themeColor)' : ''">{{ node.label }}</span>
+          <span
+            class="node-label"
+            :style="isNodeSelected(node) ? 'color: var(--themeColor)' : ''"
+          >{{ node.label }}</span>
         </span>
       </el-tree>
     </q-scroll-area>
-  </q-drawer>
+  </div>
 </template>
 
 <script>
 import { createNamespacedHelpers } from 'vuex'
 import { showContextMenu as showSideDrawerContextMenu } from 'src/contextMenu/sideDrawer'
-import bus from '../bus'
+import bus from './bus'
 import events from 'src/constants/events'
 
 const {
@@ -50,10 +48,7 @@ const {
 const { mapActions: mapClientActions, mapState: mapClientState } = createNamespacedHelpers('client')
 
 export default {
-  name: 'CategoryDrawer',
-  props: {
-    type: String
-  },
+  name: 'CategoryTreePanel',
   computed: {
     thumbStyle () {
       return {
@@ -65,6 +60,9 @@ export default {
       return {
         display: 'none'
       }
+    },
+    type () {
+      return this.sidebarTreeType
     },
     items () {
       if (this.type === 'category') {
@@ -82,22 +80,9 @@ export default {
     },
     ...mapServerGetters(['categories', 'tags']),
     ...mapServerState(['currentCategory']),
-    ...mapClientState(['rightClickCategoryItem'])
+    ...mapClientState(['rightClickCategoryItem', 'sidebarTreeType'])
   },
   methods: {
-    toggle: function () {
-      this.$refs.drawer.toggle()
-    },
-    show: function () {
-      if (this.$refs.drawer) {
-        this.$refs.drawer.show()
-      }
-    },
-    hide: function () {
-      if (this.$refs.drawer) {
-        this.$refs.drawer.hide()
-      }
-    },
     nodeIconName: function (node) {
       if (this.type !== 'category') return 'el-icon-price-tag'
 
@@ -144,6 +129,9 @@ export default {
   mounted () {
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.openCategory, this.openCategoryHandler)
   },
+  beforeDestroy () {
+    bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.openCategory, this.openCategoryHandler)
+  },
   watch: {
     currentCategory: {
       immediate: true,
@@ -158,6 +146,11 @@ export default {
 </script>
 
 <style lang="scss">
+.category-tree-panel {
+  min-width: 0;
+  min-height: 0;
+}
+
 .memocast-el-tree {
   background: transparent;
   padding: 8px 0;
@@ -218,9 +211,5 @@ export default {
       color: inherit;
     }
   }
-}
-
-.q-drawer--left {
-  background: transparent !important;
 }
 </style>
