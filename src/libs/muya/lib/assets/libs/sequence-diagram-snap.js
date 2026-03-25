@@ -3,7 +3,7 @@
  *  (c) 2012-2017 Andrew Brampton (bramp.net)
  *  @license Simplified BSD license.
  */
-import _ from 'underscore'
+// import _ from 'underscore'
 import Snap from './snap.svg-min'
 import WebFont from 'webfontloader'
 
