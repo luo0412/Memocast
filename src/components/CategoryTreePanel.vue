@@ -106,10 +106,7 @@ export default {
     },
     handleNodeClick: function (data, node) {
       this.updateCurrentCategory({ data: data.key, type: this.type })
-      this.toggleChanged({
-        key: 'noteListVisible',
-        value: true
-      })
+      this.expandFullPaneLayout()
     },
     contextMenuHandler: function (e, data, node) {
       if (this.type !== 'category') return
@@ -125,13 +122,10 @@ export default {
     },
     openCategoryHandler: function () {
       this.updateCurrentCategory({ data: this.rightClickCategoryItem, type: this.type })
-      this.toggleChanged({
-        key: 'noteListVisible',
-        value: true
-      })
+      this.expandFullPaneLayout()
     },
     ...mapServerActions(['updateCurrentCategory']),
-    ...mapClientActions(['toggleChanged', 'setRightClickCategoryItem'])
+    ...mapClientActions(['setRightClickCategoryItem', 'expandFullPaneLayout'])
   },
   mounted () {
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.openCategory, this.openCategoryHandler)

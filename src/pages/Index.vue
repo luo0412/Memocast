@@ -20,6 +20,7 @@
           before-class='overflow-hidden full-height'
           after-class='overflow-hidden full-height'
           :min="300"
+          :disable="!categoryTreeVisible"
         >
           <template v-slot:before>
             <CategoryTreePanel class='full-height' />
@@ -198,6 +199,7 @@ export default {
     ...mapServerState(['contentsList', 'isCurrentNoteLoading', 'noteState']),
     ...mapClientState([
       'noteListVisible',
+      'categoryTreeVisible',
       'enablePreviewEditor',
       'splitterWidth',
       'leftInnerSplitterRatio'
@@ -268,6 +270,7 @@ export default {
       })
     },
     persistLeftInnerSplitter () {
+      if (!this.categoryTreeVisible) return
       this.updateStateAndStore({ leftInnerSplitterRatio: this.leftInnerSplitterValue })
     },
     persistSplitterWidth () {
@@ -281,8 +284,20 @@ export default {
     bus.$on(events.GENERATE_MINDMAP, this.generateMindmapHandler)
     bus.$on(events.UPDATE_WORD_COUNT, this.wordCountUpdateHandler)
     this.$nextTick(this.hideInitLoadingPage)
-    this.splitterWidthValue = this.splitterWidth || 580
-    this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 280
+    if (!this.noteListVisible) {
+      this.splitterLimits = [0, Infinity]
+      this.splitterWidthValue = 0
+    } else {
+      this.splitterLimits = [300, Infinity]
+      this.splitterWidthValue = this.splitterWidth || 580
+    }
+    if (!this.categoryTreeVisible) {
+      this.leftInnerSplitterLimits = [0, Infinity]
+      this.leftInnerSplitterValue = 0
+    } else {
+      this.leftInnerSplitterLimits = [150, Infinity]
+      this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 280
+    }
   },
   beforeDestroy () {
     if (this.leftInnerSplitterSaveTimer) {
@@ -341,6 +356,21 @@ export default {
       } else {
         this.splitterLimits = [300, Infinity]
         this.splitterWidthValue = this.splitterWidth || 580
+        if (this.categoryTreeVisible) {
+          this.leftInnerSplitterLimits = [150, Infinity]
+          this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 280
+        } else {
+          this.leftInnerSplitterLimits = [0, Infinity]
+          this.leftInnerSplitterValue = 0
+        }
+      }
+    },
+    categoryTreeVisible: function (val) {
+      if (!val) {
+        this.leftInnerSplitterLimits = [0, Infinity]
+        this.leftInnerSplitterValue = 0
+      } else {
+        this.leftInnerSplitterLimits = [150, Infinity]
         this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 280
       }
     }

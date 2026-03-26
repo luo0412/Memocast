@@ -7,7 +7,7 @@ export default {
   logout: '登出',
   logoutHint: '确定要立刻注销登录吗？',
   cancel: '取消',
-  switchView: '切换界面视图',
+  switchView: '切换布局：三栏 → 隐藏侧栏 → 仅编辑器 → 三栏',
   changed: '已修改',
   lock: '锁定笔记',
   unlock: '解锁笔记',

@@ -87,7 +87,7 @@
       <!-- 视图切换按钮 -->
       <div
         class="header-icon-btn q-electron-drag--exception"
-        :class="{ 'is-active': noteListVisible }"
+        :class="{ 'is-active': paneLayoutMode !== 0 }"
         :title="$t('switchView')"
         @click="switchViewHandler"
       >
@@ -172,6 +172,7 @@ export default {
       'shrinkInTray',
       'autoLogin',
       'noteListVisible',
+      'paneLayoutMode',
       'enablePreviewEditor',
       'sidebarTreeType'
     ]),
@@ -242,16 +243,16 @@ export default {
     toggleCategoryDrawer () {
       if (!this.isLogin) return
       this.toggleChanged({ key: 'sidebarTreeType', value: 'category' })
-      if (!this.noteListVisible) {
-        this.toggleChanged({ key: 'noteListVisible', value: true })
+      if (!this.noteListVisible || this.paneLayoutMode !== 0) {
+        this.expandFullPaneLayout()
       }
     },
 
     toggleTagDrawer () {
       if (!this.isLogin) return
       this.toggleChanged({ key: 'sidebarTreeType', value: 'tag' })
-      if (!this.noteListVisible) {
-        this.toggleChanged({ key: 'noteListVisible', value: true })
+      if (!this.noteListVisible || this.paneLayoutMode !== 0) {
+        this.expandFullPaneLayout()
       }
     },
 
@@ -271,10 +272,7 @@ export default {
     },
 
     switchViewHandler: function () {
-      this.toggleChanged({
-        key: 'noteListVisible',
-        value: !this.noteListVisible
-      })
+      this.cyclePaneLayout()
     },
 
     macDoubleClickHandler: function () {
@@ -288,7 +286,7 @@ export default {
     },
 
     ...mapServerActions(['logout', 'getCategoryNotes']),
-    ...mapClientActions(['toggleChanged'])
+    ...mapClientActions(['toggleChanged', 'cyclePaneLayout', 'expandFullPaneLayout'])
   },
   mounted () {
     this.updateMaximizeIcon()

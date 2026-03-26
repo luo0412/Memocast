@@ -16,6 +16,9 @@ export default function () {
     customHeader: '',
     customBody: '',
     shrinkInTray: false,
+    /** 0 三栏 | 1 仅隐藏分类/标签树 | 2 仅编辑器 */
+    paneLayoutMode: 0,
+    categoryTreeVisible: true,
     noteListVisible: true,
     enablePreviewEditor: true,
     rightClickNoteItem: {},

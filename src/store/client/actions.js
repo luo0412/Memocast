@@ -10,7 +10,13 @@ import { importImage, uploadImages } from 'src/ApiInvoker'
 export default {
   initClientStore ({ commit, state }) {
     const localStore = ClientFileStorage.getItemsFromStore(state)
+    const hadPaneLayoutMode = Object.prototype.hasOwnProperty.call(localStore, 'paneLayoutMode')
     commit(types.INIT, localStore)
+    if (!hadPaneLayoutMode && state.noteListVisible === false) {
+      const patch = { paneLayoutMode: 2, categoryTreeVisible: false }
+      commit(types.UPDATE_STATES, patch)
+      commit(types.SAVE_ITEMS_TO_LOCAL_STORE_SYNC, patch)
+    }
     Dark.set(state.darkMode)
   },
   toggleChanged ({ commit }, { key, value }) {
@@ -20,6 +26,21 @@ export default {
   updateStateAndStore ({ commit }, options) {
     commit(types.UPDATE_STATES, options)
     commit(types.SAVE_ITEMS_TO_LOCAL_STORE_SYNC, options)
+  },
+  cyclePaneLayout ({ state, dispatch }) {
+    const next = (state.paneLayoutMode + 1) % 3
+    dispatch('updateStateAndStore', {
+      paneLayoutMode: next,
+      noteListVisible: next !== 2,
+      categoryTreeVisible: next === 0
+    })
+  },
+  expandFullPaneLayout ({ dispatch }) {
+    dispatch('updateStateAndStore', {
+      paneLayoutMode: 0,
+      noteListVisible: true,
+      categoryTreeVisible: true
+    })
   },
   async sendToFlomo ({ state, rootState }, docGuid) {
     const { flomoApiUrl } = state
