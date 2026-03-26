@@ -1,5 +1,5 @@
 <template>
-  <div class='flex justify-center full-height full-width'>
+  <div class='monaco-root flex justify-center full-height full-width'>
     <div
       id='monaco'
       class='full-height full-width'
@@ -165,5 +165,8 @@ export default {
 </script>
 
 <style scoped>
-
+.monaco-root {
+  min-height: 0;
+  min-width: 0;
+}
 </style>

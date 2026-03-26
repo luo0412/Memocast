@@ -7,7 +7,7 @@
       unit='px'
       separator-class='custom-splitter'
       before-class='overflow-hidden'
-      after-class='hide-scrollbar'
+      after-class='hide-scrollbar editor-splitter-after'
       :min="300"
     >
       <template v-slot:before>
@@ -37,17 +37,19 @@
       </template>
       <template v-slot:after>
         <div class='full-height editor-wrapper'>
-          <div v-show='!isSourceMode && dataLoaded'>
-            <Muya ref='muya' :active='!isSourceMode && dataLoaded' :data='tempNoteData' />
+          <div class='editor-stage'>
+            <div v-show='!isSourceMode && dataLoaded'>
+              <Muya ref='muya' :active='!isSourceMode && dataLoaded' :data='tempNoteData' />
+            </div>
+            <Monaco ref='monaco' v-if='dataLoaded' :active='isSourceMode' :data='tempNoteData' v-show='isSourceMode' />
+            <transition-group
+              appear
+              enter-active-class='animated fadeIn'
+              leave-active-class='animated fadeOut'
+            >
+              <Illustration :mode='illustrationMode' key='illustration' />
+            </transition-group>
           </div>
-          <Monaco ref='monaco' v-if='dataLoaded' :active='isSourceMode' :data='tempNoteData' v-show='isSourceMode' />
-          <transition-group
-            appear
-            enter-active-class='animated fadeIn'
-            leave-active-class='animated fadeOut'
-          >
-            <Illustration :mode='illustrationMode' key='illustration' />
-          </transition-group>
           <div class='editor-action-bar'>
             <q-btn
               icon='format_align_center'
@@ -348,12 +350,28 @@ export default {
 <style lang="scss">
 .editor-wrapper {
   position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 将 Muya/Monaco 限制在右侧面板可视区域内，避免 Monaco 撑高父级导致 action-bar 的 bottom 落在视口外 */
+.editor-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+.editor-splitter-after {
+  min-height: 0;
 }
 
 .editor-action-bar {
   position: absolute;
   bottom: 12px;
-  right: 12px;
+  right: 15px;
   display: flex;
   flex-direction: column;
   align-items: center;
