@@ -138,6 +138,15 @@ div.ag-show-quick-insert-hint[contenteditable='false'] {
   font-size: 15px;
   font-weight: bold;
   margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.note-item-title .note-file-icon,
+.note-item-title-dark .note-file-icon {
+  color: var(--iconColor);
+  flex-shrink: 0;
 }
 
 .note-item-title.dense,
@@ -168,6 +177,9 @@ div.ag-show-quick-insert-hint[contenteditable='false'] {
 
 .note-item-title-dark {
   color: #dadada;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .note-item-summary-dark {

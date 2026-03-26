@@ -5,7 +5,10 @@
     :class='`note-card${darkTag} bg-transparent`'
     @click='noteItemClickHandler'
   >
-    <div :class='`note-item-title${darkTag} ${denseTag} `' v-html='title'></div>
+    <div :class='`note-item-title${darkTag} ${denseTag}`'>
+      <q-icon :name="fileIcon" class="note-file-icon" size="16px" />
+      <span v-html='title'></span>
+    </div>
 
     <div v-if="!dense" :class='`note-item-summary${darkTag}`' v-html='summary'></div>
 
@@ -17,6 +20,7 @@
 </template>
 
 <script>
+import _ from 'lodash'
 import { createNamespacedHelpers } from 'vuex'
 import helper from 'src/utils/helper'
 
@@ -67,6 +71,14 @@ export default {
     }
   },
   computed: {
+    fileIcon () {
+      const title = this.data.title || ''
+      if (_.endsWith(title, '.md')) return 'description'
+      if (_.endsWith(title, '.txt')) return 'text_snippet'
+      if (_.endsWith(title, '.html') || _.endsWith(title, '.htm')) return 'html'
+      if (_.endsWith(title, '.pdf')) return 'pdf'
+      return 'note'
+    },
     summary () {
       if (helper.isNullOrEmpty(this.data.abstractText) && !helper.isNullOrEmpty(this.data.highlight)) {
         const { highlight: { text = [] } } = this.data

@@ -32,7 +32,7 @@
         :title="$t('noteCategory')"
         @click="toggleCategoryDrawer"
       >
-        <i class="el-icon-folder icon-custom"></i>
+        <q-icon name="folder" class="icon-custom" />
       </div>
 
       <!-- 标签图标 -->
@@ -42,7 +42,7 @@
         :title="$t('tag')"
         @click="toggleTagDrawer"
       >
-        <i class="el-icon-price-tag icon-custom"></i>
+        <q-icon name="label" class="icon-custom" />
       </div>
 
       <!-- 搜索图标 -->
@@ -52,7 +52,7 @@
         :title="$t('search')"
         @click="handleSearchClick"
       >
-        <i class="el-icon-search icon-custom"></i>
+        <q-icon name="search" class="icon-custom" />
       </div>
     </div>
 
@@ -101,7 +101,7 @@
         :title="$t('settings')"
         @click="handleSettingsClick"
       >
-        <i class="el-icon-setting icon-custom"></i>
+        <q-icon name="settings" class="icon-custom" />
       </div>
 
       <!-- 头像下拉菜单 (Ant Design Vue) -->
@@ -110,16 +110,16 @@
           <div class="header-avatar" :class="{ 'has-photo': !!avatarUrl }">
             <img v-if="avatarUrl" :src="avatarUrl" alt="avatar" />
             <a-avatar v-else :size="20" :style="{ backgroundColor: 'transparent' }">
-              <i class="el-icon-user header-avatar-placeholder" style="font-size: 11px; color: #fff;" />
+              <q-icon name="person" style="font-size: 11px; color: #fff;" />
             </a-avatar>
           </div>
           <el-dropdown-menu slot="dropdown">
             <el-dropdown-item command="login" v-if="!isLogin">
-              <i class="el-icon-user"></i>
+              <q-icon name="person" style="margin-right: 8px;" />
               {{ $t('login') }}
             </el-dropdown-item>
             <el-dropdown-item command="logout" v-else>
-              <i class="el-icon-switch-button"></i>
+              <q-icon name="logout" style="margin-right: 8px;" />
               {{ $t('logout') }}
             </el-dropdown-item>
           </el-dropdown-menu>

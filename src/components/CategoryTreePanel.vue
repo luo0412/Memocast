@@ -22,7 +22,11 @@
         @node-contextmenu="contextMenuHandler"
       >
         <span class="memocast-tree-node" slot-scope="{ node }">
-          <i :class="nodeIconName(node)" class="node-icon"></i>
+          <q-icon
+            :name="nodeIconName(node)"
+            class="memocast-tree-folder-icon"
+            :size="nodeIconSize(node)"
+          />
           <span
             class="node-label"
             :style="isNodeSelected(node) ? 'color: var(--themeColor)' : ''"
@@ -84,15 +88,18 @@ export default {
   },
   methods: {
     nodeIconName: function (node) {
-      if (this.type !== 'category') return 'el-icon-price-tag'
+      if (this.type !== 'category') return 'label'
 
       const isExpanded = node.expanded
       const isSelected = this.currentCategory === node.key
 
       if (isSelected || isExpanded) {
-        return 'el-icon-folder-opened'
+        return 'folder_open'
       }
-      return 'el-icon-folder'
+      return 'folder'
+    },
+    nodeIconSize: function (node) {
+      return '16px'
     },
     isNodeSelected: function (node) {
       return this.currentCategory === node.key
@@ -173,6 +180,8 @@ export default {
     font-size: 14px;
     color: var(--iconColor);
     padding: 4px;
+    margin-right: 8px;
+    flex-shrink: 0;
   }
 
   .el-tree-node__expand-icon.is-leaf {
@@ -195,11 +204,12 @@ export default {
     display: flex;
     align-items: center;
     flex: 1;
+    min-width: 0;
     padding-right: 8px;
+    column-gap: 10px;
 
-    .node-icon {
-      margin-right: 8px;
-      font-size: 16px;
+    .memocast-tree-folder-icon {
+      flex-shrink: 0;
       color: var(--iconColor);
     }
 

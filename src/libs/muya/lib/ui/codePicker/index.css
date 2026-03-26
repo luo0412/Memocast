@@ -40,6 +40,18 @@
   align-items: center;
 }
 
+/* Scoped file-icons-js styles */
+.ag-list-picker .icon:before {
+  font-weight: normal;
+  font-style: normal;
+  text-align: center;
+  width: 16px;
+  line-height: 1;
+  position: relative;
+  display: inline-block;
+  -webkit-font-smoothing: antialiased;
+}
+
 .ag-list-picker .item .icon-wrapper span:before {
   font-size: 14px;
 }

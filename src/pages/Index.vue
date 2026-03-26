@@ -36,7 +36,7 @@
         </q-splitter>
       </template>
       <template v-slot:after>
-        <div class='full-height'>
+        <div class='full-height editor-wrapper'>
           <div v-show='!isSourceMode && dataLoaded'>
             <Muya ref='muya' :active='!isSourceMode && dataLoaded' :data='tempNoteData' />
           </div>
@@ -47,31 +47,30 @@
             leave-active-class='animated fadeOut'
           >
             <Illustration :mode='illustrationMode' key='illustration' />
+          </transition-group>
+          <div class='editor-action-bar'>
             <q-btn
               icon='format_align_center'
               dense
               flat
               round
-              class='absolute-top-right fab-icon cursor-pointer material-icons-round'
+              class='fab-icon cursor-pointer material-icons-round'
               @click.stop='$refs.outlineDrawer.show'
               size='md'
               color='#26A69A'
               v-show='dataLoaded && contentsListLoaded && !isOutlineShow && !isSourceMode'
               v-ripple
-              key='format_align_center'
             />
             <q-btn
               icon='dashboard'
               dense
               flat
               round
-              class='absolute-bottom-right fab-icon cursor-pointer material-icons-round'
-              style='bottom: 150px'
+              class='fab-icon cursor-pointer material-icons-round'
               size='md'
               color='#26A69A'
               v-show='dataLoaded && !isOutlineShow && !isSourceMode'
               v-ripple
-              key='wordCount'
             >
               <q-tooltip
                 transition-show="fade"
@@ -79,15 +78,9 @@
                 anchor="center left" self="center right"
               >
                 <div class="text-body2">
-                  <p>
-                    {{ `${$t('word:', wordCount)}` }}
-                  </p>
-                  <p>
-                    {{ `${$t('character:', wordCount)}` }}
-                  </p>
-                  <p>
-                    {{ `${$t('paragraph:', wordCount)}` }}
-                  </p>
+                  <p>{{ `${$t('word:', wordCount)}` }}</p>
+                  <p>{{ `${$t('character:', wordCount)}` }}</p>
+                  <p>{{ `${$t('paragraph:', wordCount)}` }}</p>
                 </div>
               </q-tooltip>
             </q-btn>
@@ -96,35 +89,30 @@
               dense
               flat
               round
-              class='absolute-bottom-right fab-icon cursor-pointer material-icons-round'
-              style='bottom: 100px'
+              class='fab-icon cursor-pointer material-icons-round'
               @click='isSourceMode = !isSourceMode'
               size='md'
               color='#26A69A'
               v-show='dataLoaded && !isOutlineShow'
               v-ripple
-              key='source_code'
               :title="!isSourceMode ? $t('sourceMode') : $t('previewMode')"
-            >
-            </q-btn>
+            />
             <q-btn
               :icon='enablePreviewEditor ? "lock_open" : "lock"'
               dense
               flat
               round
-              class='absolute-bottom-right fab-icon cursor-pointer material-icons-round'
-              style='bottom: 50px'
+              class='fab-icon cursor-pointer material-icons-round'
               @click='lockModeHandler'
               size='md'
               color='#26A69A'
               v-show='dataLoaded && !isOutlineShow'
               v-ripple
-              key='lock'
               :title="enablePreviewEditor ? $t('lock') : $t('unlock')"
             />
             <q-btn
               :icon='saveButtonIcon'
-              class='absolute-bottom-right fab-icon cursor-pointer material-icons-round'
+              class='fab-icon cursor-pointer material-icons-round'
               dense
               flat
               round
@@ -133,10 +121,8 @@
               color='#26A69A'
               v-show='dataLoaded && !isOutlineShow'
               v-ripple
-              key='save'
             />
-          </transition-group>
-
+          </div>
         </div>
         <NoteOutlineDrawer ref='outlineDrawer' :change='outlineDrawerChangeHandler' />
         <Loading :visible='isCurrentNoteLoading' />
@@ -360,6 +346,35 @@ export default {
 }
 </script>
 <style lang="scss">
+.editor-wrapper {
+  position: relative;
+}
+
+.editor-action-bar {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: fit-content;
+  z-index: 6000;
+  padding: 4px 2px;
+  background: rgba(240, 240, 240, 0.88);
+  border-radius: 10px;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 全局 .fab-icon { margin: 40px } 在纵向堆叠时会叠成巨大间距，此处恢复为原独立浮动时的紧凑感 */
+.editor-action-bar .fab-icon {
+  margin: 0 !important;
+}
+
+.body--dark .editor-action-bar {
+  background: rgba(55, 55, 55, 0.88);
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+}
+
 .index-left-inner-splitter {
   min-height: 0;
 }
