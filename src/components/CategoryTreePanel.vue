@@ -24,7 +24,7 @@
         <span class="memocast-tree-node" slot-scope="{ node }">
           <q-icon
             :name="nodeIconName(node)"
-            class="memocast-tree-folder-icon"
+            class="memocast-tree-folder-icon material-icons-outlined"
             :size="nodeIconSize(node)"
           />
           <span
@@ -180,7 +180,7 @@ export default {
     font-size: 14px;
     color: var(--iconColor);
     padding: 4px;
-    margin-right: 8px;
+    margin-right: 4px;
     flex-shrink: 0;
   }
 
@@ -206,11 +206,14 @@ export default {
     flex: 1;
     min-width: 0;
     padding-right: 8px;
-    column-gap: 10px;
+    column-gap: 4px;
 
     .memocast-tree-folder-icon {
       flex-shrink: 0;
       color: var(--iconColor);
+      font-family: 'Material Icons Outlined' !important;
+      font-weight: normal;
+      font-style: normal;
     }
 
     .node-label {
