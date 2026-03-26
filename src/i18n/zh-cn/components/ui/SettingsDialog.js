@@ -2,6 +2,7 @@ export default {
   general: '通用',
   editor: '编辑器',
   server: '服务',
+  rune: '符文',
   language: '语言',
   'en-us': '英语 (美国)',
   'zh-cn': '中文 (简体)',
@@ -31,5 +32,14 @@ export default {
   minutes: '分钟',
   seconds: '秒',
   never: '永不',
-  openLogFiles: '打开日志文件'
+  openLogFiles: '打开日志文件',
+  runeManagement: '符文管理',
+  runeCardName: '名称',
+  runeCardDesc: '描述',
+  runeCardPower: '力量',
+  runeCardAdd: '添加符文',
+  runeCardEdit: '编辑',
+  runeCardDelete: '删除',
+  runeCardDeleteConfirm: '确定要删除该符文吗？',
+  runeDragTip: '拖拽可调整顺序'
 }

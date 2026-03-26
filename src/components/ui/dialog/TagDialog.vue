@@ -5,7 +5,6 @@
       style="max-height: 90vh;min-height: 70vh;min-width: 70vw"
     >
       <q-toolbar>
-        <q-icon name="bookmark" class="text-primary" style="font-size: 1.8em" />
         <q-toolbar-title
           ><span class="text-weight-bold non-selectable">{{
             $t('tag')

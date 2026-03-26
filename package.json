@@ -71,6 +71,7 @@
     "vega-lite": "^4.7.0",
     "vue": "2.7.16",
     "vue-i18n": "^8.0.0",
+    "vuedraggable": "2.24.3",
     "webfontloader": "^1.6.28"
   },
   "devDependencies": {

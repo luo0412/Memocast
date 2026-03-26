@@ -2,6 +2,7 @@ export default {
   general: 'General',
   editor: 'Editor',
   server: 'Server',
+  rune: 'Rune',
   language: 'Language',
   'en-us': 'English (US)',
   'zh-cn': 'Chinese (Simplified)',
@@ -31,5 +32,14 @@ export default {
   minutes: 'Minutes',
   seconds: 'Seconds',
   never: 'Never',
-  openLogFiles: 'Open Log Files'
+  openLogFiles: 'Open Log Files',
+  runeManagement: 'Rune Management',
+  runeCardName: 'Name',
+  runeCardDesc: 'Description',
+  runeCardPower: 'Power',
+  runeCardAdd: 'Add Rune',
+  runeCardEdit: 'Edit',
+  runeCardDelete: 'Delete',
+  runeCardDeleteConfirm: 'Are you sure to delete this rune?',
+  runeDragTip: 'Drag to reorder'
 }

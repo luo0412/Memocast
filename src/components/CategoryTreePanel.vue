@@ -22,10 +22,9 @@
         @node-contextmenu="contextMenuHandler"
       >
         <span class="memocast-tree-node" slot-scope="{ node }">
-          <q-icon
-            :name="nodeIconName(node)"
-            class="memocast-tree-folder-icon material-icons-outlined"
-            :size="nodeIconSize(node)"
+          <i
+            :class="nodeIconClass(node)"
+            class="memocast-tree-folder-icon"
           />
           <span
             class="node-label"
@@ -87,19 +86,16 @@ export default {
     ...mapClientState(['rightClickCategoryItem', 'sidebarTreeType'])
   },
   methods: {
-    nodeIconName: function (node) {
-      if (this.type !== 'category') return 'label'
+    nodeIconClass: function (node) {
+      if (this.type !== 'category') return 'el-icon-price-tag'
 
       const isExpanded = node.expanded
       const isSelected = this.currentCategory === node.key
 
       if (isSelected || isExpanded) {
-        return 'folder_open'
+        return 'el-icon-folder-opened'
       }
-      return 'folder'
-    },
-    nodeIconSize: function (node) {
-      return '16px'
+      return 'el-icon-folder'
     },
     isNodeSelected: function (node) {
       return this.currentCategory === node.key
@@ -205,9 +201,6 @@ export default {
     .memocast-tree-folder-icon {
       flex-shrink: 0;
       color: var(--iconColor);
-      font-family: 'Material Icons Outlined' !important;
-      font-weight: normal;
-      font-style: normal;
     }
 
     .node-label {

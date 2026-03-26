@@ -30,6 +30,12 @@
                 :label="$t('server')"
                 class='text-red-7'
               />
+              <q-tab
+                name='rune'
+                icon='star'
+                :label="$t('rune')"
+                class='text-purple-5'
+              />
             </q-tabs>
           </div>
           <q-separator vertical class='settings-dialog-sep' />
@@ -200,6 +206,48 @@
                   </div>
                 </div>
               </q-tab-panel>
+
+              <q-tab-panel name='rune' class='q-pa-sm'>
+                <div class='row items-center no-wrap q-mb-xs panel-title'>
+                  <div class='panel-title-bar bg-purple-5' />
+                  <span class='text-subtitle2 text-weight-medium'>{{ $t('runeManagement') }}</span>
+                  <q-space />
+                  <q-btn
+                    dense flat no-caps
+                    :label="$t('runeCardAdd')"
+                    color='purple-5'
+                    icon='add'
+                    size='sm'
+                    @click='openAddRune'
+                  />
+                </div>
+                <div class='text-caption text-grey-6 q-mb-sm'>
+                  <q-icon name='drag_indicator' size='xs' /> {{ $t('runeDragTip') }}
+                </div>
+                <q-separator class='q-my-xs' />
+                <div class='rune-grid'>
+                  <div
+                    v-for='(rune, index) in localRuneCards'
+                    :key='rune.id'
+                    draggable='true'
+                    class='rune-card-wrapper'
+                    @dragstart='onDragStart($event, index)'
+                    @dragover.prevent='onDragOver($event, index)'
+                    @drop='onDrop($event, index)'
+                    @dragend='onDragEnd'
+                  >
+                    <RuneCard
+                      :rune='rune'
+                      @edit='openEditRune'
+                      @delete='confirmDeleteRune'
+                    />
+                  </div>
+                </div>
+                <div v-if='!localRuneCards || localRuneCards.length === 0' class='text-center text-grey q-pa-xl'>
+                  <q-icon name='star' size='3rem' />
+                  <div class='q-mt-sm'>{{ $t('runeCardAdd') }}</div>
+                </div>
+              </q-tab-panel>
             </q-tab-panels>
           </div>
         </div>
@@ -207,6 +255,11 @@
     </q-card>
     <ImageUploadServiceDialog ref='imageUploadServiceDialog' />
     <UpdateDialog ref='updateDialog' />
+    <RuneFormDialog
+      ref='runeFormDialog'
+      :rune='editingRune'
+      @submit='onRuneSubmit'
+    />
   </q-dialog>
 </template>
 
@@ -214,6 +267,8 @@
 import { createNamespacedHelpers } from 'vuex'
 import ImageUploadServiceDialog from './ImageUploadServiceDialog'
 import UpdateDialog from 'components/ui/dialog/UpdateDialog'
+import RuneCard from 'components/ui/dialog/RuneCard'
+import RuneFormDialog from 'components/ui/dialog/RuneFormDialog'
 import { i18n } from 'boot/i18n'
 import bus from 'components/bus'
 import events from 'src/constants/events'
@@ -230,7 +285,9 @@ export default {
   name: 'SettingsDialog',
   components: {
     ImageUploadServiceDialog,
-    UpdateDialog
+    UpdateDialog,
+    RuneCard,
+    RuneFormDialog
   },
   data () {
     return {
@@ -245,7 +302,9 @@ export default {
         'orderByNoteTitle'
       ],
       version: version,
-      checkingNotify: null
+      checkingNotify: null,
+      editingRune: null,
+      dragFromIndex: null
     }
   },
   computed: {
@@ -272,6 +331,14 @@ export default {
       if (this.autoSaveGap === 0) return this.$t('never')
       return this.autoSaveGap + this.$t('seconds')
     },
+    localRuneCards: {
+      get () {
+        return this.runeCards
+      },
+      set (val) {
+        this.updateStateAndStore({ runeCards: val })
+      }
+    },
     ...mapState([
       'language',
       'darkMode',
@@ -281,7 +348,8 @@ export default {
       'noteOrderType',
       'theme',
       'themes',
-      'autoSaveGap'
+      'autoSaveGap',
+      'runeCards'
     ])
   },
   methods: {
@@ -408,6 +476,76 @@ export default {
     openLogFilesHandler: function () {
       openLogFiles()
     },
+    onRuneSortEnd: function () {
+      this.updateStateAndStore({ runeCards: this.localRuneCards })
+    },
+    onDragStart: function (e, index) {
+      this.dragFromIndex = index
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/plain', index)
+      e.target.closest('.rune-card-wrapper').classList.add('rune-dragging')
+    },
+    onDragOver: function (e, index) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      const wrapper = e.target.closest('.rune-card-wrapper')
+      if (wrapper && this.dragFromIndex !== index) {
+        document.querySelectorAll('.rune-card-wrapper').forEach(el => el.classList.remove('rune-dragover'))
+        wrapper.classList.add('rune-dragover')
+      }
+    },
+    onDrop: function (e, toIndex) {
+      e.preventDefault()
+      document.querySelectorAll('.rune-card-wrapper').forEach(el => el.classList.remove('rune-dragover'))
+      const fromIndex = this.dragFromIndex
+      if (fromIndex === null || fromIndex === toIndex) return
+      const cards = [...this.localRuneCards]
+      const [moved] = cards.splice(fromIndex, 1)
+      cards.splice(toIndex, 0, moved)
+      this.updateStateAndStore({ runeCards: cards })
+    },
+    onDragEnd: function (e) {
+      const wrapper = e.target.closest('.rune-card-wrapper')
+      if (wrapper) {
+        wrapper.classList.remove('rune-dragging')
+      }
+      document.querySelectorAll('.rune-card-wrapper').forEach(el => el.classList.remove('rune-dragover'))
+      this.dragFromIndex = null
+    },
+    openEditRune: function (rune) {
+      this.editingRune = { ...rune }
+      this.$nextTick(() => {
+        this.$refs.runeFormDialog.$refs.dialog.show()
+      })
+    },
+    openAddRune: function () {
+      this.editingRune = null
+      this.$nextTick(() => {
+        this.$refs.runeFormDialog.$refs.dialog.show()
+      })
+    },
+    confirmDeleteRune: function (rune) {
+      this.$q.dialog({
+        title: this.$t('runeCardDelete'),
+        message: this.$t('runeCardDeleteConfirm'),
+        cancel: true,
+        persistent: true
+      }).onOk(() => {
+        const filtered = this.localRuneCards.filter(r => r.id !== rune.id)
+        this.updateStateAndStore({ runeCards: filtered })
+      })
+    },
+    onRuneSubmit: function (data) {
+      const cards = [...this.localRuneCards]
+      const idx = cards.findIndex(r => r.id === data.id)
+      if (idx >= 0) {
+        cards.splice(idx, 1, data)
+      } else {
+        cards.push(data)
+      }
+      this.updateStateAndStore({ runeCards: cards })
+      this.editingRune = null
+    },
     ...mapActions([
       'toggleChanged',
       'updateStateAndStore'
@@ -517,5 +655,36 @@ export default {
 
 .setting-item--row .q-toggle {
   flex-shrink: 0;
+}
+
+.rune-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 4px;
+  min-height: 80px;
+}
+
+.rune-card-wrapper {
+  display: inline-block;
+}
+
+.rune-card-wrapper.rune-dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+
+.rune-card-wrapper.rune-dragover .rune-card {
+  box-shadow: 0 0 0 3px #7E57C2;
+  transform: translateY(-2px);
+}
+
+.rune-ghost {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+
+.rune-chosen {
+  box-shadow: 0 4px 20px rgba(156, 39, 176, 0.4);
 }
 </style>
