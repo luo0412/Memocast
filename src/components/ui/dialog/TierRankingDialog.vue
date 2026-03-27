@@ -69,48 +69,52 @@
           </div>
         </div>
 
-        <div
-          class='image-gallery'
-          id='tier-image-gallery'
-          @dragover.prevent='onGalleryDragOver'
-          @dragleave='onGalleryDragLeave'
-          @drop.prevent='onGalleryDrop'
-          :class='{ "drag-over": galleryDragOver }'
-        >
+        <div class='gallery-row'>
           <div
-            v-for='img in unassignedImages'
-            :key='img.id'
-            class='image-item'
-            :class='{ selected: draggingImage && draggingImage.id === img.id }'
-            draggable='true'
-            @dragstart='onImageDragStart($event, img, -1)'
-            @dragend='onImageDragEnd'
-            @click.stop='onImageClick(img)'
+            class='image-gallery'
+            id='tier-image-gallery'
+            @dragover.prevent='onGalleryDragOver'
+            @dragleave='onGalleryDragLeave'
+            @drop.prevent='onGalleryDrop'
+            :class='{ "drag-over": galleryDragOver }'
           >
-            <img :src='img.src' :alt='img.name' />
             <div
-              class='image-name-overlay'
-              :style='{ display: showImageNamesSetting ? "block" : "none" }'
-            >{{ img.name }}</div>
+              v-for='img in unassignedImages'
+              :key='img.id'
+              class='image-item'
+              :class='{ selected: draggingImage && draggingImage.id === img.id }'
+              draggable='true'
+              @dragstart='onImageDragStart($event, img, -1)'
+              @dragend='onImageDragEnd'
+              @click.stop='onImageClick(img)'
+            >
+              <img :src='img.src' :alt='img.name' />
+              <div
+                class='image-name-overlay'
+                :style='{ display: showImageNamesSetting ? "block" : "none" }'
+              >{{ img.name }}</div>
+            </div>
+            <div
+              class='upload-btn'
+              @click='triggerFilePicker'
+              @dragover.prevent='onUploadDragOver'
+              @dragleave='onUploadDragLeave'
+              @drop.prevent='onUploadDrop'
+              :class='{ "drag-over": uploadDragOver }'
+            >+</div>
           </div>
-          <div
-            class='upload-btn'
-            @click='triggerFilePicker'
-            @dragover.prevent='onUploadDragOver'
-            @dragleave='onUploadDragLeave'
-            @drop.prevent='onUploadDrop'
-            :class='{ "drag-over": uploadDragOver }'
-          >+</div>
-          <div
-            class='delete-zone'
-            :class='{ "drag-over": deleteZoneDragOver }'
-            @dragover.prevent='onDeleteDragOver'
-            @dragleave='onDeleteDragLeave'
-            @drop.prevent='onDeleteDrop'
-          >-</div>
-          <div class='button-container'>
-            <div class='add-tier-btn' @click='addNewTier'>+ 添加评级</div>
-            <div class='reset-tier-btn' @click='showResetModal = true'>↻ 重置排行榜</div>
+          <div class='gallery-right-panel'>
+            <div class='button-container'>
+              <div class='add-tier-btn' @click='addNewTier'>+ 添加评级</div>
+              <div class='reset-tier-btn' @click='showResetModal = true'>↻ 重置排行榜</div>
+            </div>
+            <div
+              class='delete-zone'
+              :class='{ "drag-over": deleteZoneDragOver }'
+              @dragover.prevent='onDeleteDragOver'
+              @dragleave='onDeleteDragLeave'
+              @drop.prevent='onDeleteDrop'
+            >-</div>
           </div>
         </div>
       </div>
@@ -1021,18 +1025,30 @@ export default {
   align-items: flex-start;
 }
 
-.image-gallery {
+.gallery-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  align-items: flex-start;
+  gap: 12px;
   padding: 8px 5px;
-  justify-content: flex-start;
-  align-items: center;
   background: #2d2d2d;
   flex-shrink: 0;
+  min-height: 110px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.image-gallery {
+  flex: 0 0 calc(60% - 12px);
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 5px;
+  justify-content: flex-start;
+  align-items: center;
   min-height: 60px;
   overflow-x: auto;
   overflow-y: hidden;
+  padding: 5px;
+  box-sizing: border-box;
 }
 
 .image-gallery::-webkit-scrollbar {
@@ -1174,12 +1190,21 @@ export default {
   z-index: 10;
 }
 
+.gallery-right-panel {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 140px;
+}
+
 .button-container {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 6px;
-  margin-left: 12px;
+  width: 100%;
 }
 
 .add-tier-btn {
@@ -1223,8 +1248,8 @@ export default {
 /* 帮助按钮 */
 .help-btn {
   position: fixed;
-  top: 16px;
-  right: 16px;
+  bottom: 20px;
+  right: 20px;
   width: 42px;
   height: 42px;
   background: #65a6bc;
@@ -1247,8 +1272,8 @@ export default {
 /* 关闭按钮 */
 .close-btn {
   position: fixed;
-  top: 16px;
-  left: 16px;
+  bottom: 20px;
+  right: 74px;
   width: 42px;
   height: 42px;
   background: rgba(80, 80, 80, 0.8);
