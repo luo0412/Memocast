@@ -108,7 +108,8 @@ import NoteItem from './ui/NoteItem'
 import ImportDialog from './ui/dialog/ImportDialog.vue'
 import CategoryDialog from './ui/dialog/CategoryDialog'
 import { createNamespacedHelpers } from 'vuex'
-import Loading from './ui/Loading'
+import { Loading, QSpinnerGears } from 'quasar'
+import LoadingComponent from './ui/Loading'
 import helper from '../utils/helper'
 import bus from './bus'
 import events from 'src/constants/events'
@@ -222,8 +223,18 @@ export default {
           this.deleteCategory(this.rightClickCategoryItem)
         })
     },
-    exportCategoryHandler: function () {
-      this.exportMarkdownFiles(this.currentNotes)
+    exportCategoryHandler: async function () {
+      const categoryToExport = this.rightClickCategoryItem
+      if (!categoryToExport) return
+      Loading.show({
+        spinner: QSpinnerGears,
+        message: this.$t('prepareExportData'),
+        delay: 400
+      })
+      const kbGuid = this.$store.state.server.kbGuid
+      const notes = await this.getCategoryNotesForExport({ kbGuid, category: categoryToExport })
+      Loading.hide()
+      this.exportMarkdownFiles(notes, categoryToExport)
     },
     refreshNoteListHandler: async function (done) {
       const tagIndex = this.tags.findIndex(
@@ -297,7 +308,8 @@ export default {
       'moveNote',
       'copyNote',
       'exportMarkdownFile',
-      'exportPng'
+      'exportPng',
+      'getCategoryNotesForExport'
     ]),
     ...mapClientActions(['setRightClickNoteItem'])
   },

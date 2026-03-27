@@ -17,19 +17,6 @@
               class='tier-label'
               :style='{ backgroundColor: tier.color }'
             >
-              <input
-                type='color'
-                class='color-picker'
-                :value='tier.color'
-                @input='changeTierColor(tierIndex, $event)'
-                @click.stop
-                title='编辑颜色'
-              />
-              <button
-                class='delete-tier-btn'
-                @click.stop='deleteTier(tierIndex)'
-                title='删除该评级'
-              >×</button>
               <span
                 class='tier-name'
                 :contenteditable='editingTierIndex === tierIndex'
@@ -38,6 +25,21 @@
                 @click.stop='startEditTier(tierIndex, $event)'
                 ref='tierNameRefs'
               >{{ tier.name }}</span>
+              <div class='tier-label-actions'>
+                <input
+                  type='color'
+                  class='color-picker'
+                  :value='tier.color'
+                  @input='changeTierColor(tierIndex, $event)'
+                  title='编辑颜色'
+                />
+                <button
+                  type='button'
+                  class='delete-tier-btn'
+                  @click.stop='deleteTier(tierIndex)'
+                  title='删除该评级'
+                >×</button>
+              </div>
             </div>
             <div
               class='tier-content'
@@ -71,28 +73,34 @@
 
         <div class='gallery-row'>
           <div
-            class='image-gallery'
             id='tier-image-gallery'
+            class='image-gallery'
             @dragover.prevent='onGalleryDragOver'
             @dragleave='onGalleryDragLeave'
             @drop.prevent='onGalleryDrop'
             :class='{ "drag-over": galleryDragOver }'
           >
-            <div
-              v-for='img in unassignedImages'
-              :key='img.id'
-              class='image-item'
-              :class='{ selected: draggingImage && draggingImage.id === img.id }'
-              draggable='true'
-              @dragstart='onImageDragStart($event, img, -1)'
-              @dragend='onImageDragEnd'
-              @click.stop='onImageClick(img)'
-            >
-              <img :src='img.src' :alt='img.name' />
               <div
-                class='image-name-overlay'
-                :style='{ display: showImageNamesSetting ? "block" : "none" }'
-              >{{ img.name }}</div>
+                v-for='img in unassignedImages'
+                :key='img.id'
+                class='image-item'
+                :class='{ selected: draggingImage && draggingImage.id === img.id }'
+                draggable='true'
+                @dragstart='onImageDragStart($event, img, -1)'
+                @dragend='onImageDragEnd'
+                @click.stop='onImageClick(img)'
+              >
+                <img :src='img.src' :alt='img.name' />
+                <div
+                  class='image-name-overlay'
+                  :style='{ display: showImageNamesSetting ? "block" : "none" }'
+                >{{ img.name }}</div>
+              </div>
+            </div>
+          <div class='gallery-right-panel'>
+            <div class='tier-actions'>
+              <div class='add-tier-btn' @click='addNewTier'>+ 添加评级</div>
+              <div class='reset-tier-btn' @click='showResetModal = true'>↻ 重置排行榜</div>
             </div>
             <div
               class='upload-btn'
@@ -102,12 +110,6 @@
               @drop.prevent='onUploadDrop'
               :class='{ "drag-over": uploadDragOver }'
             >+</div>
-          </div>
-          <div class='gallery-right-panel'>
-            <div class='button-container'>
-              <div class='add-tier-btn' @click='addNewTier'>+ 添加评级</div>
-              <div class='reset-tier-btn' @click='showResetModal = true'>↻ 重置排行榜</div>
-            </div>
             <div
               class='delete-zone'
               :class='{ "drag-over": deleteZoneDragOver }'
@@ -115,12 +117,13 @@
               @dragleave='onDeleteDragLeave'
               @drop.prevent='onDeleteDrop'
             >-</div>
+            <div class='help-close-actions'>
+              <button type='button' class='help-btn' @click='showHelp = true'>?</button>
+              <button type='button' class='close-btn' @click='closeDialog'>×</button>
+            </div>
           </div>
         </div>
       </div>
-
-      <button class='help-btn' @click='showHelp = true'>?</button>
-      <button class='close-btn' @click='closeDialog'>×</button>
     </div>
 
     <!-- 帮助弹窗 -->
@@ -594,11 +597,16 @@ export default {
       const sourceTierIndex = this.draggingImageTierIndex
       if (!img) return
 
-      // Remove from source tier
-      if (sourceTierIndex !== -1) {
-        this.tiers[sourceTierIndex].images =
-          this.tiers[sourceTierIndex].images.filter(i => i.id !== img.id)
+      // Image is already in unassigned — no-op (prevents duplicate on same-area drop)
+      if (sourceTierIndex === -1) {
+        this.draggingImage = null
+        this.draggingImageTierIndex = -1
+        return
       }
+
+      // Remove from source tier
+      this.tiers[sourceTierIndex].images =
+        this.tiers[sourceTierIndex].images.filter(i => i.id !== img.id)
 
       // Add to unassigned
       this.unassignedImages.push(img)
@@ -882,7 +890,7 @@ export default {
   transition: background-color 0.2s ease;
   flex-shrink: 0;
   overflow-x: hidden;
-  overflow-y: hidden;
+  overflow-y: visible;
 }
 
 .tier:hover {
@@ -900,8 +908,8 @@ export default {
 }
 
 .tier-label {
-  width: 140px;
-  min-width: 140px;
+  width: 172px;
+  min-width: 172px;
   text-align: center;
   font-size: 1.7em;
   font-weight: 900;
@@ -914,12 +922,19 @@ export default {
   justify-content: center;
   position: relative;
   cursor: pointer;
+  box-sizing: border-box;
+  padding: 6px 52px 6px 6px;
 }
 
 .tier-name {
   outline: none;
-  min-width: 20px;
+  display: block;
+  width: 100%;
   font-weight: 900;
+  line-height: 1.25;
+  white-space: normal;
+  overflow: visible;
+  text-align: center;
 }
 
 .tier-name:focus {
@@ -928,62 +943,65 @@ export default {
   padding: 0 5px;
 }
 
-.color-picker {
+.tier-label-actions {
   position: absolute;
-  right: -38px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s;
+  transition: opacity 0.15s ease;
   z-index: 101;
 }
 
-.tier-label:hover .color-picker,
-.tier-label:active .color-picker {
+.tier-label:hover .tier-label-actions,
+.tier-label-actions:hover {
   opacity: 1;
   pointer-events: auto;
 }
 
+.color-picker {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.color-picker:hover {
+  transform: scale(1.15);
+}
+
 .delete-tier-btn {
-  position: absolute;
-  right: -72px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
-  background: #fff;
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.9);
   border: 2px solid #ff3742;
   border-radius: 50%;
   color: #ff3742;
   cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s, background-color 0.2s, color 0.2s;
-  font-size: 22px;
+  transition: background-color 0.15s, color 0.15s, transform 0.15s;
+  font-size: 18px;
   font-weight: bold;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 101;
   padding: 0;
   line-height: 1;
-}
-
-.tier-label:hover .delete-tier-btn,
-.tier-label:active .delete-tier-btn {
-  opacity: 1;
-  pointer-events: auto;
+  flex-shrink: 0;
 }
 
 .delete-tier-btn:hover {
   background: #ff3742;
   color: #fff;
+  transform: scale(1.1);
 }
 
 .tier-content {
@@ -1027,45 +1045,61 @@ export default {
 
 .gallery-row {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 8px 5px;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px 8px 8px 5px;
   background: #2d2d2d;
   flex-shrink: 0;
-  min-height: 110px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  box-sizing: border-box;
 }
 
 .image-gallery {
-  flex: 0 0 calc(60% - 12px);
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100px;
   display: flex;
   flex-wrap: nowrap;
   gap: 5px;
-  justify-content: flex-start;
+  justify-content: flex-end;
   align-items: center;
-  min-height: 60px;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 5px;
   box-sizing: border-box;
+  /* reserve scrollbar height to prevent layout jump */
+  scrollbar-gutter: stable;
+  /* always show thin scrollbar */
+  scrollbar-width: thin;
 }
 
+/* always show scrollbar on hover + always visible track for native look */
 .image-gallery::-webkit-scrollbar {
-  height: 6px;
+  height: 8px;
 }
 
 .image-gallery::-webkit-scrollbar-track {
   background: #2d2d2d;
+  border-radius: 4px;
 }
 
 .image-gallery::-webkit-scrollbar-thumb {
-  background: #555;
-  border-radius: 3px;
+  background: #777;
+  border-radius: 4px;
 }
 
 .image-gallery::-webkit-scrollbar-thumb:hover {
-  background: #777;
+  background: #999;
+}
+
+.image-gallery::-webkit-scrollbar-corner {
+  background: #2d2d2d;
+}
+
+/* Firefox always-thin: also ensure thumb is always visible */
+@supports (scrollbar-width: thin) {
+  .image-gallery {
+    scrollbar-color: #777 #2d2d2d;
+  }
 }
 
 .image-gallery.drag-over {
@@ -1074,14 +1108,14 @@ export default {
 }
 
 .upload-btn {
-  width: 100px;
-  height: 100px;
+  width: 60px;
+  height: 60px;
   border: 2px dashed #666;
   background: #404040;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.8em;
+  font-size: 2em;
   color: #ccc;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -1096,14 +1130,14 @@ export default {
 }
 
 .delete-zone {
-  width: 100px;
-  height: 100px;
+  width: 60px;
+  height: 60px;
   border: 2px dashed #dc3545;
   background: #4a3a3a;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.8em;
+  font-size: 2em;
   color: #dc3545;
   transition: all 0.3s ease;
   flex-shrink: 0;
@@ -1193,31 +1227,32 @@ export default {
 .gallery-right-panel {
   flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: center;
   gap: 6px;
-  min-width: 140px;
 }
 
-.button-container {
+.tier-actions {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  gap: 6px;
-  width: 100%;
+  justify-content: center;
+  align-items: stretch;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .add-tier-btn {
   background: #444;
   border: 2px dashed #666;
   color: #ccc;
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 4px 10px;
+  border-radius: 6px;
   cursor: pointer;
   text-align: center;
-  font-size: 13px;
+  font-size: 12px;
   transition: all 0.3s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .add-tier-btn:hover {
@@ -1230,13 +1265,14 @@ export default {
   background: #dc3545;
   border: 2px solid #c82333;
   color: white;
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 4px 10px;
+  border-radius: 6px;
   cursor: pointer;
   text-align: center;
-  font-size: 13px;
+  font-size: 12px;
   transition: all 0.3s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .reset-tier-btn:hover {
@@ -1245,23 +1281,32 @@ export default {
   color: #fff;
 }
 
-/* 帮助按钮 */
+.help-close-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .help-btn {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 42px;
-  height: 42px;
+  width: 28px;
+  height: 28px;
   background: #65a6bc;
   border: none;
   border-radius: 50%;
   color: white;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: bold;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
-  z-index: 1000;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
 }
 
 .help-btn:hover {
@@ -1269,23 +1314,18 @@ export default {
   transform: scale(1.1);
 }
 
-/* 关闭按钮 */
 .close-btn {
-  position: fixed;
-  bottom: 20px;
-  right: 74px;
-  width: 42px;
-  height: 42px;
+  width: 28px;
+  height: 28px;
   background: rgba(80, 80, 80, 0.8);
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
   color: white;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: bold;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
-  z-index: 1000;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;

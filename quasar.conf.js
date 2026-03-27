@@ -23,7 +23,8 @@ module.exports = function (/* ctx */) {
       'i18n',
       'request',
       'element-ui',
-      'antd'
+      'antd',
+      'electron-clipboard'
     ],
 
     // https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-css
@@ -55,7 +56,7 @@ module.exports = function (/* ctx */) {
       // Add dependencies for transpiling with Babel (Array of string/regex)
       // (from node_modules, which are by default not transpiled).
       // Applies only if "transpile" is set to true.
-      transpileDependencies: [/vega.*/, /@quasar.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio'],
+      transpileDependencies: [/vega.*/, /@quasar.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/],
 
       // rtl: false, // https://quasar.dev/options/rtl-support
       // preloadChunks: true,
@@ -71,6 +72,9 @@ module.exports = function (/* ctx */) {
         // ESLint is run separately via `npm run lint`.
         // eslint-loader v4 is incompatible with eslint v8 (removed getFormatter API),
         // so it has been removed from the webpack build pipeline.
+        cfg.externals = {
+          electron: 'commonjs electron'
+        }
 
         // Add babel loader for vega modules
         // cfg.module.rules.push({
@@ -87,6 +91,50 @@ module.exports = function (/* ctx */) {
         //     }
         //   }
         // })
+
+        // Monaco editor: use monaco-editor-webpack-plugin to bundle workers
+        const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin')
+        cfg.plugins.push(new MonacoWebpackPlugin({
+          languages: ['markdown', 'yaml', 'json', 'html', 'css', 'typescript', 'javascript'],
+          features: [
+            'bracketMatching',
+            // 'clipboard', // Disabled - we use custom Electron clipboard implementation
+            'codeAction',
+            'codelens',
+            'colorDetector',
+            'comment',
+            'contextmenu',
+            'cursorUndo',
+            'find',
+            'folding',
+            'fontZoom',
+            'format',
+            'gotoLine',
+            'hover',
+            'inPlaceReplace',
+            'indentation',
+            'linesOperations',
+            'links',
+            'multicursor',
+            'parameterHints',
+            'quickCommand',
+            'quickOutline',
+            'referenceSearch',
+            'rename',
+            'smartSelect',
+            'snippets',
+            'suggest',
+            'toggleHighContrast',
+            'toggleTabFocusMode',
+            'transpose',
+            'unusualFileTabbing',
+            'viewportSemanticColoring',
+            'wordHighlighter',
+            'wordOperations',
+            'wordPartOperations',
+            'wordPartSearch'
+          ]
+        }))
       }
     },
 

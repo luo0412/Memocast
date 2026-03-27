@@ -57,37 +57,22 @@ export default {
   },
   methods: {
     initMonaco: function () {
-      /**
-       * Define custom theme
-       */
       monaco.editor.defineTheme('Memocast-Dark', {
         base: 'vs-dark',
         inherit: true,
-        rules: [{ background: '#34383e' }],
+        rules: [],
         colors: {
-          // 相关颜色属性配置
-          // 'editor.foreground': '#000000',
           'editor.background': '#34383e',
           'editorCursor.foreground': '#FFCC00'
-          // 'editor.lineHighlightBackground': '#0000FF20',
-          // 'editorLineNumber.foreground': '#008800',
-          // 'editor.selectionBackground': '#88000030',
-          // 'editor.inactiveSelectionBackground': '#88000015'
         }
       })
       monaco.editor.defineTheme('Memocast-Light', {
         base: 'vs',
         inherit: true,
-        rules: [{ background: '#ffffff' }],
+        rules: [],
         colors: {
-          // 相关颜色属性配置
-          // 'editor.foreground': '#000000',
           'editor.background': '#ffffff',
           'editorCursor.foreground': '#FFCC00'
-          // 'editor.lineHighlightBackground': '#0000FF20',
-          // 'editorLineNumber.foreground': '#008800',
-          // 'editor.selectionBackground': '#88000030',
-          // 'editor.inactiveSelectionBackground': '#88000015'
         }
       })
       this.contentEditor = monaco.editor.create(document.getElementById('monaco'), {
@@ -95,16 +80,19 @@ export default {
         language: 'markdown',
         automaticLayout: true,
         theme: this.darkMode ? 'Memocast-Dark' : 'Memocast-Light',
-        fontSize: '17px',
+        fontSize: 17,
         scrollBeyondLastLine: false,
         fontLigatures: true,
-        fontFamily: 'JetBrains Mono, Fira Code, Monaco, PingFang SC, Hiragino Sans GB, 微软雅黑, Arial, sans-serif, Microsoft YaHei'
+        fontFamily: 'JetBrains Mono, Fira Code, Monaco, PingFang SC, Hiragino Sans GB, 微软雅黑, Arial, sans-serif, Microsoft YaHei',
+        accessibilitySupport: 'on',
+        // Ensure Monaco uses the correct clipboard operations in Electron
+        automaticClipboardScrollMode: 'toCursor',
+        multiCursorPaste: 'all'
       })
-      this.contentEditor.onKeyDown(e => {
-        if (!this.active) {
-          e.preventDefault()
-          return
-        }
+
+      // Track note change state via content change (replaces onKeyDown)
+      this.contentEditor.onDidChangeModelContent(() => {
+        if (!this.active) return
         const curData = this.contentEditor.getValue()
         if (curData !== this.currentNote) {
           this.updateNoteState('changed')
@@ -112,9 +100,125 @@ export default {
           this.updateNoteState('default')
         }
       })
+
+      // Register custom shortcuts
       this.contentEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.US_COMMA, () => bus.$emit(events.VIEW_SHORTCUT_CALL.switchView, 'switchView'))
       this.contentEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.US_DOT, () => bus.$emit(events.VIEW_SHORTCUT_CALL.sourceMode, 'sourceMode'))
       this.contentEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, this.saveHandler)
+
+      // Override Monaco's built-in clipboard to use Electron clipboard
+      // This ensures copy/paste works correctly in Electron environment
+      const self = this
+      const monacoContainer = document.getElementById('monaco')
+
+      // Helper function to get selected text
+      const getSelectedText = () => {
+        const selection = self.contentEditor.getSelection()
+        return self.contentEditor.getModel().getValueInRange(selection)
+      }
+
+      // Check if Electron clipboard is available
+      const hasElectronClipboard = () => {
+        return typeof window !== 'undefined' &&
+               window.__electronClipboard &&
+               typeof window.__electronClipboard.readText === 'function'
+      }
+
+      // Intercept copy at container level
+      monacoContainer.addEventListener('copy', (e) => {
+        const selectedText = getSelectedText()
+        if (selectedText && hasElectronClipboard()) {
+          // Give Monaco time to copy to its internal clipboard, then sync to Electron
+          setTimeout(() => {
+            window.__electronClipboard.writeText(selectedText)
+          }, 0)
+        }
+      })
+
+      // Intercept cut at container level
+      monacoContainer.addEventListener('cut', (e) => {
+        const selectedText = getSelectedText()
+        if (selectedText && hasElectronClipboard()) {
+          setTimeout(() => {
+            window.__electronClipboard.writeText(selectedText)
+          }, 0)
+        }
+      })
+
+      // Intercept paste at container level
+      monacoContainer.addEventListener('paste', (e) => {
+        // Read from Electron clipboard and paste as plain text
+        if (hasElectronClipboard()) {
+          e.preventDefault()
+          const text = window.__electronClipboard.readText()
+          if (text !== null && text !== undefined && text !== '') {
+            const selection = self.contentEditor.getSelection()
+            self.contentEditor.executeEdits('paste', [{
+              range: selection,
+              text: text,
+              forceMoveMarkers: true
+            }])
+          }
+        }
+      })
+
+      // Register copyAsMarkdown, copyAsHtml, pasteAsPlainText actions consumed by the app
+      this.contentEditor.addAction({
+        id: 'copyAsMarkdown',
+        label: 'Copy As Markdown',
+        keybindings: [],
+        run: () => bus.$emit(events.EDIT_SHORTCUT_CALL.copyAsMarkdown, 'copyAsMarkdown')
+      })
+      this.contentEditor.addAction({
+        id: 'copyAsHtml',
+        label: 'Copy As HTML',
+        keybindings: [],
+        run: () => bus.$emit(events.EDIT_SHORTCUT_CALL.copyAsHtml, 'copyAsHtml')
+      })
+      this.contentEditor.addAction({
+        id: 'pasteAsPlainText',
+        label: 'Paste As Plain Text',
+        keybindings: [],
+        run: () => bus.$emit(events.EDIT_SHORTCUT_CALL.pasteAsPlainText, 'pasteAsPlainText')
+      })
+    },
+    editCopyPasteHandler: function (type) {
+      if (!this.active || !this.contentEditor) return
+      const editor = this.contentEditor
+
+      if (type === 'copyAsMarkdown') {
+        // Copy selected text to clipboard as plain text
+        const selection = editor.getSelection()
+        const selectedText = editor.getModel().getValueInRange(selection)
+        if (window.__electronClipboard) {
+          window.__electronClipboard.writeText(selectedText)
+        } else if (navigator.clipboard) {
+          navigator.clipboard.writeText(selectedText)
+        }
+      } else if (type === 'copyAsHtml') {
+        const selection = editor.getSelection()
+        const selectedText = editor.getModel().getValueInRange(selection)
+        const html = `<pre>${selectedText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`
+        if (window.__electronClipboard) {
+          window.__electronClipboard.writeHTML(html)
+          window.__electronClipboard.writeText(selectedText)
+        }
+      } else if (type === 'pasteAsPlainText') {
+        // Read plain text from Electron clipboard and insert directly
+        const text = window.__electronClipboard && window.__electronClipboard.readText()
+        if (text !== undefined) {
+          const selection = editor.getSelection()
+          editor.executeEdits('pasteAsPlainText', [{
+            range: selection,
+            text: text,
+            forceMoveMarkers: true
+          }])
+        }
+      } else if (type === 'undo') {
+        editor.trigger('source', 'undo')
+      } else if (type === 'redo') {
+        editor.trigger('source', 'redo')
+      }
     },
     saveHandler: function () {
       if (this.active && this.contentEditor) {
@@ -141,6 +245,22 @@ export default {
   mounted () {
     this.initMonaco()
     bus.$on(events.EDIT_SHORTCUT_CALL.save, this.saveHandler)
+    bus.$on(events.EDIT_SHORTCUT_CALL.copyAsMarkdown, this.editCopyPasteHandler)
+    bus.$on(events.EDIT_SHORTCUT_CALL.copyAsHtml, this.editCopyPasteHandler)
+    bus.$on(events.EDIT_SHORTCUT_CALL.pasteAsPlainText, this.editCopyPasteHandler)
+    bus.$on(events.EDIT_SHORTCUT_CALL.undo, this.editCopyPasteHandler)
+    bus.$on(events.EDIT_SHORTCUT_CALL.redo, this.editCopyPasteHandler)
+  },
+  beforeDestroy () {
+    bus.$off(events.EDIT_SHORTCUT_CALL.save, this.saveHandler)
+    bus.$off(events.EDIT_SHORTCUT_CALL.copyAsMarkdown, this.editCopyPasteHandler)
+    bus.$off(events.EDIT_SHORTCUT_CALL.copyAsHtml, this.editCopyPasteHandler)
+    bus.$off(events.EDIT_SHORTCUT_CALL.pasteAsPlainText, this.editCopyPasteHandler)
+    bus.$off(events.EDIT_SHORTCUT_CALL.undo, this.editCopyPasteHandler)
+    bus.$off(events.EDIT_SHORTCUT_CALL.redo, this.editCopyPasteHandler)
+    if (this.contentEditor) {
+      this.contentEditor.dispose()
+    }
   },
   watch: {
     currentNote: function (currentData) {

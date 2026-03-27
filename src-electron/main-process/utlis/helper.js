@@ -93,7 +93,7 @@ export function injectClickFunction (menuItem, event, callback) {
   }
   if (menuItem.submenu) {
     menuItem.submenu = menuItem.submenu.map(item => {
-      return injectClickFunction(item, callback)
+      return injectClickFunction(item, event, callback)
     })
   }
   return menuItem

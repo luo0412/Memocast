@@ -219,6 +219,24 @@ export default {
     commit(types.UPDATE_CURRENT_NOTES, result)
   },
   /**
+   * 获取指定文件夹下的笔记（用于导出，不修改 currentNotes 状态）
+   * @param kbGuid
+   * @param category
+   * @returns {Promise<*>}
+   */
+  async getCategoryNotesForExport (_, { kbGuid, category }) {
+    const result = await api.KnowledgeBaseApi.getCategoryNotes({
+      kbGuid,
+      data: {
+        category,
+        start: 0,
+        count: 100,
+        withAbstract: true
+      }
+    })
+    return result
+  },
+  /**
    * 获取所有的笔记
    * @param commit
    * @param state
@@ -945,9 +963,10 @@ export default {
    * 批量导出markdown笔记到本地
    * @param state
    * @param noteFields
+   * @param category  optional category override for the export folder name
    * @returns {Promise<void>}
    */
-  async exportMarkdownFiles ({ state }, noteFields = []) {
+  async exportMarkdownFiles ({ state }, noteFields = [], category = '') {
     const {
       kbGuid,
       currentCategory
@@ -987,10 +1006,11 @@ export default {
       }
     })
     Loading.hide()
-    const category = currentCategory.split('/')[1]
+    const exportCategory = category || currentCategory
+    const exportCategoryName = exportCategory.split('/')[1] || 'Export'
     await exportMarkdownFiles({
       contents,
-      category
+      category: exportCategoryName
     })
   }
 }
