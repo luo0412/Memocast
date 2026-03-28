@@ -11,30 +11,32 @@
       :min="300"
     >
       <template v-slot:before>
-        <q-splitter
-          v-model='leftInnerSplitterValue'
-          :limits='leftInnerSplitterLimits'
-          class='full-width full-height index-left-inner-splitter'
-          unit='px'
-          separator-class='custom-splitter'
-          before-class='overflow-hidden full-height'
-          after-class='overflow-hidden full-height'
-          :min="300"
-          :disable="!categoryTreeVisible"
-        >
-          <template v-slot:before>
-            <CategoryTreePanel class='full-height' />
-          </template>
-          <template v-slot:after>
-            <transition
-              appear
-              enter-active-class='animated fadeIn'
-              leave-active-class='animated fadeOut'
-            >
-              <NoteList v-show='noteListVisible' class='full-height' />
-            </transition>
-          </template>
-        </q-splitter>
+        <div class='left-panel-wrapper'>
+          <q-splitter
+            v-model='leftInnerSplitterValue'
+            :limits='leftInnerSplitterLimits'
+            class='full-width full-height index-left-inner-splitter'
+            unit='px'
+            horizontal
+            separator-class='custom-splitter'
+            before-class='overflow-hidden'
+            after-class='overflow-hidden'
+            :disable="!categoryTreeVisible"
+          >
+            <template v-slot:before>
+              <CategoryTreePanel class='full-height' />
+            </template>
+            <template v-slot:after>
+              <transition
+                appear
+                enter-active-class='animated fadeIn'
+                leave-active-class='animated fadeOut'
+              >
+                <NoteList v-show='noteListVisible' class='full-height' />
+              </transition>
+            </template>
+          </q-splitter>
+        </div>
       </template>
       <template v-slot:after>
         <div class='full-height editor-wrapper'>
@@ -304,8 +306,8 @@ export default {
       isMindmapMode: false,
       splitterWidthValue: 580,
       splitterLimits: [300, Infinity],
-      leftInnerSplitterValue: 280,
-      leftInnerSplitterLimits: [150, Infinity],
+      leftInnerSplitterValue: 240,
+      leftInnerSplitterLimits: [120, Infinity],
       leftInnerSplitterSaveTimer: null,
       splitterWidthSaveTimer: null,
       tempNoteData: {},
@@ -445,8 +447,8 @@ export default {
       this.leftInnerSplitterLimits = [0, Infinity]
       this.leftInnerSplitterValue = 0
     } else {
-      this.leftInnerSplitterLimits = [150, Infinity]
-      this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 280
+      this.leftInnerSplitterLimits = [120, Infinity]
+      this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 240
     }
   },
   beforeDestroy () {
@@ -508,8 +510,8 @@ export default {
         this.splitterLimits = [300, Infinity]
         this.splitterWidthValue = this.splitterWidth || 580
         if (this.categoryTreeVisible) {
-          this.leftInnerSplitterLimits = [150, Infinity]
-          this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 280
+          this.leftInnerSplitterLimits = [120, Infinity]
+          this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 240
         } else {
           this.leftInnerSplitterLimits = [0, Infinity]
           this.leftInnerSplitterValue = 0
@@ -521,8 +523,8 @@ export default {
         this.leftInnerSplitterLimits = [0, Infinity]
         this.leftInnerSplitterValue = 0
       } else {
-        this.leftInnerSplitterLimits = [150, Infinity]
-        this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 280
+        this.leftInnerSplitterLimits = [120, Infinity]
+        this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 240
       }
     },
     showEditorNoteFab: function (val) {
@@ -553,7 +555,7 @@ export default {
 }
 
 .editor-action-bar {
-  position: absolute;
+  position: fixed;
   bottom: 12px;
   right: 15px;
   display: flex;
@@ -614,6 +616,12 @@ export default {
   min-height: 0;
 }
 
+.left-panel-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .editor-component {
   height: 100%;
   overflow: auto;
@@ -641,6 +649,29 @@ export default {
 
 .q-splitter.q-splitter--dark.q-splitter--vertical > .q-splitter__separator.custom-splitter:hover,
 .q-splitter.q-splitter--dark.q-splitter--vertical.q-splitter--active > .q-splitter__separator.custom-splitter {
+  background-color: var(--themeColor) !important;
+}
+
+.q-splitter.q-splitter--horizontal > .q-splitter__separator.custom-splitter {
+  background-color: #dfe3ea !important;
+  transition: background-color 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.q-splitter.q-splitter--horizontal > .q-splitter__separator.custom-splitter:hover,
+.q-splitter.q-splitter--horizontal.q-splitter--active > .q-splitter__separator.custom-splitter {
+  background-color: var(--themeColor) !important;
+  height: 3px !important;
+  box-shadow: 0 0 0 1px var(--themeColor30, rgba(33, 181, 111, 0.35));
+}
+
+.q-splitter.q-splitter--dark.q-splitter--horizontal > .q-splitter__separator.custom-splitter {
+  background-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.q-splitter.q-splitter--dark.q-splitter--horizontal > .q-splitter__separator.custom-splitter:hover,
+.q-splitter.q-splitter--dark.q-splitter--horizontal.q-splitter--active > .q-splitter__separator.custom-splitter {
   background-color: var(--themeColor) !important;
 }
 </style>
