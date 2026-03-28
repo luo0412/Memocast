@@ -1,5 +1,4 @@
 import {
-  OPEN_CATEGORY,
   OPEN_TIER_RANKING,
   // RENAME,
   CREATE_CATEGORY,
@@ -25,7 +24,7 @@ export const showContextMenu = (event, isCurrentCategory, category) => {
     EXPORT.enabled = false
     DELETE.enabled = false
   }
-  const ITEMS = [OPEN_CATEGORY, SEPARATOR, OPEN_TIER_RANKING, SEPARATOR, CREATE_CATEGORY, EXPORT, SEPARATOR, DELETE]
+  const ITEMS = [CREATE_CATEGORY, OPEN_TIER_RANKING, SEPARATOR, EXPORT, SEPARATOR, DELETE]
 
   const MENU_ITEM = ITEMS.map(item => {
     if (item.type === 'separator') return item

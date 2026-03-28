@@ -1,11 +1,5 @@
 import * as contextMenu from './actions'
 
-export const OPEN_CATEGORY = {
-  label: 'open',
-  id: 'openCategoryMenuItem',
-  click: contextMenu.openCategory()
-}
-
 export const OPEN_TIER_RANKING = {
   label: 'openTierRanking',
   id: 'openTierRankingMenuItem',

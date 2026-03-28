@@ -119,10 +119,6 @@ export default {
       e.stopPropagation()
       showSideDrawerContextMenu(e, this.currentCategory === '', '')
     },
-    openCategoryHandler: function () {
-      this.updateCurrentCategory({ data: this.rightClickCategoryItem, type: this.type })
-      this.expandFullPaneLayout()
-    },
     openTierRankingHandler: function () {
       this.$refs.tierRankingDialog.toggle()
     },
@@ -130,11 +126,9 @@ export default {
     ...mapClientActions(['setRightClickCategoryItem', 'expandFullPaneLayout'])
   },
   mounted () {
-    bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.openCategory, this.openCategoryHandler)
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.openTierRanking, this.openTierRankingHandler)
   },
   beforeDestroy () {
-    bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.openCategory, this.openCategoryHandler)
     bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.openTierRanking, this.openTierRankingHandler)
   },
   watch: {

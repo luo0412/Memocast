@@ -1,10 +1,6 @@
 import events from 'src/constants/events'
 import { packClickFunction } from 'src/contextMenu/utils'
 
-export const openCategory = (menuItem, browserWindow) => {
-  return packClickFunction(events.SIDE_DRAWER_CONTEXT_MENU.openCategory)
-}
-
 export const openTierRanking = (menuItem, browserWindow) => {
   return packClickFunction(events.SIDE_DRAWER_CONTEXT_MENU.openTierRanking)
 }

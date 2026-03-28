@@ -55,7 +55,6 @@ export default {
     delete: 'note.item.context.menu.delete'
   },
   SIDE_DRAWER_CONTEXT_MENU: {
-    openCategory: 'side.drawer.context.menu.open.category',
     renameCategory: 'side.drawer.context.menu.rename.category',
     createCategory: 'side.drawer.context.menu.create.category',
     createNote: 'side.drawer.context.menu.create.note',
