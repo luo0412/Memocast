@@ -557,6 +557,19 @@ export default {
       icon: 'delete'
     })
   },
+  async renameCategory ({ state }, { category, newName }) {
+    const { kbGuid } = state
+    await api.KnowledgeBaseApi.renameCategory({
+      kbGuid,
+      data: { category, newName }
+    })
+    await this.dispatch('server/getAllCategories')
+    Notify.create({
+      color: 'positive',
+      message: i18n.t('renameCategorySuccessfully'),
+      icon: 'check'
+    })
+  },
   async uploadImage ({
     commit,
     getters,

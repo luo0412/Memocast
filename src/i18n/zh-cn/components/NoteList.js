@@ -4,6 +4,8 @@ export default {
   noteTitle: '新笔记.md',
   categoryName: '文件夹名',
   deleteCategory: '删除此文件夹',
+  renameCategory: '重命名文件夹',
+  renameCategorySuccessfully: '文件夹重命名成功',
   import: '导入',
   restrictedToMarkdown: '仅限于Markdown',
   upload: '上传',

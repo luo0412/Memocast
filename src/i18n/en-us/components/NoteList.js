@@ -4,6 +4,8 @@ export default {
   noteTitle: 'Note.md',
   categoryName: 'Category Name',
   deleteCategory: 'Delete This Category',
+  renameCategory: 'Rename Category',
+  renameCategorySuccessfully: 'Folder renamed successfully',
   import: 'Import',
   restrictedToMarkdown: 'Restricted to Markdown',
   upload: 'Upload',

@@ -157,6 +157,17 @@ function displayDateElegantly (date) {
   }
 }
 
+/**
+ * 从分类绝对路径取最内层文件夹名（为知路径常含 /My Notes/ 等前缀）
+ * @param {string} path 如 /My Notes/a/b/ 或 /a/b/
+ * @returns {string} 如 b
+ */
+function getCategoryLeafNameFromPath (path) {
+  if (isNullOrEmpty(path)) return ''
+  const parts = _.toString(path).split('/').filter(c => !isNullOrEmpty(c))
+  return parts.length ? parts[parts.length - 1] : ''
+}
+
 function wizIsPredefinedLocation (strLocation) {
   return [
     '/Deleted Items/',
@@ -472,6 +483,7 @@ function animatedScrollTo (element, to, duration, callback) {
 
 export default {
   isNullOrEmpty,
+  getCategoryLeafNameFromPath,
   convertHtml2Markdown,
   extractMarkdownFromMDNote,
   wizIsPredefinedLocation,

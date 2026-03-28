@@ -112,6 +112,28 @@ export default {
           this.deleteCategory(this.rightClickCategoryItem)
         })
     },
+    renameCategoryHandler: function () {
+      const category = this.rightClickCategoryItem
+      if (helper.isNullOrEmpty(category)) return
+      const categoryName = helper.getCategoryLeafNameFromPath(category)
+      this.$q.dialog({
+        title: this.$t('renameCategory'),
+        prompt: {
+          model: categoryName,
+          type: 'text',
+          attrs: {
+            spellcheck: false
+          },
+          label: this.$t('categoryName')
+        },
+        ok: this.$t('confirm'),
+        cancel: this.$t('cancel')
+      }).onOk(newName => {
+        if (newName && newName !== categoryName) {
+          this.renameCategory({ category, newName })
+        }
+      })
+    },
     exportCategoryHandler: async function () {
       const categoryToExport = this.rightClickCategoryItem
       if (!categoryToExport) return
@@ -188,6 +210,7 @@ export default {
     },
     ...mapServerActions([
       'deleteCategory',
+      'renameCategory',
       'updateCurrentCategory',
       'exportMarkdownFiles',
       'updateNoteInfo',
@@ -203,6 +226,7 @@ export default {
   mounted () {
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.exportCategory.markdown, this.exportCategoryHandler)
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.delete, this.deleteCategoryHandler)
+    bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.renameCategory, this.renameCategoryHandler)
     bus.$on(events.NOTE_ITEM_CONTEXT_MENU.rename, this.renameNoteHandler)
     bus.$on(events.NOTE_ITEM_CONTEXT_MENU.copy, this.copyNoteHandler)
     bus.$on(events.NOTE_ITEM_CONTEXT_MENU.move, this.moveNoteHandler)
