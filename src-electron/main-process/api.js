@@ -270,11 +270,11 @@ export default {
       menuItems.forEach(item => {
         menu.append(new MenuItem(item))
       })
-      menu.popup([{
+      menu.popup({
         window: win,
         x: x,
         y: y
-      }])
+      })
     }).catch(err => throw err)
 
     handleApi('open-log-files', async (e, config) => {
