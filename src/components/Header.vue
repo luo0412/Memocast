@@ -45,6 +45,16 @@
         <i class="el-icon-price-tag icon-custom" />
       </div>
 
+      <!-- 日历 -->
+      <div
+        class="header-icon-btn q-electron-drag--exception"
+        :class="{ 'is-active': sidebarTreeType === 'calendar' }"
+        :title="$t('calendarView')"
+        @click="toggleCalendarDrawer"
+      >
+        <i class="el-icon-date icon-custom" />
+      </div>
+
       <!-- 搜索图标 -->
       <div
         class="header-icon-btn q-electron-drag--exception"
@@ -242,18 +252,34 @@ export default {
 
     toggleCategoryDrawer () {
       if (!this.isLogin) return
+      const wasCalendar = this.sidebarTreeType === 'calendar'
       this.toggleChanged({ key: 'sidebarTreeType', value: 'category' })
       if (!this.noteListVisible || this.paneLayoutMode !== 0) {
         this.expandFullPaneLayout()
       }
+      if (wasCalendar) this.getCategoryNotes()
     },
 
     toggleTagDrawer () {
       if (!this.isLogin) return
+      const wasCalendar = this.sidebarTreeType === 'calendar'
       this.toggleChanged({ key: 'sidebarTreeType', value: 'tag' })
       if (!this.noteListVisible || this.paneLayoutMode !== 0) {
         this.expandFullPaneLayout()
       }
+      if (wasCalendar) this.getCategoryNotes()
+    },
+
+    toggleCalendarDrawer () {
+      if (!this.isLogin) return
+      const n = new Date()
+      const ymd = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+      this.toggleChanged({ key: 'calendarSelectedDate', value: ymd })
+      this.toggleChanged({ key: 'sidebarTreeType', value: 'calendar' })
+      if (!this.noteListVisible || this.paneLayoutMode !== 0) {
+        this.expandFullPaneLayout()
+      }
+      this.getCategoryNotes()
     },
 
     handleAvatarCommand (command) {

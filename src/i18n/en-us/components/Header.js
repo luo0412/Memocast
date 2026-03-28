@@ -11,5 +11,6 @@ export default {
   changed: 'Changed',
   lock: 'Lock',
   unlock: 'Unlock',
-  tag: 'Tag'
+  tag: 'Tag',
+  calendarView: 'Calendar'
 }

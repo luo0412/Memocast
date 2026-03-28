@@ -24,7 +24,8 @@
             :disable="!categoryTreeVisible"
           >
             <template v-slot:before>
-              <CategoryTreePanel class='full-height' />
+              <CategoryTreePanel v-if="sidebarTreeType !== 'calendar'" class='full-height' />
+              <CalendarPanel v-else class='full-height' />
             </template>
             <template v-slot:after>
               <transition
@@ -212,6 +213,7 @@
 <script>
 import NoteList from '../components/NoteList.vue'
 import CategoryTreePanel from '../components/CategoryTreePanel.vue'
+import CalendarPanel from '../components/CalendarPanel.vue'
 import bus from 'components/bus'
 import events from 'src/constants/events'
 import helper from 'src/utils/helper'
@@ -243,6 +245,7 @@ export default {
     NoteOutlineDrawer,
     NoteList,
     CategoryTreePanel,
+    CalendarPanel,
     Illustration,
     ImportDialog
   },
@@ -296,7 +299,8 @@ export default {
       'enablePreviewEditor',
       'splitterWidth',
       'leftInnerSplitterRatio',
-      'rightClickCategoryItem'
+      'rightClickCategoryItem',
+      'sidebarTreeType'
     ])
   },
   data () {

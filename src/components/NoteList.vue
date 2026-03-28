@@ -79,6 +79,9 @@ export default {
       }
     },
     category: function () {
+      if (this.sidebarTreeType === 'calendar' && this.calendarSelectedDate) {
+        return this.calendarSelectedDate.replace(/-/g, '/')
+      }
       if (helper.isNullOrEmpty(this.currentCategory)) return ''
       const tagIndex = this.tags.findIndex(
         t => t.tagGuid === this.currentCategory
@@ -97,7 +100,7 @@ export default {
     },
     ...mapServerGetters(['activeNote', 'currentNotes']),
     ...mapServerState(['isCurrentNotesLoading', 'currentCategory', 'isLogin', 'tags', 'currentNote']),
-    ...mapClientState(['rightClickCategoryItem', 'rightClickNoteItem', 'noteListDenseMode'])
+    ...mapClientState(['rightClickCategoryItem', 'rightClickNoteItem', 'noteListDenseMode', 'sidebarTreeType', 'calendarSelectedDate'])
   },
   methods: {
     deleteCategoryHandler: function () {

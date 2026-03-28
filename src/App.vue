@@ -1,9 +1,12 @@
 <template>
   <div id='q-app'>
-    <router-view />
+    <a-locale-provider :locale='antdZhCN'>
+      <router-view />
+    </a-locale-provider>
   </div>
 </template>
 <script>
+import zhCN from 'ant-design-vue/lib/locale-provider/zh_CN'
 import ErrorHandler from './ErrorHandler'
 import ScheduleHandler from './ScheduleHandler'
 import ApiHandler from 'src/ApiHandler'
@@ -25,7 +28,8 @@ export default {
   name: 'App',
   data () {
     return {
-      autoSaveInterval: null
+      autoSaveInterval: null,
+      antdZhCN: zhCN
     }
   },
   computed: {

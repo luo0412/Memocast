@@ -27,8 +27,10 @@ export default function () {
     themes: [],
     autoSaveGap: 0,
     splitterWidth: 580,
-    /** 左侧第一栏：分类树 / 标签树（与 Header 文件夹、标签按钮同步） */
+    /** 左侧第一栏：分类树 / 标签树 / 日历（与 Header 按钮同步） */
     sidebarTreeType: 'category',
+    /** 日历模式下列表筛选日 YYYY-MM-DD（本地日界） */
+    calendarSelectedDate: '',
     /** 左侧内部分割：分类树宽度 px */
     leftInnerSplitterRatio: 280,
     runeCards: [

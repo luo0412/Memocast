@@ -186,10 +186,70 @@ export default {
    * @param payload
    * @returns {Promise<void>}
    */
+  /**
+   * 日历模式：用官方 list/category 按修改时间倒序分页，按 dataModified 落在所选本地自然日的笔记写入列表。
+   * （公开文档无单独「按日」接口，此为等效查询方式。）
+   */
+  async fetchNotesByCalendarDate ({
+    commit,
+    state,
+    rootState
+  }, payload = {}) {
+    const { kbGuid } = state
+    if (!kbGuid) return
+    let ymd = payload.date || rootState.client.calendarSelectedDate
+    if (helper.isNullOrEmpty(ymd)) {
+      const n = new Date()
+      ymd = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+    }
+    const parts = ymd.split('-').map(p => parseInt(p, 10))
+    const dayStart = new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0).getTime()
+    const dayEnd = new Date(parts[0], parts[1] - 1, parts[2] + 1, 0, 0, 0, 0).getTime()
+    commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, true)
+    const collected = []
+    let start = 0
+    const pageSize = 100
+    const maxPages = 120
+    try {
+      for (let page = 0; page < maxPages; page++) {
+        const batch = await api.KnowledgeBaseApi.getCategoryNotes({
+          kbGuid,
+          data: {
+            category: '',
+            start,
+            count: pageSize,
+            withAbstract: true,
+            orderBy: 'modified',
+            ascending: 'desc'
+          }
+        })
+        if (!batch || !batch.length) break
+        for (const note of batch) {
+          const dm = note.dataModified
+          if (dm >= dayEnd) continue
+          if (dm >= dayStart && dm < dayEnd) collected.push(note)
+          if (dm < dayStart) {
+            commit(types.UPDATE_CURRENT_NOTES, collected)
+            return
+          }
+        }
+        if (batch.length < pageSize) break
+        start += pageSize
+      }
+      commit(types.UPDATE_CURRENT_NOTES, collected)
+    } finally {
+      commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
+    }
+  },
   async getCategoryNotes ({
     commit,
-    state
+    state,
+    rootState
   }, payload = {}) {
+    if (rootState.client.sidebarTreeType === 'calendar') {
+      await this.dispatch('server/fetchNotesByCalendarDate', payload)
+      return
+    }
     const {
       kbGuid,
       currentCategory,

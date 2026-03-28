@@ -11,5 +11,6 @@ export default {
   changed: '已修改',
   lock: '锁定笔记',
   unlock: '解锁笔记',
-  tag: '标签'
+  tag: '标签',
+  calendarView: '日历'
 }
