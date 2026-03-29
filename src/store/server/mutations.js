@@ -29,7 +29,11 @@ export default {
   },
   [types.LOGOUT] (state) {
     for (const key in state) {
-      state[key] = null
+      if (key === 'currentNote') {
+        state[key] = {}
+      } else {
+        state[key] = null
+      }
     }
     state.isLogin = false
     state.noteState = 'default'
@@ -43,6 +47,9 @@ export default {
     if (payload.html) {
       state.currentNote = payload
     } else {
+      if (!state.currentNote) {
+        state.currentNote = {}
+      }
       const { currentNote } = state
       currentNote.info = payload
       state.currentNote = currentNote
@@ -104,7 +111,9 @@ export default {
     return state
   },
   [types.UPDATE_CURRENT_NOTE_TAGS] (state, tags) {
-    state.currentNote.info.tags = tags
+    if (state.currentNote && state.currentNote.info) {
+      state.currentNote.info.tags = tags
+    }
     return state
   },
   [types.SET_CALENDAR_NOTE_DATES] (state, dates) {
