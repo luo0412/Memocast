@@ -15,5 +15,7 @@ export default {
   UPDATE_CONTENTS_LIST: 'update_contents_list',
   UPDATE_NOTE_STATE: 'update_note_state',
   UPDATE_ALL_TAGS: 'update_all_tags',
-  UPDATE_CURRENT_NOTE_TAGS: 'update_current_note_tags'
+  UPDATE_TAG_NOTES_COUNT: 'update_tag_notes_count',
+  UPDATE_CURRENT_NOTE_TAGS: 'update_current_note_tags',
+  SET_CALENDAR_NOTE_DATES: 'set_calendar_note_dates'
 }

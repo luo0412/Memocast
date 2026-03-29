@@ -64,6 +64,7 @@ export default {
     },
     openTierRanking: 'side.drawer.context.menu.open.tier.ranking'
   },
+  TAG_TREEMAP_RESIZE: 'tag.treemap.resize',
   MARK_MAP_CONTEXT_MENU: {
     saveAsPNG: 'mark.map.context.menu.save.as.png',
     saveAsSVG: 'mark.map.context.menu.save.as.svg',

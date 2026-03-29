@@ -17,6 +17,8 @@ export default function () {
     uploadImageUrl: '',
     contentsList: [],
     noteState: 'none',
-    tags: []
+    tags: [],
+    tagNotesCount: {},   // { [tagGuid]: number }
+    calendarNoteDates: [] // string[] of 'YYYY-MM-DD' with notes in current month
   }
 }

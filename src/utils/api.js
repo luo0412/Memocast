@@ -297,6 +297,54 @@ const KnowledgeBaseApi = {
     )
   },
   /**
+   * 获取指定标签下的笔记数量
+   * API /ks/note/list/tag/:kbGuid 返回笔记数组，无 count 字段
+   * 需要分页获取所有笔记，返回数组长度
+   * @param params
+   * @returns {Promise<number>}
+   */
+  async getTagNoteCount (params) {
+    const pageSize = 500
+    let allNotes = []
+    let start = 0
+    const tagGuid = params.data.tag
+
+    for (;;) {
+      const requestParams = {
+        tag: tagGuid,
+        start,
+        count: pageSize,
+        withAbstract: true,
+        orderBy: 'created',
+        ascending: 'asc'
+      }
+
+      let batch
+      try {
+        batch = await execRequest(
+          'GET',
+          `${this.getBaseUrl()}/ks/note/list/tag/${params.kbGuid}`,
+          null,
+          null,
+          { params: requestParams }
+        )
+      } catch {
+        return 0
+      }
+
+      if (!batch || !Array.isArray(batch) || batch.length === 0) break
+
+      allNotes = allNotes.concat(batch)
+
+      if (batch.length < pageSize) break
+
+      start += pageSize
+      if (allNotes.length >= 10000) break
+    }
+
+    return allNotes.length
+  },
+  /**
    * 创建标签
    * @param params
    * @returns {Promise<*>}

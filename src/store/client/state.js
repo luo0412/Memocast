@@ -31,6 +31,8 @@ export default function () {
     sidebarTreeType: 'category',
     /** 日历模式下列表筛选日 YYYY-MM-DD（本地日界） */
     calendarSelectedDate: '',
+    /** 日历：按修改日或创建日归类（与 list/category 的 orderBy 一致） */
+    calendarDateBasis: 'modified',
     /** 左侧内部分割：分类树宽度 px */
     leftInnerSplitterRatio: 280,
     runeCards: [

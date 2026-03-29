@@ -99,8 +99,16 @@ export default {
     state.tags = tags
     return state
   },
+  [types.UPDATE_TAG_NOTES_COUNT] (state, countMap) {
+    state.tagNotesCount = countMap
+    return state
+  },
   [types.UPDATE_CURRENT_NOTE_TAGS] (state, tags) {
     state.currentNote.info.tags = tags
+    return state
+  },
+  [types.SET_CALENDAR_NOTE_DATES] (state, dates) {
+    state.calendarNoteDates = dates
     return state
   }
 }

@@ -472,6 +472,7 @@ export default {
       this.splitterWidthSaveTimer = setTimeout(() => {
         this.persistSplitterWidth()
         this.splitterWidthSaveTimer = null
+        bus.$emit(events.TAG_TREEMAP_RESIZE)
       }, 350)
     },
     leftInnerSplitterValue (val) {
@@ -481,6 +482,7 @@ export default {
       this.leftInnerSplitterSaveTimer = setTimeout(() => {
         this.persistLeftInnerSplitter()
         this.leftInnerSplitterSaveTimer = null
+        bus.$emit(events.TAG_TREEMAP_RESIZE)
       }, 350)
     },
     isSourceMode: function (val) {

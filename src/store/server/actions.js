@@ -1,5 +1,14 @@
 import types from 'src/store/server/types'
 import api from 'src/utils/api'
+
+/** 日历列表/打点用时间戳；创建日优先 dataCreated（与 Wiz 列表字段一致），缺省回退修改日 */
+function getCalendarNoteTimestamp (note, basis) {
+  if (basis === 'created') {
+    const c = note.dataCreated
+    if (c != null && !Number.isNaN(Number(c))) return Number(c)
+  }
+  return note.dataModified
+}
 import { Dark, Dialog, Loading, Notify, QSpinnerGears } from 'quasar'
 import helper from 'src/utils/helper'
 import { i18n } from 'boot/i18n'
@@ -197,6 +206,8 @@ export default {
   }, payload = {}) {
     const { kbGuid } = state
     if (!kbGuid) return
+    const basis = rootState.client.calendarDateBasis === 'created' ? 'created' : 'modified'
+    const orderBy = basis === 'created' ? 'created' : 'modified'
     let ymd = payload.date || rootState.client.calendarSelectedDate
     if (helper.isNullOrEmpty(ymd)) {
       const n = new Date()
@@ -219,16 +230,16 @@ export default {
             start,
             count: pageSize,
             withAbstract: true,
-            orderBy: 'modified',
+            orderBy,
             ascending: 'desc'
           }
         })
         if (!batch || !batch.length) break
         for (const note of batch) {
-          const dm = note.dataModified
-          if (dm >= dayEnd) continue
-          if (dm >= dayStart && dm < dayEnd) collected.push(note)
-          if (dm < dayStart) {
+          const ts = getCalendarNoteTimestamp(note, basis)
+          if (ts >= dayEnd) continue
+          if (ts >= dayStart && ts < dayEnd) collected.push(note)
+          if (ts < dayStart) {
             commit(types.UPDATE_CURRENT_NOTES, collected)
             return
           }
@@ -240,6 +251,60 @@ export default {
     } finally {
       commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
     }
+  },
+  /**
+   * 日历视图：拉取当月有笔记的日期列表，供日历格子高亮使用。
+   * @param {number} year  4位年份
+   * @param {number} month 1-12
+   */
+  async fetchCalendarNoteDates ({ commit, state, rootState }, { year, month }) {
+    const { kbGuid } = state
+    if (!kbGuid) return
+    const basis = rootState.client.calendarDateBasis === 'created' ? 'created' : 'modified'
+    const orderBy = basis === 'created' ? 'created' : 'modified'
+    const monthStart = new Date(year, month - 1, 1, 0, 0, 0, 0).getTime()
+    const monthEnd = new Date(year, month, 1, 0, 0, 0, 0).getTime()
+    const dateSet = new Set()
+    let start = 0
+    const pageSize = 100
+    const maxPages = 120
+    try {
+      for (let page = 0; page < maxPages; page++) {
+        const batch = await api.KnowledgeBaseApi.getCategoryNotes({
+          kbGuid,
+          data: {
+            category: '',
+            start,
+            count: pageSize,
+            withAbstract: true,
+            orderBy,
+            ascending: 'asc'
+          }
+        })
+        if (!batch || !batch.length) break
+        let pastMonth = false
+        for (const note of batch) {
+          const ts = getCalendarNoteTimestamp(note, basis)
+          if (ts < monthStart) continue
+          if (ts >= monthEnd) {
+            pastMonth = true
+            break
+          }
+          const d = new Date(ts)
+          const y = d.getFullYear()
+          const m = d.getMonth() + 1
+          const day = d.getDate()
+          if (y === year && m === month) {
+            dateSet.add(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`)
+          }
+        }
+        if (pastMonth) break
+        if (batch.length < pageSize) break
+        start += pageSize
+      }
+    } finally {
+    }
+    commit(types.SET_CALENDAR_NOTE_DATES, Array.from(dateSet).sort())
   },
   async getCategoryNotes ({
     commit,
@@ -793,7 +858,24 @@ export default {
   }) {
     const { kbGuid } = state
     const tags = await api.KnowledgeBaseApi.getAllTags({ kbGuid })
+
+    const countMap = {}
+    await Promise.all(
+      tags.map(async tag => {
+        try {
+          const count = await api.KnowledgeBaseApi.getTagNoteCount({
+            kbGuid,
+            data: { tag: tag.tagGuid }
+          })
+          countMap[tag.tagGuid] = count
+        } catch {
+          countMap[tag.tagGuid] = 0
+        }
+      })
+    )
+
     commit(types.UPDATE_ALL_TAGS, tags)
+    commit(types.UPDATE_TAG_NOTES_COUNT, countMap)
   },
   /**
    * 创建一个标签，但没有指定哪篇笔记拥有这个标签
