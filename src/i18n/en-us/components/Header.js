@@ -12,5 +12,8 @@ export default {
   lock: 'Lock',
   unlock: 'Unlock',
   tag: 'Tag',
-  calendarView: 'Calendar'
+  calendarView: 'Calendar',
+  skin: 'Skin',
+  ppt: 'PPT',
+  link: 'Link'
 }

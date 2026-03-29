@@ -101,8 +101,39 @@
         :title="$t('switchView')"
         @click="switchViewHandler"
       >
-        <q-icon name="table_chart" class="icon-custom" />
+        <a-icon type="layout" class="icon-custom icon-blue" />
       </div>
+
+      <!-- PPT文件图标 -->
+      <div
+        class="header-icon-btn q-electron-drag--exception"
+        :title="$t('ppt')"
+      >
+        <a-icon type="file-ppt" class="icon-custom" />
+      </div>
+
+      <!-- 链接图标 -->
+      <div
+        class="header-icon-btn q-electron-drag--exception"
+        :title="$t('link')"
+      >
+        <a-icon type="link" class="icon-custom" />
+      </div>
+
+      <!-- 换肤按钮 (Element UI Dropdown) -->
+      <el-dropdown trigger="click" @command="handleSkinCommand">
+        <div
+          class="header-icon-btn q-electron-drag--exception"
+          :title="$t('skin')"
+        >
+          <a-icon type="skin" class="icon-custom" />
+        </div>
+        <el-dropdown-menu slot="dropdown">
+          <el-dropdown-item command="nezha">哪吒</el-dropdown-item>
+          <el-dropdown-item command="wukong">悟空</el-dropdown-item>
+          <el-dropdown-item command="baiyang">白羊</el-dropdown-item>
+        </el-dropdown-menu>
+      </el-dropdown>
 
       <!-- 设置按钮 -->
       <div
@@ -227,6 +258,14 @@ export default {
     handleSearchClick () {
       this.handleHighlight('searchHighlight')
       this.$refs.searchDialog.toggle()
+    },
+
+    handleSkinCommand (command) {
+      this.$q.notify({
+        message: `已切换皮肤：${command}`,
+        type: 'info',
+        position: 'top'
+      })
     },
 
     handleSettingsClick () {
@@ -400,6 +439,10 @@ export default {
   font-size: 18px;
   color: var(--iconColor);
   transition: color 0.2s ease;
+}
+
+.icon-blue {
+  color: #1890ff !important;
 }
 
 .header-icon-btn:hover .icon-custom {

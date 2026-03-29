@@ -12,5 +12,8 @@ export default {
   lock: '锁定笔记',
   unlock: '解锁笔记',
   tag: '标签',
-  calendarView: '日历'
+  calendarView: '日历',
+  skin: '换肤',
+  ppt: 'PPT',
+  link: '链接'
 }

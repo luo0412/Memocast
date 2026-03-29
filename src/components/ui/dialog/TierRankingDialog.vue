@@ -1060,39 +1060,31 @@ export default {
   display: flex;
   flex-wrap: nowrap;
   gap: 5px;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 5px;
+  padding: 5px 5px 15px 5px;
   box-sizing: border-box;
-  /* reserve scrollbar height to prevent layout jump */
-  scrollbar-gutter: stable;
-  /* always show thin scrollbar */
-  scrollbar-width: thin;
 }
 
-/* always show scrollbar on hover + always visible track for native look */
+/* always show scrollbar */
 .image-gallery::-webkit-scrollbar {
-  height: 8px;
+  height: 10px;
 }
 
 .image-gallery::-webkit-scrollbar-track {
   background: #2d2d2d;
-  border-radius: 4px;
+  border-radius: 5px;
 }
 
 .image-gallery::-webkit-scrollbar-thumb {
-  background: #777;
-  border-radius: 4px;
+  background: #666;
+  border-radius: 5px;
 }
 
 .image-gallery::-webkit-scrollbar-thumb:hover {
-  background: #999;
-}
-
-.image-gallery::-webkit-scrollbar-corner {
-  background: #2d2d2d;
+  background: #888;
 }
 
 /* Firefox always-thin: also ensure thumb is always visible */
