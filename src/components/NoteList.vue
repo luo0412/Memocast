@@ -1,13 +1,14 @@
 
 <template>
   <div class="full-height column note-list-root">
-    <q-pull-to-refresh @refresh="refreshNoteListHandler">
-      <q-scroll-area
-        :thumb-style="thumbStyle"
-        :bar-style="barStyle"
-        :class="`exclude-header note-list${$q.dark.isActive ? '-dark' : ''}`"
-      >
-        <q-list v-if="currentNotes.length > 0">
+    <q-scroll-area
+      class="fit note-list-scroll"
+      :thumb-style="thumbStyle"
+      :bar-style="barStyle"
+      :content-style="{ minWidth: 'auto' }"
+    >
+      <q-pull-to-refresh @refresh="refreshNoteListHandler">
+        <q-list v-if="currentNotes.length > 0" class="note-list-content">
           <q-item
             clickable
             v-ripple="{ color: '#212121' }"
@@ -27,18 +28,18 @@
         <div v-else class="note-list-empty">
           <a-empty :description="$t('noNotes')" />
         </div>
-      </q-scroll-area>
-      <q-card
-        class="absolute-bottom bg-transparent full-width no-shadow no-padding no-border-radius note-list-bottom text-center"
-        v-ripple
-        v-if="isLogin"
-      >
-        <span>{{ category }}</span>
-      </q-card>
+      </q-pull-to-refresh>
       <Loading :visible="isCurrentNotesLoading" />
+    </q-scroll-area>
+    <q-card
+      class="note-list-bottom text-center"
+      v-ripple
+      v-if="isLogin"
+    >
+      <span>{{ category }}</span>
+    </q-card>
     <CategoryDialog ref='categoryDialog' :note-info='rightClickNoteItem' :label='categoryDialogLabel'
                     :handler='categoryDialogHandler' />
-    </q-pull-to-refresh>
   </div>
 </template>
 
@@ -216,10 +217,23 @@ export default {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+
+:deep(.q-scrollarea__content) {
+  width: 100%;
+}
+
 .note-list-root {
-  min-height: 0;
+  display: flex;
+  flex-direction: column;
   position: relative;
+  min-height: 0;
+  height: 100%;
+}
+
+.note-list-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .note-list-empty {
@@ -229,13 +243,17 @@ export default {
 }
 
 .note-list-bottom {
-  max-height: 3vh;
+  flex-shrink: 0;
+  height: 24px;
   padding: 2px !important;
   color: #9b9b9b;
   user-select: none;
   font-size: 11px;
   font-weight: bold;
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif, 黑体;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
 }
 
 /* 减少笔记项之间的间距 */
