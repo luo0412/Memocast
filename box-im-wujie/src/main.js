@@ -52,3 +52,29 @@ Vue.prototype.friendStore = useFriendStore();
 Vue.prototype.groupStore = useGroupStore();
 Vue.prototype.userStore = useUserStore();
 Vue.prototype.configStore = useConfigStore();
+
+if (window.__POWERED_BY_WUJIE__) {
+  let instance;
+  window.__WUJIE_MOUNT = () => {
+    instance = new Vue({
+      el: '#message-app',
+      // 配置路由
+      router,
+      store,
+      i18n,
+      render: (h) => h(App),
+    });
+  };
+  window.__WUJIE_UNMOUNT = () => {
+    instance.$destroy();
+  };
+} else {
+  new Vue({
+    el: '#message-app',
+    // 配置路由
+    router,
+    store,
+    i18n,
+    render: (h) => h(App),
+  });
+}
