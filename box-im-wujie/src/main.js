@@ -38,13 +38,7 @@ Vue.prototype.$enums = enums; // 枚举
 Vue.prototype.$eventBus = new Vue(); // 全局事件
 Vue.config.productionTip = false;
 
-new Vue({
-  el: '#app',
-  // 配置路由
-  router,
-  pinia,
-  render: h => h(App)
-})
+Vue.use(pinia);
 
 // 挂载全局的pinia
 Vue.prototype.chatStore = useChatStore();
@@ -57,11 +51,10 @@ if (window.__POWERED_BY_WUJIE__) {
   let instance;
   window.__WUJIE_MOUNT = () => {
     instance = new Vue({
-      el: '#message-app',
+      el: '#app',
       // 配置路由
       router,
-      store,
-      i18n,
+      pinia,
       render: (h) => h(App),
     });
   };
@@ -70,11 +63,10 @@ if (window.__POWERED_BY_WUJIE__) {
   };
 } else {
   new Vue({
-    el: '#message-app',
+    el: '#app',
     // 配置路由
     router,
-    store,
-    i18n,
+    pinia,
     render: (h) => h(App),
   });
 }
