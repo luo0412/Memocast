@@ -39,7 +39,21 @@ module.exports = defineConfig({
           // 允许的 HTTP 方法
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         },
-			}
+			},
+      '/im': {
+        // 目标地址 (注意：这里写 wss 协议)
+        target: 'wss://www.boxim.online',
+        // 必须开启：启用 WebSocket 代理
+        ws: true,
+        // 必须开启：允许跨域
+        changeOrigin: true,
+        // 目标是 https/wss，建议开启
+        secure: true,
+        // 路径重写 (这里 /im 直接代理到目标的 /im，无需重写)
+        pathRewrite: {
+          '^/im': '/im'
+        }
+      }
 		}
 	},
   configureWebpack: config => {
