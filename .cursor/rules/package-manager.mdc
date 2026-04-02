@@ -1,0 +1,13 @@
+---
+description: Package manager rules
+alwaysApply: true
+---
+
+# Package Manager
+
+This project uses **yarn** as the package manager.
+
+- All dependency installation commands must use `yarn` (e.g., `yarn install`, `yarn add <pkg>`, `yarn remove <pkg>`).
+- Do NOT use `npm install` or `pnpm install`.
+- When adding dependencies, use `yarn add` with appropriate flags (`--dev` for devDependencies).
+- When removing dependencies, use `yarn remove`.
