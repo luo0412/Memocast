@@ -126,6 +126,55 @@
                 </template>
               </div>
               <q-btn
+                :icon='isSourceMode ? "assignment" : "code"'
+                dense
+                flat
+                round
+                class='fab-icon cursor-pointer material-icons-round'
+                @click='isSourceMode = !isSourceMode'
+                size='md'
+                color='#26A69A'
+                v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
+                v-ripple
+                :title="!isSourceMode ? $t('sourceMode') : $t('previewMode')"
+              />
+              <q-btn
+                :icon='enablePreviewEditor ? "lock_open" : "lock"'
+                dense
+                flat
+                round
+                class='fab-icon cursor-pointer material-icons-round'
+                @click='lockModeHandler'
+                size='md'
+                color='#26A69A'
+                v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
+                v-ripple
+                :title="enablePreviewEditor ? $t('lock') : $t('unlock')"
+              />
+              <q-btn
+                icon='dashboard'
+                dense
+                flat
+                round
+                class='fab-icon cursor-pointer material-icons-round'
+                size='md'
+                color='#26A69A'
+                v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && !isSourceMode'
+                v-ripple
+              >
+                <q-tooltip
+                  transition-show="fade"
+                  transition-hide="fade"
+                  anchor="center left" self="center right"
+                >
+                  <div class="text-body2">
+                    <p>{{ `${$t('word:', wordCount)}` }}</p>
+                    <p>{{ `${$t('character:', wordCount)}` }}</p>
+                    <p>{{ `${$t('paragraph:', wordCount)}` }}</p>
+                  </div>
+                </q-tooltip>
+              </q-btn>
+              <q-btn
                 icon='format_align_center'
                 dense
                 flat
@@ -137,68 +186,19 @@
                 v-show='!editorNoteActionsExpanded && dataLoaded && contentsListLoaded && !isOutlineShow && !isSourceMode'
                 v-ripple
               />
-            <q-btn
-              icon='dashboard'
-              dense
-              flat
-              round
-              class='fab-icon cursor-pointer material-icons-round'
-              size='md'
-              color='#26A69A'
-              v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && !isSourceMode'
-              v-ripple
-            >
-              <q-tooltip
-                transition-show="fade"
-                transition-hide="fade"
-                anchor="center left" self="center right"
-              >
-                <div class="text-body2">
-                  <p>{{ `${$t('word:', wordCount)}` }}</p>
-                  <p>{{ `${$t('character:', wordCount)}` }}</p>
-                  <p>{{ `${$t('paragraph:', wordCount)}` }}</p>
-                </div>
-              </q-tooltip>
-            </q-btn>
-            <q-btn
-              :icon='isSourceMode ? "assignment" : "code"'
-              dense
-              flat
-              round
-              class='fab-icon cursor-pointer material-icons-round'
-              @click='isSourceMode = !isSourceMode'
-              size='md'
-              color='#26A69A'
-              v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
-              v-ripple
-              :title="!isSourceMode ? $t('sourceMode') : $t('previewMode')"
-            />
-            <q-btn
-              :icon='enablePreviewEditor ? "lock_open" : "lock"'
-              dense
-              flat
-              round
-              class='fab-icon cursor-pointer material-icons-round'
-              @click='lockModeHandler'
-              size='md'
-              color='#26A69A'
-              v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
-              v-ripple
-              :title="enablePreviewEditor ? $t('lock') : $t('unlock')"
-            />
-            <q-btn
-              :icon='saveButtonIcon'
-              class='fab-icon cursor-pointer material-icons-round'
-              dense
-              flat
-              round
-              @click='refreshCurrentNote'
-              size='md'
-              color='#26A69A'
-              v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
-              v-ripple
-            />
-            <ImportDialog ref='importDialog' />
+              <q-btn
+                :icon='saveButtonIcon'
+                class='fab-icon cursor-pointer material-icons-round'
+                dense
+                flat
+                round
+                @click='refreshCurrentNote'
+                size='md'
+                color='#26A69A'
+                v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
+                v-ripple
+              />
+              <ImportDialog ref='importDialog' />
             </div>
           </div>
         </div>
