@@ -54,9 +54,9 @@ export default {
   },
   computed: {
     imUrl () {
-      if (process.env.MODE === 'electron') {
-        return 'http://localhost:8080/box-im/'
-      }
+      // if (process.env.MODE === 'electron') {
+      //   return 'http://localhost:8080/box-im/'
+      // }
       return '/box-im/'
     },
     wujieProps () {

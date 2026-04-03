@@ -121,7 +121,7 @@ export default {
 						this.$alert("您已在其他地方登录，将被强制下线", "强制下线通知", {
 							confirmButtonText: '确定',
 							callback: action => {
-								location.href = "/";
+								location.href = "/box-im/";
 							}
 						});
 					} else if (cmd == 3) {
@@ -424,7 +424,7 @@ export default {
 			this.$wsApi.close(3000);
 			sessionStorage.removeItem("accessToken");
 			localStorage.setItem("isAutoLogin", false)
-			location.href = "/";
+			location.href = "/box-im/";
 		},
 		playAudioTip() {
 			// 防止过于密集播放
@@ -498,8 +498,8 @@ export default {
 
 <style scoped lang="scss">
 .home-page {
-	height: 100vh;
-	width: 100vw;
+	height: 100%;
+	width: 100%;
 	display: flex;
 	justify-content: center;
 	align-items: center;
@@ -508,12 +508,10 @@ export default {
 	background: var(--im-color-primary-light-9);
 
 	.app-container {
-		width: 62vw;
-		height: 80vh;
+		width: 100%;
+		height: 100%;
 		display: flex;
-		min-height: 600px;
-		min-width: 970px;
-		position: absolute;
+		position: relative;
 		border-radius: 4px;
 		overflow: hidden;
 		box-shadow: var(--im-box-shadow-dark);
@@ -521,8 +519,8 @@ export default {
 
 		&.fullscreen {
 			transition: 0.2s;
-			width: 100vw;
-			height: 100vh;
+			width: 100%;
+			height: 100%;
 		}
 	}
 

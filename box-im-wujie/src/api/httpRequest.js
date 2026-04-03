@@ -28,12 +28,12 @@ http.interceptors.response.use(async response => {
 	if (response.data.code == 200) {
 		return response.data.data;
 	} else if (response.data.code == 400) {
-		location.href = "/";
+		location.href = "/box-im/";
 	} else if (response.data.code == 401) {
 		console.log("token失效，尝试重新获取")
 		let refreshToken = sessionStorage.getItem("refreshToken");
 		if (!refreshToken) {
-			location.href = "/";
+			location.href = "/box-im/";
 		}
 		// 发送请求, 进行刷新token操作, 获取新的token
 		const data = await http({
@@ -43,7 +43,7 @@ http.interceptors.response.use(async response => {
 				refreshToken: refreshToken
 			}
 		}).catch(() => {
-			location.href = "/";
+			location.href = "/box-im/";
 		})
 		// 保存token
 		sessionStorage.setItem("accessToken", data.accessToken);
@@ -70,7 +70,7 @@ http.interceptors.response.use(async response => {
 			})
 			break
 		case 401:
-			location.href = "/";
+			location.href = "/box-im/";
 			break
 		case 405:
 			Message({

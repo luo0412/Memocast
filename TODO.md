@@ -17,11 +17,11 @@ https://github.com/hinesboy/mavonEditor
 
 # 2026-04
 
-- [] 加入AI对话
+- [x] 加入AI对话
 
 ```
-https://github.com/OvidijusParsiunas/deep-chat
 https://gitee.com/bluexsx/box-im
+https://github.com/OvidijusParsiunas/deep-chat
 https://github.com/advanced-chat/vue-advanced-chat/tree/legacy
 ```
 
