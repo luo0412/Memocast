@@ -24,11 +24,9 @@
       </div>
 
       <!-- Wujie micro-frontend container -->
-      <div class="im-wujie-wrapper">
+      <div class="im-wujie-wrapper" style="width: 100%; height: 100%;">
         <WujieVue
           v-if="visible"
-          width="100%"
-          height="100%"
           name="box-im"
           :url="imUrl"
           :sync="false"
@@ -90,7 +88,7 @@ export default {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .im-drawer {
   background-color: transparent !important;
   box-shadow: none !important;
