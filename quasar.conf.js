@@ -312,6 +312,13 @@ module.exports = function (/* ctx */) {
         },
         files: [
           '**/*',
+          '!box-im-wujie/**/*',
+          '!node_modules/**/*',
+          '!dist/**/*',
+          '!.cursor/**/*',
+          '!.github/**/*',
+          '!.vscode/**/*',
+          '!docs/**/*',
           './package.json',
           'dist/electron/**/*'
         ],
