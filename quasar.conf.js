@@ -312,15 +312,15 @@ module.exports = function (/* ctx */) {
         },
         files: [
           '**/*',
+          './package.json',
+          'dist/electron/**/*',
           '!box-im-wujie/**/*',
-          '!node_modules/**/*',
+          // '!node_modules/**/*',
           '!dist/**/*',
           '!.cursor/**/*',
           '!.github/**/*',
           '!.vscode/**/*',
           '!docs/**/*',
-          './package.json',
-          'dist/electron/**/*'
         ],
         asar: true,
         asarUnpack: [

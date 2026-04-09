@@ -41,10 +41,12 @@ https://github.com/advanced-chat/vue-advanced-chat/tree/legacy
 - [] 支持离线 和 同步在线功能
 - [] 切换皮肤, 哪吒红 + 悟空黄 + 白羊等12星座 + MBTI, 会有不同动画特效和背景图
 - [] 优化打包体积
-- [] 引入matter-js 和 jsxgraph
+- [x] 引入jsxgraph
 
 ```
 @ps 之前引入过，但是引起了打包异常...
+
+不能用太新的版本 目前用 v1.10
 ```
 
 # 2026-03

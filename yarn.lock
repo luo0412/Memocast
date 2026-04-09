@@ -10181,6 +10181,11 @@ jsprim@^1.2.2:
     json-schema "0.4.0"
     verror "1.10.0"
 
+jsxgraph@1.10.1:
+  version "1.10.1"
+  resolved "https://mirrors.cloud.tencent.com/npm/jsxgraph/-/jsxgraph-1.10.1.tgz#901e2495085a6aac2707423c5065001cf015a0a0"
+  integrity sha512-N7WQmjeiiGKiJPr4iGUHgf8uRazOo9qaGLjX/tLWvrup67FUVD4eEctSLO1HuNcOSthwl16aTc692TKf/vZxNw==
+
 junk@^4.0.1:
   version "4.0.1"
   resolved "https://mirrors.cloud.tencent.com/npm/junk/-/junk-4.0.1.tgz"
