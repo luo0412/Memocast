@@ -115,7 +115,10 @@ class Muya {
 
   dispatchSelectionChange = () => {
     const selectionChanges = this.contentState.selectionChange()
-
+    // Skip dispatch if selectionChanges is null (cursor is invalid)
+    if (selectionChanges === null) {
+      return
+    }
     this.eventCenter.dispatch('selectionChange', selectionChanges)
   }
 

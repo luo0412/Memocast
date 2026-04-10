@@ -78,6 +78,10 @@ class BaseFloat {
       }
     }
     const scrollHandler = event => {
+      // Allow subclasses to override this behavior
+      if (this.shouldHideOnScroll === false) {
+        return
+      }
       if (typeof this.lastScrollTop !== 'number') {
         this.lastScrollTop = event.target.scrollTop
         return

@@ -412,6 +412,10 @@ class Selection {
     const { anchor, focus } = cursorRange
     const anchorParagraph = document.querySelector(`#${anchor.key}`)
     const focusParagraph = document.querySelector(`#${focus.key}`)
+    // Guard against null elements (block may have been removed from DOM)
+    if (!anchorParagraph || !focusParagraph) {
+      return
+    }
     const getNodeAndOffset = (node, offset) => {
       if (node.nodeType === 3) {
         return {

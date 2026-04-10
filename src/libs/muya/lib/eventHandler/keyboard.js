@@ -138,7 +138,9 @@ class Keyboard {
           event.key === EVENT_KEYS.Escape ||
           event.key === EVENT_KEYS.Tab ||
           event.key === EVENT_KEYS.ArrowUp ||
-          event.key === EVENT_KEYS.ArrowDown
+          event.key === EVENT_KEYS.ArrowDown ||
+          event.key === EVENT_KEYS.ArrowLeft ||
+          event.key === EVENT_KEYS.ArrowRight
         )
       ) {
         let needPreventDefault = false

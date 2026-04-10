@@ -11,6 +11,11 @@ import BaseScrollFloat from '../baseScrollFloat'
 import { quickInsertObj } from './config'
 import './index.css'
 
+// ============ 可配置常量 ============
+const GRID_COLUMNS = 3 // 网格列数，可随时修改
+
+// ==================================
+
 /**
  * Simple substring-includes filter, replacing fuzzaldrin's fuzzy match for label search.
  * @param {Array} candidates - Array of objects to filter
@@ -38,6 +43,9 @@ class QuickInsert extends BaseScrollFloat {
     this.renderArray = null
     this.activeItem = null
     this.block = null
+    this.columnsCount = GRID_COLUMNS // 使用常量定义列数
+    this.sectionOffsets = [] // 记录每个分区的起始索引
+    this.shouldHideOnScroll = false // Prevent scroll from hiding the panel during keyboard navigation
     this.renderObj = quickInsertObj
     this.render()
     this.listen()
@@ -46,9 +54,12 @@ class QuickInsert extends BaseScrollFloat {
   set renderObj(obj) {
     this._renderObj = obj
     const renderArray = []
+    const sectionOffsets = []
     Object.keys(obj).forEach(key => {
+      sectionOffsets.push(renderArray.length)
       renderArray.push(...obj[key])
     })
+    this.sectionOffsets = sectionOffsets
     this.renderArray = renderArray
     if (this.renderArray.length > 0) {
       this.activeItem = this.renderArray[0]
@@ -72,10 +83,8 @@ class QuickInsert extends BaseScrollFloat {
         for (const item of _renderObj[key]) {
           const {
             title,
-            subTitle,
             label,
-            icon,
-            shortCut
+            icon
           } = item
           const iconVnode = h('div.icon-container', h('i.icon', {
             style: {
@@ -85,10 +94,8 @@ class QuickInsert extends BaseScrollFloat {
           }))
 
           const description = h('div.description', [
-            h('div.big-title', title()),
-            h('div.sub-title', subTitle())
+            h('div.big-title', title())
           ])
-          const shortCutVnode = h('div.short-cut', [h('span', shortCut)])
           const selector =
             activeItem.label === label ? 'div.item.active' : 'div.item'
           items.push(
@@ -102,12 +109,12 @@ class QuickInsert extends BaseScrollFloat {
                   }
                 }
               },
-              [iconVnode, description, shortCutVnode]
+              [iconVnode, description]
             )
           )
         }
 
-        return h('section', [titleVnode, ...items])
+        return h('section', [titleVnode, h('div.items-grid', items)])
       })
 
     if (children.length === 0) {
@@ -126,6 +133,7 @@ class QuickInsert extends BaseScrollFloat {
   listen() {
     super.listen()
     const { eventCenter } = this.muya
+
     eventCenter.subscribe('muya-quick-insert', (reference, block, status) => {
       if (status) {
         this.block = block
@@ -158,32 +166,206 @@ class QuickInsert extends BaseScrollFloat {
 
   selectItem(item) {
     const { contentState } = this.muya
-    this.block.text = ''
-    const { key } = this.block
-    const offset = 0
-    contentState.cursor = {
-      start: {
-        key,
-        offset
-      },
-      end: {
-        key,
-        offset
+    try {
+      // Guard against null block
+      if (!this.block) {
+        this.hide()
+        return
+      }
+      const { key } = this.block
+      // Guard against invalid key (block may have been removed from editor)
+      if (!key || !contentState.getBlock(key)) {
+        this.hide()
+        return
+      }
+      this.block.text = ''
+      const offset = 0
+      contentState.cursor = {
+        start: {
+          key,
+          offset
+        },
+        end: {
+          key,
+          offset
+        }
+      }
+      switch (item.label) {
+        case 'paragraph':
+          contentState.partialRender()
+          break
+        case 'image':
+          contentState.format(item.label, true)
+          break
+        default:
+          contentState.updateParagraph(item.label, true)
+          break
+      }
+    } catch (err) {
+      console.error('QuickInsert selectItem error:', err)
+    } finally {
+      // Always hide the panel after selection, regardless of success or failure
+      setTimeout(this.hide.bind(this))
+    }
+  }
+
+  /**
+   * 键盘导航逻辑
+   * 上/下：按列移动（保持同列位置）
+   * 左/右：按行移动（保持同行位置）
+   *
+   * 布局示例（3列）：
+   *   [0] [1] [2]  ← Section 1 (basic block)
+   *   [3] [4] [5]  ← Section 2 (advance block)
+   *   [6] [7]      ← Section 2 续
+   */
+  step (direction) {
+    let index = this.renderArray.findIndex(item => item === this.activeItem)
+    if (index === -1) return
+
+    const { columnsCount, sectionOffsets, renderArray } = this
+    const columns = columnsCount || 1
+    const totalItems = renderArray.length
+
+    // ============ 通用：计算当前位置信息 ============
+    // 找到当前所在的分区
+    let currentSectionIndex = 0
+    for (let i = sectionOffsets.length - 1; i >= 0; i--) {
+      if (index >= sectionOffsets[i]) {
+        currentSectionIndex = i
+        break
       }
     }
-    switch (item.label) {
-      case 'paragraph':
-        contentState.partialRender()
+
+    const sectionStart = sectionOffsets[currentSectionIndex]
+    const sectionEnd = currentSectionIndex + 1 < sectionOffsets.length
+      ? sectionOffsets[currentSectionIndex + 1] - 1
+      : totalItems - 1
+    const sectionLength = sectionEnd - sectionStart + 1
+
+    // 当前项在分区内的相对索引和行列位置
+    const innerIndex = index - sectionStart
+    const currentRow = Math.floor(innerIndex / columns)
+    const currentCol = innerIndex % columns
+    // 当前行有多少列（最后一行可能不满）
+    const colsInCurrentRow = Math.min(columns, sectionLength - currentRow * columns)
+
+    switch (direction) {
+      // 上：跳到上一行同列
+      case 'previous': {
+        let targetIndex = index - columns
+        if (targetIndex < sectionStart) {
+          // 跳到上一分区末尾
+          const prevSectionIndex = currentSectionIndex - 1
+          if (prevSectionIndex >= 0) {
+            const prevSectionStart = sectionOffsets[prevSectionIndex]
+            const prevSectionEnd = sectionOffsets[currentSectionIndex] - 1
+            const prevSectionLength = prevSectionEnd - prevSectionStart + 1
+            const targetCol = Math.min(currentCol, prevSectionLength - 1)
+            targetIndex = prevSectionEnd - targetCol
+          }
+        }
+        if (targetIndex >= 0) index = targetIndex
         break
-      case 'image':
-        contentState.format(item.label, true)
+      }
+
+      // 下：跳到下一行同列
+      case 'next': {
+        let targetIndex = index + columns
+        if (targetIndex > sectionEnd) {
+          // 跳到下一分区第一个
+          const nextSectionIndex = currentSectionIndex + 1
+          if (nextSectionIndex < sectionOffsets.length) {
+            targetIndex = sectionOffsets[nextSectionIndex]
+          } else {
+            // 循环到开头
+            targetIndex = sectionOffsets[0]
+          }
+        }
+        if (targetIndex < totalItems) index = targetIndex
         break
+      }
+
+      // 左：跳到同行左边一列（跨分区时回到上一分区末尾）
+      case 'left': {
+        let newCol = currentCol - 1
+        let targetRow = currentRow
+        let targetSection = currentSectionIndex
+
+        if (newCol < 0) {
+          // 移到上一行
+          targetRow = currentRow - 1
+          if (targetRow < 0) {
+            // 移到上一分区末尾
+            targetSection = currentSectionIndex - 1
+            if (targetSection < 0) {
+              // 循环到底部最后一个分区
+              targetSection = sectionOffsets.length - 1
+            }
+          }
+        }
+
+        if (targetSection !== currentSectionIndex) {
+          // 跨分区：计算目标分区的行数和最后一行列数
+          const targetSectionStart = sectionOffsets[targetSection]
+          const targetSectionEnd = targetSection + 1 < sectionOffsets.length
+            ? sectionOffsets[targetSection + 1] - 1
+            : totalItems - 1
+          const targetSectionLength = targetSectionEnd - targetSectionStart + 1
+          const targetColsInRow = Math.min(columns, targetSectionLength - targetRow * columns)
+          newCol = targetColsInRow - 1 // 取该行最后一列
+          index = targetSectionEnd
+        } else {
+          index = sectionStart + targetRow * columns + newCol
+        }
+        break
+      }
+
+      // 右：跳到同行右边一列（跨分区时进入下一分区开头）
+      case 'right': {
+        let newCol = currentCol + 1
+        let targetRow = currentRow
+        let targetSection = currentSectionIndex
+
+        if (newCol >= colsInCurrentRow) {
+          // 移到下一行
+          targetRow = currentRow + 1
+          newCol = 0
+          // 检查是否超出当前分区
+          const itemsInNextRow = Math.min(columns, sectionLength - targetRow * columns)
+          if (targetRow * columns + newCol >= sectionLength) {
+            // 移到下一分区开头
+            targetSection = currentSectionIndex + 1
+            if (targetSection >= sectionOffsets.length) {
+              // 循环到开头
+              targetSection = 0
+              newCol = 0
+              targetRow = 0
+            } else {
+              newCol = 0
+              targetRow = 0
+            }
+          }
+        }
+
+        if (targetSection !== currentSectionIndex) {
+          index = sectionOffsets[targetSection]
+        } else {
+          index = sectionStart + targetRow * columns + newCol
+        }
+        break
+      }
+
       default:
-        contentState.updateParagraph(item.label, true)
-        break
+        return
     }
-    // delay hide to avoid dispatch enter hander
-    setTimeout(this.hide.bind(this))
+
+    if (index >= 0 && index < totalItems) {
+      this.activeItem = renderArray[index]
+      this.render()
+      const activeEle = this.getItemElement(this.activeItem)
+      this.activeEleScrollIntoView(activeEle)
+    }
   }
 
   getItemElement(item) {

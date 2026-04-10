@@ -1,7 +1,7 @@
 .ag-quick-insert {
-  width: 360px;
-  max-height: 307px;
-  padding: 0 0 20px 0;
+  width: 380px;
+  max-height: 280px;
+  padding: 0 0 12px 0;
   overflow-y: auto;
 }
 
@@ -9,7 +9,7 @@
   color: var(--editorColor);
   line-height: 120%;
   font-size: 14px;
-  padding: 10px 14px 10px 14px;
+  padding: 8px 10px 8px 10px;
   display: flex;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -19,20 +19,39 @@
   z-index: 1001;
 }
 
+.ag-quick-insert section {
+  padding: 0 6px;
+}
+
+.ag-quick-insert .items-grid {
+  display: grid;
+  /* 注意：列数需与 JS 中 GRID_COLUMNS 常量保持一致 */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+
 .ag-quick-insert .item {
   display: flex;
-  flex-direction: row;
-  padding: 6px 0;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 2px;
   cursor: pointer;
   user-select: none;
+  border-radius: 4px;
 }
 
 .ag-quick-insert:hover .active {
-  background: transparent;
+  /* 当鼠标悬浮时，保持 active 项的边框样式 */
 }
-.ag-quick-insert .active,
+.ag-quick-insert .active {
+  /* 键盘导航选中的高亮状态 - 使用边框和背景色区分 */
+  background-color: rgba(0, 0, 0, .08);
+  border: 2px solid var(--themeColor);
+  box-sizing: border-box;
+}
 .ag-quick-insert div.item:hover {
- background-color: var(--floatHoverColor);
+  /* 鼠标悬浮状态 - 使用浅背景色 */
+  background-color: var(--floatHoverColor);
 }
 
 .ag-quick-insert .no-result {
@@ -44,20 +63,20 @@
 }
 
 .ag-quick-insert .icon-container {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: 1px solid var(--floatBorderColor);
   display: flex;
   justify-content: space-around;
   align-items: center;
   border-radius: 6px;
-  margin-left: 14px;
+  margin-bottom: 4px;
 }
 
 .ag-quick-insert .icon-container > i.icon {
   display: inline-block;
   position: relative;
-  height:20px;
+  height: 20px;
   width: 20px;
   overflow: hidden;
   color: var(--iconColor);
@@ -75,28 +94,25 @@
 }
 
 .ag-quick-insert .description {
-  margin-left: 8px;
-  flex: 1;
-}
-
-.ag-quick-insert .short-cut {
-  width: 70px;
-  margin-right: 20px;
-  flex-shrink: 1;
-  text-align: right;
-  color: var(--editorColor50);
-  font-size: 14px;
-  letter-spacing: 1px;
+  text-align: center;
+  width: 100%;
 }
 
 .ag-quick-insert .big-title {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--editorColor);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .ag-quick-insert .sub-title {
-  font-size: 12px;
-  color: var(--editorColor50);
+  display: none;
+}
+
+.ag-quick-insert .short-cut {
+  display: none;
 }
 
 .ag-quick-insert .hide {
