@@ -221,6 +221,8 @@ export default {
       previewImage: null,
       draggingImage: null,
       draggingImageTierIndex: -1,
+      draggingImageIndex: -1,
+      dragOverImageIndex: -1,
       db: null
     }
   },
@@ -479,16 +481,21 @@ export default {
     onImageDragStart (e, img, tierIndex) {
       this.draggingImage = img
       this.draggingImageTierIndex = tierIndex
+      this.draggingImageIndex = tierIndex === -1
+        ? this.unassignedImages.findIndex(i => i.id === img.id)
+        : this.tiers[tierIndex]?.images.findIndex(i => i.id === img.id)
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('text/plain', img.id)
     },
 
     onImageDragEnd () {
-      // 仅重置拖拽高亮状态，不重置 draggingImage
-      // 状态会在 drop 事件或取消操作中重置
       this.tierDragOverIndex = -1
       this.deleteZoneDragOver = false
       this.galleryDragOver = false
+      this.draggingImage = null
+      this.draggingImageTierIndex = -1
+      this.draggingImageIndex = -1
+      this.dragOverImageIndex = -1
     },
 
     onTierDragOver (tierIndex, e) {
@@ -506,6 +513,20 @@ export default {
       e.preventDefault()
       e.stopPropagation()
       this.tierDragOverIndex = tierIndex
+
+      // 记录目标位置（如果拖拽到某个图片上）
+      const targetImgEl = e.target.closest('.image-item')
+      if (targetImgEl) {
+        const targetImgId = targetImgEl.querySelector('img')?.alt
+        if (targetImgId) {
+          const targetIndex = this.tiers[tierIndex].images.findIndex(i => i.id === targetImgId)
+          if (targetIndex !== -1) {
+            this.dragOverImageIndex = targetIndex
+          }
+        }
+      } else {
+        this.dragOverImageIndex = -1
+      }
     },
 
     onTierContentDragLeave (tierIndex, e) {
@@ -522,10 +543,38 @@ export default {
 
     onTierContentDrop (tierIndex) {
       if (!this.draggingImage) return
-      this.moveImageToTier(tierIndex)
+
+      const img = this.draggingImage
+      const sourceTierIndex = this.draggingImageTierIndex
+
+      if (sourceTierIndex === tierIndex) {
+        // 同一层级内排序
+        const images = this.tiers[tierIndex].images
+        const fromIndex = this.draggingImageIndex
+        let toIndex = this.dragOverImageIndex
+
+        if (toIndex === -1) {
+          toIndex = images.length - 1
+        }
+
+        if (fromIndex !== toIndex) {
+          // 移除原位置
+          images.splice(fromIndex, 1)
+          // 插入到新位置
+          const insertIndex = toIndex > fromIndex ? toIndex : toIndex
+          images.splice(insertIndex, 0, img)
+          this.saveState()
+        }
+      } else {
+        // 跨层级移动
+        this.moveImageToTier(tierIndex)
+      }
+
       this.tierDragOverIndex = -1
+      this.dragOverImageIndex = -1
       this.draggingImage = null
       this.draggingImageTierIndex = -1
+      this.draggingImageIndex = -1
     },
 
     moveImageToTier (tierIndex) {
