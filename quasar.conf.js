@@ -297,7 +297,7 @@ module.exports = function (/* ctx */) {
           '**/*',
           './package.json',
           'dist/electron/**/*',
-          '!box-im-wujie/**/*',
+          '!_plugins/**/*',
           '!public/box-im/**/*',
           // 开发依赖裁剪
           '!node_modules/@babel/**/*',
@@ -327,6 +327,7 @@ module.exports = function (/* ctx */) {
           '!node_modules/**/*.md',
           // *.map (source map，调试用，生产不需要)
           '!node_modules/**/*.map',
+          // '!node_modules/**/*.vue',
           // CHANGELOG / CONTRIBUTING / TODO 等文档文件变体
           '!node_modules/**/CHANGELOG*',
           '!node_modules/**/CONTRIBUTING*',

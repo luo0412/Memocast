@@ -386,8 +386,10 @@ class SyncService {
               // 注意：如果搜索结果中有多个同路径同标题的笔记（用户可能离线时在本地创建了重名笔记），
               // 则不走覆盖逻辑，直接创建新笔记，避免互相覆盖
               const sameFolderSameTitle = searchResult.filter(doc => {
-                const docCat = (doc.category || '').replace(/\/$/, '')
-                const noteCat = (note.category || '').replace(/\/$/, '')
+                // 关键：对两边 category 都使用 normalizeCategory 规范化
+                // 离线笔记 '/我的笔记/' 会被规范化为 '/'，与云端根目录笔记匹配
+                const docCat = normalizeCategory(doc.category || '')
+                const noteCat = normalizeCategory(note.category || '')
                 return doc.title === note.title && docCat === noteCat
               })
               if (sameFolderSameTitle.length === 1) {
