@@ -209,6 +209,51 @@ function initSchema() {
             )
           `)
 
+          // ✅ 步骤 1.5: 迁移前清理重复数据（避免 UNIQUE constraint 冲突）
+          console.log('[DB] Pre-migration: cleaning up duplicate (kb_guid, doc_guid) combinations...')
+          try {
+            const duplicateCheck = db.exec(`
+              SELECT kb_guid, doc_guid, COUNT(*) as cnt 
+              FROM notes 
+              WHERE kb_guid IS NOT NULL 
+                AND doc_guid IS NOT NULL 
+                AND doc_guid NOT LIKE 'local_%'
+              GROUP BY kb_guid, doc_guid 
+              HAVING cnt > 1
+            `)
+            
+            if (duplicateCheck.length > 0 && duplicateCheck[0].values.length > 0) {
+              console.log(`[DB] ⚠️ Found ${duplicateCheck[0].values.length} duplicate (kb_guid, doc_guid) groups before migration`)
+              
+              for (const dup of duplicateCheck[0].values) {
+                const dupKbGuid = dup[0]
+                const dupDocGuid = dup[1]
+                
+                console.log(`[DB] Cleaning duplicates: kb_guid=${dupKbGuid}, doc_guid=${dupDocGuid}`)
+                
+                // 找出该组合的所有记录，保留最新的（按 server_modified DESC），删除其余
+                db.run(`
+                  DELETE FROM notes 
+                  WHERE kb_guid = ? 
+                    AND doc_guid = ? 
+                    AND id NOT IN (
+                      SELECT id FROM notes 
+                      WHERE kb_guid = ? AND doc_guid = ? 
+                      ORDER BY COALESCE(server_modified, 0) DESC, id DESC 
+                      LIMIT 1
+                    )
+                `, [dupKbGuid, dupDocGuid, dupKbGuid, dupDocGuid])
+              }
+              
+              console.log('[DB] ✅ Duplicate cleanup completed before migration')
+            } else {
+              console.log('[DB] ✅ No duplicates found, migration can proceed')
+            }
+          } catch (cleanupError) {
+            console.warn('[DB] ⚠️ Pre-migration cleanup failed (non-critical):', cleanupError.message)
+            console.warn('[DB] Attempting to continue migration anyway...')
+          }
+
           // 步骤 2: 复制数据到新表
           db.run(`
             INSERT INTO notes_new (
@@ -417,6 +462,24 @@ function registerDatabaseHandlers() {
     }
   })
 
+  // 根据 doc_guid 获取笔记（按本地修改时间取最新版本）
+  ipcMain.handle('db:getNoteByDocGuidWithPriority', async (event, docGuid) => {
+    try {
+      // ✅ 核心原则：local_modified 最大的 = 用户最后操作的 = 应该显示的
+      return execOne(`
+        SELECT * FROM notes 
+        WHERE doc_guid = ? 
+        ORDER BY 
+          CASE WHEN local_modified IS NULL OR local_modified = 0 THEN 0 ELSE local_modified END DESC,
+          id DESC
+        LIMIT 1
+      `, [docGuid])
+    } catch (error) {
+      log.error('[DB] getNoteByDocGuidWithPriority error:', error)
+      return null
+    }
+  })
+
   // 创建笔记
   ipcMain.handle('db:createNote', async (event, note) => {
     try {
@@ -550,6 +613,40 @@ function registerDatabaseHandlers() {
       }
 
       values.push(id)
+
+      // ✅ 冲突预检：如果更新 kb_guid 或 doc_guid，检查是否会导致 UNIQUE constraint 冲突
+      if (updates.kb_guid !== undefined || updates.doc_guid !== undefined) {
+        const newKbGuid = updates.kb_guid !== undefined ? (updates.kb_guid == null ? null : toStr(updates.kb_guid)) : null
+        const newDocGuid = updates.doc_guid !== undefined ? (updates.doc_guid == null ? null : toStr(updates.doc_guid)) : null
+        
+        // 只在两者都不为空且不是 local_ 开头时才检查（符合唯一索引的 WHERE 条件）
+        if (newKbGuid && newDocGuid && !newDocGuid.startsWith('local_')) {
+          try {
+            const conflictCheck = execOne(`
+              SELECT id, title, sync_status FROM notes 
+              WHERE kb_guid = ? AND doc_guid = ? AND id != ?
+              LIMIT 1
+            `, [newKbGuid, newDocGuid, id])
+            
+            if (conflictCheck && conflictCheck.id) {
+              log.warn(`[DB] ⚠️ UNIQUE constraint conflict detected before update:`)
+              log.warn(`  - Current note: id=${id}, updating to kb_guid=${newKbGuid}, doc_guid=${newDocGuid}`)
+              log.warn(`  - Conflicting note: id=${conflictCheck.id}, title=${conflictCheck.title}, status=${conflictCheck.sync_status}`)
+              
+              // 删除冲突的旧记录（保留当前正在更新的笔记）
+              await db.run('DELETE FROM notes WHERE id = ?', [conflictCheck.id])
+              
+              // 同时删除关联的 guid_mapping
+              await db.run('DELETE FROM guid_mapping WHERE note_id = ?', [conflictCheck.id])
+              
+              log.warn(`[DB] ✅ Deleted conflicting note ${conflictCheck.id} to resolve UNIQUE constraint`)
+              saveDatabase()
+            }
+          } catch (conflictError) {
+            log.warn('[DB] Conflict check failed (non-critical):', conflictError.message)
+          }
+        }
+      }
 
       const query = `UPDATE notes SET ${fields.join(', ')} WHERE id = ?`
       await db.run(query, values)
@@ -811,10 +908,6 @@ function registerDatabaseHandlers() {
         WHERE sync_status = 'synced'
           AND title IS NOT NULL 
           AND title != ''
-          AND title NOT LIKE '[%-DELETED]%'
-          AND title NOT LIKE '[DUP-OF-%'
-          AND title NOT LIKE '[MERGED-INTO-%'
-          AND title NOT LIKE '[POST-SYNC-DUP-%'
         ORDER BY category, title, server_modified DESC
       `)
       

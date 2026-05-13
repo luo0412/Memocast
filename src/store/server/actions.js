@@ -36,6 +36,34 @@ import debugLogger from 'src/utils/debugLogger'
 
 export async function _getContent (kbGuid, docGuid) {
   console.time('FetchNote')
+  
+  // ✅ 关键改进：先检查 SQLite 是否有本地修改版本（比缓存更新）
+  try {
+    const localNote = await DatabaseClient.getNoteByDocGuidWithPriority(docGuid)
+    if (localNote && localNote.content !== null && localNote.content !== undefined) {
+      const localMod = parseInt(localNote.local_modified) || 0
+      console.log(`[_getContent] Found in SQLite: id=${localNote.id}, local_mod=${localMod}, sync=${localNote.sync_status}, content_len=${(localNote.content || '').length}`)
+      
+      // 直接返回 SQLite 数据（本地优先），跳过云端和缓存
+      return {
+        _isRawMarkdown: true,
+        info: { 
+          docGuid: localNote.doc_guid || docGuid, 
+          kbGuid, 
+          title: localNote.title, 
+          category: localNote.category || '/', 
+          dataCreated: localNote.data_created, 
+          dataModified: localMod || Date.now()
+        },
+        html: localNote.content,
+        resources: []
+      }
+    }
+  } catch (sqliteError) {
+    console.warn(`[_content] SQLite check failed (will fallback to cloud/cache):`, sqliteError.message)
+  }
+  
+  // 原有逻辑：从云端/缓存获取
   const { info } = await api.KnowledgeBaseApi.getNoteContent({
     kbGuid,
     docGuid,
@@ -48,6 +76,7 @@ export async function _getContent (kbGuid, docGuid) {
   const note = ClientFileStorage.getCachedNote(info, cacheKey)
   let result
   if (note) {
+    console.log(`[_getContent] Using cached note (cacheKey=${cacheKey.substring(0, 50)}...)`)
     result = note
   } else {
     result = await api.KnowledgeBaseApi.getNoteContent({
@@ -59,6 +88,7 @@ export async function _getContent (kbGuid, docGuid) {
       }
     })
     ClientFileStorage.setCachedNote(result, cacheKey)
+    console.log(`[_ContentLoaded] Fetched from cloud and cached`)
   }
   return result
 }
@@ -530,68 +560,77 @@ export default {
       return
     }
 
-    // 已登录：从 SQLite 优先读取，本地没有才请求云端
+    // ✅ 本地优先原则：SQLite 有就用本地，按 local_modified 时间戳取最新版本
     let result
     try {
-      const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
-      console.log('[getNoteContent] SQLite lookup:', docGuid, localNote ? `found id=${localNote.id} content_len=${(localNote.content || '').length} sync=${localNote.sync_status} local_mod=${localNote.local_modified}` : 'NOT FOUND')
+      // ✅ 查询该 docGuid 的所有记录，按 local_modified 排序后取最新的
+      const localNote = await DatabaseClient.getNoteByDocGuidWithPriority(docGuid)
+      console.log('[getNoteContent] SQLite lookup:', docGuid, localNote ? `found id=${localNote.id} content_len=${(localNote.content || '').length} sync=${localNote.sync_status} (latest by local_mod=${localNote.local_modified})` : 'NOT FOUND')
+      
       if (localNote) {
-        // 强化 SQLite 优先：只要 SQLite 有记录就永远用本地版本
-        // 即使 content 为空也不向云端请求，防止覆盖本地可能的未保存修改
-        if (!localNote.content) {
-          // content 为空时，区分两种情况：
-          // 1. sync_status='synced' 且 local_modified 为空 → 同步前占位空白，应回退云端并回填
-          // 2. 其他情况（local_only / pending_upload / local_modified 有值）→ 内容可能丢失，先尝试从云端恢复
-          const isSyncPlaceholder = localNote.sync_status === 'synced' && !localNote.local_modified
-          if (isSyncPlaceholder) {
-            console.warn('[getNoteContent] SQLite content empty (sync placeholder), fetching from cloud:', docGuid)
-            const cloudResult = await _getContent(kbGuid, docGuid)
-            if (cloudResult?.html) {
-              const markdown = helper.extractMarkdownFromMDNote(cloudResult.html, kbGuid, docGuid, cloudResult.resources || [])
-              await DatabaseClient.updateNote(localNote.id, { content: markdown, sync_status: 'synced' })
-              result = cloudResult
-            } else {
-              result = {
-                _isRawMarkdown: true,
-                info: { docGuid: localNote.doc_guid || docGuid, kbGuid, title: localNote.title, category: localNote.category || '/', dataCreated: localNote.data_created, dataModified: localNote.data_modified },
-                html: '',
-                resources: []
-              }
-            }
-          } else {
-            // SQLite 有记录但 content 为空：可能是本地编辑时内容丢失，或云端拉取时解析失败
-            // 先尝试从云端恢复，只有云端也是空时才用本地空笔记
-            console.warn('[getNoteContent] SQLite content empty, trying cloud recovery:', docGuid, 'sync_status=', localNote.sync_status, 'local_modified=', localNote.local_modified)
-            const cloudResult = await _getContent(kbGuid, docGuid)
-            if (cloudResult?.html) {
-              const markdown = helper.extractMarkdownFromMDNote(cloudResult.html, kbGuid, docGuid, cloudResult.resources || [])
-              await DatabaseClient.updateNote(localNote.id, {
-                content: markdown,
-                sync_status: 'synced'
-              })
-              console.log('[getNoteContent] Cloud recovery succeeded, content_len=', markdown.length)
-              result = cloudResult
-            } else {
-              console.warn('[getNoteContent] Cloud also empty, using local empty note:', docGuid)
-              result = {
-                _isRawMarkdown: true,
-                info: { docGuid: localNote.doc_guid || docGuid, kbGuid, title: localNote.title, category: localNote.category || '/', dataCreated: localNote.data_created, dataModified: localNote.data_modified || localNote.local_modified },
-                html: '',
-                resources: []
-              }
-            }
-          }
-        } else {
-          console.log('[getNoteContent] Using local version from SQLite:', docGuid)
+        // ✅ 核心原则：SQLite 有记录 → 直接用本地版本，绝不主动去云端拉取覆盖！
+        console.log(`[getNoteContent] ✅ LOCAL FIRST: Found in SQLite (id=${localNote.id}), using local version directly`)
+        
+        const localMod = parseInt(localNote.local_modified) || 0
+        const serverMod = parseInt(localNote.server_modified) || 0
+        console.log(`[getNoteContent] Timestamp info: local_modified=${localMod}, server_modified=${serverMod}`)
+        
+        if (localNote.content !== null && localNote.content !== undefined) {
+          // ✅ 本地有内容（包括空字符串 ''）→ 直接使用，这是用户的真实数据
           result = {
             _isRawMarkdown: true,
-            info: { docGuid: localNote.doc_guid || docGuid, kbGuid, title: localNote.title, category: localNote.category || '/', dataCreated: localNote.data_created, dataModified: localNote.data_modified || localNote.local_modified },
-            html: localNote.content,
+            info: { 
+              docGuid: localNote.doc_guid || docGuid, 
+              kbGuid, 
+              title: localNote.title, 
+              category: localNote.category || '/', 
+              dataCreated: localNote.data_created, 
+              dataModified: localMod || localNote.data_modified || Date.now()
+            },
+            html: localNote.content,  // ✅ 使用本地内容，不管云端有什么
             resources: []
+          }
+          console.log(`[getNoteContent] ✅ Using local content (len=${(localNote.content || '').length}), will NOT fetch from cloud`)
+        } else {
+          // ⚠️ 本地记录存在但 content 为 null/undefined（数据异常）
+          // 这种情况才考虑从云端恢复，但仅作为 fallback
+          console.warn('[getNoteContent] ⚠️ Local record exists but content is null/undefined (data anomaly), trying cloud as fallback:', docGuid)
+          
+          try {
+            const cloudResult = await _getContent(kbGuid, docGuid)
+            if (cloudResult?.html) {
+              const markdown = helper.extractMarkdownFromMDNote(cloudResult.html, kbGuid, docGuid, cloudResult.resources || [])
+              // 回填到 SQLite（仅当本地确实没内容时）
+              await DatabaseService.updateNote(localNote.id, { 
+                content: markdown, 
+                sync_status: 'synced',
+                server_modified: Date.now()
+              })
+              result = cloudResult
+              console.log('[getNoteContent] ⚠️ Filled null content from cloud (emergency recovery)')
+            } else {
+              // 云端也没有 → 返回空笔记
+              result = {
+                _isRawMarkdown: true,
+                info: { docGuid: localNote.doc_guid || docGuid, kbGuid, title: localNote.title, category: localNote.category || '/', dataCreated: localNote.data_created, dataModified: localMod },
+                html: '',
+                resources: []
+              }
+              console.warn('[getNoteContent] Both local and cloud are empty/missing')
+            }
+          } catch (cloudError) {
+            console.error('[getNoteContent] Cloud fallback failed:', cloudError)
+            // 云端也失败 → 返回空笔记，不崩溃
+            result = {
+              _isRawMarkdown: true,
+              info: { docGuid: localNote.doc_guid || docGuid, kbGuid, title: localNote.title, category: localNote.category || '/', dataCreated: localNote.data_created, dataModified: localMod },
+              html: '',
+              resources: []
+            }
           }
         }
       } else {
-        // SQLite 里没有，才请求云端
+        // ✅ SQLite 里完全没有这条记录 → 才去云端获取
         console.log('[getNoteContent] Not in SQLite, fetching from cloud:', docGuid)
         result = await _getContent(kbGuid, docGuid)
       }
@@ -601,10 +640,13 @@ export default {
     }
 
     console.timeEnd('GetContent')
-    console.log('[getNoteContent] about to commit UPDATE_CURRENT_NOTE, result keys:', Object.keys(result))
+    console.log(`[getNoteContent] about to commit UPDATE_CURRENT_NOTE, result keys:`, Object.keys(result))
+    console.log(`[getNoteContent] Result content preview: ${JSON.stringify((result.html || '').substring(0, 150))}`)
+    console.log(`[getNoteContent] Result _isRawMarkdown: ${result._isRawMarkdown}, info.docGuid: ${result.info?.docGuid}`)
     Loading.hide()
     commit(types.UPDATE_CURRENT_NOTE_LOADING_STATE, false)
     commit(types.UPDATE_CURRENT_NOTE, result)
+    console.log(`🔍 [getNoteContent] ========== END ========== Committed to Vuex\n`)
   },
   /**
    * 设置当前显示的笔记文件夹，并在显示之前从网络刷新文件夹的内容
@@ -649,14 +691,38 @@ export default {
   }, payload) {
     const {
       docGuid,
-      kbGuid
+      kbGuid,
+      title
     } = payload
+    
+    // ✅ 自动补全 .md 后缀（如果标题没有以 .md 结尾）
+    if (title && !title.toLowerCase().endsWith('.md')) {
+      payload.title = `${title}.md`
+      console.log(`[updateNoteInfo] Auto-append .md suffix: "${title}" → "${payload.title}"`)
+    }
+    
     await api.KnowledgeBaseApi.updateNoteInfo({
       kbGuid,
       docGuid,
       data: payload
     })
-    commit(types.UPDATE_CURRENT_NOTE, payload)
+    
+    // ✅ 安全更新：只更新 info 部分，不覆盖整个 currentNote（避免丢失本地编辑内容）
+    const currentState = state.currentNote
+    if (currentState && currentState.info) {
+      // 合并更新：保留现有内容和 _isRawMarkdown 标记，只更新 info
+      commit(types.UPDATE_CURRENT_NOTE, {
+        ...currentState,
+        info: {
+          ...(currentState.info || {}),
+          ...payload
+        }
+      })
+    } else {
+      // 首次设置（没有现有状态）
+      commit(types.UPDATE_CURRENT_NOTE, payload)
+    }
+    
     this.dispatch('server/getCategoryNotes')
   },
   /**
@@ -688,9 +754,10 @@ export default {
             title,
             content: markdown,
             category: OFFLINE_ROOT_CATEGORY,
-            sync_status: 'local_only'
+            sync_status: 'local_only',
+            local_modified: Date.now()  // ✅ 即时更新时间戳！
           })
-          console.log('[updateNote/offline] SQLite updated:', docGuid)
+          console.log(`[updateNote/offline] SQLite updated: docGuid=${docGuid}, content_len=${markdown.length}, local_modified=${Date.now()}`)
         } else {
           console.warn('[updateNote/offline] Note not found in SQLite:', docGuid)
         }
@@ -716,6 +783,7 @@ export default {
     const _updateNote = async title => {
       // Step 1: 先写本地 SQLite（同步优先，用户操作不阻塞）
       let localNoteId = null
+      const now = Date.now()  // ✅ 统一时间戳，确保一致性
       try {
         const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
         if (localNote) {
@@ -724,15 +792,17 @@ export default {
             title,
             content: markdown,
             category,
-            sync_status: 'pending_upload'
+            sync_status: 'pending_upload',
+            local_modified: now  // ✅ 即时更新时间戳！
           })
+          console.log(`[updateNote] SQLite updated: id=${localNote.id}, content_len=${markdown.length}, local_modified=${now}`)
+          
           this.dispatch('offline/updateNote', {
             id: localNote.id,
-            updates: { title, content: markdown, category, sync_status: 'pending_upload' }
+            updates: { title, content: markdown, category, sync_status: 'pending_upload', local_modified: now }
           }, { root: true })
         } else {
           // 首次保存：创建本地记录
-          const now = Date.now()
           const note = await DatabaseClient.createNote({
             doc_guid: docGuid,
             title,
@@ -740,6 +810,7 @@ export default {
             category,
             data_created: now,
             data_modified: now,
+            local_modified: now,  // ✅ 创建时也设置！
             sync_status: 'pending_upload'
           })
           localNoteId = note?.id
@@ -786,7 +857,10 @@ export default {
             api.KnowledgeBaseApi.getCacheKey(kbGuid, docGuid),
             null
           )
-          commit(types.UPDATE_CURRENT_NOTE, result)
+          // ✅ 移除这行：不要用云端返回的数据覆盖 Vuex state
+          // 原因：此时用户可能已经在编辑新内容，云端数据可能是旧的
+          // SQLite 才是唯一真实的数据源
+          // commit(types.UPDATE_CURRENT_NOTE, result)
         } catch (err) {
           console.error('[updateNote] Cloud sync failed:', err)
         }
@@ -835,7 +909,32 @@ export default {
     const userId = ClientFileStorage.getItemFromStore('userId')
     const safeCategory = currentCategory || ''
     const isLite = safeCategory.replace(/\//g, '') === 'Lite'
-    const initialContent = `# ${title}`
+    
+    // ✅ 同名检测：如果当前文件夹下已有同名笔记，自动添加编号 (1), (2)...
+    let finalTitle = title || i18n.t('untitled')
+    try {
+      const existingNotes = await DatabaseClient.getNotes({ category: safeCategory || '/' })
+      if (existingNotes && existingNotes.length > 0) {
+        const titleSet = new Set(existingNotes.map(n => n.title))
+        if (titleSet.has(finalTitle)) {
+          let counter = 1
+          // ✅ 分离文件名和扩展名，确保编号在扩展名之前
+          const lastDotIndex = finalTitle.lastIndexOf('.')
+          const baseName = lastDotIndex > 0 ? finalTitle.substring(0, lastDotIndex) : finalTitle
+          const ext = lastDotIndex > 0 ? finalTitle.substring(lastDotIndex) : ''
+          
+          while (titleSet.has(`${baseName} (${counter})${ext}`)) {
+            counter++
+          }
+          finalTitle = `${baseName} (${counter})${ext}`
+          console.log(`[createNote] Duplicate title detected: "${title}" → "${finalTitle}"`)
+        }
+      }
+    } catch (err) {
+      console.warn('[createNote] Failed to check duplicate titles:', err)
+    }
+
+    const initialContent = `# ${finalTitle}`
     const now = Date.now()
 
     // 如果未登录，仅在本地 SQLite 创建，不推云端
@@ -846,7 +945,7 @@ export default {
       try {
         note = await DatabaseClient.createNote({
           doc_guid: localDocGuid,
-          title,
+          title: finalTitle,
           content: initialContent,
           category: OFFLINE_ROOT_CATEGORY,
           data_created: now,
@@ -881,7 +980,7 @@ export default {
         info: {
           docGuid: localDocGuid,
           kbGuid: '',
-          title,
+          title: finalTitle,
           category: OFFLINE_ROOT_CATEGORY,
           dataCreated: now,
           dataModified: now
@@ -907,7 +1006,7 @@ export default {
       const note = await DatabaseClient.createNote({
         doc_guid: tempDocGuid,
         kb_guid: kbGuid,
-        title,
+        title: finalTitle,
         content: initialContent,
         category: currentCategory || '/',
         data_created: now,
@@ -917,7 +1016,7 @@ export default {
       })
       if (note) {
         localNoteId = note.id
-        this.dispatch('offline/createNote', { title, content: initialContent, category: currentCategory || '/' }, { root: true })
+        this.dispatch('offline/createNote', { title: finalTitle, content: initialContent, category: currentCategory || '/' }, { root: true })
       }
     } catch (err) {
       console.warn('[createNote] SQLite create failed, continuing with cloud:', err)
@@ -930,7 +1029,7 @@ export default {
         data: {
           category: currentCategory,
           kbGuid,
-          title,
+          title: finalTitle,
           owner: userId,
           html: helper.embedMDNote(initialContent, [], { wrapWithPreTag: isLite }),
           type: isLite ? 'lite/markdown' : 'document'
@@ -954,14 +1053,14 @@ export default {
       }
       // 直接 commit 本地已创建的笔记内容，不走 getNoteContent 重新请求云端
       // 因为 result 是 { guid, returnCode, ... } 对象，字段名与 getNoteContent 期望的 { docGuid } 不匹配
-      // 本地已有 initialContent = `# ${title}`，直接使用本地版本即可
+      // 本地已有 initialContent = `# ${finalTitle}`，直接使用本地版本即可
       const docGuid = result.guid
       commit(types.UPDATE_CURRENT_NOTE, {
         _isRawMarkdown: true,
         info: {
           docGuid,
           kbGuid,
-          title,
+          title: finalTitle,
           category: currentCategory || '/',
           dataCreated: now,
           dataModified: now
@@ -1005,12 +1104,65 @@ export default {
    * @param markdown
    * @param noteInfo - 旧笔记的 info 对象，包含 docGuid, kbGuid, title, category, resources 等
    */
-  async updateNoteWithInfo ({ commit }, { markdown, noteInfo }) {
+  async updateNoteWithInfo ({ commit }, { markdown, noteInfo, resources: incomingResources = [] }) {
     if (!noteInfo) return
-    const { kbGuid, docGuid, title, category = '/', resources = [] } = noteInfo
-    // 离线笔记不推云端，只写 SQLite
-    if (!docGuid || !kbGuid || (docGuid && docGuid.startsWith('local_'))) return
+    const { kbGuid, docGuid, title, category = '/' } = noteInfo
+    // ✅ 优先使用传入的 resources（来自 Muya.vue 的 previousResources），保持与 Ctrl+S 一致
+    const resources = incomingResources && incomingResources.length > 0 ? incomingResources : []
+    
+    // ✅ 区分离线和在线模式，而不是直接 return
+    const isOfflineNote = !docGuid || !kbGuid || (docGuid && docGuid.startsWith('local_'))
+    
+    if (isOfflineNote) {
+      // ✅ 离线笔记：只写 SQLite，不推云端
+      try {
+        const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+        if (localNote) {
+          await DatabaseClient.updateNote(localNote.id, {
+            title,
+            content: markdown,
+            category: OFFLINE_ROOT_CATEGORY,
+            sync_status: 'local_only',
+            local_modified: Date.now()
+          })
+          console.log(`[updateNoteWithInfo/offline] SQLite updated: id=${localNote.id}, docGuid=${docGuid}, content_len=${markdown.length}`)
+          
+          this.dispatch('offline/updateNote', {
+            id: localNote.id,
+            updates: { title, content: markdown, category: OFFLINE_ROOT_CATEGORY, sync_status: 'local_only', local_modified: Date.now() }
+          }, { root: true })
+        } else {
+          // 首次保存：创建本地记录
+          const now = Date.now()
+          const note = await DatabaseClient.createNote({
+            doc_guid: docGuid || `local_${now}_${Math.random().toString(36).substring(2, 10)}`,
+            title,
+            content: markdown,
+            category: OFFLINE_ROOT_CATEGORY,
+            data_created: now,
+            data_modified: now,
+            local_modified: now,
+            sync_status: 'local_only'
+          })
+          if (note) {
+            console.log(`[updateNoteWithInfo/offline] SQLite created: id=${note.id}`)
+            this.dispatch('offline/createNote', {
+              title, content: markdown, category: OFFLINE_ROOT_CATEGORY, sync_status: 'local_only'
+            }, { root: true })
+          }
+        }
+        
+        // 刷新离线笔记列表
+        const localNotes = await DatabaseClient.getNotes({ syncStatus: 'local_only' })
+        commit(types.SET_OFFLINE_NOTES, localNotes || [])
+      } catch (err) {
+        console.error('[updateNoteWithInfo/offline] SQLite write failed:', err)
+      }
+      
+      return  // ✅ 离线笔记到此结束，不执行下面的云端同步逻辑
+    }
 
+    // 以下为已登录的在线笔记逻辑
     const isLite = category.replace(/\//g, '') === 'Lite'
     const html = helper.embedMDNote(markdown, resources, {
       wrapWithPreTag: isLite,
@@ -1018,7 +1170,8 @@ export default {
       docGuid
     })
 
-    // Step 1: 写本地 SQLite
+    // Step 1: 写本地 SQLite（与 Ctrl+S 保存逻辑完全一致）
+    const now = Date.now()  // ✅ 统一时间戳
     try {
       const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
       if (localNote) {
@@ -1026,14 +1179,17 @@ export default {
           title,
           content: markdown,
           category,
-          sync_status: 'pending_upload'
+          sync_status: 'pending_upload',
+          local_modified: now  // ✅ 与 Ctrl+S 一致：即时更新时间戳！
         })
+        console.log(`[updateNoteWithInfo] SQLite updated: id=${localNote.id}, content_len=${markdown.length}, local_modified=${now}`)
+        
         this.dispatch('offline/updateNote', {
           id: localNote.id,
-          updates: { title, content: markdown, category, sync_status: 'pending_upload' }
+          updates: { title, content: markdown, category, sync_status: 'pending_upload', local_modified: now }
         }, { root: true })
       } else {
-        const now = Date.now()
+        // 首次保存：创建本地记录（与 Ctrl+S 一致）
         const note = await DatabaseClient.createNote({
           doc_guid: docGuid,
           title,
@@ -1041,6 +1197,7 @@ export default {
           category,
           data_created: now,
           data_modified: now,
+          local_modified: now,  // ✅ 创建时也设置
           sync_status: 'pending_upload'
         })
         if (note) {

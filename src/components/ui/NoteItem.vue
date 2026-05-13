@@ -75,7 +75,8 @@ export default {
     return {
       categoryDialogLabel: '',
       categoryDialogHandler: () => {},
-      count: 0
+      count: 0,
+      capturedSaveData: null  // ✅ 新增：预捕获的保存数据
     }
   },
   computed: {
@@ -164,18 +165,122 @@ export default {
     ...mapServerState(['noteState', 'currentCategory'])
   },
   methods: {
-    noteItemClickHandler: function () {
+    noteItemClickHandler: async function () {
+      // ✅ 核心原则：先确保当前笔记A完全保存，再切换到笔记B
+      
       if (this.noteState !== 'default') {
-        // 有未保存的修改：先存 SQLite（原样），再切笔记，后台同步云端
-        this.saveToSQLite().then(() => {
-          console.time('NoteLoadTime')
-          this.getNoteContent({ docGuid: this.docGuid }).then(() => console.timeEnd('NoteLoadTime'))
-        })
-        // 后台异步同步云端（不等待）
+        // 有未保存的修改
+        console.log('[NoteItem] Has unsaved changes, saving before switch...')
+        
+        try {
+          // Step 1: 捕获编辑器当前内容（此时还是稳定的笔记A）
+          const capturedData = this.captureEditorContent()
+          
+          if (capturedData) {
+            // Step 2: 同步等待保存完成（阻塞直到SQLite写入成功）
+            const saveSuccess = await this.saveWithCapturedData(capturedData)
+            
+            if (saveSuccess) {
+              console.log(`[NoteItem] ✅ Note A saved successfully, now switching to B`)
+            } else {
+              console.warn('[NoteItem] ⚠️ Save failed, but continuing to switch')
+            }
+          } else {
+            // fallback：捕获失败，尝试原有逻辑
+            await this.saveToSQLite()
+          }
+        } catch (error) {
+          console.error('[NoteItem] Error during pre-switch save:', error)
+          // 即使保存失败也继续切换（避免卡死）
+        }
+        
+        // 后台异步同步云端（不阻塞）
         this.asyncSyncToCloud()
-      } else {
-        console.time('NoteLoadTime')
-        this.getNoteContent({ docGuid: this.docGuid }).then(() => console.timeEnd('NoteLoadTime'))
+      }
+      
+      // Step 3: 保存完成（或无需保存）→ 现在安全地切换到新笔记
+      console.time('NoteLoadTime')
+      await this.getNoteContent({ docGuid: this.docGuid })
+      console.timeEnd('NoteLoadTime')
+    },
+    
+    // ✅ 新增：捕获编辑器当前内容（调用 Muya 组件的方法）
+    captureEditorContent: function () {
+      try {
+        const findMuyaComponent = (root) => {
+          const queue = [...root.$children]
+          while (queue.length) {
+            const child = queue.shift()
+            if (child.captureCurrentContent && typeof child.captureCurrentContent === 'function') {
+              return child
+            }
+            queue.push(...child.$children)
+          }
+          return null
+        }
+        
+        const muya = findMuyaComponent(this.$root)
+        if (muya) {
+          this.capturedSaveData = muya.captureCurrentContent()
+          console.log('[NoteItem] Editor content captured:', this.capturedSaveData ? `docGuid=${this.capturedSaveData.docGuid}` : 'null')
+        } else {
+          console.warn('[NoteItem] Muya component not found, cannot pre-capture')
+          this.capturedSaveData = null
+        }
+      } catch (error) {
+        console.error('[NoteItem] Failed to capture editor content:', error)
+        this.capturedSaveData = null
+      }
+    },
+    
+    // ✅ 新增：使用预捕获的数据保存
+    saveWithCapturedData: async function (capturedData) {
+      try {
+        if (!capturedData || !capturedData.docGuid) {
+          console.warn('[NoteItem] saveWithCapturedData: no valid data')
+          return false
+        }
+        
+        const { markdown, docGuid, title, resources } = capturedData
+        
+        const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+        console.log(`[NoteItem] 💾 Saving captured data: docGuid=${docGuid}, len=${markdown?.length}, title=${title}`)
+        
+        if (localNote) {
+          console.log(`[NoteItem] 📝 Updating existing note: id=${localNote.id}, current_content_len=${(localNote.content || '').length}`)
+          await DatabaseClient.updateNote(localNote.id, {
+            content: markdown,
+            title: title || localNote.title,
+            sync_status: 'pending_upload',
+            local_modified: Date.now()
+          })
+          console.log(`[NoteItem] ✅ Updated SQLite: id=${localNote.id}, new_status=pending_upload`)
+        } else {
+          console.log(`[NoteItem] 🆕 Creating new note: docGuid=${docGuid}`)
+          await DatabaseClient.createNote({
+            doc_guid: docGuid,
+            title: title || 'Untitled',
+            content: markdown,
+            sync_status: 'pending_upload',
+            local_modified: Date.now(),
+            data_created: Date.now(),
+            data_modified: Date.now()
+          })
+          console.log(`[NoteItem] ✅ Created in SQLite: docGuid=${docGuid}, status=pending_upload`)
+        }
+        
+        // ✅ 验证：保存后立即读取确认
+        const verifyNote = await DatabaseClient.getNoteByDocGuidWithPriority(docGuid)
+        if (verifyNote) {
+          console.log(`[NoteItem] ✅ Verified saved content: id=${verifyNote.id}, content_len=${(verifyNote.content || '').length}, sync=${verifyNote.sync_status}, local_mod=${verifyNote.local_modified}`)
+        } else {
+          console.error(`[NoteItem] ❌ Verification failed: cannot find note after save: ${docGuid}`)
+        }
+        
+        return true
+      } catch (err) {
+        console.error('[NoteItem] saveWithCapturedData failed:', err)
+        return false
       }
     },
     // 获取当前编辑器的 markdown 内容
@@ -267,14 +372,22 @@ export default {
       }
     },
     // 后台异步同步到云端（不等待）
-    async asyncSyncToCloud () {
-      try {
-        if (this.$store && this.$store.hasModule('offline')) {
-          this.$store.dispatch('offline/sync')
+    asyncSyncToCloud () {
+      console.log('[NoteItem] 🚀 Starting async sync to cloud (background)...')
+      
+      // ✅ 异步执行，不阻塞 UI
+      this.$nextTick(async () => {
+        try {
+          if (this.$store && this.$store.hasModule('offline')) {
+            const result = await this.$store.dispatch('offline/sync')
+            console.log('[NoteItem] ✅ Background sync completed:', result)
+          } else {
+            console.warn('[NoteItem] ⚠️ offline module not found, skipping sync')
+          }
+        } catch (error) {
+          console.error('[NoteItem] ❌ Background sync failed:', error)
         }
-      } catch (error) {
-        console.error('[NoteItem] Async sync failed:', error)
-      }
+      })
     },
     ...mapServerActions(['getNoteContent', 'updateNoteInfo'])
   }

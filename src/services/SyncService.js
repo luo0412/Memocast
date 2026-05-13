@@ -182,14 +182,16 @@ const api = {
     const data = {
       html,
       title: updates.title,
+      kbGuid: effectiveKbGuid,        // ✅ 必须包含（与 actions.js 一致）
+      docGuid,                       // ✅ 必须包含（与 actions.js 一致）
       resources: updates.resources || [],
       type: 'document'
     }
 
     // 规范化分类：离线根目录 '/My Notes/' 或 '/我的笔记/' 转为根目录 '/'；其余使用原值
     const normCat = normalizeCategory(updates.category || '')
-    if (normCat && normCat !== '/') {
-      data.category = normCat
+    if (normCat) {
+      data.category = normCat          // ✅ 始终传 category（与 actions.js 一致）
     }
 
     const result = await WizNoteApi.KnowledgeBaseApi.updateNote({
@@ -376,12 +378,9 @@ class SyncService {
         kept++
         
         for (const removeNote of removeNotes) {
-          console.log(`[SyncService] 🗑️ Soft-deleting duplicate synced note: id=${removeNote.id}, title=${removeNote.title}`)
+          console.log(`[SyncService] 🗑️ Permanently deleting duplicate synced note: id=${removeNote.id}, title=${removeNote.title}`)
           try {
-            await DatabaseService.updateNote(removeNote.id, {
-              sync_status: 'deleted',
-              title: `[POST-SYNC-DUP-DELETED] ${removeNote.title || ''}`
-            })
+            await DatabaseService.deleteNote(removeNote.id)
             removed++
           } catch (e) {
             console.error(`[SyncService] Failed to delete duplicate during cleanup:`, e)
@@ -588,6 +587,20 @@ class SyncService {
       try {
         // ✅ 幂等性保护 1：标记为"正在同步"，防止并发重复同步
         await DatabaseService.updateNote(note.id, { sync_status: 'syncing' })
+
+        // ✅ 关键改进：推送前重新从 SQLite 获取最新内容（防止使用过时的查询结果）
+        const latestNote = await DatabaseService.getNote(note.id)
+        if (latestNote && latestNote.content !== undefined && latestNote.content !== null) {
+          console.log(`[SyncService] ✅ Re-fetched latest content from SQLite: id=${note.id}, content_len=${(latestNote.content || '').length}, local_modified=${latestNote.local_modified}`)
+          
+          // 使用最新的笔记数据（合并原始元数据和最新内容）
+          note.content = latestNote.content
+          note.title = latestNote.title || note.title
+          note.category = latestNote.category || note.category
+          note.local_modified = latestNote.local_modified
+        } else {
+          console.warn(`[SyncService] ⚠️ Could not re-fetch note ${note.id} from SQLite, using original data (content_len=${(note.content || '').length})`)
+        }
 
         // ✅ 幂等性保护 2：检查是否已经通过 guid_mapping 同步过（防止重复创建）
         const existingMapping = await DatabaseService.getGuidMappingByLocalId(note.id)
@@ -913,16 +926,12 @@ class SyncService {
         notesToProcess.push(keepNote)
         
         for (const removeNote of removeNotes) {
-          console.log(`[SyncService] 🗑️ Marking duplicate conflict note for deletion: id=${removeNote.id}`)
+          console.log(`[SyncService] 🗑️ Permanently deleting duplicate conflict note: id=${removeNote.id}`)
           try {
-            // 标记为待删除（软删除），避免直接删除导致数据丢失
-            await DatabaseService.updateNote(removeNote.id, { 
-              sync_status: 'deleted',
-              title: `[DUPLICATE-DELETED] ${removeNote.title || ''}`  // 标记为重复删除
-            })
+            await DatabaseService.deleteNote(removeNote.id)
             duplicatesRemoved++
           } catch (e) {
-            console.error(`[SyncService] Failed to mark duplicate as deleted:`, e)
+            console.error(`[SyncService] Failed to delete duplicate:`, e)
           }
         }
       } else {
@@ -988,13 +997,10 @@ class SyncService {
                 }
               }
               
-              // 标记当前冲突笔记为已合并（删除）
-              await DatabaseService.updateNote(note.id, { 
-                sync_status: 'deleted',
-                title: `[MERGED-INTO-${existingSyncedNote.id}] ${note.title || ''}`
-              })
+              // 合并成功后，直接删除当前冲突笔记（硬删除）
+              await DatabaseService.deleteNote(note.id)
               
-              console.log(`[SyncService] ✅ Merged conflict note ${note.id} into synced note ${existingSyncedNote.id}`)
+              console.log(`[SyncService] ✅ Merged and deleted conflict note ${note.id} into synced note ${existingSyncedNote.id}`)
               resolved++
               continue
             } catch (mergeError) {
@@ -1005,10 +1011,8 @@ class SyncService {
             // 已存在的 synced 笔记更新或相同 → 直接删除当前冲突笔记
             console.log(`[SyncService] Deleting conflict note (existing synced is newer or same): ${note.id}`)
             try {
-              await DatabaseService.updateNote(note.id, { 
-                sync_status: 'deleted',
-                title: `[DUP-OF-${existingSyncedNote.id}] ${note.title || ''}`
-              })
+              // 直接删除重复的冲突笔记（硬删除）
+              await DatabaseService.deleteNote(note.id)
               resolved++  // 视为已解决（通过删除）
               continue
             } catch (deleteError) {

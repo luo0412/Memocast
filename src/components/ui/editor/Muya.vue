@@ -62,7 +62,9 @@ export default {
     return {
       contentEditor: {},
       firstTimeLoad: false,
-      previousNoteInfo: null
+      previousNoteInfo: null,
+      previousResources: [],
+      pendingSaveData: null // 编辑变化时预捕获的数据（备用）
     }
   },
   computed: {
@@ -76,6 +78,31 @@ export default {
   methods: {
     getValue: function () {
       return this.contentEditor?.getMarkdown()
+    },
+    // ✅ 新增：主动捕获当前编辑器内容（供外部调用，如切换笔记前）
+    captureCurrentContent: function () {
+      if (!this.contentEditor) return null
+      
+      const markdown = this.contentEditor.getMarkdown()
+      const currentNote = this.$store.state.server.currentNote
+      
+      if (!currentNote?.info || !markdown) return null
+      
+      const captureData = {
+        markdown,
+        docGuid: currentNote.info.docGuid,
+        title: currentNote.info.title,
+        resources: currentNote.resources || [],
+        timestamp: Date.now(),
+        noteState: this.noteState
+      }
+      
+      // 更新待保存数据（供 watcher 使用）
+      this.pendingSaveData = captureData
+      
+      console.log(`[Muya.captureCurrentContent] Captured: docGuid=${captureData.docGuid}, len=${markdown.length}, state=${this.noteState}`)
+      
+      return captureData
     },
     paragraphHandler: function (type) {
       if (this.active && this.enablePreviewEditor && this.contentEditor) {
@@ -269,6 +296,19 @@ export default {
         } else {
           this.updateNoteState('changed')
           this.updateContentsList(this.contentEditor.getTOC())
+          
+          // ✅ 关键改进：在内容变化时立即预捕获数据
+          // 这样当后续切换笔记时，已经有可靠的数据可以保存
+          const currentNote = this.$store.state.server.currentNote
+          if (currentNote?.info) {
+            this.pendingSaveData = {
+              markdown: curData,
+              docGuid: currentNote.info.docGuid,
+              resources: currentNote.resources || [],
+              timestamp: Date.now()
+            }
+            // console.log('[Muya] Pre-captured save data:', { docGuid: currentNote.info.docGuid, len: curData.length })
+          }
         }
         this.updateContentsList(this.contentEditor.getTOC())
       }, 300, { leading: true }))
@@ -308,30 +348,33 @@ export default {
   },
   watch: {
     currentNote: function (currentData) {
-      console.log('[Muya watcher] fired, currentData type:', typeof currentData, 'len:', (currentData || '').length, 'preview:', (currentData || '').substring(0, 80))
-      console.log('[Muya watcher] previousNoteInfo:', this.previousNoteInfo ? `docGuid=${this.previousNoteInfo.docGuid}` : null, 'noteState:', this.noteState)
-      // previousNoteInfo 保存的是上一次渲染完成时的笔记 info（上一个 watcher 调用末尾设置的）
-      // 此时 Vuex state 已经更新为新笔记，所以 previousNoteInfo 正好就是"旧笔记"的信息
-      const previousInfo = this.previousNoteInfo
-      if ((this.noteState === 'changed' || this.noteState === 'none') && previousInfo) {
-        const markdownToSave = this.contentEditor?.getMarkdown()
-        if (markdownToSave) {
-          this.updateNoteWithInfo({ markdown: markdownToSave, noteInfo: previousInfo })
-        }
-      }
+      console.log(`\n[Muya watcher] ⚡ FIRED! type: ${typeof currentData}, len: ${(currentData || '').length}`)
+      console.log(`[Muya watcher] Preview: ${JSON.stringify((currentData || '').substring(0, 120))}`)
+      
+      // ✅ 简化后的逻辑：只负责加载新笔记（保存已在 NoteItem 切换前完成）
+      
       this.contentEditor.clearHistory()
       try {
         this.contentEditor.focus()
+        console.log(`[Muya watcher] 📝 Loading into editor: len=${(currentData || '').length}`)
         this.contentEditor.setMarkdown(currentData)
         this.firstTimeLoad = true
         this.updateContentsList(this.contentEditor.getTOC())
+        
+        // 清除旧的待保存数据（新笔记开始编辑）
+        this.pendingSaveData = null
+        
+        console.log(`[Muya watcher] ✅ Done! Editor now has content\n`)
+        
       } catch (e) {
         if (e.message.indexOf('Md2V') !== -1) return
         debugLogger.Error(e, e.message)
       }
-      // 在下一个 tick 更新 previousNoteInfo（此时 currentNote 已完全切换为新笔记）
+      // 在下一个 tick 更新 previousNoteInfo
       this.$nextTick(() => {
-        this.previousNoteInfo = this.$store.state.server.currentNote?.info || null
+        const currentNote = this.$store.state.server.currentNote
+        this.previousNoteInfo = currentNote?.info || null
+        this.previousResources = currentNote?.resources || []
       })
     },
     theme: function (t) {

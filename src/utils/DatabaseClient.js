@@ -34,6 +34,15 @@ const DatabaseClient = {
   },
 
   /**
+   * 根据 doc_guid 获取笔记（按 local_modified 时间戳取最新版本）
+   * @param {string} docGuid
+   * @returns {Promise<Object|null>}
+   */
+  async getNoteByDocGuidWithPriority(docGuid) {
+    return await ipcRenderer.invoke('db:getNoteByDocGuidWithPriority', docGuid)
+  },
+
+  /**
    * 创建笔记
    * @param {Object} note
    * @returns {Promise<Object|null>}

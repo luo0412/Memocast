@@ -28,6 +28,13 @@ class DatabaseService {
   }
 
   /**
+   * 根据 doc_guid 获取笔记（按 local_modified 时间戳取最新版本）
+   */
+  getNoteByDocGuidWithPriority(docGuid) {
+    return ipcRenderer.invoke('db:getNoteByDocGuidWithPriority', docGuid)
+  }
+
+  /**
    * 获取所有笔记
    */
   getAllNotes(options = {}) {

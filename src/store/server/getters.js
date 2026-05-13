@@ -64,7 +64,7 @@ export default {
       return ''
     }
 
-    console.log('[currentNote getter] currentNote keys:', Object.keys(currentNote), '_isRawMarkdown:', currentNote._isRawMarkdown, 'info.title:', currentNote.info?.title)
+    console.log(`[currentNote getter] ⚡ FIRED! keys: ${Object.keys(currentNote)}, _isRawMarkdown: ${currentNote._isRawMarkdown}, title: ${currentNote.info?.title}`)
 
     // 本地 SQLite 来的原始 markdown，直接返回不做任何处理
     if (currentNote._isRawMarkdown) {
@@ -74,7 +74,7 @@ export default {
         console.warn('[currentNote getter] REJECTED: malformed content')
         return ''
       }
-      console.log('[currentNote getter] RETURNING _isRawMarkdown, len:', raw.length)
+      console.log(`[currentNote getter] ✅ RETURNING _isRawMarkdown, len: ${raw.length}, preview: ${JSON.stringify(raw.substring(0, 100))}`)
       return raw
     }
 
