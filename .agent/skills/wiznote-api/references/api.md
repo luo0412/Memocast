@@ -319,14 +319,28 @@ async function getNotes(kbServer, kbGuid, folder, start, count, token) {
 
 // 上传资源
 async function uploadResource(kbServer, kbGuid, docGuid, fileBuffer, fileName, token) {
-  const formData = new FormData();
-  formData.append('kbGuid', kbGuid);
-  formData.append('docGuid', docGuid);
-  formData.append('data', fileBuffer, fileName);
+  const FormData = require('form-data');
+  const form = new FormData();
+  form.append('kbGuid', kbGuid);
+  form.append('docGuid', docGuid);
+  form.append('data', fileBuffer, fileName);
 
-  return await execRequest('POST',
+  const res = await axios.post(
     `${kbServer}/ks/resource/upload/${kbGuid}/${docGuid}`,
-    formData, token);
+    form,
+    {
+      headers: {
+        ...form.getHeaders(),
+        'X-Wiz-Token': token
+      }
+    }
+  );
+
+  if (res.data.returnCode !== 200) {
+    throw new Error(res.data.returnMessage);
+  }
+
+  return res.data.result;
 }
 
 // 使用示例
