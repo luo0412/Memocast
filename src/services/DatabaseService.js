@@ -36,9 +36,12 @@ class DatabaseService {
 
   /**
    * 更新笔记
+   * @param {number} id - 笔记ID
+   * @param {Object} updates - 更新字段
+   * @param {Object} options - 选项（如 isSystemUpdate）
    */
-  updateNote(id, updates = {}) {
-    return ipcRenderer.invoke('db:updateNote', { id, updates })
+  updateNote(id, updates = {}, options = {}) {
+    return ipcRenderer.invoke('db:updateNote', { id, updates, ...options })
   }
 
   /**
@@ -109,6 +112,41 @@ class DatabaseService {
    */
   createGuidMapping(localId, serverGuid, service = 'wiznote') {
     return ipcRenderer.invoke('db:createGuidMapping', { localId, serverGuid, service })
+  }
+
+  /**
+   * 根据本地 ID 查询 GUID 映射（用于幂等性检查）
+   */
+  getGuidMappingByLocalId(localId) {
+    return ipcRenderer.invoke('db:getGuidMappingByLocalId', { localId })
+  }
+
+  /**
+   * 查找相同标题+分类的已同步笔记（用于去重）
+   */
+  findDuplicateSyncedNote(title, category) {
+    return ipcRenderer.invoke('db:findDuplicateSyncedNote', { title, category })
+  }
+
+  /**
+   * 获取所有已同步的笔记（用于同步后清理重复笔记）
+   */
+  getAllSyncedNotesForCleanup() {
+    return ipcRenderer.invoke('db:getAllSyncedNotesForCleanup')
+  }
+
+  /**
+   * 规范化笔记 GUID（同步成功后用实际 GUID 替换临时 ID）
+   */
+  normalizeNoteGuids() {
+    return ipcRenderer.invoke('db:normalizeNoteGuids')
+  }
+
+  /**
+   * 清理重复的笔记（基于 kb_guid + title 去重）
+   */
+  cleanupDuplicateNotes() {
+    return ipcRenderer.invoke('db:cleanupDuplicateNotes')
   }
 
   /**

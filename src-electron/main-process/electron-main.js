@@ -148,13 +148,14 @@ function initSchema() {
     CREATE TABLE IF NOT EXISTS notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       doc_guid TEXT,
+      kb_guid TEXT,
       title TEXT NOT NULL DEFAULT 'Untitled',
       content TEXT DEFAULT '',
       category TEXT DEFAULT '/',
       tags TEXT DEFAULT '',
       data_created INTEGER,
       data_modified INTEGER,
-      sync_status TEXT DEFAULT 'local_only' CHECK(sync_status IN ('local_only', 'synced', 'pending_upload', 'pending_download', 'conflict')),
+      sync_status TEXT DEFAULT 'local_only' CHECK(sync_status IN ('local_only', 'synced', 'pending_upload', 'pending_download', 'conflict', 'syncing', 'deleted')),
       local_modified INTEGER,
       server_modified INTEGER,
       created_at INTEGER,
@@ -163,10 +164,88 @@ function initSchema() {
   `)
 
   // 索引
-  // 索引（条件唯一索引：仅对非 NULL 的 doc_guid 强制唯一性，允许多个本地笔记 doc_guid 为 NULL）
-  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_doc_guid ON notes(doc_guid) WHERE doc_guid IS NOT NULL`)
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_doc_guid ON notes(doc_guid) WHERE doc_guid IS NOT NULL AND doc_guid NOT LIKE 'local_%'`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_notes_kb_guid ON notes(kb_guid)`)
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_kb_doc_unique ON notes(kb_guid, doc_guid) WHERE kb_guid IS NOT NULL AND doc_guid IS NOT NULL AND doc_guid NOT LIKE 'local_%'`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category)`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_notes_sync_status ON notes(sync_status)`)
+
+  // 检查是否需要添加 kb_guid 列（数据库迁移）
+  try {
+    const tableInfo = db.exec("PRAGMA table_info(notes)")
+    const columns = tableInfo[0].values.map(row => row[1])
+    if (!columns.includes('kb_guid')) {
+      console.log('[DB] Migrating: adding kb_guid column to notes table')
+      db.run("ALTER TABLE notes ADD COLUMN kb_guid TEXT")
+      saveDatabase()
+    }
+
+    // ✅ 检查是否需要升级 CHECK 约束（添加 'syncing' 或 'deleted' 状态）
+    // SQLite 不支持直接修改 CHECK 约束，需要重建表
+    try {
+      const tableSql = db.exec(`SELECT sql FROM sqlite_master WHERE type='table' AND name='notes'`)
+      if (tableSql.length > 0 && tableSql[0].values.length > 0) {
+        const currentCreateSQL = tableSql[0].values[0][0]
+        if (currentCreateSQL && (!currentCreateSQL.includes("'syncing'") || !currentCreateSQL.includes("'deleted'"))) {
+          console.log('[DB] Migrating: upgrading notes table CHECK constraint to include "syncing" and "deleted" status')
+
+          // 步骤 1: 创建新表（带更新的 CHECK 约束）
+          db.run(`
+            CREATE TABLE notes_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              doc_guid TEXT,
+              kb_guid TEXT,
+              title TEXT NOT NULL DEFAULT 'Untitled',
+              content TEXT DEFAULT '',
+              category TEXT DEFAULT '/',
+              tags TEXT DEFAULT '',
+              data_created INTEGER,
+              data_modified INTEGER,
+              sync_status TEXT DEFAULT 'local_only' CHECK(sync_status IN ('local_only', 'synced', 'pending_upload', 'pending_download', 'conflict', 'syncing', 'deleted')),
+              local_modified INTEGER,
+              server_modified INTEGER,
+              created_at INTEGER,
+              updated_at INTEGER
+            )
+          `)
+
+          // 步骤 2: 复制数据到新表
+          db.run(`
+            INSERT INTO notes_new (
+              id, doc_guid, kb_guid, title, content, category, tags,
+              data_created, data_modified, sync_status, local_modified,
+              server_modified, created_at, updated_at
+            )
+            SELECT 
+              id, doc_guid, kb_guid, title, content, category, tags,
+              data_created, data_modified, sync_status, local_modified,
+              server_modified, created_at, updated_at
+            FROM notes
+          `)
+
+          // 步骤 3: 删除旧表
+          db.run('DROP TABLE notes')
+
+          // 步骤 4: 重命名新表
+          db.run('ALTER TABLE notes_new RENAME TO notes')
+
+          // 步骤 5: 重建索引
+          db.run(`CREATE INDEX IF NOT EXISTS idx_notes_doc_guid ON notes(doc_guid)`)
+          db.run(`CREATE INDEX IF NOT EXISTS idx_notes_kb_guid ON notes(kb_guid)`)
+          db.run(`CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category)`)
+          db.run(`CREATE INDEX IF NOT EXISTS idx_notes_sync_status ON notes(sync_status)`)
+
+          saveDatabase()
+          console.log('[DB] Migration completed: CHECK constraint upgraded successfully')
+        }
+      }
+    } catch (migrationError) {
+      console.error('[DB] Migration failed (CHECK constraint upgrade):', migrationError.message)
+      console.warn('[DB] Note: If you see "CHECK constraint failed" errors, please delete the database file and restart the app')
+    }
+  } catch (e) {
+    console.warn('[DB] Migration check failed:', e.message)
+  }
 
   // Tags 表
   db.run(`
@@ -346,10 +425,11 @@ function registerDatabaseHandlers() {
       const toNum = (v) => (v == null) ? now : (typeof v === 'number') ? v : parseInt(v, 10) || now
       const toStrOrNull = (v) => (v == null) ? null : (typeof v === 'string') ? v : (typeof v === 'number') ? String(v) : JSON.stringify(v)
       await db.run(`
-        INSERT INTO notes (doc_guid, title, content, category, tags, data_created, data_modified, sync_status, local_modified, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO notes (doc_guid, kb_guid, title, content, category, tags, data_created, data_modified, sync_status, local_modified, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         toStrOrNull(note.doc_guid),
+        toStrOrNull(note.kb_guid),
         toStr(note.title) || 'Untitled',
         toStr(note.content),
         toStr(note.category) || '/',
@@ -364,20 +444,49 @@ function registerDatabaseHandlers() {
       // 保存到文件（sql.js 是 auto-commit，不需要手动 COMMIT）
       saveDatabase()
       const lastId = getLastInsertRowid()
-      if (!lastId && lastId !== 0) {
-        log.error('[DB] createNote: getLastInsertRowid returned null')
+
+      // ✅ 改进的 ID 验证逻辑
+      if (lastId === null || lastId === undefined) {
+        log.error('[DB] createNote: getLastInsertRowid returned null/undefined')
         return null
       }
-      let createdNote = execOne('SELECT * FROM notes WHERE id = ?', [lastId])
+
+      console.log('[DB] createNote: lastInsertRowid =', lastId, 'doc_guid =', note?.doc_guid)
+
+      let createdNote = null
+
+      // 尝试 1：通过 ID 查询（最可靠）
+      if (lastId && lastId > 0) {
+        createdNote = execOne('SELECT * FROM notes WHERE id = ?', [lastId])
+      }
+
+      // 尝试 2：如果 ID 查询失败或 lastId=0，通过 doc_guid 回退查询
       if (!createdNote && note.doc_guid) {
-        // lastId 为 0 时（sql.js WAL 模式偶发），回退按 doc_guid 查询
-        log.warn('[DB] createNote: lastId=0, falling back to doc_guid query')
+        log.warn(`[DB] createNote: lastId=${lastId}, falling back to doc_guid query:`, note.doc_guid)
         createdNote = execOne('SELECT * FROM notes WHERE doc_guid = ?', [note.doc_guid])
       }
+
+      // 尝试 3：如果还是没有，尝试按最新创建时间查询（最后手段）
       if (!createdNote) {
-        log.error('[DB] createNote: SELECT after insert returned null for id:', lastId)
+        log.warn('[DB] createNote: falling back to latest created_at query')
+        createdNote = execOne(`
+          SELECT * FROM notes 
+          WHERE created_at = (SELECT MAX(created_at) FROM notes)
+          ORDER BY id DESC LIMIT 1
+        `)
+      }
+
+      if (!createdNote) {
+        log.error('[DB] createNote: all query methods failed for note:', {
+          lastId,
+          doc_guid: note?.doc_guid,
+          title: note?.title,
+          sync_status: note?.sync_status
+        })
         return null
       }
+
+      console.log('[DB] createNote: successfully created note, id =', createdNote.id)
       return createdNote
     } catch (error) {
       log.error('[DB] createNote error:', error)
@@ -388,7 +497,7 @@ function registerDatabaseHandlers() {
   })
 
   // 更新笔记
-  ipcMain.handle('db:updateNote', async (event, { id, updates }) => {
+  ipcMain.handle('db:updateNote', async (event, { id, updates, isSystemUpdate = false }) => {
     try {
       const fields = []
       const values = []
@@ -416,6 +525,10 @@ function registerDatabaseHandlers() {
         fields.push('doc_guid = ?')
         values.push(updates.doc_guid == null ? null : toStr(updates.doc_guid))
       }
+      if (updates.kb_guid !== undefined) {
+        fields.push('kb_guid = ?')
+        values.push(updates.kb_guid == null ? null : toStr(updates.kb_guid))
+      }
       if (updates.sync_status !== undefined) {
         fields.push('sync_status = ?')
         values.push(toStr(updates.sync_status))
@@ -425,8 +538,17 @@ function registerDatabaseHandlers() {
         values.push(toNum(updates.server_modified))
       }
 
-      fields.push('data_modified = ?', 'local_modified = ?', 'updated_at = ?')
-      values.push(now, now, now)
+      // 关键改进：根据 isSystemUpdate 区分用户编辑和系统自动更新
+      if (!isSystemUpdate) {
+        // 用户主动编辑 → 更新所有时间戳
+        fields.push('data_modified = ?', 'local_modified = ?', 'updated_at = ?')
+        values.push(now, now, now)
+      } else {
+        // 系统自动更新（如同步完成）→ 只更新 updated_at，保留 local_modified 不变
+        fields.push('updated_at = ?')
+        values.push(now)
+      }
+
       values.push(id)
 
       const query = `UPDATE notes SET ${fields.join(', ')} WHERE id = ?`
@@ -475,12 +597,19 @@ function registerDatabaseHandlers() {
     try {
       const total = execOne('SELECT COUNT(*) as count FROM notes')
       const synced = execOne("SELECT COUNT(*) as count FROM notes WHERE sync_status = 'synced'")
-      const pending = execOne("SELECT COUNT(*) as count FROM notes WHERE sync_status IN ('pending_upload', 'local_only')")
+      const pending = execOne(`
+        SELECT COUNT(*) as count FROM notes
+        WHERE (sync_status = 'pending_upload'
+           OR (sync_status = 'local_only' AND (doc_guid LIKE 'local_%' OR doc_guid IS NULL)))
+          AND sync_status != 'syncing'
+      `)
+      const syncing = execOne("SELECT COUNT(*) as count FROM notes WHERE sync_status = 'syncing'")
       const conflict = execOne("SELECT COUNT(*) as count FROM notes WHERE sync_status = 'conflict'")
       return {
         total: total?.count || 0,
         synced: synced?.count || 0,
         pending: pending?.count || 0,
+        syncing: syncing?.count || 0,
         conflict: conflict?.count || 0
       }
     } catch (error) {
@@ -563,7 +692,13 @@ function registerDatabaseHandlers() {
   // 获取待同步的笔记
   ipcMain.handle('db:getPendingSyncNotes', async () => {
     try {
-      return execToObjects(`SELECT * FROM notes WHERE sync_status IN ('pending_upload', 'local_only') ORDER BY local_modified ASC`)
+      return execToObjects(`
+        SELECT * FROM notes
+        WHERE (sync_status = 'pending_upload'
+           OR (sync_status = 'local_only' AND (doc_guid LIKE 'local_%' OR doc_guid IS NULL)))
+          AND sync_status != 'syncing'
+        ORDER BY local_modified ASC
+      `)
     } catch (error) {
       log.error('[DB] getPendingSyncNotes error:', error)
       return []
@@ -583,13 +718,244 @@ function registerDatabaseHandlers() {
   // 创建 GUID 映射
   ipcMain.handle('db:createGuidMapping', async (event, { localId, serverGuid, service = 'wiznote' }) => {
     try {
+      // ✅ 参数验证：防止 undefined 导致 sql.js 报错
+      if (localId == null || localId === undefined) {
+        log.error('[DB] createGuidMapping: localId is required', { localId, serverGuid, service })
+        return false
+      }
+      if (serverGuid == null || serverGuid === undefined || serverGuid === '') {
+        log.error('[DB] createGuidMapping: serverGuid is required', { localId, serverGuid, service })
+        return false
+      }
+
+      // ✅ 确保所有参数都是有效类型
+      const safeLocalId = typeof localId === 'number' ? localId : parseInt(localId, 10) || 0
+      const safeServerGuid = String(serverGuid || '')
+      const safeService = String(service || 'wiznote')
+
+      console.log('[DB] createGuidMapping:', {
+        localId: safeLocalId,
+        serverGuid: safeServerGuid.substring(0, 8) + '...',  // 只显示前8位，避免日志过长
+        service: safeService
+      })
+
       await db.run(`INSERT OR REPLACE INTO guid_mapping (local_id, server_guid, service, created_at) VALUES (?, ?, ?, ?)`,
-        [localId, serverGuid, service, Date.now()])
+        [safeLocalId, safeServerGuid, safeService, Date.now()])
       saveDatabase()
       return true
     } catch (error) {
       log.error('[DB] createGuidMapping error:', error)
+      log.error('[DB] createGuidMapping params:', { localId, serverGuid, service })
       return false
+    }
+  })
+
+  // 根据本地 ID 查询 GUID 映射（用于幂等性检查）
+  ipcMain.handle('db:getGuidMappingByLocalId', async (event, { localId }) => {
+    try {
+      const result = db.exec(`SELECT * FROM guid_mapping WHERE local_id = ?`, [localId])
+      if (result.length > 0 && result[0].values.length > 0) {
+        const columns = result[0].columns
+        const values = result[0].values[0]
+        const mapping = {}
+        columns.forEach((col, idx) => {
+          mapping[col] = values[idx]
+        })
+        return mapping
+      }
+      return null
+    } catch (error) {
+      log.error('[DB] getGuidMappingByLocalId error:', error)
+      return null
+    }
+  })
+
+  // ✅ 查找相同标题+分类的已同步笔记（用于去重）
+  ipcMain.handle('db:findDuplicateSyncedNote', async (event, { title, category }) => {
+    try {
+      // 规范化 category：'/My Notes/' 或 '/我的笔记/' → '/' （统一使用英文，排除国际化影响）
+      const normalizedCat = (!category || 
+                             category === '/My Notes/' || 
+                             category === '/我的笔记/') ? '/' : (category || '')
+      
+      const result = execToObjects(`
+        SELECT id, doc_guid, kb_guid, title, category, sync_status
+        FROM notes 
+        WHERE title = ? 
+          AND (
+            (category = ? OR category IS NULL)
+            OR (category = '/My Notes/' AND ? = '/')
+            OR (category = '/我的笔记/' AND ? = '/')
+          )
+          AND sync_status = 'synced'
+          AND doc_guid IS NOT NULL
+          AND doc_guid NOT LIKE 'local_%'
+        ORDER BY server_modified DESC
+        LIMIT 1
+      `, [title, normalizedCat, normalizedCat, normalizedCat])
+      
+      return result && result.length > 0 ? result[0] : null
+    } catch (error) {
+      log.error('[DB] findDuplicateSyncedNote error:', error)
+      return null
+    }
+  })
+
+  // ✅ 获取所有已同步的笔记（用于同步后清理重复笔记）
+  ipcMain.handle('db:getAllSyncedNotesForCleanup', async () => {
+    try {
+      const result = execToObjects(`
+        SELECT id, doc_guid, kb_guid, title, category, sync_status,
+               local_modified, server_modified
+        FROM notes 
+        WHERE sync_status = 'synced'
+          AND title IS NOT NULL 
+          AND title != ''
+          AND title NOT LIKE '[%-DELETED]%'
+          AND title NOT LIKE '[DUP-OF-%'
+          AND title NOT LIKE '[MERGED-INTO-%'
+          AND title NOT LIKE '[POST-SYNC-DUP-%'
+        ORDER BY category, title, server_modified DESC
+      `)
+      
+      return result || []
+    } catch (error) {
+      log.error('[DB] getAllSyncedNotesForCleanup error:', error)
+      return []
+    }
+  })
+
+  // ✅ 规范化笔记 GUID（同步成功后用实际 GUID 替换临时 ID）
+  ipcMain.handle('db:normalizeNoteGuids', async () => {
+    try {
+      console.log('[DB] Starting note GUID normalization...')
+
+      // 步骤 1：查找所有已同步但 doc_guid 仍为临时格式的笔记
+      const tempNotes = execToObjects(`
+        SELECT id, doc_guid, kb_guid, sync_status, title
+        FROM notes
+        WHERE (doc_guid LIKE 'local_%' OR doc_guid IS NULL)
+          AND sync_status = 'synced'
+          AND kb_guid IS NOT NULL
+      `)
+
+      console.log(`[DB] Found ${tempNotes.length} synced notes with temporary doc_guid`)
+
+      let updatedCount = 0
+      for (const note of tempNotes) {
+        // 查找 guid_mapping 中是否有对应的云端 GUID
+        const mapping = db.exec(`
+          SELECT server_guid FROM guid_mapping WHERE local_id = ?
+        `, [note.id])
+
+        if (mapping.length > 0 && mapping[0].values.length > 0) {
+          const serverGuid = mapping[0].values[0][0]
+          if (serverGuid && !serverGuid.startsWith('local_')) {
+            // 用实际的云端 GUID 替换临时的 local_xxx
+            await db.run(`
+              UPDATE notes SET doc_guid = ?, updated_at = ? WHERE id = ?
+            `, [serverGuid, Date.now(), note.id])
+
+            console.log(`[DB] Normalized note ${note.id}: ${note.doc_guid} → ${serverGuid}`)
+            updatedCount++
+          }
+        } else {
+          // 如果没有映射，尝试基于 kb_guid + title 生成一个稳定的 GUID
+          // 使用 kb_guid 的前半部分 + 时间戳确保唯一性
+          const normalizedGuid = `${(note.kb_guid || '').substring(0, 16)}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+          await db.run(`
+            UPDATE notes SET doc_guid = ?, updated_at = ? WHERE id = ?
+          `, [normalizedGuid, Date.now(), note.id])
+
+          console.log(`[DB] Generated normalized GUID for note ${note.id}: ${normalizedGuid}`)
+          updatedCount++
+        }
+      }
+
+      // 步骤 2：清理无效数据（sync_status=synced 但 kb_guid 为 NULL）
+      const invalidNotes = execToObjects(`
+        SELECT id, doc_guid, kb_guid, sync_status
+        FROM notes
+        WHERE sync_status = 'synced'
+          AND (kb_guid IS NULL OR kb_guid = '')
+      `)
+
+      if (invalidNotes.length > 0) {
+        console.warn(`[DB] Found ${invalidNotes.length} synced notes with missing kb_guid, marking as conflict`)
+        for (const note of invalidNotes) {
+          await db.run(`
+            UPDATE notes SET sync_status = 'conflict', updated_at = ? WHERE id = ?
+          `, [Date.now(), note.id])
+        }
+      }
+
+      saveDatabase()
+
+      const result = {
+        normalized: updatedCount,
+        markedAsConflict: invalidNotes.length,
+        totalProcessed: tempNotes.length + invalidNotes.length
+      }
+
+      console.log('[DB] GUID normalization completed:', result)
+      return result
+
+    } catch (error) {
+      log.error('[DB] normalizeNoteGuids error:', error)
+      return { error: error.message, normalized: 0, markedAsConflict: 0 }
+    }
+  })
+
+  // ✅ 清理重复的笔记（基于 kb_guid + title 去重）
+  ipcMain.handle('db:cleanupDuplicateNotes', async () => {
+    try {
+      console.log('[DB] Starting duplicate notes cleanup...')
+
+      // 查找潜在的重复记录（相同 kb_guid + 相同标题，排除本地临时笔记）
+      const duplicates = execToObjects(`
+        SELECT kb_guid, title, COUNT(*) as count, GROUP_CONCAT(id) as ids, GROUP_CONCAT(doc_guid) as doc_guids
+        FROM notes
+        WHERE kb_guid IS NOT NULL
+          AND doc_guid IS NOT NULL
+          AND doc_guid NOT LIKE 'local_%'
+          AND sync_status = 'synced'
+        GROUP BY kb_guid, title
+        HAVING count > 1
+      `)
+
+      console.log(`[DB] Found ${duplicates.length} groups of potential duplicates`)
+
+      let removedCount = 0
+      for (const dup of duplicates) {
+        const ids = dup.ids.split(',').map(id => parseInt(id.trim()))
+        const docGuids = dup.doc_guids.split(',')
+
+        // 保留第一个（ID 最小的），删除其余的
+        const keepId = ids[0]
+        const removeIds = ids.slice(1)
+
+        console.log(`[DB] Keeping note ${keepId}, removing duplicates: ${removeIds.join(', ')}`)
+
+        for (const removeId of removeIds) {
+          await db.run('DELETE FROM notes WHERE id = ?', [removeId])
+          await db.run('DELETE FROM guid_mapping WHERE local_id = ?', [removeId])
+          removedCount++
+        }
+      }
+
+      saveDatabase()
+
+      const result = {
+        duplicateGroups: duplicates.length,
+        removedNotes: removedCount
+      }
+
+      console.log('[DB] Duplicate cleanup completed:', result)
+      return result
+
+    } catch (error) {
+      log.error('[DB] cleanupDuplicateNotes error:', error)
+      return { error: error.message, duplicateGroups: 0, removedNotes: 0 }
     }
   })
 

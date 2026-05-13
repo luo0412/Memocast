@@ -75,7 +75,7 @@
 
 <script>
 const PREVIEW_LIMIT = 5
-const OFFLINE_ROOT_CATEGORY = '/我的笔记/'
+const OFFLINE_ROOT_CATEGORY = '/My Notes/'  // 统一使用英文，排除国际化影响
 
 export default {
   name: 'OfflineSyncPromptDialog',

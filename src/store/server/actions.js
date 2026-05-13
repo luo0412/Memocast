@@ -6,8 +6,8 @@ import bus from 'src/components/bus'
 /** 离线根目录的 category key */
 export const OFFLINE_ROOT_CATEGORY_KEY = 'offline_my_notes'
 
-/** 离线根目录 category 值（存入 notes.category 字段） */
-export const OFFLINE_ROOT_CATEGORY = '/我的笔记/'
+/** 离线根目录 category 值（存入 notes.category 字段） - 统一使用英文，排除国际化影响 */
+export const OFFLINE_ROOT_CATEGORY = '/My Notes/'
 
 /** 日历列表/打点用时间戳；创建日优先 dataCreated（与 Wiz 列表字段一致），缺省回退修改日 */
 function getCalendarNoteTimestamp (note, basis) {
@@ -900,9 +900,13 @@ export default {
     // 以下为已登录逻辑（原逻辑）
 
     // Step 1: 先在本地 SQLite 创建草稿（sync_status=local_only）
+    // 生成临时 doc_guid，确保离线创建的笔记也有唯一标识
+    const tempDocGuid = `local_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
     let localNoteId = null
     try {
       const note = await DatabaseClient.createNote({
+        doc_guid: tempDocGuid,
+        kb_guid: kbGuid,
         title,
         content: initialContent,
         category: currentCategory || '/',

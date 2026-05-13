@@ -157,7 +157,7 @@ export default {
     if (!offlineNotes || !offlineNotes.length) return []
     const category = offlineCurrentCategory || ''
     let filtered = offlineNotes
-    // offlineCurrentCategory may be a category key (e.g., 'offline_my_notes') or a category path (e.g., '/我的笔记/')
+    // offlineCurrentCategory may be a category key (e.g., 'offline_my_notes') or a category path (e.g., '/My Notes/')
     // When it's the offline root key, show all local_only notes
     if (category && category !== OFFLINE_ROOT_CATEGORY_KEY) {
       filtered = offlineNotes.filter(n => n.category === category)
