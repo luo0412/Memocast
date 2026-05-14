@@ -59,22 +59,39 @@ export default {
     return []
   },
   currentNote: ({ currentNote }) => {
+    // ✅ 防御：如果 currentNote 为空/null/undefined
     if (helper.isNullOrEmpty(currentNote) || Object.keys(currentNote).length === 0) {
       console.log('[currentNote getter] EMPTY: currentNote is', currentNote)
-      return ''
+      return ''  // 返回空字符串
     }
 
-    console.log(`[currentNote getter] ⚡ FIRED! keys: ${Object.keys(currentNote)}, _isRawMarkdown: ${currentNote._isRawMarkdown}, title: ${currentNote.info?.title}`)
+    console.log(`[currentNote getter] ⚡ FIRED! keys: ${Object.keys(currentNote)}, _isRawMarkdown: ${currentNote._isRawMarkdown}, title: ${currentNote.info?.title}, timestamp: ${currentNote._loadTimestamp}`)
 
     // 本地 SQLite 来的原始 markdown，直接返回不做任何处理
     if (currentNote._isRawMarkdown) {
       const raw = currentNote.html || ''
+      
       // 防御：如果 html 是整个 API 响应对象而不是 markdown，返回空字符串
       if (typeof raw === 'object' || (typeof raw === 'string' && raw.trim().startsWith('{'))) {
         console.warn('[currentNote getter] REJECTED: malformed content')
         return ''
       }
+      
       console.log(`[currentNote getter] ✅ RETURNING _isRawMarkdown, len: ${raw.length}, preview: ${JSON.stringify(raw.substring(0, 100))}`)
+      
+      // ✅ 关键改进：即使内容为空字符串，也确保触发 watcher
+      // 通过拼接时间戳确保每次都是新值（Vue 会检测到变化）
+      if (currentNote._loadTimestamp) {
+        // 返回特殊格式：内容 + 分隔符 + 时间戳
+        // Muya watcher 会解析这个格式并提取真实内容
+        return { 
+          __markdown: raw, 
+          __timestamp: currentNote._loadTimestamp,
+          __docGuid: currentNote.info?.docGuid,
+          isEmpty: !raw || raw.length === 0
+        }
+      }
+      
       return raw
     }
 
@@ -150,7 +167,7 @@ export default {
   },
   /**
    * Offline-only notes list (used when not logged in).
-   * Returns raw notes from SQLite with sync_status=local_only,
+   * Returns raw notes from SQLite with dirty flag,
    * formatted to match the shape that NoteItem.vue expects.
    */
   offlineNotesList: ({ offlineNotes, offlineCurrentCategory }) => {
@@ -158,7 +175,7 @@ export default {
     const category = offlineCurrentCategory || ''
     let filtered = offlineNotes
     // offlineCurrentCategory may be a category key (e.g., 'offline_my_notes') or a category path (e.g., '/My Notes/')
-    // When it's the offline root key, show all local_only notes
+    // When it's the offline root key, show all notes
     if (category && category !== OFFLINE_ROOT_CATEGORY_KEY) {
       filtered = offlineNotes.filter(n => n.category === category)
     }
@@ -169,7 +186,7 @@ export default {
       category: note.category || '/',
       dataCreated: note.data_created,
       dataModified: note.data_modified || note.local_modified || note.data_created,
-      sync_status: note.sync_status,
+      dirty: note.dirty,
       // raw id for offline note lookup
       _localId: note.id
     }))

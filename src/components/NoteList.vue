@@ -113,7 +113,7 @@ export default {
           category: note.category || '/',
           dataCreated: note.data_created,
           dataModified: note.data_modified || note.local_modified || note.data_created,
-          sync_status: note.sync_status,
+          dirty: note.dirty,
           _localId: note.id
         }))
       }

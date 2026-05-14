@@ -348,33 +348,68 @@ export default {
   },
   watch: {
     currentNote: function (currentData) {
-      console.log(`\n[Muya watcher] ⚡ FIRED! type: ${typeof currentData}, len: ${(currentData || '').length}`)
-      console.log(`[Muya watcher] Preview: ${JSON.stringify((currentData || '').substring(0, 120))}`)
+      console.log(`\n[Muya watcher] ⚡ FIRED! type: ${typeof currentData}`)
+      console.log(`[Muya watcher] Previous note: ${this.previousNoteInfo?.docGuid}, New note expected from store`)
       
-      // ✅ 简化后的逻辑：只负责加载新笔记（保存已在 NoteItem 切换前完成）
+      // ✅ 解析新格式：支持字符串和对象两种格式
+      let markdownContent = ''
+      let docGuid = null
       
+      if (typeof currentData === 'string') {
+        // 旧格式：直接是 markdown 字符串
+        markdownContent = currentData || ''
+        console.log(`[Muya watcher] 📄 String format, len=${markdownContent.length}`)
+      } else if (currentData && typeof currentData === 'object') {
+        // 新格式：包含 __markdown 和元数据的对象
+        markdownContent = currentData.__markdown || ''
+        docGuid = currentData.__docGuid || null
+        
+        console.log(`[Muya watcher] 📦 Object format:`)
+        console.log(`[Muya watcher]   - markdown len=${markdownContent.length}`)
+        console.log(`[Muya watcher]   - timestamp=${currentData.__timestamp}`)
+        console.log(`[Muya watcher]   - docGuid=${docGuid}`)
+        console.log(`[Muya watcher]   - isEmpty=${currentData.isEmpty}`)
+        
+        if (currentData.isEmpty) {
+          console.log(`[Muya watcher] ℹ️ Content is empty, will show blank editor`)
+        }
+      } else {
+        // 异常情况：既不是字符串也不是对象
+        console.warn('[Muya watcher] ⚠️ Unexpected data type, clearing editor')
+        markdownContent = ''
+      }
+      
+      console.log(`[Muya watcher] Preview: ${JSON.stringify((markdownContent || '').substring(0, 120))}`)
+      
+      // ✅ 核心逻辑：加载内容到编辑器（即使是空字符串也要更新！）
       this.contentEditor.clearHistory()
       try {
         this.contentEditor.focus()
-        console.log(`[Muya watcher] 📝 Loading into editor: len=${(currentData || '').length}`)
-        this.contentEditor.setMarkdown(currentData)
+        console.log(`[Muya watcher] 📝 Loading into editor: len=${markdownContent.length}`)
+        
+        // ✅ 强制设置内容（空字符串也是有效内容，会清空编辑器）
+        this.contentEditor.setMarkdown(markdownContent)
+        
         this.firstTimeLoad = true
         this.updateContentsList(this.contentEditor.getTOC())
         
         // 清除旧的待保存数据（新笔记开始编辑）
         this.pendingSaveData = null
         
-        console.log(`[Muya watcher] ✅ Done! Editor now has content\n`)
+        console.log(`[Muya watcher] ✅ Done! Editor now has content (len=${markdownContent.length})\n`)
         
       } catch (e) {
         if (e.message.indexOf('Md2V') !== -1) return
         debugLogger.Error(e, e.message)
+        console.error('[Muya watcher] ❌ Error loading content:', e)
       }
+      
       // 在下一个 tick 更新 previousNoteInfo
       this.$nextTick(() => {
         const currentNote = this.$store.state.server.currentNote
         this.previousNoteInfo = currentNote?.info || null
         this.previousResources = currentNote?.resources || []
+        console.log(`[Muya watcher] 📌 Updated previousNoteInfo to: ${currentNote?.info?.docGuid}`)
       })
     },
     theme: function (t) {

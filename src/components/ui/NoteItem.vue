@@ -8,11 +8,11 @@
     <div :class='`note-item-title${darkTag} ${denseTag}`'>
       <q-icon :name="fileIcon" class="note-file-icon" size="16px" />
       <span v-html='title'></span>
-      <!-- 同步状态图标 -->
+      <!-- 同步状态图标（dirty=1 显示待同步） -->
       <q-icon
-        v-if="syncStatus !== 'synced'"
-        :name="syncStatusIcon"
-        :class="`sync-status-icon ${syncStatusClass}`"
+        v-if="isDirty"
+        name='cloud_upload'
+        class="sync-status-icon sync-pending"
         size="12px"
       />
     </div>
@@ -130,27 +130,9 @@ export default {
     modifiedDate () {
       return helper.displayDateElegantly(this.data.dataModified)
     },
-    // 同步状态
-    syncStatus () {
-      return this.data.sync_status || 'synced'
-    },
-    syncStatusIcon () {
-      switch (this.syncStatus) {
-        case 'local_only': return 'cloud_off'
-        case 'pending_upload': return 'cloud_upload'
-        case 'pending_download': return 'cloud_download'
-        case 'conflict': return 'warning'
-        default: return 'cloud_done'
-      }
-    },
-    syncStatusClass () {
-      switch (this.syncStatus) {
-        case 'local_only': return 'sync-local'
-        case 'pending_upload': return 'sync-pending'
-        case 'pending_download': return 'sync-download'
-        case 'conflict': return 'sync-conflict'
-        default: return 'sync-synced'
-      }
+    // 是否待同步（dirty=1）
+    isDirty () {
+      return this.data.dirty === 1
     },
     category () {
       if (helper.isNullOrEmpty(this.data.category)) return ''
@@ -168,25 +150,31 @@ export default {
     noteItemClickHandler: async function () {
       // ✅ 核心原则：先确保当前笔记A完全保存，再切换到笔记B
       
-      if (this.noteState !== 'default') {
-        // 有未保存的修改
-        console.log('[NoteItem] Has unsaved changes, saving before switch...')
+      const currentDocGuid = this.$store.state.server.currentNote?.info?.docGuid
+      console.log(`[NoteItem] Clicked: docGuid=${this.docGuid}, currentDocGuid=${currentDocGuid}, noteState=${this.noteState}`)
+      
+      // ✅ 改进：只要当前有打开的笔记就尝试保存（不再依赖 noteState）
+      if (currentDocGuid && currentDocGuid !== this.docGuid) {
+        // 有不同的笔记正在编辑 → 强制保存
+        console.log('[NoteItem] Different note is open, forcing save before switch...')
         
         try {
-          // Step 1: 捕获编辑器当前内容（此时还是稳定的笔记A）
+          // Step 1: 捕获编辑器当前内容
           const capturedData = this.captureEditorContent()
           
-          if (capturedData) {
-            // Step 2: 同步等待保存完成（阻塞直到SQLite写入成功）
+          if (capturedData && capturedData.markdown) {
+            // Step 2: 同步等待保存完成
             const saveSuccess = await this.saveWithCapturedData(capturedData)
             
             if (saveSuccess) {
-              console.log(`[NoteItem] ✅ Note A saved successfully, now switching to B`)
+              console.log(`[NoteItem] ✅ Previous note saved successfully, now switching to new note`)
             } else {
-              console.warn('[NoteItem] ⚠️ Save failed, but continuing to switch')
+              // fallback：尝试直接从 store 获取内容保存
+              console.warn('[NoteItem] Captured save failed, trying fallback...')
+              await this.saveToSQLite()
             }
           } else {
-            // fallback：捕获失败，尝试原有逻辑
+            // fallback：捕获失败，使用原有逻辑
             await this.saveToSQLite()
           }
         } catch (error) {
@@ -196,12 +184,29 @@ export default {
         
         // 后台异步同步云端（不阻塞）
         this.asyncSyncToCloud()
+      } else if (this.noteState !== 'default') {
+        // 兼容旧逻辑：noteState 不是 default 时也保存
+        console.log('[NoteItem] Same note or no note open, but has unsaved changes, saving...')
+        
+        try {
+          const capturedData = this.captureEditorContent()
+          if (capturedData) {
+            await this.saveWithCapturedData(capturedData)
+          } else {
+            await this.saveToSQLite()
+          }
+        } catch (error) {
+          console.error('[NoteItem] Error during save:', error)
+        }
       }
       
       // Step 3: 保存完成（或无需保存）→ 现在安全地切换到新笔记
+      console.log('[NoteItem] Loading new note:', this.docGuid)
       console.time('NoteLoadTime')
       await this.getNoteContent({ docGuid: this.docGuid })
       console.timeEnd('NoteLoadTime')
+      
+      console.log(`[NoteItem] ✅ Switch completed to: ${this.docGuid}`)
     },
     
     // ✅ 新增：捕获编辑器当前内容（调用 Muya 组件的方法）
@@ -251,28 +256,26 @@ export default {
           await DatabaseClient.updateNote(localNote.id, {
             content: markdown,
             title: title || localNote.title,
-            sync_status: 'pending_upload',
             local_modified: Date.now()
           })
-          console.log(`[NoteItem] ✅ Updated SQLite: id=${localNote.id}, new_status=pending_upload`)
+          console.log(`[NoteItem] ✅ Updated SQLite: id=${localNote.id}, dirty=1 (pending manual sync)`)
         } else {
           console.log(`[NoteItem] 🆕 Creating new note: docGuid=${docGuid}`)
           await DatabaseClient.createNote({
             doc_guid: docGuid,
             title: title || 'Untitled',
             content: markdown,
-            sync_status: 'pending_upload',
             local_modified: Date.now(),
             data_created: Date.now(),
             data_modified: Date.now()
           })
-          console.log(`[NoteItem] ✅ Created in SQLite: docGuid=${docGuid}, status=pending_upload`)
+          console.log(`[NoteItem] ✅ Created in SQLite: docGuid=${docGuid}, dirty=1 (pending manual sync)`)
         }
         
         // ✅ 验证：保存后立即读取确认
         const verifyNote = await DatabaseClient.getNoteByDocGuidWithPriority(docGuid)
         if (verifyNote) {
-          console.log(`[NoteItem] ✅ Verified saved content: id=${verifyNote.id}, content_len=${(verifyNote.content || '').length}, sync=${verifyNote.sync_status}, local_mod=${verifyNote.local_modified}`)
+          console.log(`[NoteItem] ✅ Verified saved content: id=${verifyNote.id}, content_len=${(verifyNote.content || '').length}, dirty=${verifyNote.dirty}, local_mod=${verifyNote.local_modified}`)
         } else {
           console.error(`[NoteItem] ❌ Verification failed: cannot find note after save: ${docGuid}`)
         }
@@ -345,19 +348,17 @@ export default {
           await DatabaseClient.updateNote(localNote.id, {
             content: markdown,
             title: info.title,
-            category: info.category || '/',
-            sync_status: 'pending_upload'
+            category: info.category || '/'
           })
-          console.log('[NoteItem] SQLite updated:', docGuid, 'content length:', markdown.length)
+          console.log('[NoteItem] SQLite updated:', docGuid, 'content length:', markdown.length, '(dirty=1 auto-set)')
         } else {
           await DatabaseClient.createNote({
             doc_guid: docGuid,
             title: info.title,
             content: markdown,
-            category: info.category || '/',
-            sync_status: 'pending_upload'
+            category: info.category || '/'
           })
-          console.log('[NoteItem] SQLite created:', docGuid, 'content length:', markdown.length)
+          console.log('[NoteItem] SQLite created:', docGuid, 'content length:', markdown.length, '(dirty=1 auto-set)')
         }
         return true
       } catch (err) {

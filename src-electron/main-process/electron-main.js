@@ -15,6 +15,9 @@ import Store from 'electron-store'
 import i18n from './i18n'
 import log from 'electron-log'
 
+// ✅ 默认根目录常量（与前端 OFFLINE_ROOT_CATEGORY 保持一致）
+const DEFAULT_ROOT_CATEGORY = '/My Notes/'
+
 // sql.js 数据库
 let db = null
 let dbPath = null
@@ -143,7 +146,7 @@ async function initDatabase() {
  * 初始化数据库表结构
  */
 function initSchema() {
-  // Notes 表
+  // Notes 表（本地优先架构：使用 dirty 字段跟踪同步状态）
   db.run(`
     CREATE TABLE IF NOT EXISTS notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,11 +158,11 @@ function initSchema() {
       tags TEXT DEFAULT '',
       data_created INTEGER,
       data_modified INTEGER,
-      sync_status TEXT DEFAULT 'local_only' CHECK(sync_status IN ('local_only', 'synced', 'pending_upload', 'pending_download', 'conflict', 'syncing', 'deleted')),
       local_modified INTEGER,
       server_modified INTEGER,
       created_at INTEGER,
-      updated_at INTEGER
+      updated_at INTEGER,
+      dirty INTEGER DEFAULT 0
     )
   `)
 
@@ -167,126 +170,98 @@ function initSchema() {
   db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_doc_guid ON notes(doc_guid) WHERE doc_guid IS NOT NULL AND doc_guid NOT LIKE 'local_%'`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_notes_kb_guid ON notes(kb_guid)`)
   db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_kb_doc_unique ON notes(kb_guid, doc_guid) WHERE kb_guid IS NOT NULL AND doc_guid IS NOT NULL AND doc_guid NOT LIKE 'local_%'`)
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_category_title_kb ON notes(category, title, kb_guid) WHERE category IS NOT NULL AND title IS NOT NULL AND kb_guid IS NOT NULL`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category)`)
-  db.run(`CREATE INDEX IF NOT EXISTS idx_notes_sync_status ON notes(sync_status)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_notes_dirty ON notes(dirty)`)
 
-  // 检查是否需要添加 kb_guid 列（数据库迁移）
+  // 数据库迁移：检查并创建唯一索引
+  try {
+    const indexList = db.exec("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='notes'")
+    const existingIndexes = indexList.length > 0 ? indexList[0].values.map(row => row[0]) : []
+    
+    if (!existingIndexes.includes('idx_notes_category_title_kb')) {
+      console.log('[DB] Migrating: adding unique index on (category, title, kb_guid)')
+      db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_category_title_kb ON notes(category, title, kb_guid) WHERE category IS NOT NULL AND title IS NOT NULL AND kb_guid IS NOT NULL`)
+      saveDatabase()
+    }
+  } catch (idxError) {
+    console.warn('[DB] Index migration check failed:', idxError.message)
+  }
+
+  // 数据库迁移：添加缺失的列
   try {
     const tableInfo = db.exec("PRAGMA table_info(notes)")
     const columns = tableInfo[0].values.map(row => row[1])
+    
     if (!columns.includes('kb_guid')) {
       console.log('[DB] Migrating: adding kb_guid column to notes table')
       db.run("ALTER TABLE notes ADD COLUMN kb_guid TEXT")
       saveDatabase()
     }
 
-    // ✅ 检查是否需要升级 CHECK 约束（添加 'syncing' 或 'deleted' 状态）
-    // SQLite 不支持直接修改 CHECK 约束，需要重建表
-    try {
-      const tableSql = db.exec(`SELECT sql FROM sqlite_master WHERE type='table' AND name='notes'`)
-      if (tableSql.length > 0 && tableSql[0].values.length > 0) {
-        const currentCreateSQL = tableSql[0].values[0][0]
-        if (currentCreateSQL && (!currentCreateSQL.includes("'syncing'") || !currentCreateSQL.includes("'deleted'"))) {
-          console.log('[DB] Migrating: upgrading notes table CHECK constraint to include "syncing" and "deleted" status')
+    if (!columns.includes('dirty')) {
+      console.log('[DB] Migrating: adding dirty column to notes table (local-first architecture)')
+      db.run("ALTER TABLE notes ADD COLUMN dirty INTEGER DEFAULT 0")
+      saveDatabase()
+      console.log('[DB] ✅ dirty column added - local-first sync architecture enabled')
+    }
 
-          // 步骤 1: 创建新表（带更新的 CHECK 约束）
-          db.run(`
-            CREATE TABLE notes_new (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              doc_guid TEXT,
-              kb_guid TEXT,
-              title TEXT NOT NULL DEFAULT 'Untitled',
-              content TEXT DEFAULT '',
-              category TEXT DEFAULT '/',
-              tags TEXT DEFAULT '',
-              data_created INTEGER,
-              data_modified INTEGER,
-              sync_status TEXT DEFAULT 'local_only' CHECK(sync_status IN ('local_only', 'synced', 'pending_upload', 'pending_download', 'conflict', 'syncing', 'deleted')),
-              local_modified INTEGER,
-              server_modified INTEGER,
-              created_at INTEGER,
-              updated_at INTEGER
-            )
-          `)
+    // ✅ 如果存在 sync_status 列，需要移除它（通过重建表）
+    if (columns.includes('sync_status')) {
+      console.log('[DB] Migrating: removing deprecated sync_status column, using dirty instead')
+      
+      try {
+        // 创建新表（不包含 sync_status）
+        db.run(`
+          CREATE TABLE notes_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            doc_guid TEXT,
+            kb_guid TEXT,
+            title TEXT NOT NULL DEFAULT 'Untitled',
+            content TEXT DEFAULT '',
+            category TEXT DEFAULT '/',
+            tags TEXT DEFAULT '',
+            data_created INTEGER,
+            data_modified INTEGER,
+            local_modified INTEGER,
+            server_modified INTEGER,
+            created_at INTEGER,
+            updated_at INTEGER,
+            dirty INTEGER DEFAULT 0
+          )
+        `)
 
-          // ✅ 步骤 1.5: 迁移前清理重复数据（避免 UNIQUE constraint 冲突）
-          console.log('[DB] Pre-migration: cleaning up duplicate (kb_guid, doc_guid) combinations...')
-          try {
-            const duplicateCheck = db.exec(`
-              SELECT kb_guid, doc_guid, COUNT(*) as cnt 
-              FROM notes 
-              WHERE kb_guid IS NOT NULL 
-                AND doc_guid IS NOT NULL 
-                AND doc_guid NOT LIKE 'local_%'
-              GROUP BY kb_guid, doc_guid 
-              HAVING cnt > 1
-            `)
-            
-            if (duplicateCheck.length > 0 && duplicateCheck[0].values.length > 0) {
-              console.log(`[DB] ⚠️ Found ${duplicateCheck[0].values.length} duplicate (kb_guid, doc_guid) groups before migration`)
-              
-              for (const dup of duplicateCheck[0].values) {
-                const dupKbGuid = dup[0]
-                const dupDocGuid = dup[1]
-                
-                console.log(`[DB] Cleaning duplicates: kb_guid=${dupKbGuid}, doc_guid=${dupDocGuid}`)
-                
-                // 找出该组合的所有记录，保留最新的（按 server_modified DESC），删除其余
-                db.run(`
-                  DELETE FROM notes 
-                  WHERE kb_guid = ? 
-                    AND doc_guid = ? 
-                    AND id NOT IN (
-                      SELECT id FROM notes 
-                      WHERE kb_guid = ? AND doc_guid = ? 
-                      ORDER BY COALESCE(server_modified, 0) DESC, id DESC 
-                      LIMIT 1
-                    )
-                `, [dupKbGuid, dupDocGuid, dupKbGuid, dupDocGuid])
-              }
-              
-              console.log('[DB] ✅ Duplicate cleanup completed before migration')
-            } else {
-              console.log('[DB] ✅ No duplicates found, migration can proceed')
-            }
-          } catch (cleanupError) {
-            console.warn('[DB] ⚠️ Pre-migration cleanup failed (non-critical):', cleanupError.message)
-            console.warn('[DB] Attempting to continue migration anyway...')
-          }
+        // 迁移数据（排除 sync_status 列）
+        db.run(`
+          INSERT INTO notes_new (
+            id, doc_guid, kb_guid, title, content, category, tags,
+            data_created, data_modified, local_modified,
+            server_modified, created_at, updated_at, dirty
+          )
+          SELECT 
+            id, doc_guid, kb_guid, title, content, category, tags,
+            data_created, data_modified, local_modified,
+            server_modified, created_at, updated_at, 
+            CASE WHEN sync_status IN ('local_only', 'pending_upload', 'conflict') THEN 1 ELSE 0 END as dirty
+          FROM notes
+        `)
 
-          // 步骤 2: 复制数据到新表
-          db.run(`
-            INSERT INTO notes_new (
-              id, doc_guid, kb_guid, title, content, category, tags,
-              data_created, data_modified, sync_status, local_modified,
-              server_modified, created_at, updated_at
-            )
-            SELECT 
-              id, doc_guid, kb_guid, title, content, category, tags,
-              data_created, data_modified, sync_status, local_modified,
-              server_modified, created_at, updated_at
-            FROM notes
-          `)
+        // 替换旧表
+        db.run('DROP TABLE notes')
+        db.run('ALTER TABLE notes_new RENAME TO notes')
 
-          // 步骤 3: 删除旧表
-          db.run('DROP TABLE notes')
+        // 重建索引
+        db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_doc_guid ON notes(doc_guid) WHERE doc_guid IS NOT NULL AND doc_guid NOT LIKE 'local_%'`)
+        db.run(`CREATE INDEX IF NOT EXISTS idx_notes_kb_guid ON notes(kb_guid)`)
+        db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_kb_doc_unique ON notes(kb_guid, doc_guid) WHERE kb_guid IS NOT NULL AND doc_guid IS NOT NULL AND doc_guid NOT LIKE 'local_%'`)
+        db.run(`CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category)`)
+        db.run(`CREATE INDEX IF NOT EXISTS idx_notes_dirty ON notes(dirty)`)
 
-          // 步骤 4: 重命名新表
-          db.run('ALTER TABLE notes_new RENAME TO notes')
-
-          // 步骤 5: 重建索引
-          db.run(`CREATE INDEX IF NOT EXISTS idx_notes_doc_guid ON notes(doc_guid)`)
-          db.run(`CREATE INDEX IF NOT EXISTS idx_notes_kb_guid ON notes(kb_guid)`)
-          db.run(`CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category)`)
-          db.run(`CREATE INDEX IF NOT EXISTS idx_notes_sync_status ON notes(sync_status)`)
-
-          saveDatabase()
-          console.log('[DB] Migration completed: CHECK constraint upgraded successfully')
-        }
+        saveDatabase()
+        console.log('[DB] ✅ Migration completed: sync_status removed, dirty architecture active')
+      } catch (migrationError) {
+        console.error('[DB] Migration failed:', migrationError.message)
       }
-    } catch (migrationError) {
-      console.error('[DB] Migration failed (CHECK constraint upgrade):', migrationError.message)
-      console.warn('[DB] Note: If you see "CHECK constraint failed" errors, please delete the database file and restart the app')
     }
   } catch (e) {
     console.warn('[DB] Migration check failed:', e.message)
@@ -415,9 +390,9 @@ function registerDatabaseHandlers() {
         query += ' AND category = ?'
         params.push(options.category)
       }
-      if (options.syncStatus) {
-        query += ' AND sync_status = ?'
-        params.push(options.syncStatus)
+      if (options.dirty !== undefined) {
+        query += ' AND dirty = ?'
+        params.push(options.dirty)
       }
       if (options.search) {
         query += ' AND (title LIKE ? OR content LIKE ?)'
@@ -480,30 +455,116 @@ function registerDatabaseHandlers() {
     }
   })
 
-  // 创建笔记
+  // 创建笔记（严格去重：永远更新同一条记录，绝不创建副本）
   ipcMain.handle('db:createNote', async (event, note) => {
     try {
       const now = Date.now()
       const toStr = (v) => (v == null) ? '' : (typeof v === 'string') ? v : (typeof v === 'number') ? String(v) : JSON.stringify(v)
       const toNum = (v) => (v == null) ? now : (typeof v === 'number') ? v : parseInt(v, 10) || now
       const toStrOrNull = (v) => (v == null) ? null : (typeof v === 'string') ? v : (typeof v === 'number') ? String(v) : JSON.stringify(v)
+      
+      const title = toStr(note.title) || 'Untitled'
+      const category = toStr(note.category) || DEFAULT_ROOT_CATEGORY
+      const kbGuid = toStrOrNull(note.kb_guid)
+      const docGuid = toStrOrNull(note.doc_guid)
+      
+      // ✅ 调试日志：显示 createNote 的所有参数（便于排查 category 问题）
+      console.log(`[DB] createNote called: title="${title}", category="${category}", kbGuid=${kbGuid}, docGuid=${docGuid}`)
+      
+      // ✅ 警告：如果 category 是错误的根目录 "/"，记录详细信息
+      if (category === '/' || (category && !category.endsWith('/'))) {
+        console.warn(`[DB] ⚠️ INVALID CATEGORY: title="${title}", raw_category="${note.category}", normalized="${category}", should be "${DEFAULT_ROOT_CATEGORY}"`)
+      }
+      
+      let existingNote = null
+      
+      // ✅ 优先级 1：按 doc_guid 精确匹配（最强）
+      if (docGuid && !docGuid.startsWith('local_')) {
+        existingNote = execOne(`SELECT * FROM notes WHERE doc_guid = ? LIMIT 1`, [docGuid])
+      }
+      
+      // ✅ 优先级 2：按 (category, title, kb_guid) 匹配（标准去重）
+      if (!existingNote && kbGuid && title && title !== 'Untitled') {
+        existingNote = execOne(`
+          SELECT * FROM notes 
+          WHERE category = ? AND title = ? AND kb_guid = ?
+          ORDER BY local_modified DESC, id DESC
+          LIMIT 1
+        `, [category, title, kbGuid])
+        
+        if (existingNote) {
+          console.log(`[DB] createNote: Matched by (category, title, kb_guid)=(${category}, ${title}, ${kbGuid}), id=${existingNote.id}`)
+        }
+      }
+      
+      // ✅ 优先级 3：按 (category, title) 匹配（kbGuid 为空时的兜底）
+      if (!existingNote && title && title !== 'Untitled') {
+        existingNote = execOne(`
+          SELECT * FROM notes 
+          WHERE category = ? AND title = ?
+          ORDER BY local_modified DESC, id DESC
+          LIMIT 1
+        `, [category, title])
+        
+        if (existingNote) {
+          console.log(`[DB] createNote: Matched by (category, title)=(${category}, ${title}), id=${existingNote.id} (kbGuid was missing)`)
+        }
+      }
+      
+      // ✅ 如果找到已有记录 → 更新它（永不创建副本）
+      if (existingNote && existingNote.id) {
+        console.log(`[DB] createNote: ✅ Updating EXISTING note id=${existingNote.id} instead of creating new`)
+        
+        await db.run(`
+          UPDATE notes 
+          SET doc_guid = COALESCE(?, doc_guid),
+              kb_guid = COALESCE(?, kb_guid),
+              title = ?,
+              content = ?,
+              category = ?,
+              tags = ?,
+              data_modified = COALESCE(?, data_modified),
+              local_modified = ?,
+              updated_at = ?,
+              dirty = 1
+          WHERE id = ?
+        `, [
+          docGuid,
+          kbGuid,
+          title,
+          toStr(note.content),
+          category,
+          toStr(note.tags),
+          toNum(note.data_modified),
+          toNum(note.local_modified) || now,
+          now,
+          existingNote.id
+        ])
+        
+        saveDatabase()
+        return execOne('SELECT * FROM notes WHERE id = ?', [existingNote.id])
+      }
+      
+      // ✅ 没有找到 → 才 INSERT 新记录
       await db.run(`
-        INSERT INTO notes (doc_guid, kb_guid, title, content, category, tags, data_created, data_modified, sync_status, local_modified, created_at, updated_at)
+        INSERT INTO notes (doc_guid, kb_guid, title, content, category, tags, data_created, data_modified, local_modified, created_at, updated_at, dirty)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        toStrOrNull(note.doc_guid),
-        toStrOrNull(note.kb_guid),
-        toStr(note.title) || 'Untitled',
+        docGuid,
+        kbGuid,
+        title,
         toStr(note.content),
-        toStr(note.category) || '/',
+        category,
         toStr(note.tags),
         toNum(note.data_created),
         toNum(note.data_modified),
-        toStr(note.sync_status) || 'local_only',
         toNum(note.local_modified),
         now,
-        now
+        now,
+        1  // 新建笔记默认 dirty=1（待同步）
       ])
+      
+      console.log(`[DB] createNote: id=?, dirty=1 (pending sync)`)
       // 保存到文件（sql.js 是 auto-commit，不需要手动 COMMIT）
       saveDatabase()
       const lastId = getLastInsertRowid()
@@ -543,8 +604,7 @@ function registerDatabaseHandlers() {
         log.error('[DB] createNote: all query methods failed for note:', {
           lastId,
           doc_guid: note?.doc_guid,
-          title: note?.title,
-          sync_status: note?.sync_status
+          title: note?.title
         })
         return null
       }
@@ -554,7 +614,7 @@ function registerDatabaseHandlers() {
     } catch (error) {
       log.error('[DB] createNote error:', error)
       log.error('[DB] createNote note object keys:', Object.keys(note || {}))
-      log.error('[DB] createNote doc_guid:', note?.doc_guid, 'sync_status:', note?.sync_status)
+      log.error('[DB] createNote doc_guid:', note?.doc_guid, 'dirty:', note?.dirty)
       return null
     }
   })
@@ -592,10 +652,6 @@ function registerDatabaseHandlers() {
         fields.push('kb_guid = ?')
         values.push(updates.kb_guid == null ? null : toStr(updates.kb_guid))
       }
-      if (updates.sync_status !== undefined) {
-        fields.push('sync_status = ?')
-        values.push(toStr(updates.sync_status))
-      }
       if (updates.server_modified !== undefined) {
         fields.push('server_modified = ?')
         values.push(toNum(updates.server_modified))
@@ -603,13 +659,15 @@ function registerDatabaseHandlers() {
 
       // 关键改进：根据 isSystemUpdate 区分用户编辑和系统自动更新
       if (!isSystemUpdate) {
-        // 用户主动编辑 → 更新所有时间戳
-        fields.push('data_modified = ?', 'local_modified = ?', 'updated_at = ?')
-        values.push(now, now, now)
+        // 用户主动编辑 → 更新所有时间戳 + 标记为脏（待同步）
+        fields.push('data_modified = ?', 'local_modified = ?', 'updated_at = ?', 'dirty = ?')
+        values.push(now, now, now, 1)
+        console.log(`[DB] ✅ User edit: note ${id} marked as dirty=1`)
       } else {
-        // 系统自动更新（如同步完成）→ 只更新 updated_at，保留 local_modified 不变
-        fields.push('updated_at = ?')
-        values.push(now)
+        // 系统自动更新（同步完成）→ 清除 dirty 标记
+        fields.push('updated_at = ?', 'dirty = ?')
+        values.push(now, 0)
+        console.log(`[DB] ✅ Sync completed: note ${id} marked as dirty=0`)
       }
 
       values.push(id)
@@ -623,7 +681,7 @@ function registerDatabaseHandlers() {
         if (newKbGuid && newDocGuid && !newDocGuid.startsWith('local_')) {
           try {
             const conflictCheck = execOne(`
-              SELECT id, title, sync_status FROM notes 
+              SELECT id, title, dirty FROM notes 
               WHERE kb_guid = ? AND doc_guid = ? AND id != ?
               LIMIT 1
             `, [newKbGuid, newDocGuid, id])
@@ -631,7 +689,7 @@ function registerDatabaseHandlers() {
             if (conflictCheck && conflictCheck.id) {
               log.warn(`[DB] ⚠️ UNIQUE constraint conflict detected before update:`)
               log.warn(`  - Current note: id=${id}, updating to kb_guid=${newKbGuid}, doc_guid=${newDocGuid}`)
-              log.warn(`  - Conflicting note: id=${conflictCheck.id}, title=${conflictCheck.title}, status=${conflictCheck.sync_status}`)
+              log.warn(`  - Conflicting note: id=${conflictCheck.id}, title=${conflictCheck.title}, dirty=${conflictCheck.dirty}`)
               
               // 删除冲突的旧记录（保留当前正在更新的笔记）
               await db.run('DELETE FROM notes WHERE id = ?', [conflictCheck.id])
@@ -652,13 +710,15 @@ function registerDatabaseHandlers() {
       await db.run(query, values)
       saveDatabase()
 
-      // 记录同步日志
-      if (updates.sync_status !== undefined) {
-        await db.run(`INSERT INTO sync_log (note_id, action, direction, timestamp, synced) VALUES (?, 'update', 'local_to_server', ?, 0)`, [id, now])
-        saveDatabase()
+      const updatedNote = execOne('SELECT * FROM notes WHERE id = ?', [id])
+      
+      if (updatedNote) {
+        console.log(`[DB] ✅ Update verified: id=${updatedNote.id}, dirty=${updatedNote.dirty}, local_modified=${updatedNote.local_modified}`)
+      } else {
+        console.error(`[DB] ❌ Failed to retrieve updated note ${id} after update`)
       }
-
-      return execOne('SELECT * FROM notes WHERE id = ?', [id])
+      
+      return updatedNote
     } catch (error) {
       log.error('[DB] updateNote error:', error)
       log.error('[DB] updateNote updates keys:', Object.keys(updates || {}))
@@ -682,33 +742,30 @@ function registerDatabaseHandlers() {
   // 获取冲突笔记
   ipcMain.handle('db:getConflictNotes', async () => {
     try {
-      return execToObjects("SELECT * FROM notes WHERE sync_status = 'conflict'")
+      return execToObjects("SELECT * FROM notes WHERE dirty = 1")
     } catch (error) {
       log.error('[DB] getConflictNotes error:', error)
       return []
     }
   })
 
-  // 获取同步状态统计
+  // 获取同步状态统计（纯 dirty 架构）
   ipcMain.handle('db:getStats', async () => {
     try {
       const total = execOne('SELECT COUNT(*) as count FROM notes')
-      const synced = execOne("SELECT COUNT(*) as count FROM notes WHERE sync_status = 'synced'")
-      const pending = execOne(`
-        SELECT COUNT(*) as count FROM notes
-        WHERE (sync_status = 'pending_upload'
-           OR (sync_status = 'local_only' AND (doc_guid LIKE 'local_%' OR doc_guid IS NULL)))
-          AND sync_status != 'syncing'
-      `)
-      const syncing = execOne("SELECT COUNT(*) as count FROM notes WHERE sync_status = 'syncing'")
-      const conflict = execOne("SELECT COUNT(*) as count FROM notes WHERE sync_status = 'conflict'")
-      return {
+      const pending = execOne('SELECT COUNT(*) as count FROM notes WHERE dirty = 1')
+      
+      const stats = {
         total: total?.count || 0,
-        synced: synced?.count || 0,
+        synced: (total?.count || 0) - (pending?.count || 0),
         pending: pending?.count || 0,
-        syncing: syncing?.count || 0,
-        conflict: conflict?.count || 0
+        syncing: 0,
+        conflict: 0
       }
+      
+      console.log(`[DB] 📊 Stats: total=${stats.total}, pending=${stats.pending} (dirty=1)`)
+      
+      return stats
     } catch (error) {
       log.error('[DB] getStats error:', error)
       return { total: 0, synced: 0, pending: 0, conflict: 0 }
@@ -763,8 +820,8 @@ function registerDatabaseHandlers() {
         VALUES (?, ?, ?, ?, ?)
       `, [id, note.content, serverData.content || '', note.local_modified, serverData.data_modified || null])
 
-      // 更新状态为冲突
-      await db.run(`UPDATE notes SET sync_status = 'conflict', updated_at = ? WHERE id = ?`, [Date.now(), id])
+      // 标记为脏（需要同步）
+      await db.run(`UPDATE notes SET dirty = 1, updated_at = ? WHERE id = ?`, [Date.now(), id])
       saveDatabase()
       return true
     } catch (error) {
@@ -786,14 +843,12 @@ function registerDatabaseHandlers() {
     }
   })
 
-  // 获取待同步的笔记
+  // 获取待同步的笔记（纯 dirty 架构：只查 dirty=1）
   ipcMain.handle('db:getPendingSyncNotes', async () => {
     try {
       return execToObjects(`
         SELECT * FROM notes
-        WHERE (sync_status = 'pending_upload'
-           OR (sync_status = 'local_only' AND (doc_guid LIKE 'local_%' OR doc_guid IS NULL)))
-          AND sync_status != 'syncing'
+        WHERE dirty = 1
         ORDER BY local_modified ASC
       `)
     } catch (error) {
@@ -876,7 +931,7 @@ function registerDatabaseHandlers() {
                              category === '/我的笔记/') ? '/' : (category || '')
       
       const result = execToObjects(`
-        SELECT id, doc_guid, kb_guid, title, category, sync_status
+        SELECT id, doc_guid, kb_guid, title, category, dirty
         FROM notes 
         WHERE title = ? 
           AND (
@@ -884,7 +939,6 @@ function registerDatabaseHandlers() {
             OR (category = '/My Notes/' AND ? = '/')
             OR (category = '/我的笔记/' AND ? = '/')
           )
-          AND sync_status = 'synced'
           AND doc_guid IS NOT NULL
           AND doc_guid NOT LIKE 'local_%'
         ORDER BY server_modified DESC
@@ -902,10 +956,11 @@ function registerDatabaseHandlers() {
   ipcMain.handle('db:getAllSyncedNotesForCleanup', async () => {
     try {
       const result = execToObjects(`
-        SELECT id, doc_guid, kb_guid, title, category, sync_status,
+        SELECT id, doc_guid, kb_guid, title, category,
                local_modified, server_modified
         FROM notes 
-        WHERE sync_status = 'synced'
+        WHERE doc_guid IS NOT NULL 
+          AND doc_guid NOT LIKE 'local_%'
           AND title IS NOT NULL 
           AND title != ''
         ORDER BY category, title, server_modified DESC
@@ -923,16 +978,15 @@ function registerDatabaseHandlers() {
     try {
       console.log('[DB] Starting note GUID normalization...')
 
-      // 步骤 1：查找所有已同步但 doc_guid 仍为临时格式的笔记
+      // 步骤 1：查找所有 doc_guid 仍为临时格式的笔记
       const tempNotes = execToObjects(`
-        SELECT id, doc_guid, kb_guid, sync_status, title
+        SELECT id, doc_guid, kb_guid, title
         FROM notes
         WHERE (doc_guid LIKE 'local_%' OR doc_guid IS NULL)
-          AND sync_status = 'synced'
           AND kb_guid IS NOT NULL
       `)
 
-      console.log(`[DB] Found ${tempNotes.length} synced notes with temporary doc_guid`)
+      console.log(`[DB] Found ${tempNotes.length} notes with temporary doc_guid`)
 
       let updatedCount = 0
       for (const note of tempNotes) {
@@ -965,19 +1019,20 @@ function registerDatabaseHandlers() {
         }
       }
 
-      // 步骤 2：清理无效数据（sync_status=synced 但 kb_guid 为 NULL）
+      // 步骤 2：清理无效数据（doc_guid 存在但 kb_guid 为 NULL）
       const invalidNotes = execToObjects(`
-        SELECT id, doc_guid, kb_guid, sync_status
+        SELECT id, doc_guid, kb_guid
         FROM notes
-        WHERE sync_status = 'synced'
+        WHERE doc_guid IS NOT NULL 
+          AND doc_guid NOT LIKE 'local_%'
           AND (kb_guid IS NULL OR kb_guid = '')
       `)
 
       if (invalidNotes.length > 0) {
-        console.warn(`[DB] Found ${invalidNotes.length} synced notes with missing kb_guid, marking as conflict`)
+        console.warn(`[DB] Found ${invalidNotes.length} notes with missing kb_guid, marking as dirty`)
         for (const note of invalidNotes) {
           await db.run(`
-            UPDATE notes SET sync_status = 'conflict', updated_at = ? WHERE id = ?
+            UPDATE notes SET dirty = 1, updated_at = ? WHERE id = ?
           `, [Date.now(), note.id])
         }
       }
@@ -1011,7 +1066,8 @@ function registerDatabaseHandlers() {
         WHERE kb_guid IS NOT NULL
           AND doc_guid IS NOT NULL
           AND doc_guid NOT LIKE 'local_%'
-          AND sync_status = 'synced'
+          AND title IS NOT NULL
+          AND title != ''
         GROUP BY kb_guid, title
         HAVING count > 1
       `)
