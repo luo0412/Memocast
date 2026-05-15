@@ -148,26 +148,34 @@ export default {
   },
   methods: {
     noteItemClickHandler: async function () {
-      // ✅ 核心原则：先确保当前笔记A完全保存，再切换到笔记B
+      console.log('\n[NoteItem] =========================================')
+      console.log('[NoteItem] 🖱️ CLICK DETECTED! Time:', new Date().toISOString())
+      console.log('[NoteItem] =========================================\n')
       
       const currentDocGuid = this.$store.state.server.currentNote?.info?.docGuid
       console.log(`[NoteItem] Clicked: docGuid=${this.docGuid}, currentDocGuid=${currentDocGuid}, noteState=${this.noteState}`)
+      console.log(`[NoteItem] Need to save? ${currentDocGuid && currentDocGuid !== this.docGuid ? 'YES ✅' : 'NO ❌'}`)
       
       // ✅ 改进：只要当前有打开的笔记就尝试保存（不再依赖 noteState）
       if (currentDocGuid && currentDocGuid !== this.docGuid) {
         // 有不同的笔记正在编辑 → 强制保存
+        console.log('\n[NoteItem] ⚡ DIFFERENT NOTE! Starting save process...')
         console.log('[NoteItem] Different note is open, forcing save before switch...')
         
         try {
           // Step 1: 捕获编辑器当前内容
+          console.log('[NoteItem] Step 1: Calling captureEditorContent()...')
           const capturedData = this.captureEditorContent()
+          console.log(`[NoteItem] Step 1 Result: ${capturedData ? 'SUCCESS ✅ (len=' + capturedData.markdown?.length + ')' : 'FAILED ❌ null'}`)
           
           if (capturedData && capturedData.markdown) {
             // Step 2: 同步等待保存完成
+            console.log('[NoteItem] Step 2: Calling saveWithCapturedData()...')
             const saveSuccess = await this.saveWithCapturedData(capturedData)
+            console.log(`[NoteItem] Step 2 Result: ${saveSuccess ? 'SUCCESS ✅' : 'FAILED ❌'}`)
             
             if (saveSuccess) {
-              console.log(`[NoteItem] ✅ Previous note saved successfully, now switching to new note`)
+              console.log('[NoteItem] ✅ Previous note saved successfully, now switching to new note')
             } else {
               // fallback：尝试直接从 store 获取内容保存
               console.warn('[NoteItem] Captured save failed, trying fallback...')
@@ -175,12 +183,15 @@ export default {
             }
           } else {
             // fallback：捕获失败，使用原有逻辑
+            console.warn('[NoteItem] No captured data, using fallback saveToSQLite()...')
             await this.saveToSQLite()
           }
         } catch (error) {
           console.error('[NoteItem] Error during pre-switch save:', error)
           // 即使保存失败也继续切换（避免卡死）
         }
+        
+        console.log('\n[NoteItem] ✅ Save process COMPLETED! Now loading new note...\n')
         
         // ✅ 移除自动同步！只在用户手动点击同步按钮时才同步
         // this.asyncSyncToCloud()  ← 已移除，不再自动调用
@@ -198,44 +209,58 @@ export default {
         } catch (error) {
           console.error('[NoteItem] Error during save:', error)
         }
+      } else {
+        console.log('[NoteItem] ℹ️ Same note and no changes, skipping save')
       }
       
       // Step 3: 保存完成（或无需保存）→ 现在安全地切换到新笔记
-      console.log('[NoteItem] Loading new note:', this.docGuid)
+      console.log(`\n[NoteItem] Loading new note: ${this.docGuid}`)
       console.time('NoteLoadTime')
       await this.getNoteContent({ docGuid: this.docGuid })
       console.timeEnd('NoteLoadTime')
       
       console.log(`[NoteItem] ✅ Switch completed to: ${this.docGuid}`)
+      console.log('[NoteItem] =========================================\n')
     },
     
     // ✅ 新增：捕获编辑器当前内容（调用 Muya 组件的方法）
     captureEditorContent: function () {
       try {
-        const findMuyaComponent = (root) => {
+        // ✅ 查找当前活跃的编辑器组件（Muya 或 Monaco）
+        const findEditorComponent = (root) => {
           const queue = [...root.$children]
           while (queue.length) {
             const child = queue.shift()
+            
+            // ✅ 检查是否有 captureCurrentContent 方法（Muya 和 Monaco 都有）
             if (child.captureCurrentContent && typeof child.captureCurrentContent === 'function') {
-              return child
+              // ✅ 优先返回活跃的编辑器
+              if (child.active === undefined || child.active === true || child.$el?.offsetParent !== null) {
+                return child
+              }
             }
+            
             queue.push(...child.$children)
           }
           return null
         }
         
-        const muya = findMuyaComponent(this.$root)
-        if (muya) {
-          this.capturedSaveData = muya.captureCurrentContent()
-          console.log('[NoteItem] Editor content captured:', this.capturedSaveData ? `docGuid=${this.capturedSaveData.docGuid}` : 'null')
+        const editor = findEditorComponent(this.$root)
+        if (editor) {
+          this.capturedSaveData = editor.captureCurrentContent()
+          const editorName = editor.$options.name || 'Unknown'
+          console.log(`[NoteItem] Editor content captured from ${editorName}:`, this.capturedSaveData ? `docGuid=${this.capturedSaveData.docGuid}` : 'null')
         } else {
-          console.warn('[NoteItem] Muya component not found, cannot pre-capture')
+          console.warn('[NoteItem] No active editor component found (neither Muya nor Monaco)')
           this.capturedSaveData = null
         }
       } catch (error) {
         console.error('[NoteItem] Failed to capture editor content:', error)
         this.capturedSaveData = null
       }
+      
+      // ✅ 关键修复：返回捕获的数据！（之前缺少这行导致总是返回 undefined）
+      return this.capturedSaveData
     },
     
     // ✅ 新增：使用预捕获的数据保存

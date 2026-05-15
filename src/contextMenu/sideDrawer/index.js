@@ -31,22 +31,28 @@ export const showContextMenu = (event, isCurrentCategory, category, isLogin) => 
 
   // 离线未登录时，隐藏创建文件夹、导入、导出选项
   if (isLogin) {
+    // ✅ 第一组：创建操作（创建文件夹 + 创建笔记）
     ITEMS.push(CREATE_CATEGORY)
+    ITEMS.push(CREATE_NOTE)
+    
+    // ✅ 第二组：导入导出（独立组，加分隔线）
+    ITEMS.push(SEPARATOR)
     ITEMS.push(OPEN_IMPORT)
     ITEMS.push(EXPORT)
+  } else {
+    // 未登录时只显示创建笔记
+    ITEMS.push(CREATE_NOTE)
   }
 
-  ITEMS.push(CREATE_NOTE)
-  ITEMS.push(SEPARATOR)
-
-  // 只有登录用户才能使用标签排行榜
+  // ✅ 第三组：从夯到拉/标签排行榜（独立组，加分隔线）
   if (isLogin) {
-    ITEMS.push(OPEN_TIER_RANKING)
     ITEMS.push(SEPARATOR)
+    ITEMS.push(OPEN_TIER_RANKING)
   }
 
-  // 非根目录才能删除
+  // ✅ 第四组：删除（独立组，加分隔线）
   if (!isRootCategory) {
+    ITEMS.push(SEPARATOR)
     ITEMS.push(DELETE)
   }
 
