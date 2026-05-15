@@ -97,6 +97,7 @@ module.exports = function (/* ctx */) {
         cfg.plugins.push(new MonacoWebpackPlugin({
           languages: ['markdown', 'yaml', 'json', 'html', 'css', 'typescript', 'javascript'],
           features: [
+            // ─── 核心功能（必需）─
             'bracketMatching',
             'clipboard',
             'codeAction',
@@ -111,7 +112,6 @@ module.exports = function (/* ctx */) {
             'format',
             'gotoLine',
             'hover',
-            'inPlaceReplace',
             'indentation',
             'linesOperations',
             'links',
@@ -124,15 +124,16 @@ module.exports = function (/* ctx */) {
             'smartSelect',
             'snippets',
             'suggest',
-            'toggleHighContrast',
             'toggleTabFocusMode',
             'transpose',
-            'unusualFileTabbing',
-            'viewportSemanticColoring',
             'wordHighlighter',
             'wordOperations',
             'wordPartOperations',
-            'wordPartSearch'
+            'wordPartSearch',
+            // ─── 已移除的功能（节省体积）─
+            // 'inPlaceReplace'        - 内联替换（不常用）
+            // 'unusualFileTabbing'    - 特殊文件缩进（不常用）
+            // 'viewportSemanticColoring' - 视口语义着色（性能消耗大）
           ]
         }))
       }
@@ -271,7 +272,9 @@ module.exports = function (/* ctx */) {
 
       builder: {
         appId: 'cn.coolma.app',
-        arch: ['x64'],
+        // ─── 第二轮优化：Electron 构建优化 ───
+
+        // 禁用不必要的功能以减小体积
         electronDownload: {
           mirror: 'https://npmmirror.com/mirrors/electron/'
         },
@@ -289,9 +292,17 @@ module.exports = function (/* ctx */) {
         compression: 'maximum',
 
         // ─── 压缩 asar 包 ───
-        // asarUnpack 用于将大体积模块解压到外部，asar 保持 true 即可
+        // asarUnpack 用于将大体积模块解压到外部，避免双重压缩并提升运行时性能
+        // 这些模块包含二进制文件、worker 文件或特殊格式，不适合打包进 asar
         asar: true,
-        // asarUnpack: '**/node_modules/{monaco-editor,echarts,mermaid,vega*,markmap*,katex,@quasar/extras}/**/*',
+        asarUnpack: [
+          '**/node_modules/{monaco-editor,echarts,mermaid,vega*,markmap*,katex,@quasar/extras}/**/*',
+          '**/node_modules/sql.js/**/*',
+          '**/node_modules/electron-updater/**/*',
+          '**/node_modules/electron-log/**/*',
+          '**/node_modules/electron-store/**/*',
+          '**/node_modules/@electron/**/*'
+        ],
 
         // ─── 排除 node_modules 中的无用模块 ───
         files: [
@@ -300,6 +311,9 @@ module.exports = function (/* ctx */) {
           'dist/electron/**/*',
           '!_plugins/**/*',
           '!public/box-im/**/*',
+          // ─── 排除 Muya 编辑器的多余图标资源 ───
+          // 每个图标有 3 个尺寸 (1.png, 2.png, 3.png)，只保留 @2x 和 @3x
+          '!src/libs/muya/lib/assets/pngicon/**/1.png',
           // 开发依赖裁剪
           '!node_modules/@babel/**/*',
           '!node_modules/babel*/*',
@@ -308,6 +322,15 @@ module.exports = function (/* ctx */) {
           '!node_modules/eslint*/*',
           '!node_modules/prettier*/**/*',
           '!node_modules/.bin/**/*',
+          // 构建工具和开发工具
+          '!node_modules/vuepress*/**/*',
+          '!node_modules/@vuepress*/**/*',
+          '!node_modules/vuepress-theme-*/**/*',
+          '!node_modules/webpack-dev-server/**/*',
+          '!node_modules/webpack-cli/**/*',
+          '!node_modules/cross-env/**/*',
+          '!node_modules/nodemon/**/*',
+          '!node_modules/@types/**/*',
           // 测试/文档/示例文件
           '!node_modules/**/test/**/*',
           '!node_modules/**/tests/**/*',
@@ -318,9 +341,6 @@ module.exports = function (/* ctx */) {
           '!node_modules/**/license*',
           '!node_modules/**/HISTORY*',
           '!node_modules/**/.github/**/*',
-          // vuepress 相关（完全不需要）
-          '!node_modules/vuepress/**/*',
-          '!node_modules/vuepress-theme-vdoing/**/*',
           // ─── 排除 .d.ts .md .map 等无用文件类型 ───
           // *.d.ts (TypeScript 类型定义，运行时不需要)
           '!node_modules/**/*.d.ts',
@@ -328,15 +348,19 @@ module.exports = function (/* ctx */) {
           '!node_modules/**/*.md',
           // *.map (source map，调试用，生产不需要)
           '!node_modules/**/*.map',
-          // '!node_modules/**/*.vue',
-          // CHANGELOG / CONTRIBUTING / TODO 等文档文件变体
-          '!node_modules/**/CHANGELOG*',
-          '!node_modules/**/CONTRIBUTING*',
-          '!node_modules/**/TODO*',
-          '!node_modules/**/LICENSE*',
-          '!node_modules/**/AUTHORS*',
-          '!node_modules/**/HISTORY*',
-          '!node_modules/**/CHANGELELOG*',
+          // 其他文档和配置文件类型
+          '!node_modules/**/*.yml',
+          '!node_modules/**/*.yaml',
+          '!node_modules/**/*.txt',
+          '!node_modules/**/*.AUTHORS',
+          '!node_modules/**/*.CONTRIBUTING',
+          '!node_modules/**/*.TODO',
+          '!node_modules/**/*.LICENSE',
+          '!node_modules/**/*.CHANGELOG',
+          '!node_modules/**/*.HISTORY',
+          '!node_modules/**/*.CHANGELELOG',
+          // *.vue 文件（源码，已编译的不需要）
+          '!node_modules/**/*.vue',
           // 其他开发文件
           '!dist/**/*',
           '!.cursor/**/*',
@@ -344,6 +368,70 @@ module.exports = function (/* ctx */) {
           '!.vscode/**/*',
           '!.workbuddy/**/*',
           '!docs/**/*',
+
+          // ─── 第二轮优化：深度排除更多无用资源 ───
+
+          // 排除 node_modules 中的其他无用文件类型
+          '!node_modules/**/*.spec.js',
+          '!node_modules/**/*.test.js',
+          '!node_modules/**/*.spec.ts',
+          '!node_modules/**/*.test.ts',
+          '!node_modules/**/*.min.js',           // 已压缩的文件（可能有重复）
+          '!node_modules/**/*.min.css',          // 已压缩的 CSS（可能有重复）
+          '!node_modules/**/package-lock.json',  // 锁定文件不需要
+          '!node_modules/**/yarn.lock',         // Yarn 锁定文件
+          '!node_modules/**/pnpm-lock.yaml',    // pnpm 锁定文件
+
+          // 排除常见的无用目录（大小写不敏感）
+          '!node_modules/**/.git/**/*',
+          '!node_modules/**/.svn/**/*',
+          '!node_modules/**/.hg/**/*',
+          '!node_modules/**/coverage/**/*',      // 测试覆盖率报告
+          '!node_modules/**/nyc_output/**/*',    // NYC 覆盖率数据
+          '!node_modules/**/.cache/**/*',        // 缓存目录
+          '!node_modules/**/.temp/**/*',         // 临时目录
+          '!node_modules/**/tmp/**/*',           // 临时目录
+
+          // 排除 IDE 和编辑器配置
+          '!node_modules/**/.idea/**/*',
+          '!node_modules/**/*.sublime-project',
+          '!node_modules/**/*.sublime-workspace',
+          '!node_modules/**/.project',
+          '!node_modules/**/.classpath',
+
+          // 排除 CI/CD 配置
+          '!node_modules/**/.travis.yml',
+          '!node_modules/**/.circleci/**/*',
+          '!node_modules/**/.github/workflows/**/*',
+          '!node_modules/**/Jenkinsfile',
+          '!node_modules/**/.gitlab-ci.yml',
+
+          // 排除 Docker 和部署配置
+          '!node_modules/**/Dockerfile*',
+          '!node_modules/**/docker-compose*',
+          '!node_modules/**/.dockerignore',
+          '!node_modules/**/Procfile',
+          '!node_modules/**/now.json',
+          '!node_modules/**/vercel.json',
+
+          // 排除示例、模板和脚手架
+          '!node_modules/**/template/**/*',
+          '!node_modules/**/templates/**/*',
+          '!node_modules/**/scaffold/**/*',
+          '!node_modules/**/boilerplate/**/*',
+          '!node_modules/**/starter*/**/*',
+
+          // 排除构建产物缓存
+          '!node_modules/**/lib-cov/**/*',
+          '!node_modules/**/build/**/*',
+          '!node_modules/**/dist/**/*',
+          '!node_modules/**/out/**/*',
+          '!node_modules/**/output/**/*',
+
+          // 排除文档生成器输出
+          '!node_modules/**/typedoc/**/*',
+          '!node_modules/**/api/**/*',
+          '!node_modules/**/doc/**/*'
         ],
 
         mac: {

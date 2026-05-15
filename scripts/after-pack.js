@@ -73,6 +73,12 @@ module.exports = function afterPack(context) {
       rmrf(crashpadDir)
       console.log('[afterPack] 已删除 crashpad 目录')
     }
+    // 删除 fmod 音频库（如果应用不使用音频功能）
+    const fmodPath = path.join(resourcesPath, 'fmod.dll') || path.join(resourcesPath, 'libfmod.dylib')
+    if (fs.existsSync(fmodPath)) {
+      fs.unlinkSync(fmodPath)
+      console.log('[afterPack] 已删除 fmod 库')
+    }
   }
   if (platform === 'windows') {
     const crashpadClient = path.join(resourcesPath, 'crashpad_handler.exe')
@@ -85,6 +91,76 @@ module.exports = function afterPack(context) {
       rmrf(crashpadReports)
       console.log('[afterPack] 已删除 Crashpad 目录')
     }
+    // 删除 fmod 音频库
+    const fmodDll = path.join(appOutDir, 'fmod.dll')
+    if (fs.existsSync(fmodDll)) {
+      fs.unlinkSync(fmodDll)
+      console.log('[afterPack] 已删除 fmod.dll')
+    }
+  }
+
+  // ─── 5. 清理 Electron 其他无用资源 ───
+  // 删除 Squirrel 自动更新器（如果你使用 electron-updater 而不是 Squirrel）
+  if (platform === 'windows') {
+    const squirrelExes = ['Update.exe', 'Update.com']
+    squirrelExes.forEach(exe => {
+      const exePath = path.join(resourcesPath, exe)
+      if (fs.existsSync(exePath)) {
+        fs.unlinkSync(exePath)
+        console.log(`[afterPack] 已删除 ${exe}`)
+      }
+    })
+  }
+
+  // ─── 6. 清理 app.asar.unpacked 中的更多无用文件 ───
+  // 在第 3 步的基础上，进一步清理
+  if (fs.existsSync(unpackedPath)) {
+    // 清理 node_modules 中常见的无用目录
+    const uselessDirs = ['.github', '.vscode', 'example', 'examples', 'test', 'tests', 'docs', 'doc']
+    uselessDirs.forEach(dir => {
+      const result = cleanDirectoryByName(unpackedPath, dir)
+      if (result.count > 0) {
+        console.log(`[afterPack] 清理 ${dir} 目录: 删除了 ${result.count} 个 (${formatSize(result.size)})`)
+      }
+    })
+
+    // 清理 LICENSE、README 等文件（大小写不敏感）
+    const uselessFiles = ['LICENSE', 'LICENSE.md', 'README', 'README.md', 'CHANGELOG', 'CHANGELOG.md', 'CONTRIBUTING', 'AUTHORS', 'HISTORY']
+    uselessFiles.forEach(file => {
+      const result = cleanFileByName(unpackedPath, file)
+      if (result.count > 0) {
+        console.log(`[afterPack] 清理 ${file} 文件: 删除了 ${result.count} 个 (${formatSize(result.size)})`)
+      }
+    })
+
+    // ─── 第二轮深度清理 ───
+
+    // 清理测试文件
+    const testFiles = ['test.js', 'tests.js', 'spec.js', 'spec.ts']
+    testFiles.forEach(pattern => {
+      const result = cleanFilesByPattern(unpackedPath, pattern)
+      if (result.count > 0) {
+        console.log(`[afterPack] 清理 ${pattern}: 删除了 ${result.count} 个 (${formatSize(result.size)})`)
+      }
+    })
+
+    // 清理覆盖率报告和缓存
+    const cacheDirs = ['coverage', 'nyc_output', '.cache', '.temp', 'tmp']
+    cacheDirs.forEach(dir => {
+      const result = cleanDirectoryByName(unpackedPath, dir)
+      if (result.count > 0) {
+        console.log(`[afterPack] 清理 ${dir} 缓存: 删除了 ${result.count} 个 (${formatSize(result.size)})`)
+      }
+    })
+
+    // 清理构建产物
+    const buildDirs = ['lib-cov', 'build', 'dist', 'out', 'output', 'typedoc', 'api']
+    buildDirs.forEach(dir => {
+      const result = cleanDirectoryByName(unpackedPath, dir)
+      if (result.count > 0) {
+        console.log(`[afterPack] 清理 ${dir} 构建产物: 删除了 ${result.count} 个 (${formatSize(result.size)})`)
+      }
+    })
   }
 }
 
@@ -140,4 +216,109 @@ function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function cleanDirectoryByName(rootDir, dirName) {
+  let count = 0
+  let size = 0
+
+  function walk(currentDir) {
+    if (!fs.existsSync(currentDir)) return
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name)
+      if (entry.isDirectory()) {
+        // 如果目录名匹配（忽略大小写）
+        if (entry.name.toLowerCase() === dirName.toLowerCase()) {
+          const result = getDirectorySize(fullPath)
+          rmrf(fullPath)
+          count++
+          size += result.size
+        } else {
+          walk(fullPath)
+        }
+      }
+    }
+  }
+
+  walk(rootDir)
+  return { count, size }
+}
+
+function cleanFileByName(rootDir, fileName) {
+  let count = 0
+  let size = 0
+
+  function walk(currentDir) {
+    if (!fs.existsSync(currentDir)) return
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name)
+      if (entry.isDirectory()) {
+        walk(fullPath)
+      } else if (entry.isFile()) {
+        // 如果文件名匹配（忽略大小写和扩展名）
+        if (entry.name.toLowerCase().startsWith(fileName.toLowerCase())) {
+          try {
+            const stat = fs.statSync(fullPath)
+            size += stat.size
+            fs.unlinkSync(fullPath)
+            count++
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
+  walk(rootDir)
+  return { count, size }
+}
+
+function getDirectorySize(dir) {
+  let size = 0
+  function walk(currentDir) {
+    if (!fs.existsSync(currentDir)) return
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name)
+      if (entry.isDirectory()) {
+        walk(fullPath)
+      } else if (entry.isFile()) {
+        try {
+          size += fs.statSync(fullPath).size
+        } catch (_) {}
+      }
+    }
+  }
+  walk(dir)
+  return { size }
+}
+
+function cleanFilesByPattern(rootDir, pattern) {
+  let count = 0
+  let size = 0
+
+  function walk(currentDir) {
+    if (!fs.existsSync(currentDir)) return
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name)
+      if (entry.isDirectory()) {
+        walk(fullPath)
+      } else if (entry.isFile()) {
+        // 如果文件名以模式结尾（如 test.js、spec.ts）
+        if (entry.name.endsWith(pattern)) {
+          try {
+            const stat = fs.statSync(fullPath)
+            size += stat.size
+            fs.unlinkSync(fullPath)
+            count++
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
+  walk(rootDir)
+  return { count, size }
 }
