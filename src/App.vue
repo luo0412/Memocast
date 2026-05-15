@@ -46,7 +46,8 @@ export default {
     }
   },
   computed: {
-    ...mapClientState(['autoSaveGap']),
+    // ✅ 已移除 autoSaveGap！不再需要自动保存配置
+    // ...mapClientState(['autoSaveGap']),
     ...mapOfflineState(['isInitialized', 'conflictNotes'])
   },
   async mounted () {
@@ -59,29 +60,26 @@ export default {
     checkUpdate()
     this.initClientStore().then()
     this.initServerStore().then()
-    // 初始化离线存储后，如果已登录则触发一次自动同步
-    // 如果未登录，也初始化离线模式（显示离线笔记树）
+    // 初始化离线存储后，加载离线模式（显示本地 SQLite 笔记）
+    // ✅ 不再自动同步！只在用户手动点击同步按钮时才同步
     this.initOfflineStore().then(() => {
       if (this.isLogin) {
-        this.sync() // fire-and-forget，不阻塞
+        // 已登录：初始化服务器状态（不触发同步）
+        this.initServerStore().then(() => {
+          console.log('[App] Initialized server store (no auto-sync)')
+        })
       } else {
         // 未登录：初始化离线模式，加载本地 SQLite 笔记
         this.initOfflineMode()
       }
     })
-    this.setupAutoSaveInterval(this.autoSaveGap)
+    // ✅ 移除自动保存定时器！用户编辑时只保存到 SQLite
+    // this.setupAutoSaveInterval(this.autoSaveGap)  ← 已移除
   },
   methods: {
-    setupAutoSaveInterval: function (gap) {
-      clearInterval(this.autoSaveInterval)
-      if (gap === 0 && this.autoSaveInterval !== null) {
-        this.autoSaveInterval = null
-      } else if (gap !== 0) {
-        this.autoSaveInterval = setInterval(() => {
-          bus.$emit(events.NOTE_SHORTCUT_CALL.save)
-        }, gap * 1000)
-      }
-    },
+    // ✅ 已移除 setupAutoSaveInterval！不再自动保存
+    // setupAutoSaveInterval: function (gap) { ... }
+    
     // 显示离线笔记同步提示对话框
     showOfflineSyncPrompt (offlineNotes) {
       if (this.$refs.offlineSyncDialog) {
@@ -129,9 +127,9 @@ export default {
     ...mapOfflineActions(['initOfflineStore', 'sync'])
   },
   watch: {
-    autoSaveGap: function (val) {
-      this.setupAutoSaveInterval(val)
-    },
+    // ✅ 已移除 autoSaveGap watcher！不再自动保存
+    // autoSaveGap: function (val) { ... }
+    
     // 冲突笔记变化时自动弹出对话框（只在数量增加时触发）
     conflictNotes: {
       handler (notes) {

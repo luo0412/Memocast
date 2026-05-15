@@ -213,12 +213,13 @@ class SyncService {
     this.notifyListeners({ type: 'sync_start' })
 
     try {
-      const stats = { pulled: 0, pushed: 0, errors: 0 }
+      const stats = { pulled: 0, pushed: 0, errors: 0, skipped: 0 }
 
       // Step 1: 从云端拉取本地不存在的笔记（不覆盖已有内容）
       console.info('[SyncService] Starting pull from cloud (new files only)...')
       const pullResult = await this.pullFromCloud()
       stats.pulled = pullResult.count
+      stats.skipped = pullResult.skipped || 0  // ✅ 添加跳过计数
 
       // Step 2: 推送本地变更到云端
       console.info('[SyncService] Starting push to cloud...')
@@ -226,7 +227,7 @@ class SyncService {
       stats.pushed = pushResult.count
       stats.errors += pushResult.errors
 
-      console.info(`[SyncService] ✅ Sync completed: ↓${stats.pulled} pulled, ↑${stats.pushed} pushed, ${stats.errors} errors`)
+      console.info(`[SyncService] ✅ Sync completed: ↓${stats.pulled} pulled, ↑${stats.pushed} pushed, ⏭️${stats.skipped} skipped (local exists), ${stats.errors} errors`)
       this.notifyListeners({ type: 'sync_complete', stats })
       return { success: true, stats }
     } catch (error) {
@@ -242,14 +243,14 @@ class SyncService {
    * 从云端拉取本地不存在的笔记（不覆盖已有内容）
    * - 获取云端所有笔记列表
    * - 只下载本地 SQLite 中不存在的笔记
-   * - 已存在的本地笔记不会被修改（本地优先）
+   * - 如果 title + category + kbGuid 都相同，直接跳过（永不覆盖本地）
    */
   async pullFromCloud() {
     try {
       const kbGuid = getKbGuid()
       if (!kbGuid || kbGuid === 'null') {
         console.warn('[SyncService] pullFromCloud skipped: no kbGuid')
-        return { count: 0 }
+        return { count: 0, skipped: 0 }
       }
 
       // 获取云端所有笔记列表（不下载内容，只获取元数据）
@@ -276,30 +277,64 @@ class SyncService {
       console.log(`[SyncService] Found ${docs.length} notes on cloud`)
 
       let pulledCount = 0
+      let skippedCount = 0
+
+      // ✅ 预加载所有本地笔记的 (title, category, kbGuid) 用于快速去重检查
+      const localNotes = await DatabaseService.getAllNotesBasic() || []
+      
+      // 构建 Set 用于 O(1) 查找：key = "title|category|kbGuid"
+      const localNoteSet = new Set(
+        localNotes.map(note => 
+          `${note.title || ''}|${note.category || OFFLINE_ROOT_CATEGORY}|${note.kb_guid || ''}`
+            .toLowerCase()  // 统一为小写比较
+        )
+      )
+      
+      console.log(`[SyncService] Loaded ${localNoteSet.size} local notes for dedup check`)
 
       for (const doc of docs) {
         const docGuid = doc.docGuid || doc.guid
         if (!docGuid) continue
 
-        // ✅ 直接下载并使用 createNote（自动去重：按 doc_guid → category+title+kb_guid → category+title）
-        // 不再提前检查是否已存在，让 createNote 统一处理
+        // ✅ 核心去重逻辑：检查 (title + category + kbGuid) 是否已存在于本地
+        let cloudCategory = doc.category
+        
+        // 规范化 category
+        if (!cloudCategory || cloudCategory === '/' || cloudCategory.trim() === '' || 
+            cloudCategory === '/My Notes' || cloudCategory === '/My Notes/') {
+          cloudCategory = OFFLINE_ROOT_CATEGORY
+        }
+        
+        const dedupeKey = `${doc.title || 'Untitled'}|${cloudCategory}|${kbGuid}`.toLowerCase()
+        
+        if (localNoteSet.has(dedupeKey)) {
+          // ✅ 本地已存在相同 (title, category, kbGuid) 的笔记 → 直接跳过！
+          skippedCount++
+          console.log(`[SyncService] ⏭️ SKIPPED: "${doc.title}" already exists locally (title+category+kbGuid match)`)
+          continue  // 跳过这条笔记，不下载不覆盖
+        }
+
+        // 本地不存在 → 下载并创建
         try {
           const result = await this._downloadAndCreateNote(doc, kbGuid, docGuid)
           
           if (result) {
             pulledCount++
-            console.log(`[SyncService] ↓ Pulled/Updated note: ${doc.title} (${docGuid}) id=${result.id}`)
+            console.log(`[SyncService] ↓ Pulled NEW note: "${doc.title}" (${docGuid}) id=${result.id}`)
+            
+            // ✅ 将新下载的笔记添加到本地集合中（避免重复下载）
+            localNoteSet.add(dedupeKey)
           }
         } catch (e) {
           console.warn(`[SyncService] Failed to download note ${docGuid}:`, e.message)
         }
       }
 
-      console.log(`[SyncService] ✅ pullFromCloud completed: ${pulledCount} notes processed`)
-      return { count: pulledCount }
+      console.log(`[SyncService] ✅ pullFromCloud completed: ${pulledCount} pulled, ${skippedCount} skipped (already exist locally)`)
+      return { count: pulledCount, skipped: skippedCount }
     } catch (error) {
       console.error('[SyncService] pullFromCloud failed:', error)
-      return { count: 0 }
+      return { count: 0, skipped: 0 }
     }
   }
 

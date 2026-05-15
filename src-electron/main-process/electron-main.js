@@ -417,6 +417,21 @@ function registerDatabaseHandlers() {
     }
   })
 
+  // ✅ 获取所有笔记的基本信息（用于同步去重检查）
+  ipcMain.handle('db:getAllNotesBasic', async () => {
+    try {
+      return execToObjects(`
+        SELECT title, category, kb_guid 
+        FROM notes 
+        WHERE title IS NOT NULL AND title != '' 
+          AND kb_guid IS NOT NULL AND kb_guid != ''
+      `)
+    } catch (error) {
+      log.error('[DB] getAllNotesBasic error:', error)
+      return []
+    }
+  })
+
   // 获取单个笔记
   ipcMain.handle('db:getNote', async (event, id) => {
     try {

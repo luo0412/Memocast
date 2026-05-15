@@ -43,6 +43,14 @@ const DatabaseClient = {
   },
 
   /**
+   * 获取所有笔记的基本信息（用于去重检查）
+   * @returns {Promise<Array>} 返回 [{title, category, kb_guid}, ...]
+   */
+  async getAllNotesBasic() {
+    return await ipcRenderer.invoke('db:getAllNotesBasic')
+  },
+
+  /**
    * 创建笔记
    * @param {Object} note
    * @returns {Promise<Object|null>}

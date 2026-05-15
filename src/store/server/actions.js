@@ -454,7 +454,8 @@ export default {
     const {
       kbGuid,
       currentCategory,
-      tags
+      tags,
+      isLogin  // ✅ 添加登录状态检查
     } = state
     const {
       category,
@@ -469,7 +470,43 @@ export default {
 
     const targetCategory = category || currentCategory
 
-    // 获取云端笔记列表
+    // ✅ 离线模式：完全从 SQLite 加载（不请求云端）
+    if (!isLogin || !kbGuid) {
+      console.log('[getCategoryNotes] Offline mode, loading from SQLite only:', targetCategory)
+      
+      try {
+        const localNotes = await DatabaseClient.getNotes({ 
+          category: targetCategory || OFFLINE_ROOT_CATEGORY 
+        })
+        
+        // 转换为 UI 格式
+        const formattedNotes = (localNotes || [])
+          .filter(note => note.title && note.title !== 'Untitled')
+          .map(note => ({
+            docGuid: note.doc_guid,
+            guid: note.doc_guid,
+            title: note.title,
+            abstractText: note.content ? note.content.substring(0, 200) : '',
+            category: note.category || targetCategory,
+            dataCreated: note.data_created || Date.now(),
+            dataModified: note.data_modified || note.local_modified || Date.now(),
+            _localId: note.id,
+            _dirty: note.dirty === 1,
+            _source: 'local'
+          }))
+          .sort((a, b) => (b.dataModified || 0) - (a.dataModified || 0))
+        
+        console.log(`[getCategoryNotes] ✅ Loaded ${formattedNotes.length} notes from SQLite (offline mode)`)
+        commit(types.UPDATE_CURRENT_NOTES, formattedNotes)
+        return
+      } catch (err) {
+        console.error('[getCategoryNotes] Failed to load from SQLite:', err)
+        commit(types.UPDATE_CURRENT_NOTES, [])
+        return
+      }
+    }
+
+    // ✅ 在线模式：合并云端和本地数据（本地优先）
     const cloudResult = await api.KnowledgeBaseApi.getCategoryNotes({
       kbGuid,
       data: {

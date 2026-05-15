@@ -182,8 +182,8 @@ export default {
           // 即使保存失败也继续切换（避免卡死）
         }
         
-        // 后台异步同步云端（不阻塞）
-        this.asyncSyncToCloud()
+        // ✅ 移除自动同步！只在用户手动点击同步按钮时才同步
+        // this.asyncSyncToCloud()  ← 已移除，不再自动调用
       } else if (this.noteState !== 'default') {
         // 兼容旧逻辑：noteState 不是 default 时也保存
         console.log('[NoteItem] Same note or no note open, but has unsaved changes, saving...')

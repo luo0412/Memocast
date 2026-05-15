@@ -258,8 +258,17 @@ export default {
       this.contentEditor.on('muya-click', _.debounce((event) => {
         if (event.target.type === 'checkbox') {
           const curData = this.contentEditor.getMarkdown()
+          
+          // ✅ 兼容新格式：提取 currentNote 的真实内容
+          let currentNoteContent = ''
+          if (typeof this.currentNote === 'string') {
+            currentNoteContent = this.currentNote || ''
+          } else if (this.currentNote && typeof this.currentNote === 'object') {
+            currentNoteContent = this.currentNote.__markdown || ''
+          }
+          
           // eslint-disable-next-line eqeqeq
-          if (curData != this.currentNote) {
+          if (curData != currentNoteContent) {
             this.updateNoteState('changed')
             this.updateContentsList(this.contentEditor.getTOC())
           } else {
@@ -290,7 +299,19 @@ export default {
       })
 
       this.contentEditor.on('change', _.debounce(({ markdown: curData }) => {
-        if (curData.replace(/\s/g, '') === this.currentNote.replace(/\s/g, '') || this.noteState === 'none' || this.firstTimeLoad) {
+        // ✅ 兼容新格式：currentNote 可能是字符串或对象
+        let currentNoteContent = ''
+        
+        if (typeof this.currentNote === 'string') {
+          // 旧格式：直接是字符串
+          currentNoteContent = this.currentNote || ''
+        } else if (this.currentNote && typeof this.currentNote === 'object') {
+          // 新格式：提取 __markdown 字段
+          currentNoteContent = this.currentNote.__markdown || ''
+        }
+        
+        // ✅ 使用提取后的内容进行比较
+        if (curData.replace(/\s/g, '') === currentNoteContent.replace(/\s/g, '') || this.noteState === 'none' || this.firstTimeLoad) {
           this.updateNoteState('default')
           this.firstTimeLoad = false
         } else {

@@ -161,28 +161,7 @@
                     />
                   </div>
                 </div>
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
-                    <span>{{ $t('autoSave') }}</span>
-                    <q-item dense class='q-px-none'>
-                      <q-item-section avatar>
-                        <q-icon style="color: var(--themeColor);" name="timer" size="sm" />
-                      </q-item-section>
-                      <q-item-section>
-                        <q-slider
-                          style="color: var(--themeColor);"
-                          :step="30"
-                          :value="autoSaveGap"
-                          @input="autoSaveGapChangeHandler"
-                          :min="0"
-                          :max="240"
-                          label
-                          :label-value="autoSaveGapLabel"
-                        />
-                      </q-item-section>
-                    </q-item>
-                  </div>
-                </div>
+                <!-- ✅ 已移除自动保存选项！不再需要自动保存配置 -->
               </q-tab-panel>
 
               <q-tab-panel name='server' class='q-pa-sm'>
@@ -354,10 +333,9 @@ export default {
         this.$t('orderByCreatedTime')
       ]
     },
-    autoSaveGapLabel: function () {
-      if (this.autoSaveGap === 0) return this.$t('never')
-      return this.autoSaveGap + this.$t('seconds')
-    },
+    // ✅ 已移除 autoSaveGapLabel！不再需要
+    // autoSaveGapLabel: function () { ... },
+    
     localRuneCards: {
       get () {
         return this.runeCards
@@ -385,7 +363,8 @@ export default {
       'noteOrderType',
       'theme',
       'themes',
-      'autoSaveGap',
+      // ✅ 已移除 autoSaveGap！不再需要自动保存配置
+      // 'autoSaveGap',
       'runeCards'
     ]),
     ...mapOfflineState(['syncStatus', 'conflictNotes'])
@@ -426,10 +405,9 @@ export default {
       )
       this.updateStateAndStore({ noteOrderType: typePlain })
     },
-    autoSaveGapChangeHandler: function (value) {
-      if (isNaN(value)) return
-      this.toggleChanged({ key: 'autoSaveGap', value: value })
-    },
+    // ✅ 已移除 autoSaveGapChangeHandler！不再需要
+    // autoSaveGapChangeHandler: function (value) { ... },
+    
     checkUpdateHandler: function () {
       checkUpdate().then(() => {
         this.checkingNotify = this.$q.notify({
