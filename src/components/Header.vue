@@ -155,7 +155,6 @@
         </div>
           <el-dropdown-menu slot="dropdown">
           <el-dropdown-item command="nezha">哪吒</el-dropdown-item>
-          <el-dropdown-item command="wukong">悟空</el-dropdown-item>
           <el-dropdown-item command="baiyang">白羊</el-dropdown-item>
           <el-dropdown-item command="infp">INFP</el-dropdown-item>
         </el-dropdown-menu>

@@ -45,7 +45,7 @@ yarn add -D @electron/rebuild
 npx electron-rebuild -f -w
 ```
 
-- [] 切换皮肤, 哪吒红 + 悟空黄 + 白羊等12星座 + MBTI, 会有不同动画特效和背景图
+- [] 切换皮肤, 哪吒红 + 白羊等12星座 + MBTI, 会有不同动画特效和背景图
 - [] 优化打包体积
 - [x] 引入jsxgraph
 
