@@ -1,5 +1,5 @@
 // scripts/after-pack.js
-// electron-builder afterPack 钩子：在 app 完全解压后裁剪 Electron 多余文件
+// electron-builder afterPack 钩子：裁剪 Electron 多余文件
 const path = require('path')
 const fs = require('fs')
 
@@ -7,161 +7,245 @@ module.exports = function afterPack(context) {
   const { appOutDir, packager } = context
   const platform = packager.platform.name // 'mac', 'windows', or 'linux'
 
-  // 确定 locales 目录的实际路径（各平台位置不同）
-  let localesPath
+  console.log('\n' + '='.repeat(60))
+  console.log('[afterPack] 开始裁剪...')
+  console.log('[afterPack] 平台:', platform)
+  console.log('='.repeat(60) + '\n')
+
+  let totalRemovedFiles = 0
+  let totalRemovedSize = 0
+
+  // ─── 确定关键路径 ───
   let resourcesPath
+  let localesPath
+  let unpackedPath
 
   if (platform === 'mac') {
-    // macOS: Electron locales 在 .app/Contents/Frameworks/Electron Framework.framework/ 中
     const appBundlePath = path.join(appOutDir, `${packager.appInfo.productFilename}.app`)
     resourcesPath = path.join(appBundlePath, 'Contents', 'Resources')
     localesPath = path.join(appBundlePath, 'Contents', 'Frameworks', 'Electron Framework.framework', 'Resources', 'locales')
+    unpackedPath = path.join(resourcesPath, 'app.asar.unpacked')
   } else if (platform === 'windows') {
-    // Windows: locales 直接在 win-unpacked\ 下，与 resources 同级
     resourcesPath = path.join(appOutDir, 'resources')
     localesPath = path.join(appOutDir, 'locales')
+    unpackedPath = path.join(resourcesPath, 'app.asar.unpacked')
   } else {
-    // Linux: locales 在 resources 目录下
     resourcesPath = path.join(appOutDir, 'resources')
     localesPath = path.join(resourcesPath, 'locales')
+    unpackedPath = path.join(resourcesPath, 'app.asar.unpacked')
   }
 
-  console.log(`[afterPack] 平台: ${platform}`)
-  console.log(`[afterPack] resources: ${resourcesPath}`)
-  console.log(`[afterPack] locales: ${localesPath}`)
+  // ════════════════════════════════════════
+  // 第一部分：裁剪 locales
+  // ════════════════════════════════════════
+  const localeResult = trimLocales(localesPath)
+  totalRemovedFiles += localeResult.count
+  totalRemovedSize += localeResult.size
 
-  // ─── 1. 裁剪 locales，只保留中英文 ───
-  if (fs.existsSync(localesPath)) {
-    const whitelist = ['en-US.pak', 'en.pak', 'zh-CN.pak']
-    const files = fs.readdirSync(localesPath)
-    let removedCount = 0
-    let removedSize = 0
-    files.forEach((f) => {
-      if (!whitelist.includes(f)) {
-        const fullPath = path.join(localesPath, f)
-        const size = fs.statSync(fullPath).size
+  // ════════════════════════════════════════
+  // 第二部分：删除调试文件和 crashpad
+  // ════════════════════════════════════════
+  const debugResult = cleanDebugFiles(resourcesPath, appOutDir, platform)
+  totalRemovedFiles += debugResult.count
+  totalRemovedSize += debugResult.size
+
+  // ════════════════════════════════════════
+  // 第三部分：深度清理 app.asar.unpacked 目录
+  // ════════════════════════════════════════
+  if (fs.existsSync(unpackedPath)) {
+    console.log(`\n[afterPack] 📁 清理 app.asar.unpacked: ${unpackedPath}`)
+    console.log('-'.repeat(60))
+
+    const unpackedResult = deepCleanDirectory(unpackedPath)
+    totalRemovedFiles += unpackedResult.count
+    totalRemovedSize += unpackedResult.size
+  }
+
+  // ════════════════════════════════════════
+  // 输出统计报告
+  // ════════════════════════════════════════
+  console.log('\n' + '='.repeat(60))
+  console.log('[afterPack] ✅ 裁剪完成！')
+  console.log(`[afterPack] 📊 总计删除: ${totalRemovedFiles} 个文件`)
+  console.log(`[afterPack] 💾 节省空间: ${formatSize(totalRemovedSize)}`)
+  console.log('='.repeat(60) + '\n')
+}
+
+// ──────────────────────────────────────────────
+// 功能函数
+// ──────────────────────────────────────────────
+
+function trimLocales(localesPath) {
+  let count = 0
+  let size = 0
+
+  if (!fs.existsSync(localesPath)) {
+    return { count, size }
+  }
+
+  const whitelist = ['en-US.pak', 'en.pak', 'zh-CN.pak']
+  const files = fs.readdirSync(localesPath)
+
+  files.forEach((f) => {
+    if (!whitelist.includes(f)) {
+      const fullPath = path.join(localesPath, f)
+      try {
+        const stat = fs.statSync(fullPath)
         fs.unlinkSync(fullPath)
-        removedCount++
-        removedSize += size
-      }
-    })
-    console.log(`[afterPack] locales 裁剪完成: 删除了 ${removedCount} 个文件 (${formatSize(removedSize)}), 保留了 en-US/en/zh-CN`)
-  } else {
-    console.log(`[afterPack] locales 目录不存在: ${localesPath}`)
-  }
+        count++
+        size += stat.size
+      } catch (e) {}
+    }
+  })
 
-  // ─── 2. 删除调试文件 ───
+  console.log(`[afterPack] ✂️  locales: 删除 ${count} 个 (${formatSize(size)}), 保留 en-US/en/zh-CN`)
+  return { count, size }
+}
+
+function cleanDebugFiles(resourcesPath, appOutDir, platform) {
+  let count = 0
+  let size = 0
+
+  // debug.log
   const debugLog = path.join(resourcesPath, 'debug.log')
-  if (fs.existsSync(debugLog)) {
-    fs.unlinkSync(debugLog)
-    console.log('[afterPack] 已删除 debug.log')
-  }
+  if (safeDelete(debugLog)) count++
 
-  // ─── 3. 清理 unpack 目录中的无用文件类型 ───
-  // asarUnpack 的模块（monaco-editor, echarts, mermaid 等）会解压到 app.asar.unpacked 目录
-  // 这些模块内部仍有 .d.ts .md .map 等无用文件，一并清理
-  const unpackedPath = path.join(resourcesPath, 'app.asar.unpacked')
-  if (fs.existsSync(unpackedPath)) {
-    const result = cleanFileTypes(unpackedPath, ['.d.ts', '.md', '.map', '.ts'])
-    console.log(`[afterPack] unpacked 目录清理: 删除了 ${result.count} 个文件 (${formatSize(result.size)})`)
-  }
-
-  // ─── 4. 清理 crashpad (生产环境不需要) ───
+  // crashpad (macOS)
   if (platform === 'mac') {
-    const crashpadDir = path.join(resourcesPath, 'crashpad')
-    if (fs.existsSync(crashpadDir)) {
-      rmrf(crashpadDir)
-      console.log('[afterPack] 已删除 crashpad 目录')
-    }
-    // 删除 fmod 音频库（如果应用不使用音频功能）
-    const fmodPath = path.join(resourcesPath, 'fmod.dll') || path.join(resourcesPath, 'libfmod.dylib')
-    if (fs.existsSync(fmodPath)) {
-      fs.unlinkSync(fmodPath)
-      console.log('[afterPack] 已删除 fmod 库')
-    }
+    if (safeDeleteDir(path.join(resourcesPath, 'crashpad'))) count++
   }
+
+  // crashpad & fmod (Windows)
   if (platform === 'windows') {
-    const crashpadClient = path.join(resourcesPath, 'crashpad_handler.exe')
-    if (fs.existsSync(crashpadClient)) {
-      fs.unlinkSync(crashpadClient)
-      console.log('[afterPack] 已删除 crashpad_handler.exe')
-    }
-    const crashpadReports = path.join(resourcesPath, 'Crashpad')
-    if (fs.existsSync(crashpadReports)) {
-      rmrf(crashpadReports)
-      console.log('[afterPack] 已删除 Crashpad 目录')
-    }
-    // 删除 fmod 音频库
-    const fmodDll = path.join(appOutDir, 'fmod.dll')
-    if (fs.existsSync(fmodDll)) {
-      fs.unlinkSync(fmodDll)
-      console.log('[afterPack] 已删除 fmod.dll')
-    }
-  }
+    if (safeDelete(path.join(resourcesPath, 'crashpad_handler.exe'))) count++
+    if (safeDeleteDir(path.join(resourcesPath, 'Crashpad'))) count++
+    if (safeDelete(path.join(appOutDir, 'fmod.dll'))) count++
 
-  // ─── 5. 清理 Electron 其他无用资源 ───
-  // 删除 Squirrel 自动更新器（如果你使用 electron-updater 而不是 Squirrel）
-  if (platform === 'windows') {
-    const squirrelExes = ['Update.exe', 'Update.com']
-    squirrelExes.forEach(exe => {
-      const exePath = path.join(resourcesPath, exe)
-      if (fs.existsSync(exePath)) {
-        fs.unlinkSync(exePath)
-        console.log(`[afterPack] 已删除 ${exe}`)
-      }
+    // Squirrel 更新器
+    ['Update.exe', 'Update.com'].forEach(exe => {
+      if (safeDelete(path.join(resourcesPath, exe))) count++
     })
   }
 
-  // ─── 6. 清理 app.asar.unpacked 中的更多无用文件 ───
-  // 在第 3 步的基础上，进一步清理
-  if (fs.existsSync(unpackedPath)) {
-    // 清理 node_modules 中常见的无用目录
-    const uselessDirs = ['.github', '.vscode', 'example', 'examples', 'test', 'tests', 'docs', 'doc']
-    uselessDirs.forEach(dir => {
-      const result = cleanDirectoryByName(unpackedPath, dir)
-      if (result.count > 0) {
-        console.log(`[afterPack] 清理 ${dir} 目录: 删除了 ${result.count} 个 (${formatSize(result.size)})`)
-      }
-    })
+  console.log(`[afterPack] 🧹 调试文件: 删除 ${count} 个`)
+  return { count, size: 0 }
+}
 
-    // 清理 LICENSE、README 等文件（大小写不敏感）
-    const uselessFiles = ['LICENSE', 'LICENSE.md', 'README', 'README.md', 'CHANGELOG', 'CHANGELOG.md', 'CONTRIBUTING', 'AUTHORS', 'HISTORY']
-    uselessFiles.forEach(file => {
-      const result = cleanFileByName(unpackedPath, file)
-      if (result.count > 0) {
-        console.log(`[afterPack] 清理 ${file} 文件: 删除了 ${result.count} 个 (${formatSize(result.size)})`)
-      }
-    })
+function deepCleanDirectory(rootDir) {
+  let totalCount = 0
+  let totalSize = 0
 
-    // ─── 第二轮深度清理 ───
+  // 要删除的文件模式
+  const deletePatterns = [
+    /^readme$/i,
+    /^license$/i,
+    /^changelog$/i,
+    /^contributing$/i,
+    /^authors$/i,
+    /^history$/i,
+    /^todo$/i,
+    /\.test\.js$/i,
+    /\.spec\.js$/i,
+    /\.test\.ts$/i,
+    /\.spec\.ts$/i,
+  ]
 
-    // 清理测试文件
-    const testFiles = ['test.js', 'tests.js', 'spec.js', 'spec.ts']
-    testFiles.forEach(pattern => {
-      const result = cleanFilesByPattern(unpackedPath, pattern)
-      if (result.count > 0) {
-        console.log(`[afterPack] 清理 ${pattern}: 删除了 ${result.count} 个 (${formatSize(result.size)})`)
-      }
-    })
+  // 要删除的扩展名
+  const deleteExts = ['.md', '.txt', '.d.ts', '.map', '.yml', '.yaml']
 
-    // 清理覆盖率报告和缓存
-    const cacheDirs = ['coverage', 'nyc_output', '.cache', '.temp', 'tmp']
-    cacheDirs.forEach(dir => {
-      const result = cleanDirectoryByName(unpackedPath, dir)
-      if (result.count > 0) {
-        console.log(`[afterPack] 清理 ${dir} 缓存: 删除了 ${result.count} 个 (${formatSize(result.size)})`)
-      }
-    })
+  // 要删除的目录
+  const deleteDirs = [
+    'test', 'tests', '__test__', '__tests__',
+    'docs', 'doc',
+    'example', 'examples', 'demo', 'demos',
+    '.github', '.vscode', '.idea',
+    'coverage', 'nyc_output',
+    '.cache', 'tmp'
+  ]
 
-    // 清理构建产物
-    const buildDirs = ['lib-cov', 'build', 'dist', 'out', 'output', 'typedoc', 'api']
-    buildDirs.forEach(dir => {
-      const result = cleanDirectoryByName(unpackedPath, dir)
-      if (result.count > 0) {
-        console.log(`[afterPack] 清理 ${dir} 构建产物: 删除了 ${result.count} 个 (${formatSize(result.size)})`)
+  function walk(dir) {
+    if (!fs.existsSync(dir)) return
+
+    let entries
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch (e) {
+      return
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name)
+
+      if (entry.isDirectory()) {
+        // 检查是否应该删除此目录
+        const shouldDelete = deleteDirs.some(d =>
+          entry.name.toLowerCase() === d.toLowerCase()
+        )
+
+        if (shouldDelete && entry.name !== 'node_modules') {
+          try {
+            const result = getDirSize(fullPath)
+            rmrf(fullPath)
+            totalCount++
+            totalSize += result.size
+            
+            if (totalCount % 50 === 0) {
+              console.log(`    🗑️  已删除 ${totalCount} 个项目...`)
+            }
+          } catch (e) {}
+        } else {
+          walk(fullPath)
+        }
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name)
+        const name = path.basename(entry.name, ext)
+
+        // 检查是否应该删除此文件
+        const shouldDelete =
+          deletePatterns.some(p => p.test(entry.name)) ||
+          deleteExts.some(e => ext.toLowerCase() === e.toLowerCase()) ||
+          (entry.name.startsWith('.') && !entry.name.startsWith('.bin'))
+
+        if (shouldDelete) {
+          try {
+            const stat = fs.statSync(fullPath)
+            fs.unlinkSync(fullPath)
+            totalCount++
+            totalSize += stat.size
+          } catch (e) {}
+        }
       }
-    })
+    }
   }
+
+  walk(rootDir)
+
+  console.log(`  [afterPack] ✅ 完成: ${totalCount} 个文件 (${formatSize(totalSize)})`)
+  return { count: totalCount, size: totalSize }
+}
+
+// ──────────────────────────────────────────────
+// 工具函数
+// ──────────────────────────────────────────────
+
+function safeDelete(filePath) {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath)
+      return true
+    }
+  } catch (e) {}
+  return false
+}
+
+function safeDeleteDir(dirPath) {
+  try {
+    if (fs.existsSync(dirPath)) {
+      rmrf(dirPath)
+      return true
+    }
+  } catch (e) {}
+  return false
 }
 
 function rmrf(dir) {
@@ -178,147 +262,30 @@ function rmrf(dir) {
   }
 }
 
-function cleanFileTypes(dir, extensions) {
-  let count = 0
+function getDirSize(dir) {
   let size = 0
-
   function walk(currentDir) {
     if (!fs.existsSync(currentDir)) return
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name)
-      if (entry.isDirectory()) {
-        walk(fullPath)
-        // 如果目录清空后为空，也尝试删除（但保留 node_modules 结构）
-        const remaining = fs.readdirSync(fullPath)
-        if (remaining.length === 0 && !fullPath.endsWith('node_modules')) {
-          try { fs.rmdirSync(fullPath) } catch (_) {}
-        }
-      } else if (entry.isFile()) {
-        const ext = path.extname(entry.name)
-        if (extensions.includes(ext) || extensions.includes(entry.name)) {
+    try {
+      const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name)
+        if (entry.isDirectory()) {
+          walk(fullPath)
+        } else if (entry.isFile()) {
           try {
-            const stat = fs.statSync(fullPath)
-            size += stat.size
-            fs.unlinkSync(fullPath)
-            count++
+            size += fs.statSync(fullPath).size
           } catch (_) {}
         }
       }
-    }
+    } catch (_) {}
   }
-
   walk(dir)
-  return { count, size }
+  return { size }
 }
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-}
-
-function cleanDirectoryByName(rootDir, dirName) {
-  let count = 0
-  let size = 0
-
-  function walk(currentDir) {
-    if (!fs.existsSync(currentDir)) return
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name)
-      if (entry.isDirectory()) {
-        // 如果目录名匹配（忽略大小写）
-        if (entry.name.toLowerCase() === dirName.toLowerCase()) {
-          const result = getDirectorySize(fullPath)
-          rmrf(fullPath)
-          count++
-          size += result.size
-        } else {
-          walk(fullPath)
-        }
-      }
-    }
-  }
-
-  walk(rootDir)
-  return { count, size }
-}
-
-function cleanFileByName(rootDir, fileName) {
-  let count = 0
-  let size = 0
-
-  function walk(currentDir) {
-    if (!fs.existsSync(currentDir)) return
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name)
-      if (entry.isDirectory()) {
-        walk(fullPath)
-      } else if (entry.isFile()) {
-        // 如果文件名匹配（忽略大小写和扩展名）
-        if (entry.name.toLowerCase().startsWith(fileName.toLowerCase())) {
-          try {
-            const stat = fs.statSync(fullPath)
-            size += stat.size
-            fs.unlinkSync(fullPath)
-            count++
-          } catch (_) {}
-        }
-      }
-    }
-  }
-
-  walk(rootDir)
-  return { count, size }
-}
-
-function getDirectorySize(dir) {
-  let size = 0
-  function walk(currentDir) {
-    if (!fs.existsSync(currentDir)) return
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name)
-      if (entry.isDirectory()) {
-        walk(fullPath)
-      } else if (entry.isFile()) {
-        try {
-          size += fs.statSync(fullPath).size
-        } catch (_) {}
-      }
-    }
-  }
-  walk(dir)
-  return { size }
-}
-
-function cleanFilesByPattern(rootDir, pattern) {
-  let count = 0
-  let size = 0
-
-  function walk(currentDir) {
-    if (!fs.existsSync(currentDir)) return
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name)
-      if (entry.isDirectory()) {
-        walk(fullPath)
-      } else if (entry.isFile()) {
-        // 如果文件名以模式结尾（如 test.js、spec.ts）
-        if (entry.name.endsWith(pattern)) {
-          try {
-            const stat = fs.statSync(fullPath)
-            size += stat.size
-            fs.unlinkSync(fullPath)
-            count++
-          } catch (_) {}
-        }
-      }
-    }
-  }
-
-  walk(rootDir)
-  return { count, size }
 }

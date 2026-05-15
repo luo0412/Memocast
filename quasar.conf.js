@@ -295,14 +295,14 @@ module.exports = function (/* ctx */) {
         // asarUnpack 用于将大体积模块解压到外部，避免双重压缩并提升运行时性能
         // 这些模块包含二进制文件、worker 文件或特殊格式，不适合打包进 asar
         asar: true,
-        asarUnpack: [
-          '**/node_modules/{monaco-editor,echarts,mermaid,vega*,markmap*,katex,@quasar/extras}/**/*',
-          '**/node_modules/sql.js/**/*',
-          '**/node_modules/electron-updater/**/*',
-          '**/node_modules/electron-log/**/*',
-          '**/node_modules/electron-store/**/*',
-          '**/node_modules/@electron/**/*'
-        ],
+        // asarUnpack: [
+        //   '**/node_modules/{monaco-editor,echarts,mermaid,vega*,markmap*,katex,@quasar/extras}/**/*',
+        //   '**/node_modules/sql.js/**/*',
+        //   '**/node_modules/electron-updater/**/*',
+        //   '**/node_modules/electron-log/**/*',
+        //   '**/node_modules/electron-store/**/*',
+        //   '**/node_modules/@electron/**/*'
+        // ],
 
         // ─── 排除 node_modules 中的无用模块 ───
         files: [
@@ -415,23 +415,23 @@ module.exports = function (/* ctx */) {
           '!node_modules/**/vercel.json',
 
           // 排除示例、模板和脚手架
-          '!node_modules/**/template/**/*',
-          '!node_modules/**/templates/**/*',
-          '!node_modules/**/scaffold/**/*',
-          '!node_modules/**/boilerplate/**/*',
-          '!node_modules/**/starter*/**/*',
+          // '!node_modules/**/template/**/*',
+          // '!node_modules/**/templates/**/*',
+          // '!node_modules/**/scaffold/**/*',
+          // '!node_modules/**/boilerplate/**/*',
+          // '!node_modules/**/starter*/**/*',
 
           // 排除构建产物缓存
-          '!node_modules/**/lib-cov/**/*',
-          '!node_modules/**/build/**/*',
-          '!node_modules/**/dist/**/*',
-          '!node_modules/**/out/**/*',
-          '!node_modules/**/output/**/*',
+          // '!node_modules/**/lib-cov/**/*',
+          // '!node_modules/**/build/**/*',
+          // '!node_modules/**/dist/**/*',
+          // '!node_modules/**/out/**/*',
+          // '!node_modules/**/output/**/*',
 
           // 排除文档生成器输出
-          '!node_modules/**/typedoc/**/*',
-          '!node_modules/**/api/**/*',
-          '!node_modules/**/doc/**/*'
+          // '!node_modules/**/typedoc/**/*',
+          // '!node_modules/**/api/**/*',
+          // '!node_modules/**/doc/**/*'
         ],
 
         mac: {
