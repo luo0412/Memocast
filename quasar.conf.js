@@ -271,6 +271,7 @@ module.exports = function (/* ctx */) {
 
       builder: {
         appId: 'cn.coolma.app',
+        arch: ['x64'],
         electronDownload: {
           mirror: 'https://npmmirror.com/mirrors/electron/'
         },
