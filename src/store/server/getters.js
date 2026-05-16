@@ -2,7 +2,7 @@ import api from 'src/utils/api'
 import _ from 'lodash'
 import helper from 'src/utils/helper'
 import ServerFileStorage from 'src/utils/storage/ServerFileStorage'
-import { OFFLINE_ROOT_CATEGORY_KEY } from 'src/store/server/actions'
+import { OFFLINE_ROOT_CATEGORY_KEY } from 'src/utils/constants'
 
 export default {
   avatarUrl: ({ userGuid }) => {

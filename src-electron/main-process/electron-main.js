@@ -14,9 +14,7 @@ import ThemeManager from './utlis/theme-manager'
 import Store from 'electron-store'
 import i18n from './i18n'
 import log from 'electron-log'
-
-// ✅ 默认根目录常量（与前端 OFFLINE_ROOT_CATEGORY 保持一致）
-const DEFAULT_ROOT_CATEGORY = '/My Notes/'
+const { DEFAULT_ROOT_CATEGORY } = require('./constants')
 
 // sql.js 数据库
 let db = null
@@ -1135,6 +1133,65 @@ function registerDatabaseHandlers() {
     } catch (error) {
       log.error('[DB] resetDatabase error:', error)
       return false
+    }
+  })
+
+  // 按 kb_guid 删除所有笔记（用于 logout 时清理旧账号数据，防止多租户污染）
+  ipcMain.handle('db:deleteNotesByKbGuid', async (event, kbGuid) => {
+    try {
+      if (!kbGuid) {
+        log.warn('[DB] deleteNotesByKbGuid: kbGuid is required')
+        return 0
+      }
+      const result = await db.run('DELETE FROM notes WHERE kb_guid = ?', [kbGuid])
+      await db.run('DELETE FROM guid_mapping WHERE local_id IN (SELECT id FROM notes WHERE kb_guid = ?)', [kbGuid])
+      saveDatabase()
+      log.info(`[DB] Deleted all notes for kbGuid=${kbGuid}`)
+      return result?.changes || 0
+    } catch (error) {
+      log.error('[DB] deleteNotesByKbGuid error:', error)
+      return 0
+    }
+  })
+
+  // 获取指定账号的待同步笔记（仅返回当前 kbGuid 的 dirty=1 笔记，防止跨账号数据污染）
+  ipcMain.handle('db:getPendingSyncNotesByKbGuid', async (event, kbGuid) => {
+    try {
+      if (!kbGuid) {
+        log.warn('[DB] getPendingSyncNotesByKbGuid: kbGuid is required')
+        return []
+      }
+      return execToObjects(`
+        SELECT * FROM notes
+        WHERE dirty = 1 AND kb_guid = ?
+        ORDER BY local_modified ASC
+      `, [kbGuid])
+    } catch (error) {
+      log.error('[DB] getPendingSyncNotesByKbGuid error:', error)
+      return []
+    }
+  })
+
+  // 清理不属于当前 kbGuid 的所有笔记（用于 login 时隔离旧账号数据）
+  ipcMain.handle('db:clearOtherAccountNotes', async (event, currentKbGuid) => {
+    try {
+      if (!currentKbGuid) {
+        log.warn('[DB] clearOtherAccountNotes: currentKbGuid is required')
+        return 0
+      }
+      const result = await db.run(
+        'DELETE FROM notes WHERE kb_guid IS NOT NULL AND kb_guid != ? AND kb_guid != ""',
+        [currentKbGuid]
+      )
+      await db.run(
+        'DELETE FROM guid_mapping WHERE local_id NOT IN (SELECT id FROM notes)',
+      )
+      saveDatabase()
+      log.info(`[DB] Cleared notes from other accounts (current=${currentKbGuid}), removed ${result?.changes || 0} notes`)
+      return result?.changes || 0
+    } catch (error) {
+      log.error('[DB] clearOtherAccountNotes error:', error)
+      return 0
     }
   })
 

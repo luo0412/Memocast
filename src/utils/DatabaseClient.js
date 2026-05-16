@@ -129,6 +129,33 @@ const DatabaseClient = {
    */
   async resetDatabase() {
     return await ipcRenderer.invoke('db:resetDatabase')
+  },
+
+  /**
+   * 按 kb_guid 删除所有笔记（logout 时清理旧账号数据）
+   * @param {string} kbGuid
+   * @returns {Promise<number>} 删除的笔记数量
+   */
+  async deleteNotesByKbGuid(kbGuid) {
+    return await ipcRenderer.invoke('db:deleteNotesByKbGuid', kbGuid)
+  },
+
+  /**
+   * 清理不属于当前账号的所有笔记（login 时隔离旧账号数据）
+   * @param {string} currentKbGuid
+   * @returns {Promise<number>} 删除的笔记数量
+   */
+  async clearOtherAccountNotes(currentKbGuid) {
+    return await ipcRenderer.invoke('db:clearOtherAccountNotes', currentKbGuid)
+  },
+
+  /**
+   * 获取指定账号的待同步笔记（带 kb_guid 过滤，防止跨账号数据污染）
+   * @param {string} kbGuid
+   * @returns {Promise<Array>}
+   */
+  async getPendingSyncNotesByKbGuid(kbGuid) {
+    return await ipcRenderer.invoke('db:getPendingSyncNotesByKbGuid', kbGuid)
   }
 }
 

@@ -2,12 +2,12 @@ import types from 'src/store/server/types'
 import api from 'src/utils/api'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from 'src/components/bus'
+import { OFFLINE_ROOT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY, normalizeCategoryForMatch } from 'src/utils/constants'
 
-/** 离线根目录的 category key */
-export const OFFLINE_ROOT_CATEGORY_KEY = 'offline_my_notes'
-
-/** 离线根目录 category 值（存入 notes.category 字段） - 统一使用英文，排除国际化影响 */
-export const OFFLINE_ROOT_CATEGORY = '/My Notes/'
+/** @deprecated 请从 src/utils/constants 导入，保持单点定义 */
+export { OFFLINE_ROOT_CATEGORY_KEY } from 'src/utils/constants'
+/** @deprecated 请从 src/utils/constants 导入，保持单点定义 */
+export { OFFLINE_ROOT_CATEGORY } from 'src/utils/constants'
 
 /** 日历列表/打点用时间戳；创建日优先 dataCreated（与 Wiz 列表字段一致），缺省回退修改日 */
 function getCalendarNoteTimestamp (note, basis) {
@@ -262,6 +262,20 @@ export default {
       isLogin: true
     })
 
+    // ✅ 登录后清理不属于当前账号的旧笔记，防止多租户数据污染
+    // 只保留 kb_guid == 当前账号 或 kb_guid == null（本地离线笔记） 的记录
+    const newKbGuid = result.kbGuid
+    if (newKbGuid) {
+      try {
+        const removed = await DatabaseClient.clearOtherAccountNotes(newKbGuid)
+        if (removed > 0) {
+          console.log(`[login] Cleared ${removed} notes from other accounts (kbGuid=${newKbGuid})`)
+        }
+      } catch (err) {
+        console.warn('[login] Failed to clear other accounts notes:', err)
+      }
+    }
+
     // 检查是否有离线笔记需要同步
     try {
       const pendingNotes = await DatabaseClient.getNotes({ dirty: 1 })
@@ -288,6 +302,18 @@ export default {
    * @returns {Promise<void>}
    */
   async logout ({ commit }) {
+    // 登出前先清理当前账号的 SQLite 数据，防止旧账号笔记残留干扰新账号
+    const currentKbGuid = localStorage.getItem('kbGuid')
+    if (currentKbGuid) {
+      try {
+        await DatabaseClient.deleteNotesByKbGuid(currentKbGuid)
+        console.log(`[logout] Cleaned up SQLite notes for kbGuid=${currentKbGuid}`)
+      } catch (err) {
+        console.warn('[logout] Failed to clean SQLite notes:', err)
+      }
+    }
+    localStorage.removeItem('kbGuid')
+
     await api.AccountServerApi.Logout()
     ServerFileStorage.removeItemFromLocalStorage('token')
     commit(types.LOGOUT)
@@ -521,15 +547,15 @@ export default {
     try {
       const localNotes = await DatabaseClient.getNotes({ category: targetCategory })
       
-      // ✅ 核心去重原则：按 (category + title) 唯一，本地优先
-      // 使用 Map 确保每个 (category, title) 只出现一次
-      const dedupeMap = new Map()  // key: "category|title", value: 合并后的笔记对象
+      // ✅ 核心去重原则：按 (category + title + kbGuid) 唯一，本地优先
+      // 使用 Map 确保每个 (category, title, kbGuid) 只出现一次
+      const dedupeMap = new Map()  // key: "category|title|kbGuid", value: 合并后的笔记对象
       
       // 第一步：添加所有本地笔记（本地优先权最高）
       for (const localNote of (localNotes || [])) {
         if (!localNote.title || localNote.title === 'Untitled') continue
         
-        const dedupeKey = `${localNote.category || targetCategory}|${localNote.title}`
+        const dedupeKey = `${localNote.category || targetCategory}|${localNote.title}|${kbGuid || ''}`
         
         // 如果这个 (category, title) 还没出现过 → 添加
         if (!dedupeMap.has(dedupeKey)) {
@@ -552,10 +578,12 @@ export default {
       // 第二步：添加云端独有的笔记（本地没有的才添加）
       for (const cloudNote of cloudResult) {
         if (!cloudNote.title) continue
-        
-        const dedupeKey = `${targetCategory}|${cloudNote.title}`
-        
-        // 只有当本地不存在这个 (category, title) 时才添加云端版本
+
+        // ✅ 规范化 category 并加上 kbGuid，确保与本地 dedupe key 对称
+        const cloudCat = normalizeCategoryForMatch(cloudNote.category || targetCategory || '')
+        const dedupeKey = `${cloudCat}|${cloudNote.title}|${kbGuid || ''}`
+
+        // 只有当本地不存在这个 (category, title, kbGuid) 时才添加云端版本
         if (!dedupeMap.has(dedupeKey)) {
           dedupeMap.set(dedupeKey, {
             ...cloudNote,

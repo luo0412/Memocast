@@ -7,19 +7,7 @@
 import DatabaseService from './DatabaseService'
 import WizNoteApi from '../utils/api'
 import helper from '../utils/helper'
-
-/** 离线根目录 category 值（存入 notes.category 字段） - 统一使用英文，排除国际化影响 */
-const OFFLINE_ROOT_CATEGORY = '/My Notes/'
-
-function normalizeCategory (cat) {
-  if (!cat || 
-      cat === OFFLINE_ROOT_CATEGORY || 
-      cat === '/我的笔记/' ||
-      cat === 'OFFLINE_ROOT_CATEGORY') {
-    return '/'
-  }
-  return cat
-}
+import { OFFLINE_ROOT_CATEGORY, normalizeCategoryForMatch } from '../utils/constants'
 
 function getKbGuid() {
   return localStorage.getItem('kbGuid')
@@ -146,9 +134,10 @@ const api = {
       type: 'document'
     }
 
-    const normCat = normalizeCategory(updates.category || '')
-    if (normCat) {
-      data.category = normCat
+    // ✅ 保持原始 category 不做 normalize，确保上传路径与本地存储一致
+    // normalizeCategory 仅用于去重/search 匹配逻辑，不用于 API 上传
+    if (updates.category != null) {
+      data.category = updates.category
     }
 
     const result = await WizNoteApi.KnowledgeBaseApi.updateNote({
@@ -282,12 +271,13 @@ class SyncService {
       // ✅ 预加载所有本地笔记的 (title, category, kbGuid) 用于快速去重检查
       const localNotes = await DatabaseService.getAllNotesBasic() || []
       
-      // 构建 Set 用于 O(1) 查找：key = "title|category|kbGuid"
+      // 构建 Set 用于 O(1) 查找：key = "title|category(kbGuid normalized)|kbGuid"
+      // category 需要与 pullFromCloud 中的 normalizeCategoryForMatch 保持一致
       const localNoteSet = new Set(
-        localNotes.map(note => 
-          `${note.title || ''}|${note.category || OFFLINE_ROOT_CATEGORY}|${note.kb_guid || ''}`
-            .toLowerCase()  // 统一为小写比较
-        )
+        localNotes.map(note => {
+          const localCat = normalizeCategoryForMatch(note.category || '')
+          return `${note.title || ''}|${localCat}|${note.kb_guid || ''}`.toLowerCase()
+        })
       )
       
       console.log(`[SyncService] Loaded ${localNoteSet.size} local notes for dedup check`)
@@ -296,14 +286,8 @@ class SyncService {
         const docGuid = doc.docGuid || doc.guid
         if (!docGuid) continue
 
-        // ✅ 核心去重逻辑：检查 (title + category + kbGuid) 是否已存在于本地
-        let cloudCategory = doc.category
-        
-        // 规范化 category
-        if (!cloudCategory || cloudCategory === '/' || cloudCategory.trim() === '' || 
-            cloudCategory === '/My Notes' || cloudCategory === '/My Notes/') {
-          cloudCategory = OFFLINE_ROOT_CATEGORY
-        }
+        // ✅ 核心去重逻辑：使用 normalizeCategoryForMatch 确保与本地 Set 对称
+        const cloudCategory = normalizeCategoryForMatch(doc.category || '')
         
         const dedupeKey = `${doc.title || 'Untitled'}|${cloudCategory}|${kbGuid}`.toLowerCase()
         
@@ -400,13 +384,19 @@ class SyncService {
 
   /**
    * 上传本地变更到云端（纯本地优先架构）
-   * - 遍历所有 dirty=1 的笔记
+   * - 遍历当前账号所有 dirty=1 的笔记（按 kb_guid 过滤，防止跨账号污染）
    * - 直接用本地内容覆盖/创建云端笔记
    * - 不检查冲突、不比较时间戳，永远本地优先
    */
   async pushToCloud() {
-    const pendingNotes = await DatabaseService.getPendingSyncNotes()
-    console.log(`[SyncService] 📤 pushToCloud: found ${pendingNotes?.length || 0} dirty notes`)
+    const kbGuid = getKbGuid()
+    if (!kbGuid || kbGuid === 'null') {
+      console.warn('[SyncService] pushToCloud skipped: no kbGuid')
+      return { count: 0, errors: 0 }
+    }
+
+    const pendingNotes = await DatabaseService.getPendingSyncNotesByKbGuid(kbGuid)
+    console.log(`[SyncService] 📤 pushToCloud: found ${pendingNotes?.length || 0} dirty notes for kbGuid=${kbGuid}`)
     
     if (pendingNotes.length === 0) {
       console.log('[SyncService] No dirty notes to sync')
@@ -428,7 +418,6 @@ class SyncService {
           note.category = latestNote.category || note.category
         }
 
-        const kbGuid = getKbGuid()
         let cloudDocGuid = null
 
         // 2. 判断是否已有云端 GUID（非 local_ 开头）
@@ -438,26 +427,27 @@ class SyncService {
           // ✅ 已有云端 GUID → 直接更新覆盖
           cloudDocGuid = note.doc_guid
           console.log(`[SyncService] Updating cloud note: ${cloudDocGuid}`)
-          
+
           await api.updateDoc(cloudDocGuid, {
             title: note.title,
             content: note.content,
-            category: note.category || '/'
-          }, note.kb_guid || null)
+            category: note.category || OFFLINE_ROOT_CATEGORY  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY 而非 /
+          }, note.kb_guid || kbGuid)
         } else {
           // ❌ 无云端 GUID 或 local_ 开头 → 搜索或创建
           console.log(`[SyncService] New/offline note, searching cloud...`)
           
           try {
             const searchResult = await WizNoteApi.KnowledgeBaseApi.searchNote({
-              data: { ss: note.title },
-              kbGuid
+              kbGuid: getKbGuid(),
+              data: { ss: note.title }
             })
             
             if (Array.isArray(searchResult) && searchResult.length > 0) {
               const exactMatch = searchResult.filter(doc => {
-                const docCat = normalizeCategory(doc.category || '')
-                const noteCat = normalizeCategory(note.category || '')
+                // ✅ 规范化到 OFFLINE_ROOT_CATEGORY，确保 /My Notes/ 和 / 统一为 OFFLINE_ROOT_CATEGORY
+                const docCat = normalizeCategoryForMatch(doc.category || '')
+                const noteCat = normalizeCategoryForMatch(note.category || '')
                 return doc.title === note.title && docCat === noteCat
               })
               
@@ -468,7 +458,7 @@ class SyncService {
                 await api.updateDoc(cloudDocGuid, {
                   title: note.title,
                   content: note.content,
-                  category: note.category || '/'
+                  category: note.category || OFFLINE_ROOT_CATEGORY  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY
                 }, kbGuid)
               }
             }
@@ -482,8 +472,8 @@ class SyncService {
             const result = await api.createDoc({
               title: note.title,
               content: note.content,
-              category: note.category || ''
-            }, note.kb_guid || null)
+              category: note.category || OFFLINE_ROOT_CATEGORY  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY
+            }, note.kb_guid || kbGuid)  // ✅ 无 kb_guid 时用当前账号
             
             if (result?.guid) {
               cloudDocGuid = result.guid
