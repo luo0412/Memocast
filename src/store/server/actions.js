@@ -17,6 +17,62 @@ function getCalendarNoteTimestamp (note, basis) {
   }
   return note.dataModified
 }
+
+/**
+ * 从 SQLite local_categories 表构建目录树
+ * @param {Array} categories - local_categories 表中的所有记录
+ * @returns {Array} 树形结构
+ */
+function buildOfflineCategoryTree (categories) {
+  // 找到根节点（/My Notes/）
+  const rootCat = categories.find(c => c.category === OFFLINE_ROOT_CATEGORY)
+  if (!rootCat) return []
+
+  const nodeMap = new Map()
+  // 构建节点
+  for (const cat of categories) {
+    const key = cat.category
+    const label = key.replace(/\/$/, '').replace(/^\//, '') || '我的笔记'
+    nodeMap.set(key, {
+      label,
+      key,
+      children: [],
+      selectable: true,
+      kb_guid: cat.kb_guid,
+      local_only: cat.local_only === 1,
+      categoryPath: key
+    })
+  }
+
+  // 链接父子关系
+  const roots = []
+  for (const cat of categories) {
+    const node = nodeMap.get(cat.category)
+    if (!node) continue
+
+    const parentPath = cat.parent || '/'
+    const parent = nodeMap.get(parentPath)
+    if (parent && parentPath !== cat.category) {
+      parent.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+
+  // 确保根节点在数组中（离线模式只有 /My Notes/）
+  if (!roots.find(n => n.key === OFFLINE_ROOT_CATEGORY)) {
+    roots.unshift({
+      label: '我的笔记',
+      key: OFFLINE_ROOT_CATEGORY_KEY,
+      children: [],
+      selectable: true,
+      isOfflineRoot: true
+    })
+  }
+
+  return roots
+}
+
 import { Dark, Dialog, Loading, Notify, QSpinnerGears } from 'quasar'
 import helper from 'src/utils/helper'
 import { i18n } from 'boot/i18n'
@@ -169,24 +225,23 @@ export default {
   },
   /**
    * Initialize offline mode: load local-only notes from SQLite and build
-   * the offline category tree (single root node "我的笔记").
+   * the offline category tree (supports sub-folders).
    * Called after skip-login so the user can create/view notes without account.
    */
   async initOfflineMode ({ commit, state }) {
     try {
+      // 确保离线根目录存在
+      await DatabaseClient.ensureOfflineRoot()
+
       const localNotes = await DatabaseClient.getNotes()
       console.log('[initOfflineMode] loaded notes:', localNotes.length)
 
       commit(types.SET_OFFLINE_NOTES, localNotes || [])
 
-      const offlineRoot = {
-        label: '我的笔记',
-        key: OFFLINE_ROOT_CATEGORY_KEY,
-        children: [],
-        selectable: true,
-        isOfflineRoot: true
-      }
-      commit(types.SET_OFFLINE_CATEGORIES, [offlineRoot])
+      // 从 SQLite 加载所有本地目录，构建树形结构
+      const localCategories = await DatabaseClient.getCategories({})
+      const tree = buildOfflineCategoryTree(localCategories)
+      commit(types.SET_OFFLINE_CATEGORIES, tree)
       commit(types.UPDATE_CURRENT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY)
       commit(types.SET_OFFLINE_CURRENT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY)
 
@@ -262,28 +317,27 @@ export default {
       isLogin: true
     })
 
-    // ✅ 登录后清理不属于当前账号的旧笔记，防止多租户数据污染
-    // 只保留 kb_guid == 当前账号 或 kb_guid == null（本地离线笔记） 的记录
+    // ✅ 永远本地优先：不禁用任何本地笔记
+    // 登录时将 kb_guid=null 的离线笔记迁移到当前账号，下次同步时推送到云端
     const newKbGuid = result.kbGuid
     if (newKbGuid) {
       try {
-        const removed = await DatabaseClient.clearOtherAccountNotes(newKbGuid)
-        if (removed > 0) {
-          console.log(`[login] Cleared ${removed} notes from other accounts (kbGuid=${newKbGuid})`)
+        const migrated = await DatabaseClient.migrateOfflineNotes(newKbGuid)
+        if (migrated > 0) {
+          console.log(`[login] Migrated ${migrated} offline notes to kbGuid=${newKbGuid}`)
         }
       } catch (err) {
-        console.warn('[login] Failed to clear other accounts notes:', err)
+        console.warn('[login] Failed to migrate offline notes:', err)
       }
     }
 
-    // 检查是否有离线笔记需要同步
+    // 检查是否有离线笔记需要同步（local_ 开头的 doc_guid）
     try {
       const pendingNotes = await DatabaseClient.getNotes({ dirty: 1 })
       const offlineNotes = pendingNotes.filter(n => n.doc_guid && n.doc_guid.startsWith('local_'))
       if (offlineNotes.length > 0) {
         console.log('[login] Found', offlineNotes.length, 'offline notes to sync')
         commit(types.SET_OFFLINE_NOTES, offlineNotes)
-        // 通过 bus 事件通知 App.vue 显示同步提示弹窗
         bus.$emit('showOfflineSyncPrompt', offlineNotes)
       }
     } catch (err) {
@@ -297,22 +351,13 @@ export default {
     return result
   },
   /**
-   * 登出
-   * @param commit
-   * @returns {Promise<void>}
+   * 登出（永远本地优先：不清除任何本地 SQLite 数据）
+   * - 保留所有本地笔记，下次登录时自动关联到新账号
+   * - 切换账号 = 改变同步目标，笔记留在本地
    */
   async logout ({ commit }) {
-    // 登出前先清理当前账号的 SQLite 数据，防止旧账号笔记残留干扰新账号
-    const currentKbGuid = localStorage.getItem('kbGuid')
-    if (currentKbGuid) {
-      try {
-        await DatabaseClient.deleteNotesByKbGuid(currentKbGuid)
-        console.log(`[logout] Cleaned up SQLite notes for kbGuid=${currentKbGuid}`)
-      } catch (err) {
-        console.warn('[logout] Failed to clean SQLite notes:', err)
-      }
-    }
-    localStorage.removeItem('kbGuid')
+    // 永远本地优先：不禁用 localStorage.kbGuid，下次登录时旧笔记会继续使用旧 kbGuid
+    // 本地笔记的 kb_guid 在创建时写入，已在本地保存，logout 后保留
 
     await api.AccountServerApi.Logout()
     ServerFileStorage.removeItemFromLocalStorage('token')
@@ -1625,58 +1670,102 @@ export default {
     childCategoryName,
     parentCategory
   }) {
-    const {
-      kbGuid,
-      // currentCategory,
-      categories
-    } = state
-    if (helper.checkCategoryExistence(categories, parentCategory, childCategoryName)) {
-      Notify.create({
-        color: 'red-10',
-        message: i18n.t('categoryExisted'),
-        icon: 'error'
-      })
+    const { kbGuid, isLogin, categories } = state
+
+    // 计算完整路径
+    let fullCategoryPath
+    if (helper.isNullOrEmpty(parentCategory) || parentCategory === OFFLINE_ROOT_CATEGORY || parentCategory === '/') {
+      fullCategoryPath = `${OFFLINE_ROOT_CATEGORY}${childCategoryName}/`
+    } else {
+      fullCategoryPath = `${parentCategory}${childCategoryName}/`
+    }
+
+    // 在线模式：同时创建云端目录 + 本地记录
+    if (isLogin && kbGuid) {
+      if (helper.checkCategoryExistence(categories, parentCategory, childCategoryName)) {
+        Notify.create({ color: 'red-10', message: i18n.t('categoryExisted'), icon: 'error' })
+        return
+      }
+      try {
+        await api.KnowledgeBaseApi.createCategory({
+          kbGuid,
+          data: {
+            parent: helper.isNullOrEmpty(parentCategory) ? '/' : parentCategory,
+            pos: Math.floor(Date.now() / 1000).toFixed(0),
+            child: childCategoryName
+          }
+        })
+        // 标记本地目录已同步到云端
+        await DatabaseClient.createCategory({
+          category: fullCategoryPath,
+          parent: helper.isNullOrEmpty(parentCategory) ? OFFLINE_ROOT_CATEGORY : parentCategory,
+          kbGuid,
+          localOnly: false
+        })
+        await this.dispatch('server/getAllCategories')
+        await this.dispatch('server/updateCurrentCategory', { data: fullCategoryPath, type: 'category' })
+      } catch (err) {
+        console.error('[createCategory] online failed:', err)
+        Notify.create({ color: 'red-10', message: i18n.t('categoryExisted'), icon: 'error' })
+      }
       return
     }
-    await api.KnowledgeBaseApi.createCategory({
-      kbGuid,
-      data: {
-        parent: helper.isNullOrEmpty(parentCategory) ? '/' : parentCategory,
-        pos: Math.floor(Date.now() / 1000).toFixed(0),
-        child: childCategoryName
+
+    // 离线模式：只创建本地目录
+    try {
+      const localCategories = await DatabaseClient.getCategories({})
+      const exists = localCategories.some(c => c.category === fullCategoryPath)
+      if (exists) {
+        Notify.create({ color: 'red-10', message: i18n.t('categoryExisted'), icon: 'error' })
+        return
       }
-    })
-    await this.dispatch('server/getAllCategories')
-    await this.dispatch(
-      'server/updateCurrentCategory', {
-        data:
-          helper
-            .isNullOrEmpty(parentCategory)
-            ? `/${childCategoryName}/`
-            : `${parentCategory}${childCategoryName}/`,
-        type: 'category'
-      }
-    )
+      await DatabaseClient.createCategory({
+        category: fullCategoryPath,
+        parent: helper.isNullOrEmpty(parentCategory) ? OFFLINE_ROOT_CATEGORY : parentCategory,
+        kbGuid: kbGuid || '',
+        localOnly: true
+      })
+      // 刷新离线目录树
+      const updatedCategories = await DatabaseClient.getCategories({})
+      const tree = buildOfflineCategoryTree(updatedCategories)
+      commit(types.SET_OFFLINE_CATEGORIES, tree)
+      await this.dispatch('server/updateCurrentCategory', { data: fullCategoryPath, type: 'category' })
+      Notify.create({ color: 'positive', message: i18n.t('categoryCreated'), icon: 'folder_open' })
+    } catch (err) {
+      console.error('[createCategory] offline failed:', err)
+      Notify.create({ color: 'red-10', message: '创建文件夹失败', icon: 'error' })
+    }
   },
   async deleteCategory ({
     commit,
     state
   }, category) {
-    const { kbGuid } = state
-    await api.KnowledgeBaseApi.deleteCategory({
-      kbGuid,
-      data: { category }
-    })
-    await this.dispatch('server/getAllCategories')
-    await this.dispatch('server/updateCurrentCategory', {
-      type: 'category',
-      data: ''
-    })
-    Notify.create({
-      color: 'red-6',
-      message: i18n.t('deleteCategorySuccessfully'),
-      icon: 'delete'
-    })
+    const { kbGuid, isLogin } = state
+
+    // 在线模式：先删云端
+    if (isLogin && kbGuid) {
+      try {
+        await api.KnowledgeBaseApi.deleteCategory({ kbGuid, data: { category } })
+      } catch (err) {
+        console.warn('[deleteCategory] online delete failed:', err)
+      }
+    }
+
+    // 再删本地记录
+    try {
+      await DatabaseClient.deleteCategory(category)
+      // 刷新目录树
+      const localCategories = await DatabaseClient.getCategories({})
+      const tree = buildOfflineCategoryTree(localCategories)
+      commit(types.SET_OFFLINE_CATEGORIES, tree)
+      // 删除该目录下的所有本地笔记（同时删除整个分类）
+      // note: 笔记的 category 字段记录了分类，查询时不加过滤即可
+      await this.dispatch('server/updateCurrentCategory', { data: '', type: '' })
+    } catch (err) {
+      console.error('[deleteCategory] local delete failed:', err)
+    }
+
+    Notify.create({ color: 'red-6', message: i18n.t('deleteCategorySuccessfully'), icon: 'delete' })
   },
   async uploadImage ({
     commit,

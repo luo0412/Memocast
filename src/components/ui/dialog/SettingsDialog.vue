@@ -31,6 +31,12 @@
                 class='text-red-7'
               />
               <q-tab
+                name='cloud'
+                icon='cloud_sync'
+                :label="$t('cloudSync')"
+                class='text-blue-7'
+              />
+              <q-tab
                 name='rune'
                 icon='star'
                 :label="$t('rune')"
@@ -245,6 +251,131 @@
                   <div class='q-mt-sm'>{{ $t('runeCardAdd') }}</div>
                 </div>
               </q-tab-panel>
+
+              <q-tab-panel name='cloud' class='q-pa-sm'>
+                <div class='row items-center no-wrap q-mb-xs panel-title'>
+                  <div class='panel-title-bar bg-blue-7' />
+                  <span class='text-subtitle2 text-weight-medium'>{{ $t('cloudSync') }}</span>
+                </div>
+                <q-separator class='q-my-xs' />
+
+                <!-- 未登录状态 -->
+                <div v-if='!isLoggedIn' class='text-center q-pa-lg'>
+                  <q-icon name='cloud_off' size='3rem' color='grey-5' />
+                  <div class='text-h6 q-mt-sm text-grey-7'>{{ $t('cloudSyncNotLoggedIn') }}</div>
+                  <div class='text-caption text-grey-5 q-mt-xs'>{{ $t('cloudSyncNotLoggedInHint') }}</div>
+                  <q-btn
+                    class='q-mt-md'
+                    color='primary'
+                    :label="$t('cloudSyncLogin')"
+                    icon='login'
+                    unelevated
+                    @click='openLoginDialog'
+                  />
+                </div>
+
+                <!-- 已登录状态 -->
+                <div v-else>
+                  <!-- 账号信息卡片 -->
+                  <q-card flat bordered class='q-mb-sm'>
+                    <q-card-section class='q-pa-sm'>
+                      <div class='row items-center no-wrap'>
+                        <q-icon name='account_circle' size='1.5rem' color='blue-7' class='q-mr-sm' />
+                        <div>
+                          <div class='text-body2 text-weight-medium'>{{ accountInfo.displayName || accountInfo.email || '-' }}</div>
+                          <div class='text-caption text-grey-6'>
+                            <span class='text-grey-5'>{{ $t('cloudSyncKbGuid') }}:</span>
+                            {{ accountInfo.kbGuid ? accountInfo.kbGuid.substring(0, 8) + '...' : '-' }}
+                          </div>
+                        </div>
+                        <q-space />
+                        <q-btn
+                          flat dense round
+                          color='negative'
+                          icon='logout'
+                          size='sm'
+                          :label="$t('cloudSyncLogout')"
+                          @click='confirmLogout'
+                        />
+                      </div>
+                    </q-card-section>
+                  </q-card>
+
+                  <!-- 同步状态 -->
+                  <div class='row q-col-gutter-xs q-mb-sm'>
+                    <div class='col-4'>
+                      <div class='sync-stat-card'>
+                        <div class='text-caption text-grey-6'>{{ $t('cloudSyncTotal') }}</div>
+                        <div class='text-h6 text-primary'>{{ syncStats.total }}</div>
+                      </div>
+                    </div>
+                    <div class='col-4'>
+                      <div class='sync-stat-card'>
+                        <div class='text-caption text-grey-6'>{{ $t('cloudSyncSynced') }}</div>
+                        <div class='text-h6 text-positive'>{{ syncStats.synced }}</div>
+                      </div>
+                    </div>
+                    <div class='col-4'>
+                      <div class='sync-stat-card'>
+                        <div class='text-caption text-grey-6'>{{ $t('cloudSyncPending') }}</div>
+                        <div class='text-h6' :class="syncStats.pending > 0 ? 'text-orange' : 'text-grey'">{{ syncStats.pending }}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 上次同步时间 -->
+                  <div class='text-caption text-grey-6 q-mb-md'>
+                    <q-icon name='schedule' size='xs' class='q-mr-xs' />
+                    {{ $t('cloudSyncLastSync') }}:
+                    {{ lastSyncTimeDisplay || $t('never') }}
+                  </div>
+
+                  <!-- 同步按钮 -->
+                  <div class='row q-gutter-sm'>
+                    <q-btn
+                      class='col'
+                      color='primary'
+                      :label="isSyncing ? $t('cloudSyncSyncing') : $t('cloudSyncSyncNow')"
+                      icon='sync'
+                      unelevated
+                      :loading='isSyncing'
+                      @click='doSync'
+                    />
+                    <q-btn
+                      flat
+                      class='col'
+                      color='blue'
+                      :label="$t('cloudSyncSyncPullOnly')"
+                      icon='cloud_download'
+                      :loading='isSyncing'
+                      :disable='isSyncing'
+                      @click='doPullOnly'
+                    />
+                    <q-btn
+                      flat
+                      class='col'
+                      color='blue'
+                      :label="$t('cloudSyncSyncPushOnly')"
+                      icon='cloud_upload'
+                      :loading='isSyncing'
+                      :disable='isSyncing'
+                      @click='doPushOnly'
+                    />
+                  </div>
+
+                  <!-- 错误提示 -->
+                  <q-banner
+                    v-if='syncError'
+                    class='q-mt-sm'
+                    rounded
+                    type='negative'
+                    dense
+                    icon='error'
+                  >
+                    {{ syncError }}
+                  </q-banner>
+                </div>
+              </q-tab-panel>
             </q-tab-panels>
           </div>
         </div>
@@ -273,6 +404,7 @@ import { version } from '../../../../package.json'
 import { checkUpdate, needUpdate, openLogFiles, openThemeFolder, refreshThemeFolder } from 'src/ApiInvoker'
 import helper from 'src/utils/helper'
 import DatabaseService from 'src/services/DatabaseService'
+import CloudSyncService from 'src/services/CloudSyncService'
 
 const {
   mapState,
@@ -309,7 +441,12 @@ export default {
       checkingNotify: null,
       runeFormVisible: false,
       editingRune: null,
-      dragFromIndex: null
+      dragFromIndex: null,
+      // 云同步状态
+      syncStats: { total: 0, synced: 0, pending: 0, conflict: 0 },
+      lastSyncTimeDisplay: null,
+      isSyncing: false,
+      syncError: null
     }
   },
   computed: {
@@ -353,6 +490,18 @@ export default {
       if (s?.isSyncing) return this.$t('syncing')
       if (!s) return this.$t('never')
       return `${s.synced || 0}/${s.total || 0}`
+    },
+    isLoggedIn () {
+      const kbGuid = localStorage.getItem('kbGuid')
+      return !!(kbGuid && kbGuid !== 'null' && kbGuid !== '')
+    },
+    accountInfo () {
+      return {
+        kbGuid: localStorage.getItem('kbGuid') || '',
+        email: localStorage.getItem('userId') || '',
+        displayName: localStorage.getItem('displayName') || '',
+        kbServer: localStorage.getItem('kbServer') || ''
+      }
     },
     ...mapState([
       'language',
@@ -596,6 +745,90 @@ export default {
       }
       this.editingRune = null
     },
+
+    // ==================== 云同步 ====================
+    async refreshCloudSyncStatus () {
+      const stats = await DatabaseService.getStats()
+      this.syncStats = {
+        total: stats.total || 0,
+        synced: stats.synced || 0,
+        pending: stats.pending || 0,
+        conflict: stats.conflict || 0
+      }
+      const lastTime = CloudSyncService.formatLastSyncTime()
+      this.lastSyncTimeDisplay = lastTime
+    },
+
+    async doSync () {
+      this.syncError = null
+      this.isSyncing = true
+      const result = await CloudSyncService.sync()
+      this.isSyncing = false
+      await this.refreshCloudSyncStatus()
+      if (result.success) {
+        this.$q.notify({ message: this.$t('cloudSyncSuccess'), type: 'positive', icon: 'check' })
+      } else {
+        this.syncError = result.error || this.$t('cloudSyncFailed')
+      }
+    },
+
+    async doPullOnly () {
+      this.syncError = null
+      this.isSyncing = true
+      const result = await CloudSyncService.pullOnly()
+      this.isSyncing = false
+      await this.refreshCloudSyncStatus()
+      if (result.success) {
+        this.$q.notify({ message: `${this.$t('cloudSyncSuccess')} ↓${result.pulled || 0}`, type: 'positive', icon: 'cloud_download' })
+      } else {
+        this.syncError = result.error || this.$t('cloudSyncFailed')
+      }
+    },
+
+    async doPushOnly () {
+      this.syncError = null
+      this.isSyncing = true
+      const result = await CloudSyncService.pushOnly()
+      this.isSyncing = false
+      await this.refreshCloudSyncStatus()
+      if (result.success) {
+        this.$q.notify({ message: `${this.$t('cloudSyncSuccess')} ↑${result.count || 0}`, type: 'positive', icon: 'cloud_upload' })
+      } else {
+        this.syncError = result.error || this.$t('cloudSyncFailed')
+      }
+    },
+
+    openLoginDialog () {
+      this.$refs.dialog.hide()
+      this.$nextTick(() => {
+        bus.$emit('showLoginDialog')
+      })
+    },
+
+    confirmLogout () {
+      this.$q.dialog({
+        title: this.$t('cloudSyncLogout'),
+        message: this.$t('cloudSyncLogoutConfirm'),
+        cancel: { label: this.$t('cancel') },
+        ok: { label: this.$t('cloudSyncLogout'), color: 'negative' }
+      }).onOk(async () => {
+        await this.$store.dispatch('server/logout')
+        await this.refreshCloudSyncStatus()
+        this.$q.notify({ message: this.$t('cloudSyncOfflineMode'), type: 'info', icon: 'cloud_off' })
+      })
+    },
+
+    onCloudSyncStatusChange (event) {
+      if (event.type === 'sync_start') {
+        this.isSyncing = true
+      } else if (event.type === 'sync_complete') {
+        this.isSyncing = false
+        this.refreshCloudSyncStatus()
+      } else if (event.type === 'sync_error') {
+        this.isSyncing = false
+        this.syncError = event.error
+      }
+    },
     ...mapActions([
       'toggleChanged',
       'updateStateAndStore',
@@ -611,11 +844,15 @@ export default {
     bus.$on(events.UPDATE_EVENTS.updateNotAvailable, this.updateUnavailableHandler)
     bus.$on(events.UPDATE_EVENTS.updateError, this.updateErrorHandler)
     this.loadRunes()
+    // 初始化云同步状态
+    CloudSyncService.addListener(this.onCloudSyncStatusChange)
+    this.refreshCloudSyncStatus()
   },
   beforeDestroy () {
     bus.$off(events.UPDATE_EVENTS.updateAvailable)
     bus.$off(events.UPDATE_EVENTS.updateNotAvailable)
     bus.$off(events.UPDATE_EVENTS.updateError)
+    CloudSyncService.removeListener(this.onCloudSyncStatusChange)
   }
 }
 </script>
@@ -742,5 +979,17 @@ export default {
 
 .rune-chosen {
   box-shadow: 0 4px 20px rgba(156, 39, 176, 0.4);
+}
+
+/* 云同步面板 */
+.sync-stat-card {
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+.body--dark .sync-stat-card {
+  background: #2a2a2a;
 }
 </style>

@@ -286,6 +286,21 @@ function initSchema() {
     )
   `)
 
+  // 离线文件夹表（支持离线模式创建和管理文件夹）
+  db.run(`
+    CREATE TABLE IF NOT EXISTS local_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT NOT NULL UNIQUE,
+      parent TEXT DEFAULT '',
+      kb_guid TEXT DEFAULT '',
+      local_only INTEGER DEFAULT 0,
+      created_at INTEGER,
+      updated_at INTEGER
+    )
+  `)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_local_categories_kb ON local_categories(kb_guid)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_local_categories_parent ON local_categories(parent)`)
+
   // 同步日志表
   db.run(`
     CREATE TABLE IF NOT EXISTS sync_log (
@@ -821,6 +836,107 @@ function registerDatabaseHandlers() {
     }
   })
 
+  // ============================================================
+  // 离线文件夹（categories）CRUD - 支持离线模式创建文件夹
+  // ============================================================
+
+  // 获取所有本地文件夹
+  ipcMain.handle('db:getCategories', async (event, { kbGuid } = {}) => {
+    try {
+      let query = 'SELECT * FROM local_categories WHERE 1=1'
+      const params = []
+      if (kbGuid) {
+        query += ' AND (kb_guid = ? OR kb_guid = "")'
+        params.push(kbGuid)
+      }
+      query += ' ORDER BY category ASC'
+      return execToObjects(query, params)
+    } catch (error) {
+      log.error('[DB] getCategories error:', error)
+      return []
+    }
+  })
+
+  // 创建本地文件夹（支持离线创建）
+  ipcMain.handle('db:createCategory', async (event, { category, parent, kbGuid, localOnly }) => {
+    try {
+      const now = Date.now()
+      // 规范化路径：确保以 / 开头和结尾
+      let normalizedCategory = category
+      if (!normalizedCategory.startsWith('/')) normalizedCategory = '/' + normalizedCategory
+      if (!normalizedCategory.endsWith('/')) normalizedCategory = normalizedCategory + '/'
+
+      // 幂等：如果已存在，直接返回
+      const existing = execOne('SELECT * FROM local_categories WHERE category = ?', [normalizedCategory])
+      if (existing) {
+        log.info(`[DB] createCategory: category "${normalizedCategory}" already exists, skipping`)
+        return existing
+      }
+
+      await db.run(
+        `INSERT INTO local_categories (category, parent, kb_guid, local_only, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        [normalizedCategory, parent || '', kbGuid || '', localOnly ? 1 : 0, now, now]
+      )
+      saveDatabase()
+      const lastId = getLastInsertRowid()
+      return execOne('SELECT * FROM local_categories WHERE id = ?', [lastId])
+    } catch (error) {
+      log.error('[DB] createCategory error:', error)
+      return null
+    }
+  })
+
+  // 删除本地文件夹
+  ipcMain.handle('db:deleteCategory', async (event, { category }) => {
+    try {
+      await db.run('DELETE FROM local_categories WHERE category = ?', [category])
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] deleteCategory error:', error)
+      return false
+    }
+  })
+
+  // 将本地文件夹同步到云端（createCategory 同步版）
+  // category 参数格式: { category, parent, kbGuid }
+  ipcMain.handle('db:syncCategoryToCloud', async (event, { category, parent, kbGuid }) => {
+    try {
+      // 已在云端创建过了（local_only=0），跳过
+      const existing = execOne('SELECT * FROM local_categories WHERE category = ? AND local_only = 0', [category])
+      if (existing) {
+        return { success: true, skipped: true }
+      }
+
+      // 标记为已同步（local_only=0）
+      await db.run('UPDATE local_categories SET local_only = 0, updated_at = ? WHERE category = ?', [Date.now(), category])
+      saveDatabase()
+      return { success: true }
+    } catch (error) {
+      log.error('[DB] syncCategoryToCloud error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // 确保离线根目录存在（初始化时调用）
+  ipcMain.handle('db:ensureOfflineRoot', async () => {
+    try {
+      const rootCat = DEFAULT_ROOT_CATEGORY
+      const existing = execOne('SELECT * FROM local_categories WHERE category = ?', [rootCat])
+      if (existing) return existing
+
+      await db.run(
+        `INSERT INTO local_categories (category, parent, kb_guid, local_only, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        [rootCat, '/', '', 1, Date.now(), Date.now()]
+      )
+      saveDatabase()
+      return execOne('SELECT * FROM local_categories WHERE category = ?', [rootCat])
+    } catch (error) {
+      log.error('[DB] ensureOfflineRoot error:', error)
+      return null
+    }
+  })
+
   // 标记笔记为冲突状态
   ipcMain.handle('db:markAsConflict', async (event, { id, serverData = {} }) => {
     try {
@@ -1121,12 +1237,18 @@ function registerDatabaseHandlers() {
     }
   })
 
-  // 重置数据库（清空所有本地笔记，重置同步状态）
+  // 重置数据库（清空所有本地笔记和文件夹，重置同步状态）
   ipcMain.handle('db:resetDatabase', async () => {
     try {
       await db.run('DELETE FROM notes')
       await db.run('DELETE FROM guid_mapping')
       await db.run('DELETE FROM sync_log')
+      await db.run('DELETE FROM local_categories')
+      // 重建离线根目录
+      await db.run(
+        `INSERT INTO local_categories (category, parent, kb_guid, local_only, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        [DEFAULT_ROOT_CATEGORY, '/', '', 1, Date.now(), Date.now()]
+      )
       saveDatabase()
       log.info('[DB] Database reset successfully')
       return true
@@ -1172,25 +1294,23 @@ function registerDatabaseHandlers() {
     }
   })
 
-  // 清理不属于当前 kbGuid 的所有笔记（用于 login 时隔离旧账号数据）
-  ipcMain.handle('db:clearOtherAccountNotes', async (event, currentKbGuid) => {
+  // 将所有 kb_guid=null 的离线笔记迁移到当前账号
+  // 用于：用户离线创建笔记后登录，已创建的笔记应该关联到当前账号并同步
+  ipcMain.handle('db:migrateOfflineNotes', async (event, currentKbGuid) => {
     try {
       if (!currentKbGuid) {
-        log.warn('[DB] clearOtherAccountNotes: currentKbGuid is required')
+        log.warn('[DB] migrateOfflineNotes: currentKbGuid is required')
         return 0
       }
       const result = await db.run(
-        'DELETE FROM notes WHERE kb_guid IS NOT NULL AND kb_guid != ? AND kb_guid != ""',
+        "UPDATE notes SET kb_guid = ?, dirty = 1 WHERE kb_guid IS NULL OR kb_guid = ''",
         [currentKbGuid]
       )
-      await db.run(
-        'DELETE FROM guid_mapping WHERE local_id NOT IN (SELECT id FROM notes)',
-      )
       saveDatabase()
-      log.info(`[DB] Cleared notes from other accounts (current=${currentKbGuid}), removed ${result?.changes || 0} notes`)
+      log.info(`[DB] Migrated ${result?.changes || 0} offline notes to kbGuid=${currentKbGuid}`)
       return result?.changes || 0
     } catch (error) {
-      log.error('[DB] clearOtherAccountNotes error:', error)
+      log.error('[DB] migrateOfflineNotes error:', error)
       return 0
     }
   })

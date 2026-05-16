@@ -49,5 +49,25 @@ export default {
   resetSqliteHint: '清空所有本地缓存笔记，下次同步时从云端重新拉取',
   resetSqliteConfirm: '确定要重置本地数据库吗？所有本地未同步的笔记将被清除！',
   resetSqliteSuccess: '本地数据库已重置',
-  resetSqliteFailed: '重置失败，请重试'
+  resetSqliteFailed: '重置失败，请重试',
+  categoryCreated: '文件夹已创建',
+  // 云同步
+  cloudSyncNotLoggedIn: '未登录',
+  cloudSyncNotLoggedInHint: '离线模式可用，本地笔记保留本地',
+  cloudSyncSyncNow: '立即同步',
+  cloudSyncSyncPullOnly: '仅下载',
+  cloudSyncSyncPushOnly: '仅上传',
+  cloudSyncPending: '待同步',
+  cloudSyncSynced: '已同步',
+  cloudSyncTotal: '总计',
+  cloudSyncLastSync: '上次同步',
+  cloudSyncSyncing: '同步中...',
+  cloudSyncSuccess: '同步成功',
+  cloudSyncFailed: '同步失败',
+  cloudSyncNoAccount: '未登录为知笔记账号',
+  cloudSyncLogin: '去登录',
+  cloudSyncLogout: '退出登录',
+  cloudSyncLogoutConfirm: '退出登录后本地笔记仍保留本地。确定要退出登录吗？',
+  cloudSyncOfflineMode: '离线模式：本地笔记不上传到云端',
+  cloudSyncKbGuid: '知识库 ID'
 }

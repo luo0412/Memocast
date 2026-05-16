@@ -49,5 +49,26 @@ export default {
   resetSqliteHint: 'Clear all local cached notes, will re-pull from cloud on next sync',
   resetSqliteConfirm: 'Are you sure to reset the local database? All unsynced local notes will be deleted!',
   resetSqliteSuccess: 'Local database has been reset',
-  resetSqliteFailed: 'Reset failed, please try again'
+  resetSqliteFailed: 'Reset failed, please try again',
+  // Cloud Sync
+  cloudSync: 'Cloud Sync',
+  cloudSyncAccount: 'Current Account',
+  cloudSyncNotLoggedIn: 'Not Logged In',
+  cloudSyncNotLoggedInHint: 'Offline mode available, local notes stay local',
+  cloudSyncSyncNow: 'Sync Now',
+  cloudSyncSyncPullOnly: 'Download Only',
+  cloudSyncSyncPushOnly: 'Upload Only',
+  cloudSyncPending: 'Pending',
+  cloudSyncSynced: 'Synced',
+  cloudSyncTotal: 'Total',
+  cloudSyncLastSync: 'Last Sync',
+  cloudSyncSyncing: 'Syncing...',
+  cloudSyncSuccess: 'Sync successful',
+  cloudSyncFailed: 'Sync failed',
+  cloudSyncNoAccount: 'Not logged in to WizNote account',
+  cloudSyncLogin: 'Login',
+  cloudSyncLogout: 'Logout',
+  cloudSyncLogoutConfirm: 'Local notes will be kept after logout. Continue?',
+  cloudSyncOfflineMode: 'Offline mode: local notes are not uploaded to cloud',
+  cloudSyncKbGuid: 'Knowledge Base ID'
 }

@@ -498,6 +498,8 @@ export default {
     }
     bus.$on(events.VIEW_SHORTCUT_CALL.switchView, this.switchViewHandler)
     bus.$on(events.NOTE_SHORTCUT_CALL.searchNote, () => this.$refs.searchDialog.toggle())
+    // 云同步面板点击"去登录" → 打开登录对话框
+    bus.$on('showLoginDialog', () => this.$refs.loginDialog.toggle())
   },
   watch: {
     isLogin: function (currentData) {
@@ -505,6 +507,10 @@ export default {
         this.$refs.loginDialog.show()
       }
     }
+  },
+  beforeDestroy () {
+    bus.$off(events.VIEW_SHORTCUT_CALL.switchView, this.switchViewHandler)
+    bus.$off('showLoginDialog')
   }
 }
 </script>
