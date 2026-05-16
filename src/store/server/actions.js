@@ -318,16 +318,19 @@ export default {
     })
 
     // ✅ 永远本地优先：不禁用任何本地笔记
-    // 登录时将 kb_guid=null 的离线笔记迁移到当前账号，下次同步时推送到云端
+    // 登录时将 kb_guid=null 的离线笔记和文件夹迁移到当前账号，下次同步时推送到云端
     const newKbGuid = result.kbGuid
     if (newKbGuid) {
       try {
-        const migrated = await DatabaseClient.migrateOfflineNotes(newKbGuid)
-        if (migrated > 0) {
-          console.log(`[login] Migrated ${migrated} offline notes to kbGuid=${newKbGuid}`)
+        const migratedNotes = await DatabaseClient.migrateOfflineNotes(newKbGuid)
+        if (migratedNotes > 0) {
+          console.log(`[login] Migrated ${migratedNotes} offline notes to kbGuid=${newKbGuid}`)
         }
+        // 同步迁移离线文件夹（kb_guid='' → current kbGuid）
+        await DatabaseClient.migrateOfflineCategories(newKbGuid)
+        console.log(`[login] Migrated offline categories to kbGuid=${newKbGuid}`)
       } catch (err) {
-        console.warn('[login] Failed to migrate offline notes:', err)
+        console.warn('[login] Failed to migrate offline data:', err)
       }
     }
 

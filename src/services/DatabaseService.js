@@ -228,6 +228,10 @@ class DatabaseService {
   syncCategoryToCloud(params) {
     return ipcRenderer.invoke('db:syncCategoryToCloud', params)
   }
+
+  migrateOfflineCategories(currentKbGuid) {
+    return ipcRenderer.invoke('db:migrateOfflineCategories', currentKbGuid)
+  }
 }
 
 export default new DatabaseService()

@@ -918,6 +918,26 @@ function registerDatabaseHandlers() {
     }
   })
 
+  // 将 kb_guid=null/空 的离线文件夹迁移到当前账号（登录时调用）
+  ipcMain.handle('db:migrateOfflineCategories', async (event, currentKbGuid) => {
+    try {
+      if (!currentKbGuid) {
+        log.warn('[DB] migrateOfflineCategories: currentKbGuid is required')
+        return 0
+      }
+      const result = await db.run(
+        "UPDATE local_categories SET kb_guid = ?, updated_at = ? WHERE kb_guid IS NULL OR kb_guid = ''",
+        [currentKbGuid, Date.now()]
+      )
+      saveDatabase()
+      log.info(`[DB] Migrated ${result?.changes || 0} offline categories to kbGuid=${currentKbGuid}`)
+      return result?.changes || 0
+    } catch (error) {
+      log.error('[DB] migrateOfflineCategories error:', error)
+      return 0
+    }
+  })
+
   // 确保离线根目录存在（初始化时调用）
   ipcMain.handle('db:ensureOfflineRoot', async () => {
     try {

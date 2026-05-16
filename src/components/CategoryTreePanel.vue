@@ -130,6 +130,10 @@ export default {
     },
     items () {
       if (this.type === 'category') {
+        // 离线模式下显示本地离线目录树（支持离线创建文件夹）
+        if (!this.isLogin && this.offlineCategories && this.offlineCategories.length > 0) {
+          return this.offlineCategories
+        }
         return this.categories
       } else if (this.type === 'tag') {
         return this.tags

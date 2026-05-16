@@ -70,7 +70,7 @@ const api = {
     const userId = localStorage.getItem('userId') || ''
     const isLite = (note.category || '').replace(/\//g, '') === 'Lite'
     const category = note.category || ''
-    
+
     const html = helper.embedMDNote(note.content || '', [], {
       wrapWithPreTag: isLite,
       kbGuid: effectiveKbGuid,
@@ -270,7 +270,7 @@ class SyncService {
 
       // ✅ 预加载所有本地笔记的 (title, category, kbGuid) 用于快速去重检查
       const localNotes = await DatabaseService.getAllNotesBasic() || []
-      
+
       // 构建 Set 用于 O(1) 查找：key = "title|category(kbGuid normalized)|kbGuid"
       // category 需要与 pullFromCloud 中的 normalizeCategoryForMatch 保持一致
       const localNoteSet = new Set(
@@ -279,7 +279,7 @@ class SyncService {
           return `${note.title || ''}|${localCat}|${note.kb_guid || ''}`.toLowerCase()
         })
       )
-      
+
       console.log(`[SyncService] Loaded ${localNoteSet.size} local notes for dedup check`)
 
       for (const doc of docs) {
@@ -288,9 +288,9 @@ class SyncService {
 
         // ✅ 核心去重逻辑：使用 normalizeCategoryForMatch 确保与本地 Set 对称
         const cloudCategory = normalizeCategoryForMatch(doc.category || '')
-        
+
         const dedupeKey = `${doc.title || 'Untitled'}|${cloudCategory}|${kbGuid}`.toLowerCase()
-        
+
         if (localNoteSet.has(dedupeKey)) {
           // ✅ 本地已存在相同 (title, category, kbGuid) 的笔记 → 直接跳过！
           skippedCount++
@@ -301,11 +301,11 @@ class SyncService {
         // 本地不存在 → 下载并创建
         try {
           const result = await this._downloadAndCreateNote(doc, kbGuid, docGuid)
-          
+
           if (result) {
             pulledCount++
             console.log(`[SyncService] ↓ Pulled NEW note: "${doc.title}" (${docGuid}) id=${result.id}`)
-            
+
             // ✅ 将新下载的笔记添加到本地集合中（避免重复下载）
             localNoteSet.add(dedupeKey)
           }
@@ -339,7 +339,7 @@ class SyncService {
 
     // ✅ 修复 category 处理：使用真实根目录 OFFLINE_ROOT_CATEGORY，而不是 "/"
     let cloudCategory = doc.category
-    
+
     // 校验并规范化 category
     if (!cloudCategory || cloudCategory === '/' || cloudCategory.trim() === '' || cloudCategory === '/My Notes' || cloudCategory === '/My Notes/') {
       console.warn(`[SyncService] ⚠️ Note "${doc.title}" has empty/root category (raw: "${cloudCategory}"), using "${OFFLINE_ROOT_CATEGORY}" as default`)
@@ -397,7 +397,10 @@ class SyncService {
 
     const pendingNotes = await DatabaseService.getPendingSyncNotesByKbGuid(kbGuid)
     console.log(`[SyncService] 📤 pushToCloud: found ${pendingNotes?.length || 0} dirty notes for kbGuid=${kbGuid}`)
-    
+
+    // ✅ 先把本地独有的目录同步到云端（离线创建的文件夹）
+    await this.syncLocalCategoriesToCloud(kbGuid)
+
     if (pendingNotes.length === 0) {
       console.log('[SyncService] No dirty notes to sync')
       return { count: 0, errors: 0 }
@@ -436,13 +439,13 @@ class SyncService {
         } else {
           // ❌ 无云端 GUID 或 local_ 开头 → 搜索或创建
           console.log(`[SyncService] New/offline note, searching cloud...`)
-          
+
           try {
             const searchResult = await WizNoteApi.KnowledgeBaseApi.searchNote({
               kbGuid: getKbGuid(),
               data: { ss: note.title }
             })
-            
+
             if (Array.isArray(searchResult) && searchResult.length > 0) {
               const exactMatch = searchResult.filter(doc => {
                 // ✅ 规范化到 OFFLINE_ROOT_CATEGORY，确保 /My Notes/ 和 / 统一为 OFFLINE_ROOT_CATEGORY
@@ -450,11 +453,11 @@ class SyncService {
                 const noteCat = normalizeCategoryForMatch(note.category || '')
                 return doc.title === note.title && docCat === noteCat
               })
-              
+
               if (exactMatch.length === 1) {
                 cloudDocGuid = exactMatch[0].guid || exactMatch[0].docGuid
                 console.log(`[SyncService] Found match, updating: ${cloudDocGuid}`)
-                
+
                 await api.updateDoc(cloudDocGuid, {
                   title: note.title,
                   content: note.content,
@@ -474,7 +477,7 @@ class SyncService {
               content: note.content,
               category: note.category || OFFLINE_ROOT_CATEGORY  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY
             }, note.kb_guid || kbGuid)  // ✅ 无 kb_guid 时用当前账号
-            
+
             if (result?.guid) {
               cloudDocGuid = result.guid
               console.log(`[SyncService] ✅ Created: ${cloudDocGuid}`)
@@ -511,6 +514,74 @@ class SyncService {
 
     console.log(`[SyncService] 📊 pushToCloud completed: ${pushedCount} synced, ${errors} errors`)
     return { count: pushedCount, errors }
+  }
+
+  /**
+   * 将本地独有的目录同步到云端
+   * - 读取 local_only=1 的目录（离线创建的目录）
+   * - 按父子顺序（广度优先）依次在云端创建
+   * - 创建成功后更新 local_only=0
+   * - 幂等：已存在的目录跳过
+   */
+  async syncLocalCategoriesToCloud(kbGuid) {
+    try {
+      const localCats = await DatabaseService.getCategories({ kbGuid })
+      const unsynced = localCats.filter(c => c.local_only === 1)
+
+      if (unsynced.length === 0) {
+        return { synced: 0, skipped: 0 }
+      }
+
+      console.log(`[SyncService] syncLocalCategoriesToCloud: ${unsynced.length} local-only categories to sync`)
+
+      // 按路径深度排序（先创建父目录，再创建子目录）
+      const sorted = [...unsynced].sort((a, b) => {
+        const depthA = (a.category.match(/\//g) || []).length
+        const depthB = (b.category.match(/\//g) || []).length
+        return depthA - depthB
+      })
+
+      let synced = 0
+      for (const cat of sorted) {
+        try {
+          // 构造 API 需要的 parent 和 child
+          const parent = cat.parent || OFFLINE_ROOT_CATEGORY
+          const child = cat.category
+            .replace(parent, '')
+            .replace(/^\//, '')
+            .replace(/\/$/, '')
+
+          await WizNoteApi.KnowledgeBaseApi.createCategory({
+            kbGuid,
+            data: {
+              parent: parent,
+              pos: Math.floor(Date.now() / 1000).toFixed(0),
+              child: child
+            }
+          })
+
+          // 标记为已同步
+          await DatabaseService.syncCategoryToCloud({ category: cat.category })
+          synced++
+          console.log(`[SyncService] ✅ Category synced: ${cat.category}`)
+        } catch (err) {
+          // 幂等：云端已存在该目录（错误码 400/409），标记为已同步
+          if (err?.response?.status === 400 || err?.response?.status === 409 || err?.message?.includes('exists')) {
+            await DatabaseService.syncCategoryToCloud({ category: cat.category })
+            console.warn(`[SyncService] Category already exists on cloud, marked synced: ${cat.category}`)
+            synced++
+          } else {
+            console.warn(`[SyncService] Failed to sync category ${cat.category}:`, err?.message || err)
+          }
+        }
+      }
+
+      console.log(`[SyncService] syncLocalCategoriesToCloud: ${synced}/${unsynced.length} categories synced`)
+      return { synced, total: unsynced.length }
+    } catch (err) {
+      console.error('[SyncService] syncLocalCategoriesToCloud error:', err)
+      return { synced: 0, total: 0 }
+    }
   }
 
   /**

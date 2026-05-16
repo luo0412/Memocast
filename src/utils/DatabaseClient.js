@@ -164,54 +164,34 @@ const DatabaseClient = {
    * @param {string} currentKbGuid
    * @returns {Promise<number>} 迁移的笔记数量
    */
-  async migrateOfflineNotes(currentKbGuid) {
-    return await ipcRenderer.invoke('db:migrateOfflineNotes', currentKbGuid)
+  migrateOfflineNotes(currentKbGuid) {
+    return ipcRenderer.invoke('db:migrateOfflineNotes', currentKbGuid)
   },
 
   // ==================== 离线文件夹（categories）====================
 
-  /**
-   * 获取所有本地文件夹
-   * @param {Object} options - { kbGuid }
-   * @returns {Promise<Array>}
-   */
-  async getCategories(options = {}) {
-    return await ipcRenderer.invoke('db:getCategories', options)
+  getCategories(options = {}) {
+    return ipcRenderer.invoke('db:getCategories', options)
   },
 
-  /**
-   * 创建本地文件夹（支持离线创建）
-   * @param {Object} params - { category, parent, kbGuid, localOnly }
-   * @returns {Promise<Object|null>}
-   */
-  async createCategory(params) {
-    return await ipcRenderer.invoke('db:createCategory', params)
+  createCategory(params) {
+    return ipcRenderer.invoke('db:createCategory', params)
   },
 
-  /**
-   * 删除本地文件夹
-   * @param {string} category
-   * @returns {Promise<boolean>}
-   */
-  async deleteCategory(category) {
-    return await ipcRenderer.invoke('db:deleteCategory', { category })
+  deleteCategory(category) {
+    return ipcRenderer.invoke('db:deleteCategory', { category })
   },
 
-  /**
-   * 确保离线根目录存在
-   * @returns {Promise<Object|null>}
-   */
-  async ensureOfflineRoot() {
-    return await ipcRenderer.invoke('db:ensureOfflineRoot')
+  ensureOfflineRoot() {
+    return ipcRenderer.invoke('db:ensureOfflineRoot')
   },
 
-  /**
-   * 将本地文件夹标记为已同步
-   * @param {string} category
-   * @returns {Promise<{success: boolean, skipped?: boolean}>}
-   */
-  async syncCategoryToCloud(params) {
-    return await ipcRenderer.invoke('db:syncCategoryToCloud', params)
+  syncCategoryToCloud(params) {
+    return ipcRenderer.invoke('db:syncCategoryToCloud', params)
+  },
+
+  migrateOfflineCategories(currentKbGuid) {
+    return ipcRenderer.invoke('db:migrateOfflineCategories', currentKbGuid)
   }
 }
 
