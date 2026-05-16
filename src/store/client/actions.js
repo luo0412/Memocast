@@ -108,5 +108,36 @@ export default {
   },
   async saveRunes (_, runes) {
     return await DatabaseService.saveRunes(runes)
+  },
+  /**
+   * 执行同步（调用 SyncService）
+   */
+  async sync ({ commit }) {
+    const SyncService = (await import('src/services/SyncService')).default
+    const DatabaseClient = (await import('src/utils/DatabaseClient')).default
+
+    commit('client/UPDATE_SYNC_STATUS', { isSyncing: true })
+
+    try {
+      const result = await SyncService.sync()
+
+      const stats = await DatabaseClient.getStats()
+      commit('client/UPDATE_SYNC_STATUS', {
+        isSyncing: false,
+        lastSyncTime: Date.now(),
+        ...stats
+      })
+
+      return result
+    } catch (error) {
+      console.error('[sync] Sync failed:', error)
+      commit('client/UPDATE_SYNC_STATUS', { isSyncing: false })
+      throw error
+    }
+  },
+  async refreshSyncStatus ({ commit }) {
+    const DatabaseClient = (await import('src/utils/DatabaseClient')).default
+    const stats = await DatabaseClient.getStats()
+    commit('client/UPDATE_SYNC_STATUS', { ...stats })
   }
 }

@@ -240,12 +240,6 @@ const {
   mapActions: mapClientActions
 } = createNamespacedHelpers('client')
 
-const {
-  mapState: mapOfflineState,
-  mapActions: mapOfflineActions,
-  mapGetters: mapOfflineGetters
-} = createNamespacedHelpers('offline')
-
 export default {
   name: 'Header',
   computed: {
@@ -257,9 +251,9 @@ export default {
       'noteListVisible',
       'paneLayoutMode',
       'enablePreviewEditor',
-      'sidebarTreeType'
+      'sidebarTreeType',
+      'syncStatus'
     ]),
-    ...mapOfflineState(['syncStatus']),
 
     // 同步状态
     isSyncing() {
@@ -444,8 +438,7 @@ export default {
     },
 
     ...mapServerActions(['logout', 'getCategoryNotes', 'refreshTagNotesCount']),
-    ...mapClientActions(['toggleChanged', 'cyclePaneLayout', 'expandFullPaneLayout']),
-    ...mapOfflineActions(['sync']),
+    ...mapClientActions(['toggleChanged', 'cyclePaneLayout', 'expandFullPaneLayout', 'sync']),
 
     // 同步按钮点击处理
     async handleSyncClick() {

@@ -17,10 +17,6 @@ export default {
   UPDATE_ALL_TAGS: 'update_all_tags',
   UPDATE_TAG_NOTES_COUNT: 'update_tag_notes_count',
   UPDATE_CURRENT_NOTE_TAGS: 'update_current_note_tags',
-  SET_CALENDAR_NOTE_DATES: 'set_calendar_note_dates',
-  SET_OFFLINE_CATEGORIES: 'set_offline_categories',
-  SET_OFFLINE_NOTES: 'set_offline_notes',
-  SET_OFFLINE_CURRENT_CATEGORY: 'set_offline_current_category',
-  UPDATE_OFFLINE_CATEGORIES: 'update_offline_categories',
-  ADD_OFFLINE_CATEGORY: 'add_offline_category'
+    SET_CALENDAR_NOTE_DATES: 'set_calendar_note_dates',
+    SET_CATEGORIES: 'set_categories'
 }

@@ -186,6 +186,10 @@ const DatabaseClient = {
     return ipcRenderer.invoke('db:ensureOfflineRoot')
   },
 
+  clearNotesByKbGuid(kbGuid) {
+    return ipcRenderer.invoke('db:clearNotesByKbGuid', kbGuid)
+  },
+
   syncCategoryToCloud(params) {
     return ipcRenderer.invoke('db:syncCategoryToCloud', params)
   },

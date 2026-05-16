@@ -3,7 +3,6 @@ import Vuex from 'vuex'
 
 import server from './server'
 import client from './client'
-import offline from './offline'
 Vue.use(Vuex)
 
 /*
@@ -19,8 +18,7 @@ export default function (/* { ssrContext } */) {
   const Store = new Vuex.Store({
     modules: {
       server: server,
-      client: client,
-      offline: offline
+      client: client
     },
 
     // enable strict mode (adds overhead!)

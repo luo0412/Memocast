@@ -7,5 +7,6 @@ export default {
   SAVE_TO_LOCAL_STORE_SYNC: 'save_to_local_store_sync',
   SAVE_ITEMS_TO_LOCAL_STORE_SYNC: 'save_all_to_local_store_sync',
   TOGGLE_CHANGED: 'toggle_changed',
-  UPDATE_STATES: 'update_states'
+  UPDATE_STATES: 'update_states',
+  UPDATE_SYNC_STATUS: 'update_sync_status'
 }

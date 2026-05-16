@@ -34,13 +34,14 @@ export const showContextMenu = (event, isCurrentCategory, category, isLogin) => 
     // ✅ 第一组：创建操作（创建文件夹 + 创建笔记）
     ITEMS.push(CREATE_CATEGORY)
     ITEMS.push(CREATE_NOTE)
-    
+
     // ✅ 第二组：导入导出（独立组，加分隔线）
     ITEMS.push(SEPARATOR)
     ITEMS.push(OPEN_IMPORT)
     ITEMS.push(EXPORT)
   } else {
-    // 未登录时只显示创建笔记
+    // 未登录时只显示创建笔记和创建文件夹（均走本地 SQLite）
+    ITEMS.push(CREATE_CATEGORY)
     ITEMS.push(CREATE_NOTE)
   }
 

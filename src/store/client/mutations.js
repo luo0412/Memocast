@@ -32,5 +32,8 @@ export default {
     for (const key in object) {
       state[key] = object[key]
     }
+  },
+  [types.UPDATE_SYNC_STATUS] (state, status) {
+    state.syncStatus = { ...state.syncStatus, ...status }
   }
 }

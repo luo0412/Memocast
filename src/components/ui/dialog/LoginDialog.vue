@@ -127,9 +127,6 @@ const {
   mapState: mapClientState,
   mapActions: mapClientActions
 } = createNamespacedHelpers('client')
-const {
-  mapActions: mapOfflineActions
-} = createNamespacedHelpers('offline')
 export default {
   name: 'LoginDialog',
   components: { Loading },
@@ -168,8 +165,8 @@ export default {
       ipcRenderer.send('window-close')
     },
     skipLogin: function () {
-      // 跳过登录，初始化离线模式，以离线模式运行
-      this.$store.dispatch('server/initOfflineMode')
+      // 跳过登录：从 SQLite 加载本地数据，统一使用 currentNotes/categories
+      this.$store.dispatch('server/loadLocalData')
       this.$emit('skip-login')
       this.toggle()
     },
@@ -185,8 +182,7 @@ export default {
       return this.$refs.dialog.show()
     },
     ...mapServerActions(['login', 'getCategoryNotes']),
-    ...mapClientActions(['toggleChanged']),
-    ...mapOfflineActions(['initOfflineStore'])
+    ...mapClientActions(['toggleChanged'])
   },
   created () {
     const [userId, password, url] = ClientFileStorage.getItemsFromStore([

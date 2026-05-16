@@ -30,25 +30,17 @@ const {
   mapActions: mapServerActions,
   mapState: mapServerState
 } = createNamespacedHelpers('server')
-const {
-  mapActions: mapOfflineActions,
-  mapState: mapOfflineState
-} = createNamespacedHelpers('offline')
 export default {
   name: 'App',
   components: { ConflictResolveDialog, OfflineSyncPromptDialog },
   data () {
     return {
       autoSaveInterval: null,
-      antdZhCN: zhCN,
-      // 记录上次冲突数，避免重复弹出
-      lastConflictCount: 0
+      antdZhCN: zhCN
     }
   },
   computed: {
-    // ✅ 已移除 autoSaveGap！不再需要自动保存配置
-    // ...mapClientState(['autoSaveGap']),
-    ...mapOfflineState(['isInitialized', 'conflictNotes'])
+    ...mapServerState(['isLogin'])
   },
   async mounted () {
     RegisterErrorHandler()
@@ -60,26 +52,8 @@ export default {
     checkUpdate()
     this.initClientStore().then()
     this.initServerStore().then()
-    // 初始化离线存储后，加载离线模式（显示本地 SQLite 笔记）
-    // ✅ 不再自动同步！只在用户手动点击同步按钮时才同步
-    this.initOfflineStore().then(() => {
-      if (this.isLogin) {
-        // 已登录：初始化服务器状态（不触发同步）
-        this.initServerStore().then(() => {
-          console.log('[App] Initialized server store (no auto-sync)')
-        })
-      } else {
-        // 未登录：初始化离线模式，加载本地 SQLite 笔记
-        this.initOfflineMode()
-      }
-    })
-    // ✅ 移除自动保存定时器！用户编辑时只保存到 SQLite
-    // this.setupAutoSaveInterval(this.autoSaveGap)  ← 已移除
   },
   methods: {
-    // ✅ 已移除 setupAutoSaveInterval！不再自动保存
-    // setupAutoSaveInterval: function (gap) { ... }
-    
     // 显示离线笔记同步提示对话框
     showOfflineSyncPrompt (offlineNotes) {
       if (this.$refs.offlineSyncDialog) {
@@ -122,24 +96,7 @@ export default {
       }
     },
     ...mapClientActions(['initClientStore']),
-    ...mapServerActions(['initServerStore', 'reLogin', 'initOfflineMode', 'getAllCategories', 'getCategoryNotes']),
-    ...mapServerState(['isLogin']),
-    ...mapOfflineActions(['initOfflineStore', 'sync'])
-  },
-  watch: {
-    // ✅ 已移除 autoSaveGap watcher！不再自动保存
-    // autoSaveGap: function (val) { ... }
-    
-    // 冲突笔记变化时自动弹出对话框（只在数量增加时触发）
-    conflictNotes: {
-      handler (notes) {
-        if (notes && notes.length > this.lastConflictCount) {
-          this.showConflictDialog(notes[0])
-        }
-        this.lastConflictCount = notes ? notes.length : 0
-      },
-      deep: true
-    }
+    ...mapServerActions(['initServerStore', 'reLogin', 'getAllCategories', 'getCategoryNotes'])
   },
   beforeDestroy () {
     bus.$off('showOfflineSyncPrompt', this.showOfflineSyncPrompt)

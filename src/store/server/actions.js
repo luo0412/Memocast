@@ -19,58 +19,98 @@ function getCalendarNoteTimestamp (note, basis) {
 }
 
 /**
- * 从 SQLite local_categories 表构建目录树
- * @param {Array} categories - local_categories 表中的所有记录
+ * 从笔记的 category 字段和 local_categories 表构建目录树
+ * 路径格式：'/My Notes/'（根）、'/My Notes/Folder/'（子文件夹）
+ * 笔记 category 和 local_categories 两个来源的路径都要显示（合并）
+ * @param {Array} notes - notes 表中的所有笔记
+ * @param {Array} [localCategories] - local_categories 表记录（空文件夹）
  * @returns {Array} 树形结构
  */
-function buildOfflineCategoryTree (categories) {
-  // 找到根节点（/My Notes/）
-  const rootCat = categories.find(c => c.category === OFFLINE_ROOT_CATEGORY)
-  if (!rootCat) return []
+function buildCategoryTreeFromNotes (notes, localCategories) {
+  const categorySet = new Set()
 
+  // 从笔记的 category 字段收集所有唯一路径
+  for (const note of notes) {
+    if (note.category && note.category !== '/' && note.category !== '') {
+      categorySet.add(note.category)
+    }
+  }
+
+  // 始终合并 local_categories（确保空文件夹也显示）
+  if (localCategories && localCategories.length > 0) {
+    for (const cat of localCategories) {
+      if (cat.category && cat.category !== '/' && cat.category !== '' && cat.category !== OFFLINE_ROOT_CATEGORY) {
+        categorySet.add(cat.category)
+      }
+    }
+  }
+
+  if (categorySet.size === 0) {
+    return []
+  }
+
+  // 构建所有路径节点（从根到每一级）
   const nodeMap = new Map()
-  // 构建节点
-  for (const cat of categories) {
-    const key = cat.category
-    const label = key.replace(/\/$/, '').replace(/^\//, '') || '我的笔记'
-    nodeMap.set(key, {
+  nodeMap.set(OFFLINE_ROOT_CATEGORY, {
+    label: '我的笔记',
+    key: OFFLINE_ROOT_CATEGORY,
+    children: [],
+    selectable: true,
+    isOfflineRoot: true,
+    categoryPath: OFFLINE_ROOT_CATEGORY
+  })
+
+  for (const path of categorySet) {
+    if (nodeMap.has(path)) continue
+    const label = path.replace(/\/$/, '').replace(/^\//, '') || '我的笔记'
+    nodeMap.set(path, {
       label,
-      key,
+      key: path,
       children: [],
       selectable: true,
-      kb_guid: cat.kb_guid,
-      local_only: cat.local_only === 1,
-      categoryPath: key
+      categoryPath: path
     })
   }
 
-  // 链接父子关系
-  const roots = []
-  for (const cat of categories) {
-    const node = nodeMap.get(cat.category)
-    if (!node) continue
-
-    const parentPath = cat.parent || '/'
+  // 链接父子关系（根据路径字符串父子关系）
+  const roots = [nodeMap.get(OFFLINE_ROOT_CATEGORY)]
+  for (const [path, node] of nodeMap) {
+    if (path === OFFLINE_ROOT_CATEGORY) continue
+    // 去掉末尾 / 后找父路径
+    const parentPath = path.slice(0, -1).slice(0, path.slice(0, -1).lastIndexOf('/') + 1) + '/'
     const parent = nodeMap.get(parentPath)
-    if (parent && parentPath !== cat.category) {
+    if (parent && parentPath !== path) {
       parent.children.push(node)
     } else {
       roots.push(node)
     }
   }
 
-  // 确保根节点在数组中（离线模式只有 /My Notes/）
-  if (!roots.find(n => n.key === OFFLINE_ROOT_CATEGORY)) {
-    roots.unshift({
-      label: '我的笔记',
-      key: OFFLINE_ROOT_CATEGORY_KEY,
-      children: [],
-      selectable: true,
-      isOfflineRoot: true
-    })
+  // 递归排序子文件夹（字母序）
+  const sortChildren = (node) => {
+    node.children.sort((a, b) => a.label.localeCompare(b.label))
+    for (const child of node.children) {
+      sortChildren(child)
+    }
   }
+  if (roots[0]) sortChildren(roots[0])
 
-  return roots
+  return roots[0] ? [roots[0]] : []
+}
+
+/**
+ * 在树中查找指定 key 的节点
+ */
+function findCategoryNode (node, key) {
+  if (!node) return null
+  if (node.key === key) return node
+  if (node.children) {
+    for (const child of node.children) {
+      const found = findCategoryNode(child, key)
+      if (found) return found
+    }
+  }
+  return null
 }
 
 import { Dark, Dialog, Loading, Notify, QSpinnerGears } from 'quasar'
@@ -220,49 +260,36 @@ export default {
         url
       })
     } else {
-      this.dispatch('server/initOfflineMode')
+      // 未登录：从 SQLite 加载笔记和目录，统一使用 currentNotes/currentCategory
+      await this.dispatch('server/loadLocalData')
     }
   },
   /**
-   * Initialize offline mode: load local-only notes from SQLite and build
-   * the offline category tree (supports sub-folders).
-   * Called after skip-login so the user can create/view notes without account.
+   * 统一加载本地数据（未登录时从 SQLite 加载，已登录时也通过 getCategoryNotes 加载）
+   * 统一使用 currentNotes 和 categories，不再区分 online/offline 数据源
    */
-  async initOfflineMode ({ commit, state }) {
+  async loadLocalData ({ commit, state }) {
     try {
-      // 确保离线根目录存在
       await DatabaseClient.ensureOfflineRoot()
-
+      // 从 SQLite 加载所有笔记（包含 category 字段），基于 category 构建目录树
       const localNotes = await DatabaseClient.getNotes()
-      console.log('[initOfflineMode] loaded notes:', localNotes.length)
-
-      commit(types.SET_OFFLINE_NOTES, localNotes || [])
-
-      // 从 SQLite 加载所有本地目录，构建树形结构
       const localCategories = await DatabaseClient.getCategories({})
-      const tree = buildOfflineCategoryTree(localCategories)
-      commit(types.SET_OFFLINE_CATEGORIES, tree)
-      commit(types.UPDATE_CURRENT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY)
-      commit(types.SET_OFFLINE_CURRENT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY)
+      console.log('[loadLocalData] loaded notes:', localNotes.length)
+      console.log('[loadLocalData] localCategories:', localCategories)
+
+      // 打印所有笔记的 category，方便排查
+      const allCategories = [...new Set(localNotes.map(n => n.category).filter(c => c && c !== '/'))]
+      console.log('[loadLocalData] unique categories from notes:', allCategories)
+
+      const tree = buildCategoryTreeFromNotes(localNotes, localCategories)
+      console.log('[loadLocalData] built tree:', JSON.stringify(tree, null, 2))
+      commit(types.SET_CATEGORIES, tree)
+      commit(types.UPDATE_CURRENT_CATEGORY, OFFLINE_ROOT_CATEGORY)
 
       return localNotes || []
     } catch (err) {
-      console.error('[initOfflineMode] failed:', err)
+      console.error('[loadLocalData] failed:', err)
       return []
-    }
-  },
-  /**
-   * Update offline current category and refresh offline notes list.
-   */
-  async updateOfflineCurrentCategory ({ commit, state }, payload) {
-    const { data } = payload
-    commit(types.SET_OFFLINE_CURRENT_CATEGORY, data)
-    // Re-fetch offline notes to ensure we have the latest
-    try {
-      const localNotes = await DatabaseClient.getNotes()
-      commit(types.SET_OFFLINE_NOTES, localNotes || [])
-    } catch (err) {
-      console.warn('[updateOfflineCurrentCategory] failed to refresh notes:', err)
     }
   },
   async getContent (payload, {
@@ -340,7 +367,6 @@ export default {
       const offlineNotes = pendingNotes.filter(n => n.doc_guid && n.doc_guid.startsWith('local_'))
       if (offlineNotes.length > 0) {
         console.log('[login] Found', offlineNotes.length, 'offline notes to sync')
-        commit(types.SET_OFFLINE_NOTES, offlineNotes)
         bus.$emit('showOfflineSyncPrompt', offlineNotes)
       }
     } catch (err) {
@@ -358,23 +384,19 @@ export default {
    * - 保留所有本地笔记，下次登录时自动关联到新账号
    * - 切换账号 = 改变同步目标，笔记留在本地
    */
-  async logout ({ commit }) {
-    // 永远本地优先：不禁用 localStorage.kbGuid，下次登录时旧笔记会继续使用旧 kbGuid
-    // 本地笔记的 kb_guid 在创建时写入，已在本地保存，logout 后保留
-
+  async logout ({ commit, state, dispatch }) {
+    // 保存退出前的 kbGuid，清空前用它来清除笔记关联
+    const oldKbGuid = state.kbGuid
     await api.AccountServerApi.Logout()
     ServerFileStorage.removeItemFromLocalStorage('token')
     commit(types.LOGOUT)
-    // 重置离线同步状态（右上角待同步数量）
-    commit('offline/UPDATE_SYNC_STATUS', {
-      isSyncing: false,
-      lastSyncTime: null,
-      total: 0,
-      synced: 0,
-      pending: 0,
-      conflict: 0
-    }, { root: true })
-    commit('offline/SET_INITIALIZED', false, { root: true })
+    // 退出登录：清空笔记的 kb_guid + 设 dirty=1（保留笔记不断开关联，下次登录可继续同步）
+    // 不刷新文件树（树应基于笔记的 category 字段构建）
+    if (oldKbGuid) {
+      await DatabaseClient.clearNotesByKbGuid(oldKbGuid)
+    }
+    // 重新加载当前目录的笔记列表（此时 kb_guid 已清空，getCategoryNotes 会走离线路径）
+    await dispatch('getCategoryNotes', { category: '' })
   },
   /**
    * 重新登录
@@ -942,11 +964,9 @@ export default {
     commit(types.UPDATE_CURRENT_CATEGORY, data)
     commit(types.SAVE_TO_LOCAL_STORE_SYNC, ['currentCategory', data])
 
-    // 离线模式：从 SQLite 过滤本地笔记
+    // 统一模式：始终从 SQLite 加载本地笔记（通过 getCategoryNotes 处理格式化）
     if (!state.isLogin || !state.kbGuid) {
-      commit(types.UPDATE_CURRENT_NOTES, [])
-      // offlineNotes 已经在 initOfflineMode 时加载到 state.offlineNotes
-      // 组件通过 offlineNotesList getter 获取过滤后的列表
+      await this.dispatch('server/getCategoryNotes', { category: data })
       return
     }
 
@@ -1043,9 +1063,8 @@ export default {
       } catch (err) {
         console.error('[updateNote/offline] SQLite write failed:', err)
       }
-      // 离线笔记保存在 SQLite，增量更新 offlineNotes 中该笔记的内容
-      const localNotes = await DatabaseClient.getNotes()
-      commit(types.SET_OFFLINE_NOTES, localNotes || [])
+      // 刷新本地笔记列表
+      await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
       commit(types.UPDATE_NOTE_STATE, 'default')
       return
     }
@@ -1077,10 +1096,7 @@ export default {
           console.log(`[updateNote] SQLite updated: id=${localNote.id}, content_len=${markdown.length}, dirty=1 (pending manual sync)`)
           
           if (updatedNote) {
-            this.dispatch('offline/updateNote', {
-              id: localNote.id,
-              note: updatedNote  // 直接传入已更新的笔记对象，避免重复查询
-            }, { root: true })
+            // 数据已写入 SQLite，无需额外操作
           }
         } else {
           // 首次保存：创建本地记录
@@ -1096,9 +1112,6 @@ export default {
           localNoteId = note?.id
           updatedNote = note
           if (note) {
-            this.dispatch('offline/createNote', {
-              note: note  // 直接传入已创建的笔记对象
-            }, { root: true })
             console.log(`[updateNote] SQLite created: id=${note.id}, dirty=1 (pending manual sync)`)
           }
         }
@@ -1211,9 +1224,8 @@ export default {
         })
         return
       }
-      // 重新加载离线笔记列表
-      const localNotes = await DatabaseClient.getNotes()
-      commit(types.SET_OFFLINE_NOTES, localNotes || [])
+      // 刷新本地笔记列表
+      await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
       // 显示本地草稿内容
       commit(types.UPDATE_CURRENT_NOTE, {
         _isRawMarkdown: true,
@@ -1255,7 +1267,6 @@ export default {
       })
       if (note) {
         localNoteId = note.id
-        this.dispatch('offline/createNote', { title: finalTitle, content: initialContent, category: currentCategory || OFFLINE_ROOT_CATEGORY }, { root: true })
       }
     } catch (err) {
       console.warn('[createNote] SQLite create failed, continuing with cloud:', err)
@@ -1281,10 +1292,6 @@ export default {
             doc_guid: result.guid
           })
           await DatabaseClient.createGuidMapping(localNoteId, result.guid, 'wiznote')
-          this.dispatch('offline/updateNote', {
-            id: localNoteId,
-            updates: { doc_guid: result.guid }
-          }, { root: true })
         } catch (e2) {
           console.warn('[createNote] Failed to update local doc_guid:', e2)
         }
@@ -1325,7 +1332,7 @@ export default {
           html: initialContent,
           resources: []
         })
-        this.dispatch('offline/sync', null, { root: true })
+        this.dispatch('client/sync', null, { root: true })
       } else {
         Notify.create({
           message: i18n.t('createNoteFailed'),
@@ -1363,11 +1370,6 @@ export default {
             local_modified: Date.now()
           })
           console.log(`[updateNoteWithInfo/offline] SQLite updated: id=${localNote.id}, docGuid=${docGuid}, content_len=${markdown.length}`)
-          
-          this.dispatch('offline/updateNote', {
-            id: localNote.id,
-            updates: { title, content: markdown, category: OFFLINE_ROOT_CATEGORY, local_modified: Date.now() }
-          }, { root: true })
         } else {
           // 首次保存：创建本地记录
           const now = Date.now()
@@ -1382,15 +1384,11 @@ export default {
           })
           if (note) {
             console.log(`[updateNoteWithInfo/offline] SQLite created: id=${note.id}`)
-            this.dispatch('offline/createNote', {
-              title, content: markdown, category: OFFLINE_ROOT_CATEGORY
-            }, { root: true })
           }
         }
         
-        // 刷新离线笔记列表
-        const localNotes = await DatabaseClient.getNotes()
-        commit(types.SET_OFFLINE_NOTES, localNotes || [])
+        // 刷新本地笔记列表
+        await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
       } catch (err) {
         console.error('[updateNoteWithInfo/offline] SQLite write failed:', err)
       }
@@ -1420,10 +1418,7 @@ export default {
         console.log(`[updateNoteWithInfo] SQLite updated: id=${localNote.id}, content_len=${markdown.length}, dirty=1 (pending manual sync)`)
         
         if (updatedNote) {
-          this.dispatch('offline/updateNote', {
-            id: localNote.id,
-            note: updatedNote  // 直接传入已更新的笔记对象
-          }, { root: true })
+          // 数据已写入 SQLite，无需额外操作
         }
       } else {
         // 首次保存：创建本地记录
@@ -1437,10 +1432,7 @@ export default {
           local_modified: now
         })
         if (note) {
-          this.dispatch('offline/createNote', {
-            note: note  // 直接传入已创建的笔记对象
-          }, { root: true })
-          console.log(`[updateNoteWithInfo] SQLite created: id=${note.id}, dirty=1 (pending manual sync)`)
+          // 数据已写入 SQLite
         }
       }
     } catch (err) {
@@ -1482,8 +1474,7 @@ export default {
             local_modified: now
           })
           if (note) {
-            const localNotes = await DatabaseClient.getNotes()
-            commit(types.SET_OFFLINE_NOTES, localNotes || [])
+            await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
           }
           commit(types.UPDATE_CURRENT_NOTE, {
             _isRawMarkdown: true,
@@ -1517,7 +1508,6 @@ export default {
         })
         if (note) {
           localNoteId = note.id
-          this.dispatch('offline/createNote', { title, content: text, category: currentCategory || OFFLINE_ROOT_CATEGORY }, { root: true })
         }
       } catch (err) {
         console.warn('[importNote] SQLite create failed:', err)
@@ -1544,10 +1534,6 @@ export default {
               doc_guid: docGuid
             })
             await DatabaseClient.createGuidMapping(localNoteId, docGuid, 'wiznote')
-            this.dispatch('offline/updateNote', {
-              id: localNoteId,
-              updates: { doc_guid: docGuid }
-            }, { root: true })
           } catch (e2) {
             console.warn('[importNote] Failed to update local doc_guid:', e2)
           }
@@ -1599,11 +1585,9 @@ export default {
         const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
         if (localNote) {
           await DatabaseClient.deleteNote(localNote.id)
-          this.dispatch('offline/deleteNote', localNote.id, { root: true })
         }
-        // 刷新离线笔记列表
-        const localNotes = await DatabaseClient.getNotes()
-        commit(types.SET_OFFLINE_NOTES, localNotes || [])
+        // 刷新本地笔记列表
+        await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
       } catch (err) {
         console.warn('[deleteNote/offline] SQLite delete failed:', err)
       }
@@ -1625,7 +1609,6 @@ export default {
       const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
       if (localNote) {
         await DatabaseClient.deleteNote(localNote.id)
-        this.dispatch('offline/deleteNote', localNote.id, { root: true })
       }
     } catch (err) {
       console.warn('[deleteNote] SQLite delete failed:', err)
@@ -1675,12 +1658,16 @@ export default {
   }) {
     const { kbGuid, isLogin, categories } = state
 
-    // 计算完整路径
+    // 计算完整路径（父路径 + 子文件夹名）
     let fullCategoryPath
+    // 根目录（空、/、/My Notes/）下创建直接子文件夹
     if (helper.isNullOrEmpty(parentCategory) || parentCategory === OFFLINE_ROOT_CATEGORY || parentCategory === '/') {
       fullCategoryPath = `${OFFLINE_ROOT_CATEGORY}${childCategoryName}/`
     } else {
-      fullCategoryPath = `${parentCategory}${childCategoryName}/`
+      // parentCategory 格式为 '/My Notes/Work/'，去掉末尾 / 后找倒数第二个 /
+      // '/My Notes/Work/'.slice(0, -1) = '/My Notes/Work' → .lastIndexOf('/') = 11 → parentBase = '/My Notes/'
+      const parentBase = parentCategory.slice(0, -1).slice(0, parentCategory.slice(0, -1).lastIndexOf('/') + 1)
+      fullCategoryPath = `${parentBase}${childCategoryName}/`
     }
 
     // 在线模式：同时创建云端目录 + 本地记录
@@ -1728,10 +1715,29 @@ export default {
         kbGuid: kbGuid || '',
         localOnly: true
       })
-      // 刷新离线目录树
-      const updatedCategories = await DatabaseClient.getCategories({})
-      const tree = buildOfflineCategoryTree(updatedCategories)
-      commit(types.SET_OFFLINE_CATEGORIES, tree)
+
+      // 乐观更新目录树：前端直接修改 state.categories（不查数据库，避免看不到刚创建的临时文件夹）
+      const currentTree = state.categories
+      if (currentTree && currentTree.length > 0) {
+        const root = currentTree[0]
+        // 找到父节点
+        const parentNode = findCategoryNode(root, parentCategory || OFFLINE_ROOT_CATEGORY)
+        if (parentNode) {
+          // 避免重复
+          if (!parentNode.children.find(c => c.key === fullCategoryPath)) {
+            parentNode.children.push({
+              label: childCategoryName,
+              key: fullCategoryPath,
+              children: [],
+              selectable: true,
+              categoryPath: fullCategoryPath
+            })
+            // 排序
+            parentNode.children.sort((a, b) => a.label.localeCompare(b.label))
+          }
+        }
+        commit(types.SET_CATEGORIES, [...currentTree])
+      }
       await this.dispatch('server/updateCurrentCategory', { data: fullCategoryPath, type: 'category' })
       Notify.create({ color: 'positive', message: i18n.t('categoryCreated'), icon: 'folder_open' })
     } catch (err) {
@@ -1757,12 +1763,12 @@ export default {
     // 再删本地记录
     try {
       await DatabaseClient.deleteCategory(category)
-      // 刷新目录树
-      const localCategories = await DatabaseClient.getCategories({})
-      const tree = buildOfflineCategoryTree(localCategories)
-      commit(types.SET_OFFLINE_CATEGORIES, tree)
+      // 刷新目录树（基于笔记 + local_categories 兜底）
+      const updatedNotes = await DatabaseClient.getNotes()
+      const updatedCategories = await DatabaseClient.getCategories({})
+      const tree = buildCategoryTreeFromNotes(updatedNotes, updatedCategories)
+      commit(types.SET_CATEGORIES, tree)
       // 删除该目录下的所有本地笔记（同时删除整个分类）
-      // note: 笔记的 category 字段记录了分类，查询时不加过滤即可
       await this.dispatch('server/updateCurrentCategory', { data: '', type: '' })
     } catch (err) {
       console.error('[deleteCategory] local delete failed:', err)

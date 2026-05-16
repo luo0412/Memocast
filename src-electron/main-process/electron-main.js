@@ -1296,6 +1296,28 @@ function registerDatabaseHandlers() {
     }
   })
 
+  // 清空指定 kbGuid 的笔记的 kb_guid 和 dirty 标记（用于退出登录时不删除本地笔记，仅断开关联）
+  // 会更新该 kbGuid 下所有笔记：kb_guid=NULL, dirty=1（本地修改待重新同步）
+  ipcMain.handle('db:clearNotesByKbGuid', async (event, kbGuid) => {
+    try {
+      if (!kbGuid) {
+        log.warn('[DB] clearNotesByKbGuid: kbGuid is required')
+        return 0
+      }
+      const now = Date.now()
+      const result = await db.run(
+        'UPDATE notes SET kb_guid = NULL, dirty = 1, local_modified = ?, updated_at = ? WHERE kb_guid = ?',
+        [now, now, kbGuid]
+      )
+      saveDatabase()
+      log.info(`[DB] Cleared kb_guid for ${result?.changes || 0} notes (kbGuid=${kbGuid}), marked as dirty`)
+      return result?.changes || 0
+    } catch (error) {
+      log.error('[DB] clearNotesByKbGuid error:', error)
+      return 0
+    }
+  })
+
   // 获取指定账号的待同步笔记（仅返回当前 kbGuid 的 dirty=1 笔记，防止跨账号数据污染）
   ipcMain.handle('db:getPendingSyncNotesByKbGuid', async (event, kbGuid) => {
     try {

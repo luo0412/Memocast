@@ -35,7 +35,7 @@
             v-if="node.data && node.data.isOfflineRoot"
             color="grey-5"
             text-color="grey-8"
-            :label="offlineNoteCount"
+            :label="currentNotes.length"
             class="offline-badge"
           />
         </span>
@@ -130,10 +130,6 @@ export default {
     },
     items () {
       if (this.type === 'category') {
-        // 离线模式下显示本地离线目录树（支持离线创建文件夹）
-        if (!this.isLogin && this.offlineCategories && this.offlineCategories.length > 0) {
-          return this.offlineCategories
-        }
         return this.categories
       } else if (this.type === 'tag') {
         return this.tags
@@ -146,14 +142,8 @@ export default {
         label: 'label'
       }
     },
-    offlineNoteCount () {
-      if (!this.isLogin && this.offlineNotes && this.offlineNotes.length > 0) {
-        return this.offlineNotes.length
-      }
-      return null
-    },
-    ...mapServerGetters(['categories', 'tags']),
-    ...mapServerState(['currentCategory', 'tagNotesCount', 'isLogin', 'offlineNotes']),
+    ...mapServerGetters(['categories', 'tags', 'currentNotes']),
+    ...mapServerState(['currentCategory', 'tagNotesCount', 'isLogin']),
     ...mapClientState(['rightClickCategoryItem', 'sidebarTreeType'])
   },
   methods: {

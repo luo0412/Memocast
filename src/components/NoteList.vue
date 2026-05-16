@@ -34,7 +34,7 @@
     <q-card
       class="note-list-bottom text-center"
       v-ripple
-      v-if="isLogin || isOfflineMode"
+      v-if="isLogin"
     >
       <span>{{ category }}</span>
     </q-card>
@@ -53,7 +53,6 @@ import helper from '../utils/helper'
 import bus from './bus'
 import events from 'src/constants/events'
 import { showContextMenu as showNoteItemContextMenu } from 'src/contextMenu/noteList'
-import { OFFLINE_ROOT_CATEGORY_KEY } from 'src/store/server/actions'
 const { mapGetters: mapServerGetters, mapState: mapServerState, mapActions: mapServerActions } = createNamespacedHelpers('server')
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 export default {
@@ -102,25 +101,13 @@ export default {
       }
     },
     isOfflineMode () {
-      return !this.isLogin && this.offlineNotes && this.offlineNotes.length >= 0
+      return !this.isLogin
     },
     displayNotes () {
-      if (!this.isLogin) {
-        return this.offlineNotes.map(note => ({
-          docGuid: note.doc_guid,
-          title: note.title,
-          abstractText: note.content ? note.content.substring(0, 200) : '',
-          category: note.category || '/',
-          dataCreated: note.data_created,
-          dataModified: note.data_modified || note.local_modified || note.data_created,
-          dirty: note.dirty,
-          _localId: note.id
-        }))
-      }
       return this.currentNotes
     },
     ...mapServerGetters(['activeNote', 'currentNotes']),
-    ...mapServerState(['isCurrentNotesLoading', 'currentCategory', 'isLogin', 'tags', 'currentNote', 'offlineNotes', 'offlineCurrentCategory']),
+    ...mapServerState(['isCurrentNotesLoading', 'currentCategory', 'isLogin', 'tags', 'currentNote']),
     ...mapClientState(['rightClickCategoryItem', 'rightClickNoteItem', 'noteListDenseMode', 'sidebarTreeType', 'calendarSelectedDate']),
   },
   methods: {

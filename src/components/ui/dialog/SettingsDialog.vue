@@ -407,14 +407,9 @@ import DatabaseService from 'src/services/DatabaseService'
 import CloudSyncService from 'src/services/CloudSyncService'
 
 const {
-  mapState,
-  mapActions
+  mapState: mapClientState,
+  mapActions: mapActions
 } = createNamespacedHelpers('client')
-
-const {
-  mapState: mapOfflineState,
-  mapActions: mapOfflineActions
-} = createNamespacedHelpers('offline')
 
 export default {
   name: 'SettingsDialog',
@@ -503,7 +498,7 @@ export default {
         kbServer: localStorage.getItem('kbServer') || ''
       }
     },
-    ...mapState([
+    ...mapClientState([
       'language',
       'darkMode',
       'noteListDenseMode',
@@ -512,11 +507,9 @@ export default {
       'noteOrderType',
       'theme',
       'themes',
-      // ✅ 已移除 autoSaveGap！不再需要自动保存配置
-      // 'autoSaveGap',
-      'runeCards'
-    ]),
-    ...mapOfflineState(['syncStatus', 'conflictNotes'])
+      'runeCards',
+      'syncStatus'
+    ])
   },
   methods: {
     toggle: function () {
@@ -651,14 +644,13 @@ export default {
         const DatabaseClient = (await import('../../../utils/DatabaseClient')).default
         const success = await DatabaseClient.resetDatabase()
         if (success) {
-          // 重置 offline store 的同步状态
-          this.$store.commit('offline/UPDATE_SYNC_STATUS', {
+          // 重置同步状态
+          this.$store.commit('client/UPDATE_SYNC_STATUS', {
             isSyncing: false,
             lastSyncTime: null,
             total: 0,
             synced: 0,
-            pending: 0,
-            conflict: 0
+            pending: 0
           })
           this.$q.notify({
             message: this.$t('resetSqliteSuccess'),
@@ -835,9 +827,10 @@ export default {
       'loadRunes',
       'saveRune',
       'deleteRune',
-      'saveRunes'
-    ]),
-    ...mapOfflineActions(['sync', 'refresh'])
+      'saveRunes',
+      'sync',
+      'refreshSyncStatus'
+    ])
   },
   mounted () {
     bus.$on(events.UPDATE_EVENTS.updateAvailable, this.updateAvailableHandler)

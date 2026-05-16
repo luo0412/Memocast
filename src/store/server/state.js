@@ -20,8 +20,5 @@ export default function () {
     tags: [],
     tagNotesCount: {},   // { [tagGuid]: number }
     calendarNoteDates: [], // string[] of 'YYYY-MM-DD' with notes in current month
-    offlineCategories: [], // offline root node tree [{ label, key, children }]
-    offlineNotes: [],    // raw notes from SQLite for offline mode
-    offlineCurrentCategory: '' // current offline category key
   }
 }

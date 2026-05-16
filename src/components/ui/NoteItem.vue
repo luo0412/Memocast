@@ -404,12 +404,8 @@ export default {
       // ✅ 异步执行，不阻塞 UI
       this.$nextTick(async () => {
         try {
-          if (this.$store && this.$store.hasModule('offline')) {
-            const result = await this.$store.dispatch('offline/sync')
-            console.log('[NoteItem] ✅ Background sync completed:', result)
-          } else {
-            console.warn('[NoteItem] ⚠️ offline module not found, skipping sync')
-          }
+          const result = await this.$store.dispatch('client/sync')
+          console.log('[NoteItem] ✅ Background sync completed:', result)
         } catch (error) {
           console.error('[NoteItem] ❌ Background sync failed:', error)
         }

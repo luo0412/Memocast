@@ -31,6 +31,10 @@ export default {
     return state
   },
   [types.LOGOUT] (state) {
+    // 保留 categories（目录树）和 currentCategory（当前目录）不变
+    // 它们在退出登录时仍然有效，基于本地 SQLite 数据
+    const preservedCategories = state.categories
+    const preservedCurrentCategory = state.currentCategory
     for (const key in state) {
       if (key === 'currentNote') {
         state[key] = {}
@@ -40,9 +44,8 @@ export default {
     }
     state.isLogin = false
     state.noteState = 'default'
-    state.offlineCategories = []
-    state.offlineNotes = []
-    state.offlineCurrentCategory = ''
+    state.categories = preservedCategories
+    state.currentCategory = preservedCurrentCategory
     return state
   },
   [types.UPDATE_CURRENT_NOTES] (state, payload) {
@@ -132,26 +135,8 @@ export default {
     state.calendarNoteDates = dates
     return state
   },
-  [types.SET_OFFLINE_CATEGORIES] (state, categories) {
-    state.offlineCategories = categories
-    return state
-  },
-  [types.SET_OFFLINE_NOTES] (state, notes) {
-    state.offlineNotes = notes
-    return state
-  },
-  [types.SET_OFFLINE_CURRENT_CATEGORY] (state, category) {
-    state.offlineCurrentCategory = category
-    return state
-  },
-  [types.UPDATE_OFFLINE_CATEGORIES] (state, categories) {
-    state.offlineCategories = categories
-    return state
-  },
-  [types.ADD_OFFLINE_CATEGORY] (state, category) {
-    if (!state.offlineCategories.find(c => c.key === category.key)) {
-      state.offlineCategories.push(category)
-    }
+  [types.SET_CATEGORIES] (state, categories) {
+    state.categories = categories
     return state
   }
 }
