@@ -14,13 +14,15 @@
         :props="treeProps"
         node-key="key"
         :current-node-key="currentCategory"
-        :default-expand-all="true"
+        :default-expanded-keys="expandedKeys"
         :expand-on-click-node="false"
         :highlight-current="true"
         :indent="20"
         class="memocast-el-tree"
         @node-click="handleNodeClick"
         @node-contextmenu="contextMenuHandler"
+        @node-expand="handleNodeExpand"
+        @node-collapse="handleNodeCollapse"
       >
         <span class="memocast-tree-node" slot-scope="{ node }">
           <i
@@ -56,6 +58,7 @@
 import { createNamespacedHelpers } from 'vuex'
 import { showContextMenu as showSideDrawerContextMenu } from 'src/contextMenu/sideDrawer'
 import TierRankingDialog from 'components/ui/dialog/TierRankingDialog'
+import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from './bus'
 import events from 'src/constants/events'
 import * as echarts from 'echarts'
@@ -65,6 +68,10 @@ const {
   mapActions: mapServerActions,
   mapState: mapServerState
 } = createNamespacedHelpers('server')
+
+const WORKSPACE_STATE_KEYS = {
+  expandedKeys: 'workspace.categoryTreeExpandedKeys'
+}
 
 const { mapActions: mapClientActions, mapState: mapClientState } = createNamespacedHelpers('client')
 
@@ -121,7 +128,8 @@ export default {
         display: 'none'
       },
       tagChart: null,
-      tagChartData: []
+      tagChartData: [],
+      expandedKeys: []
     }
   },
   computed: {
@@ -292,6 +300,23 @@ export default {
       this.updateCurrentCategory({ data: data.key, type: this.type })
       this.expandFullPaneLayout()
     },
+    async persistExpandedKeys () {
+      if (this.type !== 'category') return
+      const uniqueKeys = Array.from(new Set((this.expandedKeys || []).filter(Boolean)))
+      await DatabaseClient.setAppState(WORKSPACE_STATE_KEYS.expandedKeys, uniqueKeys)
+    },
+    async handleNodeExpand (data) {
+      if (!data?.key || this.type !== 'category') return
+      if (!this.expandedKeys.includes(data.key)) {
+        this.expandedKeys = [...this.expandedKeys, data.key]
+      }
+      await this.persistExpandedKeys()
+    },
+    async handleNodeCollapse (data) {
+      if (!data?.key || this.type !== 'category') return
+      this.expandedKeys = this.expandedKeys.filter(key => key !== data.key)
+      await this.persistExpandedKeys()
+    },
     contextMenuHandler: function (e, data, node) {
       if (this.type !== 'category') return
       this.setRightClickCategoryItem(data.key)
@@ -321,6 +346,13 @@ export default {
   mounted () {
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.openTierRanking, this.openTierRankingHandler)
     bus.$on(events.TAG_TREEMAP_RESIZE, this.resizeTagTreemap)
+    DatabaseClient.getAppState(WORKSPACE_STATE_KEYS.expandedKeys)
+      .then((keys) => {
+        this.expandedKeys = Array.isArray(keys) && keys.length > 0 ? keys : ['/My Notes/']
+      })
+      .catch(() => {
+        this.expandedKeys = ['/My Notes/']
+      })
   },
   beforeDestroy () {
     bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.openTierRanking, this.openTierRankingHandler)
@@ -360,6 +392,21 @@ export default {
         if (this.type === 'tag') {
           this.$nextTick(() => {
             this.initTagTreemap()
+          })
+          return
+        }
+
+        if (this.type === 'category') {
+          const keys = Array.isArray(this.expandedKeys) && this.expandedKeys.length > 0
+            ? this.expandedKeys
+            : ['/My Notes/']
+          this.$nextTick(() => {
+            keys.forEach(key => {
+              const node = this.$refs.tree?.getNode(key)
+              if (node) {
+                this.$refs.tree.store.nodesMap[key].expanded = true
+              }
+            })
           })
         }
       }

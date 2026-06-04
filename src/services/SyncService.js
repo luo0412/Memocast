@@ -7,10 +7,11 @@
 import DatabaseService from './DatabaseService'
 import WizNoteApi from '../utils/api'
 import helper from '../utils/helper'
+import SessionStorageService from './SessionStorageService'
 import { OFFLINE_ROOT_CATEGORY, normalizeCategoryForMatch } from '../utils/constants'
 
 function getKbGuid() {
-  return localStorage.getItem('kbGuid')
+  return SessionStorageService.getKbGuid()
 }
 
 const api = {
@@ -67,7 +68,7 @@ const api = {
       throw new Error('[SyncService] kbGuid is not available, please login first')
     }
 
-    const userId = localStorage.getItem('userId') || ''
+    const userId = SessionStorageService.getUserId() || ''
     const isLite = (note.category || '').replace(/\//g, '') === 'Lite'
     const category = note.category || ''
 

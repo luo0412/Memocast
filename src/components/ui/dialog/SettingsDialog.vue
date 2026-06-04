@@ -405,6 +405,7 @@ import { checkUpdate, needUpdate, openLogFiles, openThemeFolder, refreshThemeFol
 import helper from 'src/utils/helper'
 import DatabaseService from 'src/services/DatabaseService'
 import CloudSyncService from 'src/services/CloudSyncService'
+import SessionStorageService from 'src/services/SessionStorageService'
 
 const {
   mapState: mapClientState,
@@ -487,16 +488,10 @@ export default {
       return `${s.synced || 0}/${s.total || 0}`
     },
     isLoggedIn () {
-      const kbGuid = localStorage.getItem('kbGuid')
-      return !!(kbGuid && kbGuid !== 'null' && kbGuid !== '')
+      return SessionStorageService.isLoggedIn()
     },
     accountInfo () {
-      return {
-        kbGuid: localStorage.getItem('kbGuid') || '',
-        email: localStorage.getItem('userId') || '',
-        displayName: localStorage.getItem('displayName') || '',
-        kbServer: localStorage.getItem('kbServer') || ''
-      }
+      return SessionStorageService.getAccountInfo()
     },
     ...mapClientState([
       'language',

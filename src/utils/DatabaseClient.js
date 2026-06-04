@@ -98,8 +98,8 @@ const DatabaseClient = {
    * 获取所有标签
    * @returns {Promise<Array>}
    */
-  async getTags() {
-    return await ipcRenderer.invoke('db:getTags')
+  async getTags(options = {}) {
+    return await ipcRenderer.invoke('db:getTags', options)
   },
 
   /**
@@ -109,6 +109,18 @@ const DatabaseClient = {
    */
   async createTag(tag) {
     return await ipcRenderer.invoke('db:createTag', tag)
+  },
+
+  async getNoteTags(noteId) {
+    return await ipcRenderer.invoke('db:getNoteTags', { noteId })
+  },
+
+  async attachTagToNote(noteId, tagId) {
+    return await ipcRenderer.invoke('db:attachTagToNote', { noteId, tagId })
+  },
+
+  async removeTagFromNote(noteId, tagId) {
+    return await ipcRenderer.invoke('db:removeTagFromNote', { noteId, tagId })
   },
 
   /**
@@ -196,6 +208,22 @@ const DatabaseClient = {
 
   migrateOfflineCategories(currentKbGuid) {
     return ipcRenderer.invoke('db:migrateOfflineCategories', currentKbGuid)
+  },
+
+  getAppState(key) {
+    return ipcRenderer.invoke('db:getAppState', key)
+  },
+
+  getAppStates(keys = []) {
+    return ipcRenderer.invoke('db:getAppStates', keys)
+  },
+
+  setAppState(key, value) {
+    return ipcRenderer.invoke('db:setAppState', { key, value })
+  },
+
+  removeAppState(key) {
+    return ipcRenderer.invoke('db:removeAppState', key)
   }
 }
 

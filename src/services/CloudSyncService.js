@@ -6,7 +6,7 @@
 
 import SyncService from './SyncService'
 import DatabaseService from '../services/DatabaseService'
-import { OFFLINE_ROOT_CATEGORY } from '../utils/constants'
+import SessionStorageService from './SessionStorageService'
 
 class CloudSyncService {
   constructor() {
@@ -28,17 +28,11 @@ class CloudSyncService {
   }
 
   get isLoggedIn() {
-    const kbGuid = localStorage.getItem('kbGuid')
-    return !!(kbGuid && kbGuid !== 'null')
+    return SessionStorageService.isLoggedIn()
   }
 
   get accountInfo() {
-    return {
-      kbGuid: localStorage.getItem('kbGuid') || '',
-      email: localStorage.getItem('userId') || '',
-      displayName: localStorage.getItem('displayName') || '',
-      kbServer: localStorage.getItem('kbServer') || ''
-    }
+    return SessionStorageService.getAccountInfo()
   }
 
   addListener(callback) {

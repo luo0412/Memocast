@@ -1,7 +1,7 @@
 import types from 'src/store/server/types'
 import helper from 'src/utils/helper'
 import api from 'src/utils/api'
-import ServerFileStorage from 'src/utils/storage/ServerFileStorage'
+import SessionStorageService from 'src/services/SessionStorageService'
 import ClientFileStorage from 'src/utils/storage/ClientFileStorage'
 
 export default {
@@ -18,12 +18,19 @@ export default {
     const { kbGuid, kbServer, lang, email, displayName, userGuid, token, isLogin } = payload
     if (!helper.isNullOrEmpty(kbServer)) {
       api.KnowledgeBaseApi.setBaseUrl(kbServer)
+      SessionStorageService.setKbServer(kbServer)
     }
     if (!helper.isNullOrEmpty(token)) {
-      ServerFileStorage.saveToLocalStorage('token', token)
+      SessionStorageService.setToken(token)
     }
     if (!helper.isNullOrEmpty(kbGuid)) {
-      localStorage.setItem('kbGuid', kbGuid)
+      SessionStorageService.setKbGuid(kbGuid)
+    }
+    if (!helper.isNullOrEmpty(email)) {
+      SessionStorageService.setUserId(email)
+    }
+    if (!helper.isNullOrEmpty(displayName)) {
+      SessionStorageService.setDisplayName(displayName)
     }
     const data = { kbGuid, kbServer, lang, email, displayName, userGuid, isLogin }
     Object.assign(state, data)

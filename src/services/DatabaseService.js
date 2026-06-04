@@ -75,8 +75,20 @@ class DatabaseService {
   /**
    * 获取所有标签
    */
-  getAllTags() {
-    return ipcRenderer.invoke('db:getTags')
+  getAllTags(options = {}) {
+    return ipcRenderer.invoke('db:getTags', options)
+  }
+
+  getNoteTags(noteId) {
+    return ipcRenderer.invoke('db:getNoteTags', { noteId })
+  }
+
+  attachTagToNote(noteId, tagId) {
+    return ipcRenderer.invoke('db:attachTagToNote', { noteId, tagId })
+  }
+
+  removeTagFromNote(noteId, tagId) {
+    return ipcRenderer.invoke('db:removeTagFromNote', { noteId, tagId })
   }
 
   /**

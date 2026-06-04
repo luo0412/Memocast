@@ -3,19 +3,53 @@ import api from 'src/utils/api'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from 'src/components/bus'
 import { OFFLINE_ROOT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY, normalizeCategoryForMatch } from 'src/utils/constants'
+import SessionStorageService from 'src/services/SessionStorageService'
+
+const APP_STATE_KEYS = {
+  currentCategory: 'workspace.currentCategory',
+  sidebarTreeType: 'workspace.sidebarTreeType',
+  categoryTreeExpandedKeys: 'workspace.categoryTreeExpandedKeys',
+  syncStatus: 'workspace.syncStatus'
+}
 
 /** @deprecated 请从 src/utils/constants 导入，保持单点定义 */
 export { OFFLINE_ROOT_CATEGORY_KEY } from 'src/utils/constants'
 /** @deprecated 请从 src/utils/constants 导入，保持单点定义 */
 export { OFFLINE_ROOT_CATEGORY } from 'src/utils/constants'
 
-/** 日历列表/打点用时间戳；创建日优先 dataCreated（与 Wiz 列表字段一致），缺省回退修改日 */
 function getCalendarNoteTimestamp (note, basis) {
   if (basis === 'created') {
-    const c = note.dataCreated
+    const c = note.dataCreated || note.data_created
     if (c != null && !Number.isNaN(Number(c))) return Number(c)
   }
-  return note.dataModified
+  return Number(note.dataModified || note.data_modified || note.local_modified || 0)
+}
+
+function formatYmd(ts) {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function mapLocalNoteToSummary (note, fallbackCategory = OFFLINE_ROOT_CATEGORY) {
+  return {
+    docGuid: note.doc_guid,
+    guid: note.doc_guid,
+    title: note.title,
+    abstractText: note.content ? note.content.substring(0, 200) : '',
+    category: note.category || fallbackCategory,
+    dataCreated: note.data_created || Date.now(),
+    dataModified: note.data_modified || note.local_modified || Date.now(),
+    _localId: note.id,
+    _dirty: note.dirty === 1,
+    _source: 'local'
+  }
+}
+
+function parseLocalTagId(tagGuid) {
+  if (!tagGuid || typeof tagGuid !== 'string') return null
+  if (!tagGuid.startsWith('local_tag_')) return null
+  const id = Number(tagGuid.replace('local_tag_', ''))
+  return Number.isFinite(id) ? id : null
 }
 
 /**
@@ -113,11 +147,32 @@ function findCategoryNode (node, key) {
   return null
 }
 
+function categoryExistsInTree (tree, category) {
+  if (!Array.isArray(tree) || !category) return false
+  return tree.some(node => !!findCategoryNode(node, category))
+}
+
+async function loadWorkspaceState () {
+  try {
+    return await DatabaseClient.getAppStates(Object.values(APP_STATE_KEYS))
+  } catch (error) {
+    console.warn('[workspaceState] Failed to load app state:', error)
+    return {}
+  }
+}
+
+async function saveWorkspaceStateValue (key, value) {
+  try {
+    await DatabaseClient.setAppState(key, value)
+  } catch (error) {
+    console.warn(`[workspaceState] Failed to save ${key}:`, error)
+  }
+}
+
 import { Dark, Dialog, Loading, Notify, QSpinnerGears } from 'quasar'
 import helper from 'src/utils/helper'
 import { i18n } from 'boot/i18n'
 import ClientFileStorage from 'src/utils/storage/ClientFileStorage'
-import ServerFileStorage from 'src/utils/storage/ServerFileStorage'
 import _ from 'lodash'
 import {
   exportFile,
@@ -241,7 +296,6 @@ export default {
   }) {
     const localStore = ClientFileStorage.getItemsFromStore(state)
     commit(types.INIT, localStore)
-    ServerFileStorage.removeItemFromLocalStorage('token')
     const [
       autoLogin,
       userId,
@@ -268,23 +322,34 @@ export default {
    * 统一加载本地数据（未登录时从 SQLite 加载，已登录时也通过 getCategoryNotes 加载）
    * 统一使用 currentNotes 和 categories，不再区分 online/offline 数据源
    */
-  async loadLocalData ({ commit, state }) {
+  async loadLocalData ({ commit, state, rootState }) {
     try {
       await DatabaseClient.ensureOfflineRoot()
-      // 从 SQLite 加载所有笔记（包含 category 字段），基于 category 构建目录树
+      const workspaceState = await loadWorkspaceState()
       const localNotes = await DatabaseClient.getNotes()
       const localCategories = await DatabaseClient.getCategories({})
       console.log('[loadLocalData] loaded notes:', localNotes.length)
       console.log('[loadLocalData] localCategories:', localCategories)
 
-      // 打印所有笔记的 category，方便排查
       const allCategories = [...new Set(localNotes.map(n => n.category).filter(c => c && c !== '/'))]
       console.log('[loadLocalData] unique categories from notes:', allCategories)
 
       const tree = buildCategoryTreeFromNotes(localNotes, localCategories)
       console.log('[loadLocalData] built tree:', JSON.stringify(tree, null, 2))
       commit(types.SET_CATEGORIES, tree)
-      commit(types.UPDATE_CURRENT_CATEGORY, OFFLINE_ROOT_CATEGORY)
+
+      const savedCurrentCategory = workspaceState[APP_STATE_KEYS.currentCategory] || state.currentCategory || OFFLINE_ROOT_CATEGORY
+      const restoredCategory = categoryExistsInTree(tree, savedCurrentCategory)
+        ? savedCurrentCategory
+        : OFFLINE_ROOT_CATEGORY
+      commit(types.UPDATE_CURRENT_CATEGORY, restoredCategory)
+
+      if (rootState?.client && workspaceState[APP_STATE_KEYS.sidebarTreeType]) {
+        commit('client/TOGGLE_CHANGED', {
+          key: 'sidebarTreeType',
+          value: workspaceState[APP_STATE_KEYS.sidebarTreeType]
+        }, { root: true })
+      }
 
       return localNotes || []
     } catch (err) {
@@ -388,7 +453,7 @@ export default {
     // 保存退出前的 kbGuid，清空前用它来清除笔记关联
     const oldKbGuid = state.kbGuid
     await api.AccountServerApi.Logout()
-    ServerFileStorage.removeItemFromLocalStorage('token')
+    SessionStorageService.clearSession()
     commit(types.LOGOUT)
     // 退出登录：清空笔记的 kb_guid + 设 dirty=1（保留笔记不断开关联，下次登录可继续同步）
     // 不刷新文件树（树应基于笔记的 category 字段构建）
@@ -436,10 +501,8 @@ export default {
     state,
     rootState
   }, payload = {}) {
-    const { kbGuid } = state
-    if (!kbGuid) return
+    const { kbGuid, isLogin } = state
     const basis = rootState.client.calendarDateBasis === 'created' ? 'created' : 'modified'
-    const orderBy = basis === 'created' ? 'created' : 'modified'
     let ymd = payload.date || rootState.client.calendarSelectedDate
     if (helper.isNullOrEmpty(ymd)) {
       const n = new Date()
@@ -449,6 +512,30 @@ export default {
     const dayStart = new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0).getTime()
     const dayEnd = new Date(parts[0], parts[1] - 1, parts[2] + 1, 0, 0, 0, 0).getTime()
     commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, true)
+
+    if (!isLogin || !kbGuid) {
+      try {
+        const localNotes = await DatabaseClient.getNotes()
+        const collected = (localNotes || [])
+          .filter(note => note.title && note.title !== 'Untitled')
+          .filter(note => {
+            const ts = getCalendarNoteTimestamp(note, basis)
+            return ts >= dayStart && ts < dayEnd
+          })
+          .map(note => mapLocalNoteToSummary(note, note.category || OFFLINE_ROOT_CATEGORY))
+          .sort((a, b) => (b.dataModified || 0) - (a.dataModified || 0))
+
+        commit(types.UPDATE_CURRENT_NOTES, collected)
+      } catch (err) {
+        console.error('[fetchNotesByCalendarDate] Offline calendar query failed:', err)
+        commit(types.UPDATE_CURRENT_NOTES, [])
+      } finally {
+        commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
+      }
+      return
+    }
+
+    const orderBy = basis === 'created' ? 'created' : 'modified'
     const collected = []
     let start = 0
     const pageSize = 100
@@ -490,13 +577,29 @@ export default {
    * @param {number} month 1-12
    */
   async fetchCalendarNoteDates ({ commit, state, rootState }, { year, month }) {
-    const { kbGuid } = state
-    if (!kbGuid) return
+    const { kbGuid, isLogin } = state
     const basis = rootState.client.calendarDateBasis === 'created' ? 'created' : 'modified'
-    const orderBy = basis === 'created' ? 'created' : 'modified'
     const monthStart = new Date(year, month - 1, 1, 0, 0, 0, 0).getTime()
     const monthEnd = new Date(year, month, 1, 0, 0, 0, 0).getTime()
     const dateSet = new Set()
+
+    if (!isLogin || !kbGuid) {
+      try {
+        const localNotes = await DatabaseClient.getNotes()
+        for (const note of (localNotes || [])) {
+          const ts = getCalendarNoteTimestamp(note, basis)
+          if (ts >= monthStart && ts < monthEnd) {
+            dateSet.add(formatYmd(ts))
+          }
+        }
+      } catch (err) {
+        console.error('[fetchCalendarNoteDates] Offline calendar dates query failed:', err)
+      }
+      commit(types.SET_CALENDAR_NOTE_DATES, Array.from(dateSet).sort())
+      return
+    }
+
+    const orderBy = basis === 'created' ? 'created' : 'modified'
     let start = 0
     const pageSize = 100
     const maxPages = 120
@@ -578,18 +681,7 @@ export default {
         // 转换为 UI 格式
         const formattedNotes = (localNotes || [])
           .filter(note => note.title && note.title !== 'Untitled')
-          .map(note => ({
-            docGuid: note.doc_guid,
-            guid: note.doc_guid,
-            title: note.title,
-            abstractText: note.content ? note.content.substring(0, 200) : '',
-            category: note.category || targetCategory,
-            dataCreated: note.data_created || Date.now(),
-            dataModified: note.data_modified || note.local_modified || Date.now(),
-            _localId: note.id,
-            _dirty: note.dirty === 1,
-            _source: 'local'
-          }))
+          .map(note => mapLocalNoteToSummary(note, targetCategory || OFFLINE_ROOT_CATEGORY))
           .sort((a, b) => (b.dataModified || 0) - (a.dataModified || 0))
         
         console.log(`[getCategoryNotes] ✅ Loaded ${formattedNotes.length} notes from SQLite (offline mode)`)
@@ -963,6 +1055,10 @@ export default {
     } = payload
     commit(types.UPDATE_CURRENT_CATEGORY, data)
     commit(types.SAVE_TO_LOCAL_STORE_SYNC, ['currentCategory', data])
+    await saveWorkspaceStateValue(APP_STATE_KEYS.currentCategory, data)
+    if (type) {
+      await saveWorkspaceStateValue(APP_STATE_KEYS.sidebarTreeType, type)
+    }
 
     // 统一模式：始终从 SQLite 加载本地笔记（通过 getCategoryNotes 处理格式化）
     if (!state.isLogin || !state.kbGuid) {
@@ -1927,12 +2023,42 @@ export default {
     state
   }, payload) {
     commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, true)
-    const { kbGuid } = state
+    const { kbGuid, isLogin } = state
     const {
       tag,
       start,
       count
     } = payload
+
+    if (!isLogin || !kbGuid) {
+      const localTagId = parseLocalTagId(tag)
+      if (!localTagId) {
+        commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
+        commit(types.UPDATE_CURRENT_NOTES, [])
+        return
+      }
+
+      try {
+        const taggedLocalNotes = await DatabaseClient.getNotes()
+        const localTagNotes = []
+
+        for (const note of (taggedLocalNotes || [])) {
+          const noteTags = (note.tags || '').split('*').filter(Boolean)
+          if (noteTags.includes(tag)) {
+            localTagNotes.push(mapLocalNoteToSummary(note, note.category || OFFLINE_ROOT_CATEGORY))
+          }
+        }
+
+        commit(types.UPDATE_CURRENT_NOTES, localTagNotes.sort((a, b) => (b.dataModified || 0) - (a.dataModified || 0)))
+      } catch (err) {
+        console.error('[getTagNotes] Offline local tag query failed:', err)
+        commit(types.UPDATE_CURRENT_NOTES, [])
+      } finally {
+        commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
+      }
+      return
+    }
+
     const result = await api.KnowledgeBaseApi.getTagNotes({
       kbGuid,
       data: {
@@ -1957,7 +2083,42 @@ export default {
     commit,
     state
   }) {
-    const { kbGuid } = state
+    const { kbGuid, isLogin, currentNote } = state
+    if (!isLogin || !kbGuid) {
+      try {
+        const tags = await DatabaseClient.getTags()
+        const countMap = {}
+        const allNotes = await DatabaseClient.getNotes()
+
+        for (const tag of tags) {
+          let count = 0
+          for (const note of (allNotes || [])) {
+            const noteTags = (note.tags || '').split('*').filter(Boolean)
+            if (noteTags.includes(tag.tagGuid)) {
+              count++
+            }
+          }
+          countMap[tag.tagGuid] = count
+        }
+
+        commit(types.UPDATE_ALL_TAGS, tags)
+        commit(types.UPDATE_TAG_NOTES_COUNT, countMap)
+
+        if (currentNote?.info?.docGuid && currentNote.info.docGuid.startsWith('local_')) {
+          const localNote = await DatabaseClient.getNoteByDocGuid(currentNote.info.docGuid)
+          if (localNote) {
+            const noteTags = await DatabaseClient.getNoteTags(localNote.id)
+            commit(types.UPDATE_CURRENT_NOTE_TAGS, noteTags.map(t => t.tagGuid).join('*'))
+          }
+        }
+      } catch (err) {
+        console.error('[getAllTags] Offline tags query failed:', err)
+        commit(types.UPDATE_ALL_TAGS, [])
+        commit(types.UPDATE_TAG_NOTES_COUNT, {})
+      }
+      return
+    }
+
     const tags = await api.KnowledgeBaseApi.getAllTags({ kbGuid })
 
     const countMap = {}
@@ -1985,8 +2146,13 @@ export default {
     parentTag = {},
     name
   }) {
-    const { kbGuid } = state
+    const { kbGuid, isLogin } = state
     const { tagGuid: parentTagGuid } = parentTag
+
+    if (!isLogin || !kbGuid) {
+      return await DatabaseClient.createTag({ name })
+    }
+
     return await api.KnowledgeBaseApi.createTag({
       kbGuid,
       data: {
@@ -2009,9 +2175,26 @@ export default {
     const {
       currentNote: { info }
     } = state
-    const newTagList = info.tags?.split('*') || []
-    newTagList.push(tagGuid)
+    const newTagList = info.tags?.split('*').filter(Boolean) || []
+    if (!newTagList.includes(tagGuid)) {
+      newTagList.push(tagGuid)
+    }
     commit(types.UPDATE_CURRENT_NOTE_TAGS, newTagList.join('*'))
+
+    if (!state.isLogin || !state.kbGuid || (info.docGuid && info.docGuid.startsWith('local_'))) {
+      const localTagId = parseLocalTagId(tagGuid)
+      const localNote = await DatabaseClient.getNoteByDocGuid(info.docGuid)
+      if (localNote && localTagId) {
+        await DatabaseClient.attachTagToNote(localNote.id, localTagId)
+        await DatabaseClient.updateNote(localNote.id, {
+          tags: newTagList.join('*'),
+          local_modified: Date.now()
+        })
+      }
+      this.dispatch('server/getAllTags')
+      return
+    }
+
     this.dispatch('server/updateNoteInfo', {
       ...state.currentNote.info,
       tags: newTagList.join('*')
@@ -2019,7 +2202,11 @@ export default {
     this.dispatch('server/getAllTags')
   },
   async renameTag ({ state }, tag) {
-    const { kbGuid } = state
+    const { kbGuid, isLogin } = state
+    if (!isLogin || !kbGuid) {
+      return
+    }
+
     const {
       tagGuid,
       name
@@ -2037,7 +2224,11 @@ export default {
     tag,
     parentTag = {}
   }) {
-    const { kbGuid } = state
+    const { kbGuid, isLogin } = state
+    if (!isLogin || !kbGuid) {
+      return
+    }
+
     const { tagGuid } = tag
     const { tagGuid: parentTagGuid } = parentTag
     await api.KnowledgeBaseApi.moveTag({
@@ -2061,8 +2252,23 @@ export default {
       currentNote: { info }
     } = state
     const newTagList =
-      info.tags?.split('*').filter(t => t !== tagGuid) || []
+      info.tags?.split('*').filter(t => t && t !== tagGuid) || []
     commit(types.UPDATE_CURRENT_NOTE_TAGS, newTagList.join('*'))
+
+    if (!state.isLogin || !state.kbGuid || (info.docGuid && info.docGuid.startsWith('local_'))) {
+      const localTagId = parseLocalTagId(tagGuid)
+      const localNote = await DatabaseClient.getNoteByDocGuid(info.docGuid)
+      if (localNote && localTagId) {
+        await DatabaseClient.removeTagFromNote(localNote.id, localTagId)
+        await DatabaseClient.updateNote(localNote.id, {
+          tags: newTagList.join('*'),
+          local_modified: Date.now()
+        })
+      }
+      this.dispatch('server/getAllTags')
+      return
+    }
+
     this.dispatch('server/updateNoteInfo', {
       ...state.currentNote.info,
       tags: newTagList.join('*')
@@ -2076,8 +2282,17 @@ export default {
    * @returns {Promise<void>}
    */
   async deleteTag ({ state }, tag) {
-    const { kbGuid } = state
+    const { kbGuid, isLogin } = state
     const { tagGuid } = tag
+
+    if (!isLogin || !kbGuid) {
+      const localTagId = parseLocalTagId(tagGuid)
+      if (!localTagId) return
+      await DatabaseClient.deleteTag(localTagId)
+      this.dispatch('server/getAllTags')
+      return
+    }
+
     await api.KnowledgeBaseApi.deleteTag({
       kbGuid,
       tagGuid

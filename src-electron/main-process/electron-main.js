@@ -301,6 +301,14 @@ function initSchema() {
   db.run(`CREATE INDEX IF NOT EXISTS idx_local_categories_kb ON local_categories(kb_guid)`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_local_categories_parent ON local_categories(parent)`)
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS app_state (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at INTEGER
+    )
+  `)
+
   // 同步日志表
   db.run(`
     CREATE TABLE IF NOT EXISTS sync_log (
@@ -801,9 +809,26 @@ function registerDatabaseHandlers() {
   })
 
   // 获取所有标签
-  ipcMain.handle('db:getTags', async () => {
+  ipcMain.handle('db:getTags', async (event, { noteId } = {}) => {
     try {
-      return execToObjects('SELECT * FROM tags ORDER BY name')
+      let query = `
+        SELECT
+          t.id,
+          t.name,
+          t.color,
+          t.created_at,
+          'local_tag_' || t.id AS tagGuid
+        FROM tags t
+      `
+      const params = []
+
+      if (noteId) {
+        query += ' INNER JOIN note_tags nt ON nt.tag_id = t.id WHERE nt.note_id = ?'
+        params.push(noteId)
+      }
+
+      query += ' ORDER BY t.name'
+      return execToObjects(query, params)
     } catch (error) {
       log.error('[DB] getTags error:', error)
       return []
@@ -814,13 +839,62 @@ function registerDatabaseHandlers() {
   ipcMain.handle('db:createTag', async (event, tag) => {
     try {
       const now = Date.now()
-      await db.run(`INSERT INTO tags (name, color, created_at) VALUES (?, ?, ?)`, [tag.name, tag.color || '#1890ff', now])
+      const name = (tag?.name || '').trim()
+      if (!name) return null
+
+      const existing = execOne('SELECT id, name, color, created_at FROM tags WHERE name = ?', [name])
+      if (existing) {
+        return { ...existing, tagGuid: `local_tag_${existing.id}` }
+      }
+
+      await db.run(`INSERT INTO tags (name, color, created_at) VALUES (?, ?, ?)`, [name, tag.color || '#1890ff', now])
       saveDatabase()
       const lastId = getLastInsertRowid()
-      return { id: lastId, name: tag.name, color: tag.color || '#1890ff', created_at: now }
+      return { id: lastId, name, color: tag.color || '#1890ff', created_at: now, tagGuid: `local_tag_${lastId}` }
     } catch (error) {
       log.error('[DB] createTag error:', error)
       return null
+    }
+  })
+
+  ipcMain.handle('db:getNoteTags', async (event, { noteId }) => {
+    try {
+      if (!noteId) return []
+      return execToObjects(
+        `SELECT t.id, t.name, t.color, t.created_at, 'local_tag_' || t.id AS tagGuid
+         FROM tags t
+         INNER JOIN note_tags nt ON nt.tag_id = t.id
+         WHERE nt.note_id = ?
+         ORDER BY t.name`,
+        [noteId]
+      )
+    } catch (error) {
+      log.error('[DB] getNoteTags error:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle('db:attachTagToNote', async (event, { noteId, tagId }) => {
+    try {
+      if (!noteId || !tagId) return false
+      await db.run('INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)', [noteId, tagId])
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] attachTagToNote error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('db:removeTagFromNote', async (event, { noteId, tagId }) => {
+    try {
+      if (!noteId || !tagId) return false
+      await db.run('DELETE FROM note_tags WHERE note_id = ? AND tag_id = ?', [noteId, tagId])
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] removeTagFromNote error:', error)
+      return false
     }
   })
 
@@ -954,6 +1028,72 @@ function registerDatabaseHandlers() {
     } catch (error) {
       log.error('[DB] ensureOfflineRoot error:', error)
       return null
+    }
+  })
+
+  ipcMain.handle('db:getAppState', async (event, key) => {
+    try {
+      if (!key) return null
+      const row = execOne('SELECT value FROM app_state WHERE key = ?', [key])
+      if (!row) return null
+      try {
+        return JSON.parse(row.value)
+      } catch (parseError) {
+        return row.value
+      }
+    } catch (error) {
+      log.error('[DB] getAppState error:', error)
+      return null
+    }
+  })
+
+  ipcMain.handle('db:setAppState', async (event, { key, value }) => {
+    try {
+      if (!key) return false
+      const now = Date.now()
+      const serialized = JSON.stringify(value)
+      await db.run(
+        `INSERT INTO app_state (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        [key, serialized, now]
+      )
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] setAppState error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('db:getAppStates', async (event, keys = []) => {
+    try {
+      if (!Array.isArray(keys) || keys.length === 0) return {}
+      const placeholders = keys.map(() => '?').join(', ')
+      const rows = execToObjects(`SELECT key, value FROM app_state WHERE key IN (${placeholders})`, keys)
+      const result = {}
+      for (const row of rows) {
+        try {
+          result[row.key] = JSON.parse(row.value)
+        } catch (parseError) {
+          result[row.key] = row.value
+        }
+      }
+      return result
+    } catch (error) {
+      log.error('[DB] getAppStates error:', error)
+      return {}
+    }
+  })
+
+  ipcMain.handle('db:removeAppState', async (event, key) => {
+    try {
+      if (!key) return false
+      await db.run('DELETE FROM app_state WHERE key = ?', [key])
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] removeAppState error:', error)
+      return false
     }
   })
 
