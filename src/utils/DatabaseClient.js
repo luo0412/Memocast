@@ -115,6 +115,10 @@ const DatabaseClient = {
     return await ipcRenderer.invoke('db:getNoteTags', { noteId })
   },
 
+  async getTagByName(name) {
+    return await ipcRenderer.invoke('db:getTagByName', { name })
+  },
+
   async attachTagToNote(noteId, tagId) {
     return await ipcRenderer.invoke('db:attachTagToNote', { noteId, tagId })
   },

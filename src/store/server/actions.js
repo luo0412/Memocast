@@ -25,6 +25,10 @@ function getCalendarNoteTimestamp (note, basis) {
   return Number(note.dataModified || note.data_modified || note.local_modified || 0)
 }
 
+function getNoteTagList(note) {
+  return (note?.tags || '').split('*').filter(Boolean)
+}
+
 function formatYmd(ts) {
   const d = new Date(ts)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -50,6 +54,67 @@ function parseLocalTagId(tagGuid) {
   if (!tagGuid.startsWith('local_tag_')) return null
   const id = Number(tagGuid.replace('local_tag_', ''))
   return Number.isFinite(id) ? id : null
+}
+
+function replaceTagGuidString(tagString = '', fromTagGuid, toTagGuid) {
+  const parts = tagString.split('*').filter(Boolean)
+  const mapped = parts.map(tag => (tag === fromTagGuid ? toTagGuid : tag))
+  return Array.from(new Set(mapped)).join('*')
+}
+
+async function migrateOfflineTagsToCloud(kbGuid) {
+  if (!kbGuid) return { created: 0, attached: 0, updatedNotes: 0 }
+
+  const localTags = await DatabaseClient.getTags()
+  if (!Array.isArray(localTags) || localTags.length === 0) {
+    return { created: 0, attached: 0, updatedNotes: 0 }
+  }
+
+  const cloudTags = await api.KnowledgeBaseApi.getAllTags({ kbGuid })
+  const cloudTagMap = new Map((cloudTags || []).map(tag => [tag.name, tag]))
+
+  let created = 0
+  let attached = 0
+  let updatedNotes = 0
+
+  const localNotes = await DatabaseClient.getNotes()
+  for (const localTag of localTags) {
+    let cloudTag = cloudTagMap.get(localTag.name)
+    if (!cloudTag) {
+      cloudTag = await api.KnowledgeBaseApi.createTag({
+        kbGuid,
+        data: {
+          name: localTag.name,
+          parentTagGuid: ''
+        }
+      })
+      if (cloudTag) {
+        created++
+        cloudTagMap.set(localTag.name, cloudTag)
+      }
+    }
+
+    const cloudTagGuid = cloudTag?.tagGuid || cloudTag?.guid
+    if (!cloudTagGuid) continue
+
+    for (const note of (localNotes || [])) {
+      const noteTags = getNoteTagList(note)
+      if (!noteTags.includes(localTag.tagGuid)) continue
+
+      const nextTags = replaceTagGuidString(note.tags || '', localTag.tagGuid, cloudTagGuid)
+      if (nextTags !== (note.tags || '')) {
+        await DatabaseClient.updateNote(note.id, {
+          tags: nextTags,
+          dirty: 1,
+          local_modified: Date.now()
+        })
+        attached++
+        updatedNotes++
+      }
+    }
+  }
+
+  return { created, attached, updatedNotes }
 }
 
 /**
@@ -421,6 +486,9 @@ export default {
         // 同步迁移离线文件夹（kb_guid='' → current kbGuid）
         await DatabaseClient.migrateOfflineCategories(newKbGuid)
         console.log(`[login] Migrated offline categories to kbGuid=${newKbGuid}`)
+
+        const migratedTags = await migrateOfflineTagsToCloud(newKbGuid)
+        console.log('[login] Migrated offline tags to cloud:', migratedTags)
       } catch (err) {
         console.warn('[login] Failed to migrate offline data:', err)
       }
@@ -455,12 +523,16 @@ export default {
     await api.AccountServerApi.Logout()
     SessionStorageService.clearSession()
     commit(types.LOGOUT)
-    // 退出登录：清空笔记的 kb_guid + 设 dirty=1（保留笔记不断开关联，下次登录可继续同步）
-    // 不刷新文件树（树应基于笔记的 category 字段构建）
+    // 退出登录：清空笔记/目录关联并设 dirty=1（保留本地数据，下次登录可继续同步）
     if (oldKbGuid) {
       await DatabaseClient.clearNotesByKbGuid(oldKbGuid)
+      await DatabaseClient.migrateOfflineCategories('')
     }
-    // 重新加载当前目录的笔记列表（此时 kb_guid 已清空，getCategoryNotes 会走离线路径）
+    await dispatch('loadLocalData')
+    await dispatch('getAllTags')
+    if (state.currentCategory && state.tags?.map(t => t.tagGuid).includes(state.currentCategory)) {
+      await dispatch('updateCurrentCategory', { data: OFFLINE_ROOT_CATEGORY, type: 'category' })
+    }
     await dispatch('getCategoryNotes', { category: '' })
   },
   /**
@@ -2043,7 +2115,7 @@ export default {
         const localTagNotes = []
 
         for (const note of (taggedLocalNotes || [])) {
-          const noteTags = (note.tags || '').split('*').filter(Boolean)
+          const noteTags = getNoteTagList(note)
           if (noteTags.includes(tag)) {
             localTagNotes.push(mapLocalNoteToSummary(note, note.category || OFFLINE_ROOT_CATEGORY))
           }
@@ -2092,12 +2164,12 @@ export default {
 
         for (const tag of tags) {
           let count = 0
-          for (const note of (allNotes || [])) {
-            const noteTags = (note.tags || '').split('*').filter(Boolean)
-            if (noteTags.includes(tag.tagGuid)) {
-              count++
-            }
+        for (const note of (allNotes || [])) {
+          const noteTags = getNoteTagList(note)
+          if (noteTags.includes(tag.tagGuid)) {
+            count++
           }
+        }
           countMap[tag.tagGuid] = count
         }
 

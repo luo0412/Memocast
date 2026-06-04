@@ -84,7 +84,8 @@ const api = {
       title: note.title || 'Untitled',
       owner: userId,
       html,
-      type: isLite ? 'lite/markdown' : 'document'
+      type: isLite ? 'lite/markdown' : 'document',
+      tags: note.tags || ''
     }
 
     const result = await WizNoteApi.KnowledgeBaseApi.createNote({
@@ -132,7 +133,8 @@ const api = {
       kbGuid: effectiveKbGuid,
       docGuid,
       resources: updates.resources || [],
-      type: 'document'
+      type: 'document',
+      tags: updates.tags || ''
     }
 
     // ✅ 保持原始 category 不做 normalize，确保上传路径与本地存储一致
@@ -435,7 +437,8 @@ class SyncService {
           await api.updateDoc(cloudDocGuid, {
             title: note.title,
             content: note.content,
-            category: note.category || OFFLINE_ROOT_CATEGORY  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY 而非 /
+            category: note.category || OFFLINE_ROOT_CATEGORY,  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY 而非 /
+            tags: note.tags || ''
           }, note.kb_guid || kbGuid)
         } else {
           // ❌ 无云端 GUID 或 local_ 开头 → 搜索或创建
@@ -462,7 +465,8 @@ class SyncService {
                 await api.updateDoc(cloudDocGuid, {
                   title: note.title,
                   content: note.content,
-                  category: note.category || OFFLINE_ROOT_CATEGORY  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY
+                  category: note.category || OFFLINE_ROOT_CATEGORY,  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY
+                  tags: note.tags || ''
                 }, kbGuid)
               }
             }
@@ -476,7 +480,8 @@ class SyncService {
             const result = await api.createDoc({
               title: note.title,
               content: note.content,
-              category: note.category || OFFLINE_ROOT_CATEGORY  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY
+              category: note.category || OFFLINE_ROOT_CATEGORY,  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY
+              tags: note.tags || ''
             }, note.kb_guid || kbGuid)  // ✅ 无 kb_guid 时用当前账号
 
             if (result?.guid) {

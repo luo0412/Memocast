@@ -874,6 +874,17 @@ function registerDatabaseHandlers() {
     }
   })
 
+  ipcMain.handle('db:getTagByName', async (event, { name }) => {
+    try {
+      if (!name) return null
+      const row = execOne('SELECT id, name, color, created_at FROM tags WHERE name = ?', [name])
+      return row ? { ...row, tagGuid: `local_tag_${row.id}` } : null
+    } catch (error) {
+      log.error('[DB] getTagByName error:', error)
+      return null
+    }
+  })
+
   ipcMain.handle('db:attachTagToNote', async (event, { noteId, tagId }) => {
     try {
       if (!noteId || !tagId) return false
