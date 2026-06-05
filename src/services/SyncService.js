@@ -166,6 +166,7 @@ class SyncService {
     this.isSyncing = false
     this.syncQueue = []
     this.listeners = []
+    this._cloudCategoryNotesCache = new Map()
   }
 
   addListener(callback) {
@@ -182,6 +183,50 @@ class SyncService {
         console.error('[SyncService] Listener error:', e)
       }
     })
+  }
+
+  async getCloudNotesByCategory(kbGuid, category = '') {
+    const cacheKey = `${kbGuid}::${category || ''}`
+    if (this._cloudCategoryNotesCache.has(cacheKey)) {
+      return this._cloudCategoryNotesCache.get(cacheKey)
+    }
+
+    const notes = []
+    let start = 0
+    const count = 100
+
+    for (;;) {
+      const result = await WizNoteApi.KnowledgeBaseApi.getCategoryNotes({
+        kbGuid,
+        data: {
+          category,
+          start,
+          count,
+          withAbstract: true
+        }
+      })
+
+      const items = Array.isArray(result) ? result : (result?.result || [])
+      if (!items.length) break
+
+      notes.push(...items)
+      if (items.length < count) break
+      start += count
+    }
+
+    this._cloudCategoryNotesCache.set(cacheKey, notes)
+    return notes
+  }
+
+  async findCloudNoteInCategory({ kbGuid, title, category }) {
+    const targetTitle = title || 'Untitled'
+    const targetCategory = normalizeCategoryForMatch(category || '')
+    const notes = await this.getCloudNotesByCategory(kbGuid, category || '')
+
+    return notes.find(doc => {
+      const docCategory = normalizeCategoryForMatch(doc.category || '')
+      return doc.title === targetTitle && docCategory === targetCategory
+    }) || null
   }
 
   /**
@@ -205,13 +250,15 @@ class SyncService {
     this.notifyListeners({ type: 'sync_start' })
 
     try {
-      const stats = { pulled: 0, pushed: 0, errors: 0, skipped: 0 }
+      const stats = { pulled: 0, pushed: 0, errors: 0, skipped: 0, backfilled: 0 }
+      this._cloudCategoryNotesCache.clear()
 
       // Step 1: 从云端拉取本地不存在的笔记（不覆盖已有内容）
       console.info('[SyncService] Starting pull from cloud (new files only)...')
       const pullResult = await this.pullFromCloud()
       stats.pulled = pullResult.count
-      stats.skipped = pullResult.skipped || 0  // ✅ 添加跳过计数
+      stats.skipped = pullResult.skipped || 0
+      stats.backfilled = pullResult.backfilled || 0
 
       // Step 2: 推送本地变更到云端
       console.info('[SyncService] Starting push to cloud...')
@@ -219,7 +266,7 @@ class SyncService {
       stats.pushed = pushResult.count
       stats.errors += pushResult.errors
 
-      console.info(`[SyncService] ✅ Sync completed: ↓${stats.pulled} pulled, ↑${stats.pushed} pushed, ⏭️${stats.skipped} skipped (local exists), ${stats.errors} errors`)
+      console.info(`[SyncService] ✅ Sync completed: ↓${stats.pulled} pulled, ↑${stats.pushed} pushed, ⏭️${stats.skipped} skipped, ♻️${stats.backfilled} backfilled, ${stats.errors} errors`)
       this.notifyListeners({ type: 'sync_complete', stats })
       return { success: true, stats }
     } catch (error) {
@@ -242,10 +289,9 @@ class SyncService {
       const kbGuid = getKbGuid()
       if (!kbGuid || kbGuid === 'null') {
         console.warn('[SyncService] pullFromCloud skipped: no kbGuid')
-        return { count: 0, skipped: 0 }
+        return { count: 0, skipped: 0, backfilled: 0 }
       }
 
-      // 获取云端所有笔记列表（不下载内容，只获取元数据）
       console.log('[SyncService] Fetching cloud note list...')
       const docs = []
       let start = 0
@@ -270,17 +316,19 @@ class SyncService {
 
       let pulledCount = 0
       let skippedCount = 0
+      let backfilledCount = 0
 
-      // ✅ 预加载所有本地笔记的 (title, category, kbGuid) 用于快速去重检查
-      const localNotes = await DatabaseClient.notes.getAllBasic() || []
-
-      // 构建 Set 用于 O(1) 查找：key = "title|category(kbGuid normalized)|kbGuid"
-      // category 需要与 pullFromCloud 中的 normalizeCategoryForMatch 保持一致
+      const localNotes = await DatabaseClient.notes.getAll() || []
       const localNoteSet = new Set(
         localNotes.map(note => {
           const localCat = normalizeCategoryForMatch(note.category || '')
           return `${note.title || ''}|${localCat}|${note.kb_guid || ''}`.toLowerCase()
         })
+      )
+      const localNotesByDocGuid = new Map(
+        localNotes
+          .filter(note => note.doc_guid)
+          .map(note => [note.doc_guid, note])
       )
 
       console.log(`[SyncService] Loaded ${localNoteSet.size} local notes for dedup check`)
@@ -289,76 +337,142 @@ class SyncService {
         const docGuid = doc.docGuid || doc.guid
         if (!docGuid) continue
 
-        // ✅ 核心去重逻辑：使用 normalizeCategoryForMatch 确保与本地 Set 对称
-        const cloudCategory = normalizeCategoryForMatch(doc.category || '')
+        const existingLocalNote = localNotesByDocGuid.get(docGuid)
+        if (existingLocalNote && !existingLocalNote.doc_guid?.startsWith('local_')) {
+          const existingContent = typeof existingLocalNote.content === 'string' ? existingLocalNote.content.trim() : ''
+          if (!existingContent) {
+            try {
+              const updated = await this._downloadAndUpdateEmptyNote(existingLocalNote, doc, kbGuid, docGuid)
+              if (updated) {
+                backfilledCount++
+                localNotesByDocGuid.set(docGuid, updated)
+              }
+            } catch (e) {
+              console.warn(`[SyncService] Failed to backfill empty note ${docGuid}:`, e.message)
+            }
+          }
+          skippedCount++
+          continue
+        }
 
+        const cloudCategory = normalizeCategoryForMatch(doc.category || '')
         const dedupeKey = `${doc.title || 'Untitled'}|${cloudCategory}|${kbGuid}`.toLowerCase()
 
         if (localNoteSet.has(dedupeKey)) {
-          // ✅ 本地已存在相同 (title, category, kbGuid) 的笔记 → 直接跳过！
           skippedCount++
-          console.log(`[SyncService] ⏭️ SKIPPED: "${doc.title}" already exists locally (title+category+kbGuid match)`)
-          continue  // 跳过这条笔记，不下载不覆盖
+          console.log(`[SyncService] ⏭️ SKIPPED: "${doc.title}" already exists locally (same title + category)`)
+          continue
         }
 
-        // 本地不存在 → 下载并创建
         try {
           const result = await this._downloadAndCreateNote(doc, kbGuid, docGuid)
 
           if (result) {
             pulledCount++
             console.log(`[SyncService] ↓ Pulled NEW note: "${doc.title}" (${docGuid}) id=${result.id}`)
-
-            // ✅ 将新下载的笔记添加到本地集合中（避免重复下载）
             localNoteSet.add(dedupeKey)
+            localNotesByDocGuid.set(docGuid, result)
           }
         } catch (e) {
           console.warn(`[SyncService] Failed to download note ${docGuid}:`, e.message)
         }
       }
 
-      console.log(`[SyncService] ✅ pullFromCloud completed: ${pulledCount} pulled, ${skippedCount} skipped (already exist locally)`)
-      return { count: pulledCount, skipped: skippedCount }
+      console.log(`[SyncService] ✅ pullFromCloud completed: ${pulledCount} pulled, ${skippedCount} skipped (already exist locally), ${backfilledCount} backfilled`)
+      return { count: pulledCount, skipped: skippedCount, backfilled: backfilledCount }
     } catch (error) {
       console.error('[SyncService] pullFromCloud failed:', error)
-      return { count: 0, skipped: 0 }
+      return { count: 0, skipped: 0, backfilled: 0 }
     }
+  }
+
+  async downloadCloudNoteMarkdown(kbGuid, docGuid) {
+    const content = await WizNoteApi.KnowledgeBaseApi.getNoteContent({
+      kbGuid,
+      docGuid,
+      data: {
+        downloadInfo: 1,
+        downloadData: 1
+      }
+    })
+
+    const info = content?.info || null
+    const rawHtml = typeof content?.html === 'string' ? content.html : ''
+    const infoHtml = typeof info?.html === 'string' ? info.html : ''
+    const resources = content?.resources || info?.resources || []
+
+    let markdownContent = ''
+    let html = rawHtml || infoHtml
+
+    if (rawHtml) {
+      markdownContent = helper.convertHtml2Markdown(rawHtml, kbGuid, docGuid, resources)
+    } else if (infoHtml) {
+      markdownContent = helper.extractMarkdownFromMDNote(infoHtml, kbGuid, docGuid, resources)
+    }
+
+    return {
+      markdownContent,
+      content,
+      info,
+      resources,
+      html
+    }
+  }
+
+  async _downloadAndUpdateEmptyNote(localNote, doc, kbGuid, docGuid) {
+    const { markdownContent, content, html } = await this.downloadCloudNoteMarkdown(kbGuid, docGuid)
+
+    if (!markdownContent) {
+      console.warn('[SyncService] Skip backfill because downloaded content is still empty:', {
+        title: doc.title,
+        docGuid,
+        localNoteId: localNote?.id,
+        htmlLength: html.length,
+        hasInfo: !!content?.info,
+        hasResources: Array.isArray(content?.resources) ? content.resources.length : 0
+      })
+      return null
+    }
+
+    const serverModified = doc.dataModified || doc.data_modified || Date.now()
+    const updated = await DatabaseClient.notes.update(localNote.id, {
+      title: doc.title || localNote.title,
+      content: markdownContent,
+      category: doc.category || localNote.category,
+      tags: doc.tags || localNote.tags || '',
+      kb_guid: kbGuid,
+      server_modified: serverModified
+    }, { isSystemUpdate: true })
+
+    if (updated) {
+      console.log(`[SyncService] ♻️ Backfilled empty local note: "${doc.title}" (${docGuid}) id=${updated.id}, md_len=${markdownContent.length}`)
+    }
+
+    return updated
   }
 
   /**
    * 从云端下载并创建新笔记到本地
    */
   async _downloadAndCreateNote(doc, kbGuid, docGuid) {
-    const content = await WizNoteApi.KnowledgeBaseApi.getNoteContent({
-      kbGuid,
-      docGuid
-    })
-
-    const markdownContent = content && content.html
-      ? helper.extractMarkdownFromMDNote(content.html, kbGuid, docGuid, content.resources || [])
-      : ''
-
+    const { markdownContent, content, html } = await this.downloadCloudNoteMarkdown(kbGuid, docGuid)
     const serverModified = doc.dataModified || doc.data_modified || Date.now()
 
-    // ✅ 修复 category 处理：使用真实根目录 OFFLINE_ROOT_CATEGORY，而不是 "/"
     let cloudCategory = doc.category
 
-    // 校验并规范化 category
     if (!cloudCategory || cloudCategory === '/' || cloudCategory.trim() === '' || cloudCategory === '/My Notes' || cloudCategory === '/My Notes/') {
       console.warn(`[SyncService] ⚠️ Note "${doc.title}" has empty/root category (raw: "${cloudCategory}"), using "${OFFLINE_ROOT_CATEGORY}" as default`)
       cloudCategory = OFFLINE_ROOT_CATEGORY
     } else {
-      // 确保 category 以 / 开头
       if (!cloudCategory.startsWith('/')) {
         cloudCategory = '/' + cloudCategory
       }
-      // 确保以 / 结尾（符合 WizNote 规范）
       if (!cloudCategory.endsWith('/')) {
         cloudCategory = cloudCategory + '/'
       }
     }
 
-    console.log(`[SyncService] ↓ Downloading: "${doc.title}" → category="${cloudCategory}" (original: "${doc.category}")`)
+    console.log(`[SyncService] ↓ Downloading: "${doc.title}" → category="${cloudCategory}" (original: "${doc.category}"), html_len=${html.length}, md_len=${markdownContent.length}`)
 
     const note = await DatabaseClient.notes.create({
       doc_guid: docGuid,
@@ -373,13 +487,23 @@ class SyncService {
       local_modified: serverModified
     })
 
-    // 创建 GUID 映射
     if (note && note.id && docGuid) {
       try {
         await DatabaseClient.sync.createGuidMapping(note.id, docGuid, 'wiznote')
       } catch (e) {
         console.warn('[SyncService] GUID mapping failed (non-critical):', e.message)
       }
+    }
+
+    if (!markdownContent) {
+      console.warn('[SyncService] Downloaded note has empty markdown content:', {
+        title: doc.title,
+        docGuid,
+        category: cloudCategory,
+        htmlLength: html.length,
+        hasInfo: !!content?.info,
+        hasResources: Array.isArray(content?.resources) ? content.resources.length : 0
+      })
     }
 
     return note
@@ -415,6 +539,11 @@ class SyncService {
     for (const note of pendingNotes) {
       console.log(`[SyncService] Processing: id=${note.id}, title=${note.title}, doc_guid=${note.doc_guid || 'none'}`)
 
+      let syncMode = 'unknown'
+      let syncStage = 'prepare'
+      let cloudDocGuid = null
+      let matchedDoc = null
+
       try {
         // 1. 从 SQLite 获取最新内容（确保使用用户最后编辑的版本）
         const latestNote = await DatabaseClient.notes.getById(note.id)
@@ -431,6 +560,8 @@ class SyncService {
 
         if (hasCloudGuid) {
           // ✅ 已有云端 GUID → 直接更新覆盖
+          syncMode = 'update-by-guid'
+          syncStage = 'update-cloud'
           cloudDocGuid = note.doc_guid
           console.log(`[SyncService] Updating cloud note: ${cloudDocGuid}`)
 
@@ -441,52 +572,63 @@ class SyncService {
             tags: note.tags || ''
           }, note.kb_guid || kbGuid)
         } else {
-          // ❌ 无云端 GUID 或 local_ 开头 → 搜索或创建
-          console.log(`[SyncService] New/offline note, searching cloud...`)
+          // ❌ 无云端 GUID 或 local_ 开头 → 按“同文件夹下是否存在同名文件”决定更新或创建
+          console.log(`[SyncService] New/offline note, checking cloud category existence...`)
 
           try {
-            const searchResult = await WizNoteApi.KnowledgeBaseApi.searchNote({
-              kbGuid: getKbGuid(),
-              data: { ss: note.title }
+            syncStage = 'find-same-category-note'
+            matchedDoc = await this.findCloudNoteInCategory({
+              kbGuid,
+              title: note.title,
+              category: note.category || OFFLINE_ROOT_CATEGORY
             })
 
-            if (Array.isArray(searchResult) && searchResult.length > 0) {
-              const exactMatch = searchResult.filter(doc => {
-                // ✅ 规范化到 OFFLINE_ROOT_CATEGORY，确保 /My Notes/ 和 / 统一为 OFFLINE_ROOT_CATEGORY
-                const docCat = normalizeCategoryForMatch(doc.category || '')
-                const noteCat = normalizeCategoryForMatch(note.category || '')
-                return doc.title === note.title && docCat === noteCat
-              })
+            if (matchedDoc) {
+              syncMode = 'update-by-category-title'
+              syncStage = 'update-cloud'
+              cloudDocGuid = matchedDoc.guid || matchedDoc.docGuid
+              console.log(`[SyncService] Found same-category match, updating: ${cloudDocGuid}`)
 
-              if (exactMatch.length === 1) {
-                cloudDocGuid = exactMatch[0].guid || exactMatch[0].docGuid
-                console.log(`[SyncService] Found match, updating: ${cloudDocGuid}`)
-
-                await api.updateDoc(cloudDocGuid, {
-                  title: note.title,
-                  content: note.content,
-                  category: note.category || OFFLINE_ROOT_CATEGORY,  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY
-                  tags: note.tags || ''
-                }, kbGuid)
-              }
+              await api.updateDoc(cloudDocGuid, {
+                title: note.title,
+                content: note.content,
+                category: note.category || OFFLINE_ROOT_CATEGORY,
+                tags: note.tags || ''
+              }, kbGuid)
             }
           } catch (searchError) {
-            console.warn('[SyncService] Search failed, will create new:', searchError.message)
+            console.warn('[SyncService] Category existence check failed, will create new:', {
+              message: searchError.message,
+              title: note.title,
+              category: note.category || OFFLINE_ROOT_CATEGORY,
+              kbGuid
+            })
           }
 
           if (!cloudDocGuid) {
-            // 没有找到匹配 → 创建新笔记
+            syncMode = 'create-new'
+            syncStage = 'create-cloud'
             console.log(`[SyncService] Creating new cloud note: ${note.title}`)
             const result = await api.createDoc({
               title: note.title,
               content: note.content,
-              category: note.category || OFFLINE_ROOT_CATEGORY,  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY
+              category: note.category || OFFLINE_ROOT_CATEGORY,
               tags: note.tags || ''
-            }, note.kb_guid || kbGuid)  // ✅ 无 kb_guid 时用当前账号
+            }, note.kb_guid || kbGuid)
 
             if (result?.guid) {
               cloudDocGuid = result.guid
               console.log(`[SyncService] ✅ Created: ${cloudDocGuid}`)
+              const cacheKey = `${kbGuid}::${note.category || OFFLINE_ROOT_CATEGORY}`
+              const cachedNotes = this._cloudCategoryNotesCache.get(cacheKey)
+              if (cachedNotes) {
+                cachedNotes.push({
+                  guid: cloudDocGuid,
+                  docGuid: cloudDocGuid,
+                  title: note.title,
+                  category: note.category || OFFLINE_ROOT_CATEGORY
+                })
+              }
             } else {
               throw new Error('createDoc returned no guid')
             }
@@ -494,6 +636,7 @@ class SyncService {
         }
 
         // 3. 同步成功 → 更新本地记录（dirty=0）
+        syncStage = 'persist-local-sync-state'
         await DatabaseClient.notes.update(note.id, {
           doc_guid: cloudDocGuid,
           kb_guid: note.kb_guid || kbGuid,
@@ -513,7 +656,19 @@ class SyncService {
         console.log(`[SyncService] ✅ Synced: ${note.title} (id=${note.id})`)
 
       } catch (error) {
-        console.error(`[SyncService] ❌ Failed: ${note.title} (id=${note.id}):`, error)
+        console.error(`[SyncService] ❌ Failed: ${note.title} (id=${note.id})`, {
+          mode: syncMode,
+          stage: syncStage,
+          localDocGuid: note.doc_guid || null,
+          cloudDocGuid,
+          matchedDocGuid: matchedDoc ? (matchedDoc.guid || matchedDoc.docGuid || null) : null,
+          category: note.category || OFFLINE_ROOT_CATEGORY,
+          kbGuid: note.kb_guid || kbGuid,
+          message: error?.message,
+          responseStatus: error?.response?.status,
+          responseData: error?.response?.data,
+          stack: error?.stack
+        })
         errors++
       }
     }

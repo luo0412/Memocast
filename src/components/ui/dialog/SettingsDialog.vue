@@ -312,13 +312,12 @@
                   <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
                     <span>{{ $t('resetSqlite') }}</span>
                     <q-btn
-                      class='fab-btn'
+                      class='fab-btn reset-sqlite-btn'
                       flat
-                      round
-                      dense
-                      size='sm'
+                      no-caps
                       color='negative'
                       icon='delete_forever'
+                      :label="$t('resetSqlite')"
                       @click='resetSqliteHandler'
                     />
                   </div>

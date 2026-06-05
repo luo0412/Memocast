@@ -785,21 +785,37 @@ function registerDatabaseHandlers() {
     }
   })
 
-  // 获取同步状态统计（纯 dirty 架构）
+  // 获取同步状态统计（仅统计当前账号 dirty 笔记，避免与右上角待同步数量不一致）
   ipcMain.handle('db:getStats', async () => {
     try {
+      const currentKbGuid = ClientStorage.get('kbGuid')
       const total = execOne('SELECT COUNT(*) as count FROM notes')
-      const pending = execOne('SELECT COUNT(*) as count FROM notes WHERE dirty = 1')
+      let pending
+
+      if (currentKbGuid) {
+        pending = execOne(
+          `SELECT COUNT(*) as count
+           FROM notes
+           WHERE dirty = 1 AND kb_guid = ?`,
+          [currentKbGuid]
+        )
+      } else {
+        pending = execOne(
+          `SELECT COUNT(*) as count
+           FROM notes
+           WHERE dirty = 1 AND (kb_guid IS NULL OR kb_guid = '')`
+        )
+      }
       
       const stats = {
         total: total?.count || 0,
-        synced: (total?.count || 0) - (pending?.count || 0),
+        synced: Math.max((total?.count || 0) - (pending?.count || 0), 0),
         pending: pending?.count || 0,
         syncing: 0,
         conflict: 0
       }
       
-      console.log(`[DB] 📊 Stats: total=${stats.total}, pending=${stats.pending} (dirty=1)`)
+      console.log(`[DB] 📊 Stats: total=${stats.total}, pending=${stats.pending}, kbGuid=${currentKbGuid || 'offline'}`)
       
       return stats
     } catch (error) {

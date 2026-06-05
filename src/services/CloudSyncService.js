@@ -113,7 +113,7 @@ class CloudSyncService {
       this._status.lastSyncTime = Date.now()
       await this._refreshStats()
       this._notify({ type: 'sync_complete', result })
-      return { success: true, pulled: result.count, skipped: result.skipped }
+      return { success: true, pulled: result.count, skipped: result.skipped, backfilled: result.backfilled || 0 }
     } catch (error) {
       this._status.error = error.message
       this._notify({ type: 'sync_error', error: error.message })
