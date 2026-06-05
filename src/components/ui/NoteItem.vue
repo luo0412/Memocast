@@ -273,12 +273,12 @@ export default {
         
         const { markdown, docGuid, title, resources } = capturedData
         
-        const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+        const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
         console.log(`[NoteItem] 💾 Saving captured data: docGuid=${docGuid}, len=${markdown?.length}, title=${title}`)
         
         if (localNote) {
           console.log(`[NoteItem] 📝 Updating existing note: id=${localNote.id}, current_content_len=${(localNote.content || '').length}`)
-          await DatabaseClient.updateNote(localNote.id, {
+          await DatabaseClient.notes.update(localNote.id, {
             content: markdown,
             title: title || localNote.title,
             local_modified: Date.now()
@@ -286,7 +286,7 @@ export default {
           console.log(`[NoteItem] ✅ Updated SQLite: id=${localNote.id}, dirty=1 (pending manual sync)`)
         } else {
           console.log(`[NoteItem] 🆕 Creating new note: docGuid=${docGuid}`)
-          await DatabaseClient.createNote({
+          await DatabaseClient.notes.create({
             doc_guid: docGuid,
             title: title || 'Untitled',
             content: markdown,
@@ -298,7 +298,7 @@ export default {
         }
         
         // ✅ 验证：保存后立即读取确认
-        const verifyNote = await DatabaseClient.getNoteByDocGuidWithPriority(docGuid)
+        const verifyNote = await DatabaseClient.notes.getByDocGuidWithPriority(docGuid)
         if (verifyNote) {
           console.log(`[NoteItem] ✅ Verified saved content: id=${verifyNote.id}, content_len=${(verifyNote.content || '').length}, dirty=${verifyNote.dirty}, local_mod=${verifyNote.local_modified}`)
         } else {
@@ -367,17 +367,17 @@ export default {
           return false
         }
 
-        const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+        const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
         console.log('[NoteItem] SQLite lookup result:', localNote ? `id=${localNote.id}` : 'null')
         if (localNote) {
-          await DatabaseClient.updateNote(localNote.id, {
+          await DatabaseClient.notes.update(localNote.id, {
             content: markdown,
             title: info.title,
             category: info.category || '/'
           })
           console.log('[NoteItem] SQLite updated:', docGuid, 'content length:', markdown.length, '(dirty=1 auto-set)')
         } else {
-          await DatabaseClient.createNote({
+          await DatabaseClient.notes.create({
             doc_guid: docGuid,
             title: info.title,
             content: markdown,

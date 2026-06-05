@@ -303,7 +303,7 @@ export default {
     async persistExpandedKeys () {
       if (this.type !== 'category') return
       const uniqueKeys = Array.from(new Set((this.expandedKeys || []).filter(Boolean)))
-      await DatabaseClient.setAppState(WORKSPACE_STATE_KEYS.expandedKeys, uniqueKeys)
+      await DatabaseClient.appState.set(WORKSPACE_STATE_KEYS.expandedKeys, uniqueKeys)
     },
     async handleNodeExpand (data) {
       if (!data?.key || this.type !== 'category') return
@@ -346,7 +346,7 @@ export default {
   mounted () {
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.openTierRanking, this.openTierRankingHandler)
     bus.$on(events.TAG_TREEMAP_RESIZE, this.resizeTagTreemap)
-    DatabaseClient.getAppState(WORKSPACE_STATE_KEYS.expandedKeys)
+    DatabaseClient.appState.get(WORKSPACE_STATE_KEYS.expandedKeys)
       .then((keys) => {
         this.expandedKeys = Array.isArray(keys) && keys.length > 0 ? keys : ['/My Notes/']
       })

@@ -92,7 +92,7 @@ export default {
   },
   async loadRunes ({ commit }) {
     try {
-      const runes = await DatabaseClient.getRunes()
+      const runes = await DatabaseClient.runes.getAll()
       if (runes && runes.length > 0) {
         commit(types.TOGGLE_CHANGED, { key: 'runeCards', value: runes })
       }
@@ -101,13 +101,13 @@ export default {
     }
   },
   async saveRune (_, rune) {
-    return await DatabaseClient.saveRune(rune)
+    return await DatabaseClient.runes.save(rune)
   },
   async deleteRune (_, id) {
-    return await DatabaseClient.deleteRune(id)
+    return await DatabaseClient.runes.remove(id)
   },
   async saveRunes (_, runes) {
-    return await DatabaseClient.saveRunes(runes)
+    return await DatabaseClient.runes.saveMany(runes)
   },
   /**
    * 执行同步（调用 SyncService）
@@ -120,7 +120,7 @@ export default {
     try {
       const result = await SyncService.sync()
 
-      const stats = await DatabaseClient.getStats()
+      const stats = await DatabaseClient.sync.getStats()
       commit(types.UPDATE_SYNC_STATUS, {
         isSyncing: false,
         lastSyncTime: Date.now(),
@@ -135,7 +135,7 @@ export default {
     }
   },
   async refreshSyncStatus ({ commit }) {
-    const stats = await DatabaseClient.getStats()
+    const stats = await DatabaseClient.sync.getStats()
     commit(types.UPDATE_SYNC_STATUS, { ...stats })
   }
 }

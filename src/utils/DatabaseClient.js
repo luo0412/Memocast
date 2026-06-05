@@ -2,8 +2,8 @@
  * DatabaseClient - 渲染进程数据库客户端
  * 通过 IPC 与主进程通信，实现数据库操作。
  *
- * 保持原有扁平 API 不变，同时按领域暴露分组接口，
- * 便于新代码按 notes/tags/categories/sync/appState/runes 组织调用。
+ * 按领域暴露分组接口，便于业务代码按 notes/tags/categories/
+ * sync/appState/runes 组织调用。
  */
 
 import { ipcRenderer } from 'electron'
@@ -274,51 +274,7 @@ const DatabaseClient = {
   sync,
   categories,
   appState,
-  runes,
-
-  getNotes: notes.getAll,
-  getNote: notes.getById,
-  getNoteByDocGuid: notes.getByDocGuid,
-  getNoteByDocGuidWithPriority: notes.getByDocGuidWithPriority,
-  getAllNotesBasic: notes.getAllBasic,
-  createNote: notes.create,
-  updateNote: notes.update,
-  deleteNote: notes.remove,
-  getConflictNotes: notes.getConflicts,
-  deleteNotesByKbGuid: notes.deleteByKbGuid,
-  clearNotesByKbGuid: notes.clearByKbGuid,
-  clearOtherAccountNotes: notes.clearOtherAccounts,
-  getPendingSyncNotesByKbGuid: notes.getPendingByKbGuid,
-  migrateOfflineNotes: notes.migrateOffline,
-
-  getTags: tags.getAll,
-  createTag: tags.create,
-  getTagByName: tags.getByName,
-  getNoteTags: tags.getNoteTags,
-  attachTagToNote: tags.attachToNote,
-  removeTagFromNote: tags.removeFromNote,
-  deleteTag: tags.remove,
-
-  getStats: sync.getStats,
-  createGuidMapping: sync.createGuidMapping,
-  resetDatabase: sync.resetDatabase,
-
-  getCategories: categories.getAll,
-  createCategory: categories.create,
-  deleteCategory: categories.remove,
-  ensureOfflineRoot: categories.ensureOfflineRoot,
-  syncCategoryToCloud: categories.syncToCloud,
-  migrateOfflineCategories: categories.migrateOffline,
-
-  getAppState: appState.get,
-  getAppStates: appState.getMany,
-  setAppState: appState.set,
-  removeAppState: appState.remove,
-
-  getRunes: runes.getAll,
-  saveRune: runes.save,
-  saveRunes: runes.saveMany,
-  deleteRune: runes.remove
+  runes
 }
 
 export default DatabaseClient

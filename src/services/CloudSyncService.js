@@ -51,7 +51,7 @@ class CloudSyncService {
 
   async _refreshStats() {
     try {
-      const stats = await DatabaseClient.getStats()
+      const stats = await DatabaseClient.sync.getStats()
       this._status.total = stats.total || 0
       this._status.synced = stats.synced || 0
       this._status.pending = stats.pending || 0

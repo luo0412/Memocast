@@ -459,7 +459,7 @@ export default {
 
       try {
         const result = await this.sync()
-        const stats = await DatabaseClient.getStats()
+        const stats = await DatabaseClient.sync.getStats()
         this.$store.commit(`client/${types.UPDATE_SYNC_STATUS}`, {
           isSyncing: false,
           lastSyncTime: Date.now(),
@@ -491,7 +491,7 @@ export default {
       } catch (error) {
         console.error('Sync failed:', error)
         try {
-          const stats = await DatabaseClient.getStats()
+          const stats = await DatabaseClient.sync.getStats()
           this.$store.commit(`client/${types.UPDATE_SYNC_STATUS}`, {
             isSyncing: false,
             ...stats

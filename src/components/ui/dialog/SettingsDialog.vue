@@ -637,7 +637,7 @@ export default {
         cancel: { label: this.$t('cancel') },
         ok: { label: this.$t('confirm'), color: 'negative' }
       }).onOk(async () => {
-        const success = await DatabaseClient.resetDatabase()
+        const success = await DatabaseClient.sync.resetDatabase()
         if (success) {
           // 重置同步状态
           this.$store.commit('client/UPDATE_SYNC_STATUS', {
@@ -743,7 +743,7 @@ export default {
 
     async refreshCloudSyncStatus () {
       this.refreshCloudSyncLoginState()
-      const stats = await DatabaseClient.getStats()
+      const stats = await DatabaseClient.sync.getStats()
       this.syncStats = {
         total: stats.total || 0,
         synced: stats.synced || 0,
