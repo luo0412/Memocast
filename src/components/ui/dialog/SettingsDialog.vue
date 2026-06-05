@@ -31,12 +31,6 @@
                 class='text-red-7'
               />
               <q-tab
-                name='cloud'
-                icon='cloud_sync'
-                :label="$t('cloudSync')"
-                class='text-blue-7'
-              />
-              <q-tab
                 name='rune'
                 icon='star'
                 :label="$t('rune')"
@@ -190,70 +184,8 @@
                   </div>
                 </div>
                 <q-separator class='q-my-xs' />
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
-                    <span>{{ $t('resetSqlite') }}</span>
-                    <q-btn
-                      class='fab-btn'
-                      flat
-                      round
-                      dense
-                      size='sm'
-                      color='negative'
-                      icon='delete_forever'
-                      @click='resetSqliteHandler'
-                    />
-                  </div>
-                  <div class='text-caption text-grey-6'>
-                    {{ $t('resetSqliteHint') }}
-                  </div>
-                </div>
-              </q-tab-panel>
 
-              <q-tab-panel name='rune' class='q-pa-sm'>
-                <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-purple-5' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('runeManagement') }}</span>
-                  <q-space />
-                  <q-btn
-                    dense flat no-caps
-                    :label="$t('runeCardAdd')"
-                    color='purple-5'
-                    icon='add'
-                    size='sm'
-                    @click='openAddRune'
-                  />
-                </div>
-                <div class='text-caption text-grey-6 q-mb-sm'>
-                  <q-icon name='drag_indicator' size='xs' /> {{ $t('runeDragTip') }}
-                </div>
-                <q-separator class='q-my-xs' />
-                <div class='rune-grid'>
-                  <div
-                    v-for='(rune, index) in localRuneCards'
-                    :key='rune.id'
-                    draggable='true'
-                    class='rune-card-wrapper'
-                    @dragstart='onDragStart($event, index)'
-                    @dragover.prevent='onDragOver($event, index)'
-                    @drop='onDrop($event, index)'
-                    @dragend='onDragEnd'
-                  >
-                    <RuneCard
-                      :rune='rune'
-                      @edit='openEditRune'
-                      @delete='confirmDeleteRune'
-                    />
-                  </div>
-                </div>
-                <div v-if='!localRuneCards || localRuneCards.length === 0' class='text-center text-grey q-pa-xl'>
-                  <q-icon name='star' size='3rem' />
-                  <div class='q-mt-sm'>{{ $t('runeCardAdd') }}</div>
-                </div>
-              </q-tab-panel>
-
-              <q-tab-panel name='cloud' class='q-pa-sm'>
-                <div class='row items-center no-wrap q-mb-xs panel-title'>
+                <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
                   <div class='panel-title-bar bg-blue-7' />
                   <span class='text-subtitle2 text-weight-medium'>{{ $t('cloudSync') }}</span>
                 </div>
@@ -375,7 +307,70 @@
                     {{ syncError }}
                   </q-banner>
                 </div>
+                <q-separator class='q-my-xs' />
+                <div>
+                  <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
+                    <span>{{ $t('resetSqlite') }}</span>
+                    <q-btn
+                      class='fab-btn'
+                      flat
+                      round
+                      dense
+                      size='sm'
+                      color='negative'
+                      icon='delete_forever'
+                      @click='resetSqliteHandler'
+                    />
+                  </div>
+                  <div class='text-caption text-grey-6'>
+                    {{ $t('resetSqliteHint') }}
+                  </div>
+                </div>
               </q-tab-panel>
+
+              <q-tab-panel name='rune' class='q-pa-sm'>
+                <div class='row items-center no-wrap q-mb-xs panel-title'>
+                  <div class='panel-title-bar bg-purple-5' />
+                  <span class='text-subtitle2 text-weight-medium'>{{ $t('runeManagement') }}</span>
+                  <q-space />
+                  <q-btn
+                    dense flat no-caps
+                    :label="$t('runeCardAdd')"
+                    color='purple-5'
+                    icon='add'
+                    size='sm'
+                    @click='openAddRune'
+                  />
+                </div>
+                <div class='text-caption text-grey-6 q-mb-sm'>
+                  <q-icon name='drag_indicator' size='xs' /> {{ $t('runeDragTip') }}
+                </div>
+                <q-separator class='q-my-xs' />
+                <div class='rune-grid'>
+                  <div
+                    v-for='(rune, index) in localRuneCards'
+                    :key='rune.id'
+                    draggable='true'
+                    class='rune-card-wrapper'
+                    @dragstart='onDragStart($event, index)'
+                    @dragover.prevent='onDragOver($event, index)'
+                    @drop='onDrop($event, index)'
+                    @dragend='onDragEnd'
+                  >
+                    <RuneCard
+                      :rune='rune'
+                      @edit='openEditRune'
+                      @delete='confirmDeleteRune'
+                    />
+                  </div>
+                </div>
+                <div v-if='!localRuneCards || localRuneCards.length === 0' class='text-center text-grey q-pa-xl'>
+                  <q-icon name='star' size='3rem' />
+                  <div class='q-mt-sm'>{{ $t('runeCardAdd') }}</div>
+                </div>
+              </q-tab-panel>
+
+
             </q-tab-panels>
           </div>
         </div>
@@ -403,7 +398,7 @@ import events from 'src/constants/events'
 import { version } from '../../../../package.json'
 import { checkUpdate, needUpdate, openLogFiles, openThemeFolder, refreshThemeFolder } from 'src/ApiInvoker'
 import helper from 'src/utils/helper'
-import DatabaseService from 'src/services/DatabaseService'
+import DatabaseClient from 'src/utils/DatabaseClient'
 import CloudSyncService from 'src/services/CloudSyncService'
 import SessionStorageService from 'src/services/SessionStorageService'
 
@@ -438,6 +433,10 @@ export default {
       runeFormVisible: false,
       editingRune: null,
       dragFromIndex: null,
+      cloudSyncLoginState: {
+        isLoggedIn: SessionStorageService.isLoggedIn(),
+        accountInfo: SessionStorageService.getAccountInfo()
+      },
       // 云同步状态
       syncStats: { total: 0, synced: 0, pending: 0, conflict: 0 },
       lastSyncTimeDisplay: null,
@@ -488,10 +487,10 @@ export default {
       return `${s.synced || 0}/${s.total || 0}`
     },
     isLoggedIn () {
-      return SessionStorageService.isLoggedIn()
+      return this.cloudSyncLoginState.isLoggedIn
     },
     accountInfo () {
-      return SessionStorageService.getAccountInfo()
+      return this.cloudSyncLoginState.accountInfo || {}
     },
     ...mapClientState([
       'language',
@@ -508,6 +507,8 @@ export default {
   },
   methods: {
     toggle: function () {
+      this.refreshCloudSyncLoginState()
+      this.refreshCloudSyncStatus()
       return this.$refs.dialog.toggle()
     },
     languageChangeHandler: function (lan) {
@@ -636,7 +637,6 @@ export default {
         cancel: { label: this.$t('cancel') },
         ok: { label: this.$t('confirm'), color: 'negative' }
       }).onOk(async () => {
-        const DatabaseClient = (await import('../../../utils/DatabaseClient')).default
         const success = await DatabaseClient.resetDatabase()
         if (success) {
           // 重置同步状态
@@ -734,8 +734,16 @@ export default {
     },
 
     // ==================== 云同步 ====================
+    refreshCloudSyncLoginState () {
+      this.cloudSyncLoginState = {
+        isLoggedIn: SessionStorageService.isLoggedIn(),
+        accountInfo: SessionStorageService.getAccountInfo()
+      }
+    },
+
     async refreshCloudSyncStatus () {
-      const stats = await DatabaseService.getStats()
+      this.refreshCloudSyncLoginState()
+      const stats = await DatabaseClient.getStats()
       this.syncStats = {
         total: stats.total || 0,
         synced: stats.synced || 0,

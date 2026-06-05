@@ -6,7 +6,7 @@ import helper from 'src/utils/helper'
 import { i18n } from 'boot/i18n'
 import _ from 'lodash'
 import { importImage, uploadImages } from 'src/ApiInvoker'
-import DatabaseService from 'src/services/DatabaseService'
+import DatabaseClient from 'src/utils/DatabaseClient'
 
 export default {
   initClientStore ({ commit, state }) {
@@ -92,7 +92,7 @@ export default {
   },
   async loadRunes ({ commit }) {
     try {
-      const runes = await DatabaseService.getRunes()
+      const runes = await DatabaseClient.getRunes()
       if (runes && runes.length > 0) {
         commit(types.TOGGLE_CHANGED, { key: 'runeCards', value: runes })
       }
@@ -101,28 +101,27 @@ export default {
     }
   },
   async saveRune (_, rune) {
-    return await DatabaseService.saveRune(rune)
+    return await DatabaseClient.saveRune(rune)
   },
   async deleteRune (_, id) {
-    return await DatabaseService.deleteRune(id)
+    return await DatabaseClient.deleteRune(id)
   },
   async saveRunes (_, runes) {
-    return await DatabaseService.saveRunes(runes)
+    return await DatabaseClient.saveRunes(runes)
   },
   /**
    * 执行同步（调用 SyncService）
    */
   async sync ({ commit }) {
     const SyncService = (await import('src/services/SyncService')).default
-    const DatabaseClient = (await import('src/utils/DatabaseClient')).default
 
-    commit('client/UPDATE_SYNC_STATUS', { isSyncing: true })
+    commit(types.UPDATE_SYNC_STATUS, { isSyncing: true })
 
     try {
       const result = await SyncService.sync()
 
       const stats = await DatabaseClient.getStats()
-      commit('client/UPDATE_SYNC_STATUS', {
+      commit(types.UPDATE_SYNC_STATUS, {
         isSyncing: false,
         lastSyncTime: Date.now(),
         ...stats
@@ -131,13 +130,12 @@ export default {
       return result
     } catch (error) {
       console.error('[sync] Sync failed:', error)
-      commit('client/UPDATE_SYNC_STATUS', { isSyncing: false })
+      commit(types.UPDATE_SYNC_STATUS, { isSyncing: false })
       throw error
     }
   },
   async refreshSyncStatus ({ commit }) {
-    const DatabaseClient = (await import('src/utils/DatabaseClient')).default
     const stats = await DatabaseClient.getStats()
-    commit('client/UPDATE_SYNC_STATUS', { ...stats })
+    commit(types.UPDATE_SYNC_STATUS, { ...stats })
   }
 }

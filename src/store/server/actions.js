@@ -1,4 +1,5 @@
 import types from 'src/store/server/types'
+import clientTypes from 'src/store/client/types'
 import api from 'src/utils/api'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from 'src/components/bus'
@@ -35,12 +36,13 @@ function formatYmd(ts) {
 }
 
 function mapLocalNoteToSummary (note, fallbackCategory = OFFLINE_ROOT_CATEGORY) {
+  const normalizedCategory = normalizeCategoryForMatch(note.category || fallbackCategory)
   return {
     docGuid: note.doc_guid,
     guid: note.doc_guid,
     title: note.title,
     abstractText: note.content ? note.content.substring(0, 200) : '',
-    category: note.category || fallbackCategory,
+    category: normalizedCategory,
     dataCreated: note.data_created || Date.now(),
     dataModified: note.data_modified || note.local_modified || Date.now(),
     _localId: note.id,
@@ -65,7 +67,7 @@ function replaceTagGuidString(tagString = '', fromTagGuid, toTagGuid) {
 async function migrateOfflineTagsToCloud(kbGuid) {
   if (!kbGuid) return { created: 0, attached: 0, updatedNotes: 0 }
 
-  const localTags = await DatabaseClient.getTags()
+  const localTags = await DatabaseClient.tags.getAll()
   if (!Array.isArray(localTags) || localTags.length === 0) {
     return { created: 0, attached: 0, updatedNotes: 0 }
   }
@@ -77,7 +79,7 @@ async function migrateOfflineTagsToCloud(kbGuid) {
   let attached = 0
   let updatedNotes = 0
 
-  const localNotes = await DatabaseClient.getNotes()
+  const localNotes = await DatabaseClient.notes.getAll()
   for (const localTag of localTags) {
     let cloudTag = cloudTagMap.get(localTag.name)
     if (!cloudTag) {
@@ -103,7 +105,7 @@ async function migrateOfflineTagsToCloud(kbGuid) {
 
       const nextTags = replaceTagGuidString(note.tags || '', localTag.tagGuid, cloudTagGuid)
       if (nextTags !== (note.tags || '')) {
-        await DatabaseClient.updateNote(note.id, {
+        await DatabaseClient.notes.update(note.id, {
           tags: nextTags,
           dirty: 1,
           local_modified: Date.now()
@@ -128,19 +130,38 @@ async function migrateOfflineTagsToCloud(kbGuid) {
 function buildCategoryTreeFromNotes (notes, localCategories) {
   const categorySet = new Set()
 
+  const addCategoryPath = (rawCategory) => {
+    const normalized = normalizeCategoryForMatch(rawCategory)
+    if (!normalized || normalized === '/' || normalized === '') return
+
+    const trimmed = normalized.replace(/\/$/, '')
+    if (!trimmed) {
+      categorySet.add(OFFLINE_ROOT_CATEGORY)
+      return
+    }
+
+    const segments = trimmed.split('/').filter(Boolean)
+    if (segments.length === 0) {
+      categorySet.add(OFFLINE_ROOT_CATEGORY)
+      return
+    }
+
+    let currentPath = ''
+    for (const segment of segments) {
+      currentPath += `/${segment}`
+      categorySet.add(`${currentPath}/`)
+    }
+  }
+
   // 从笔记的 category 字段收集所有唯一路径
   for (const note of notes) {
-    if (note.category && note.category !== '/' && note.category !== '') {
-      categorySet.add(note.category)
-    }
+    addCategoryPath(note.category)
   }
 
   // 始终合并 local_categories（确保空文件夹也显示）
   if (localCategories && localCategories.length > 0) {
     for (const cat of localCategories) {
-      if (cat.category && cat.category !== '/' && cat.category !== '' && cat.category !== OFFLINE_ROOT_CATEGORY) {
-        categorySet.add(cat.category)
-      }
+      addCategoryPath(cat.category)
     }
   }
 
@@ -160,8 +181,8 @@ function buildCategoryTreeFromNotes (notes, localCategories) {
   })
 
   for (const path of categorySet) {
-    if (nodeMap.has(path)) continue
-    const label = path.replace(/\/$/, '').replace(/^\//, '') || '我的笔记'
+    if (path === OFFLINE_ROOT_CATEGORY || nodeMap.has(path)) continue
+    const label = path.replace(/\/$/, '').split('/').filter(Boolean).pop() || '我的笔记'
     nodeMap.set(path, {
       label,
       key: path,
@@ -175,12 +196,16 @@ function buildCategoryTreeFromNotes (notes, localCategories) {
   const roots = [nodeMap.get(OFFLINE_ROOT_CATEGORY)]
   for (const [path, node] of nodeMap) {
     if (path === OFFLINE_ROOT_CATEGORY) continue
-    // 去掉末尾 / 后找父路径
-    const parentPath = path.slice(0, -1).slice(0, path.slice(0, -1).lastIndexOf('/') + 1) + '/'
-    const parent = nodeMap.get(parentPath)
-    if (parent && parentPath !== path) {
-      parent.children.push(node)
-    } else {
+    const trimmed = path.replace(/\/$/, '')
+    const lastSlashIndex = trimmed.lastIndexOf('/')
+    const parentPath = lastSlashIndex > 0 ? `${trimmed.slice(0, lastSlashIndex + 1)}` : OFFLINE_ROOT_CATEGORY
+    const parent = nodeMap.get(parentPath) || nodeMap.get(OFFLINE_ROOT_CATEGORY)
+    if (parent && parent !== node) {
+      const alreadyExists = parent.children.some(child => child.key === node.key)
+      if (!alreadyExists) {
+        parent.children.push(node)
+      }
+    } else if (!roots.some(root => root.key === node.key)) {
       roots.push(node)
     }
   }
@@ -219,7 +244,7 @@ function categoryExistsInTree (tree, category) {
 
 async function loadWorkspaceState () {
   try {
-    return await DatabaseClient.getAppStates(Object.values(APP_STATE_KEYS))
+    return await DatabaseClient.appState.getMany(Object.values(APP_STATE_KEYS))
   } catch (error) {
     console.warn('[workspaceState] Failed to load app state:', error)
     return {}
@@ -228,7 +253,7 @@ async function loadWorkspaceState () {
 
 async function saveWorkspaceStateValue (key, value) {
   try {
-    await DatabaseClient.setAppState(key, value)
+    await DatabaseClient.appState.set(key, value)
   } catch (error) {
     console.warn(`[workspaceState] Failed to save ${key}:`, error)
   }
@@ -255,7 +280,7 @@ export async function _getContent (kbGuid, docGuid) {
   
   // ✅ 关键改进：先检查 SQLite 是否有本地修改版本（比缓存更新）
   try {
-    const localNote = await DatabaseClient.getNoteByDocGuidWithPriority(docGuid)
+      const localNote = await DatabaseClient.notes.getByDocGuidWithPriority(docGuid)
     if (localNote && localNote.content !== null && localNote.content !== undefined) {
       const localMod = parseInt(localNote.local_modified) || 0
       console.log(`[_getContent] Found in SQLite: id=${localNote.id}, local_mod=${localMod}, dirty=${localNote.dirty}, content_len=${(localNote.content || '').length}`)
@@ -389,10 +414,10 @@ export default {
    */
   async loadLocalData ({ commit, state, rootState }) {
     try {
-      await DatabaseClient.ensureOfflineRoot()
+      await DatabaseClient.categories.ensureOfflineRoot()
       const workspaceState = await loadWorkspaceState()
-      const localNotes = await DatabaseClient.getNotes()
-      const localCategories = await DatabaseClient.getCategories({})
+      const localNotes = await DatabaseClient.notes.getAll()
+      const localCategories = await DatabaseClient.categories.getAll({})
       console.log('[loadLocalData] loaded notes:', localNotes.length)
       console.log('[loadLocalData] localCategories:', localCategories)
 
@@ -410,7 +435,7 @@ export default {
       commit(types.UPDATE_CURRENT_CATEGORY, restoredCategory)
 
       if (rootState?.client && workspaceState[APP_STATE_KEYS.sidebarTreeType]) {
-        commit('client/TOGGLE_CHANGED', {
+        commit(`client/${clientTypes.TOGGLE_CHANGED}`, {
           key: 'sidebarTreeType',
           value: workspaceState[APP_STATE_KEYS.sidebarTreeType]
         }, { root: true })
@@ -479,12 +504,12 @@ export default {
     const newKbGuid = result.kbGuid
     if (newKbGuid) {
       try {
-        const migratedNotes = await DatabaseClient.migrateOfflineNotes(newKbGuid)
+        const migratedNotes = await DatabaseClient.notes.migrateOffline(newKbGuid)
         if (migratedNotes > 0) {
           console.log(`[login] Migrated ${migratedNotes} offline notes to kbGuid=${newKbGuid}`)
         }
         // 同步迁移离线文件夹（kb_guid='' → current kbGuid）
-        await DatabaseClient.migrateOfflineCategories(newKbGuid)
+        await DatabaseClient.categories.migrateOffline(newKbGuid)
         console.log(`[login] Migrated offline categories to kbGuid=${newKbGuid}`)
 
         const migratedTags = await migrateOfflineTagsToCloud(newKbGuid)
@@ -496,7 +521,7 @@ export default {
 
     // 检查是否有离线笔记需要同步（local_ 开头的 doc_guid）
     try {
-      const pendingNotes = await DatabaseClient.getNotes({ dirty: 1 })
+      const pendingNotes = await DatabaseClient.notes.getAll({ dirty: 1 })
       const offlineNotes = pendingNotes.filter(n => n.doc_guid && n.doc_guid.startsWith('local_'))
       if (offlineNotes.length > 0) {
         console.log('[login] Found', offlineNotes.length, 'offline notes to sync')
@@ -518,19 +543,39 @@ export default {
    * - 切换账号 = 改变同步目标，笔记留在本地
    */
   async logout ({ commit, state, dispatch }) {
-    // 保存退出前的 kbGuid，清空前用它来清除笔记关联
+    // 保存退出前的状态，避免 commit(LOGOUT) 后读取到被清空的数据
     const oldKbGuid = state.kbGuid
+    const wasTagSelection = !!(state.currentCategory && state.tags?.map(t => t.tagGuid).includes(state.currentCategory))
+
     await api.AccountServerApi.Logout()
+
+    if (oldKbGuid) {
+      await DatabaseClient.notes.clearByKbGuid(oldKbGuid)
+      const accountCategories = await DatabaseClient.categories.getAll({ kbGuid: oldKbGuid })
+      const uniqueCategories = new Map()
+      for (const category of (accountCategories || [])) {
+        if (!category?.category) continue
+        uniqueCategories.set(category.category, category)
+      }
+
+      for (const category of uniqueCategories.values()) {
+        await DatabaseClient.categories.create({
+          category: category.category,
+          parent: category.parent,
+          kbGuid: '',
+          localOnly: category.local_only === 1
+        })
+      }
+    }
+
     SessionStorageService.clearSession()
     commit(types.LOGOUT)
-    // 退出登录：清空笔记/目录关联并设 dirty=1（保留本地数据，下次登录可继续同步）
-    if (oldKbGuid) {
-      await DatabaseClient.clearNotesByKbGuid(oldKbGuid)
-      await DatabaseClient.migrateOfflineCategories('')
-    }
+
     await dispatch('loadLocalData')
     await dispatch('getAllTags')
-    if (state.currentCategory && state.tags?.map(t => t.tagGuid).includes(state.currentCategory)) {
+    await dispatch('getAllCategories')
+    commit(types.UPDATE_CATEGORIES_POS, {})
+    if (wasTagSelection) {
       await dispatch('updateCurrentCategory', { data: OFFLINE_ROOT_CATEGORY, type: 'category' })
     }
     await dispatch('getCategoryNotes', { category: '' })
@@ -587,7 +632,7 @@ export default {
 
     if (!isLogin || !kbGuid) {
       try {
-        const localNotes = await DatabaseClient.getNotes()
+        const localNotes = await DatabaseClient.notes.getAll()
         const collected = (localNotes || [])
           .filter(note => note.title && note.title !== 'Untitled')
           .filter(note => {
@@ -657,7 +702,7 @@ export default {
 
     if (!isLogin || !kbGuid) {
       try {
-        const localNotes = await DatabaseClient.getNotes()
+        const localNotes = await DatabaseClient.notes.getAll()
         for (const note of (localNotes || [])) {
           const ts = getCalendarNoteTimestamp(note, basis)
           if (ts >= monthStart && ts < monthEnd) {
@@ -746,7 +791,7 @@ export default {
       console.log('[getCategoryNotes] Offline mode, loading from SQLite only:', targetCategory)
       
       try {
-        const localNotes = await DatabaseClient.getNotes({ 
+      const localNotes = await DatabaseClient.notes.getAll({
           category: targetCategory || OFFLINE_ROOT_CATEGORY 
         })
         
@@ -779,7 +824,7 @@ export default {
 
     // 获取本地 SQLite 中该分类下的所有笔记（包括 dirty=1 的）
     try {
-      const localNotes = await DatabaseClient.getNotes({ category: targetCategory })
+      const localNotes = await DatabaseClient.notes.getAll({ category: targetCategory })
       
       // ✅ 核心去重原则：按 (category + title + kbGuid) 唯一，本地优先
       // 使用 Map 确保每个 (category, title, kbGuid) 只出现一次
@@ -874,7 +919,28 @@ export default {
     state
   }) {
     commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, true)
-    const { kbGuid } = state
+    const { kbGuid, isLogin } = state
+
+    if (!isLogin || !kbGuid) {
+      try {
+        await DatabaseClient.categories.ensureOfflineRoot()
+        const localNotes = await DatabaseClient.notes.getAll()
+        const localCategories = await DatabaseClient.categories.getAll({})
+        const tree = buildCategoryTreeFromNotes(localNotes, localCategories)
+        commit(types.SET_CATEGORIES, tree)
+        commit(types.UPDATE_ALL_CATEGORIES, localCategories)
+        commit(types.UPDATE_CATEGORIES_POS, [])
+      } catch (err) {
+        console.error('[getAllCategories] Offline load failed:', err)
+        commit(types.SET_CATEGORIES, [])
+        commit(types.UPDATE_ALL_CATEGORIES, [])
+        commit(types.UPDATE_CATEGORIES_POS, [])
+      } finally {
+        commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
+      }
+      return
+    }
+
     const res = await api.KnowledgeBaseApi.getCategories({ kbGuid })
     commit(types.UPDATE_ALL_CATEGORIES, res.result)
     commit(types.UPDATE_CATEGORIES_POS, res.pos)
@@ -911,7 +977,7 @@ export default {
     if (!state.isLogin && (!docGuid || docGuid.startsWith('local_'))) {
       console.log('[getNoteContent] Offline mode, loading from SQLite:', docGuid)
       try {
-        const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+        const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
         if (localNote) {
           console.log(`[getNoteContent] ✅ Offline: Found in SQLite id=${localNote.id}`)
           commit(types.UPDATE_CURRENT_NOTE, {
@@ -946,7 +1012,7 @@ export default {
     try {
       // Step 1: 查询本地 SQLite 数据库
       console.log('[getNoteContent] Step 1: Querying SQLite...')
-      const localNote = await DatabaseClient.getNoteByDocGuidWithPriority(docGuid)
+      const localNote = await DatabaseClient.notes.getByDocGuidWithPriority(docGuid)
       
       if (localNote && localNote.id) {
         // ✅ 找到本地记录 → 使用本地版本（本地优先原则）
@@ -1002,7 +1068,7 @@ export default {
                 result.resources || []
               )
               
-              await DatabaseService.createNote({
+              await DatabaseClient.notes.create({
                 doc_guid: docGuid,
                 kb_guid: kbGuid,
                 title: result.info?.title || 'Untitled',
@@ -1214,14 +1280,15 @@ export default {
     // 离线笔记（docGuid 以 local_ 开头）：仅保存到 SQLite，不推云端
     // 注意：必须同时检查 !state.isLogin，因为 login 后 kbGuid 被设置了，!kbGuid 会变成 false
     if (!state.isLogin && docGuid && docGuid.startsWith('local_')) {
-      const { title } = state.currentNote.info
+      const { title, tags } = state.currentNote.info
       try {
-        const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+        const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
         if (localNote) {
-          await DatabaseClient.updateNote(localNote.id, {
+          await DatabaseClient.notes.update(localNote.id, {
             title,
             content: markdown,
-            category: OFFLINE_ROOT_CATEGORY,
+            category,
+            tags: tags || '',
             local_modified: Date.now()
           })
           console.log(`[updateNote/offline] SQLite updated: docGuid=${docGuid}, content_len=${markdown.length}`)
@@ -1252,10 +1319,10 @@ export default {
       let updatedNote = null
       const now = Date.now()
       try {
-        const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+        const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
         if (localNote) {
           localNoteId = localNote.id
-          updatedNote = await DatabaseClient.updateNote(localNote.id, {
+          updatedNote = await DatabaseClient.notes.update(localNote.id, {
             title,
             content: markdown,
             category,
@@ -1268,7 +1335,7 @@ export default {
           }
         } else {
           // 首次保存：创建本地记录
-          const note = await DatabaseClient.createNote({
+          const note = await DatabaseClient.notes.create({
             doc_guid: docGuid,
             title,
             content: markdown,
@@ -1335,7 +1402,7 @@ export default {
     // ✅ 同名检测：如果当前文件夹下已有同名笔记，自动添加编号 (1), (2)...
     let finalTitle = title || i18n.t('untitled')
     try {
-      const existingNotes = await DatabaseClient.getNotes({ category: safeCategory || '/' })
+      const existingNotes = await DatabaseClient.notes.getAll({ category: safeCategory || '/' })
       if (existingNotes && existingNotes.length > 0) {
         const titleSet = new Set(existingNotes.map(n => n.title))
         if (titleSet.has(finalTitle)) {
@@ -1365,7 +1432,7 @@ export default {
       const localDocGuid = `local_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
       let note = null
       try {
-        note = await DatabaseClient.createNote({
+        note = await DatabaseClient.notes.create({
           doc_guid: localDocGuid,
           title: finalTitle,
           content: initialContent,
@@ -1423,7 +1490,7 @@ export default {
     const tempDocGuid = `local_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
     let localNoteId = null
     try {
-      const note = await DatabaseClient.createNote({
+      const note = await DatabaseClient.notes.create({
         doc_guid: tempDocGuid,
         kb_guid: kbGuid,
         title: finalTitle,
@@ -1456,10 +1523,10 @@ export default {
       // 云端创建成功后，更新本地 doc_guid
       if (localNoteId) {
         try {
-          await DatabaseClient.updateNote(localNoteId, {
+          await DatabaseClient.notes.update(localNoteId, {
             doc_guid: result.guid
           })
-          await DatabaseClient.createGuidMapping(localNoteId, result.guid, 'wiznote')
+          await DatabaseClient.sync.createGuidMapping(localNoteId, result.guid, 'wiznote')
         } catch (e2) {
           console.warn('[createNote] Failed to update local doc_guid:', e2)
         }
@@ -1529,9 +1596,9 @@ export default {
     if (isOfflineNote) {
       // ✅ 离线笔记：只写 SQLite，不推云端
       try {
-        const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+        const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
         if (localNote) {
-          await DatabaseClient.updateNote(localNote.id, {
+          await DatabaseClient.notes.update(localNote.id, {
             title,
             content: markdown,
             category: OFFLINE_ROOT_CATEGORY,
@@ -1541,7 +1608,7 @@ export default {
         } else {
           // 首次保存：创建本地记录
           const now = Date.now()
-          const note = await DatabaseClient.createNote({
+          const note = await DatabaseClient.notes.create({
             doc_guid: docGuid || `local_${now}_${Math.random().toString(36).substring(2, 10)}`,
             title,
             content: markdown,
@@ -1575,9 +1642,9 @@ export default {
     // Step 1: 写本地 SQLite（本地优先架构 - 只标记为脏，不立即同步）
     const now = Date.now()
     try {
-      const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+      const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
       if (localNote) {
-        const updatedNote = await DatabaseClient.updateNote(localNote.id, {
+        const updatedNote = await DatabaseClient.notes.update(localNote.id, {
           title,
           content: markdown,
           category,
@@ -1590,7 +1657,7 @@ export default {
         }
       } else {
         // 首次保存：创建本地记录
-        const note = await DatabaseClient.createNote({
+        const note = await DatabaseClient.notes.create({
           doc_guid: docGuid,
           title,
           content: markdown,
@@ -1632,7 +1699,7 @@ export default {
       if (!isLogin) {
         const localDocGuid = `local_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
         try {
-          const note = await DatabaseClient.createNote({
+          const note = await DatabaseClient.notes.create({
             doc_guid: localDocGuid,
             title,
             content: text,
@@ -1666,7 +1733,7 @@ export default {
       // Step 1: 先写入本地 SQLite（dirty=1，待同步）
       let localNoteId = null
       try {
-        const note = await DatabaseClient.createNote({
+        const note = await DatabaseClient.notes.create({
           title,
           content: text,
           category: currentCategory || OFFLINE_ROOT_CATEGORY,
@@ -1698,10 +1765,10 @@ export default {
         // 云端创建成功后更新本地 doc_guid
         if (localNoteId) {
           try {
-            await DatabaseClient.updateNote(localNoteId, {
+            await DatabaseClient.notes.update(localNoteId, {
               doc_guid: docGuid
             })
-            await DatabaseClient.createGuidMapping(localNoteId, docGuid, 'wiznote')
+            await DatabaseClient.sync.createGuidMapping(localNoteId, docGuid, 'wiznote')
           } catch (e2) {
             console.warn('[importNote] Failed to update local doc_guid:', e2)
           }
@@ -1746,13 +1813,14 @@ export default {
       kbGuid,
       docGuid
     } = payload
+    const isOfflineDelete = !state.isLogin || !kbGuid || (docGuid && docGuid.startsWith('local_'))
 
-    // 离线笔记删除：直接删除本地记录，不推云端
-    if (docGuid && docGuid.startsWith('local_')) {
+    // 离线笔记/未登录删除：只删除本地记录，不调用云端接口
+    if (isOfflineDelete) {
       try {
-        const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+        const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
         if (localNote) {
-          await DatabaseClient.deleteNote(localNote.id)
+          await DatabaseClient.notes.remove(localNote.id)
         }
         // 刷新本地笔记列表
         await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
@@ -1774,9 +1842,9 @@ export default {
     // 注意：当前 schema 没有 deleted 字段，这里直接物理删除本地记录
     // 同步时检测到本地有删除日志（sync_log）则从云端删除
     try {
-      const localNote = await DatabaseClient.getNoteByDocGuid(docGuid)
+      const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
       if (localNote) {
-        await DatabaseClient.deleteNote(localNote.id)
+        await DatabaseClient.notes.remove(localNote.id)
       }
     } catch (err) {
       console.warn('[deleteNote] SQLite delete failed:', err)
@@ -1854,7 +1922,7 @@ export default {
           }
         })
         // 标记本地目录已同步到云端
-        await DatabaseClient.createCategory({
+        await DatabaseClient.categories.create({
           category: fullCategoryPath,
           parent: helper.isNullOrEmpty(parentCategory) ? OFFLINE_ROOT_CATEGORY : parentCategory,
           kbGuid,
@@ -1871,13 +1939,13 @@ export default {
 
     // 离线模式：只创建本地目录
     try {
-      const localCategories = await DatabaseClient.getCategories({})
+      const localCategories = await DatabaseClient.categories.getAll({})
       const exists = localCategories.some(c => c.category === fullCategoryPath)
       if (exists) {
         Notify.create({ color: 'red-10', message: i18n.t('categoryExisted'), icon: 'error' })
         return
       }
-      await DatabaseClient.createCategory({
+      await DatabaseClient.categories.create({
         category: fullCategoryPath,
         parent: helper.isNullOrEmpty(parentCategory) ? OFFLINE_ROOT_CATEGORY : parentCategory,
         kbGuid: kbGuid || '',
@@ -1930,10 +1998,10 @@ export default {
 
     // 再删本地记录
     try {
-      await DatabaseClient.deleteCategory(category)
+      await DatabaseClient.categories.remove(category)
       // 刷新目录树（基于笔记 + local_categories 兜底）
-      const updatedNotes = await DatabaseClient.getNotes()
-      const updatedCategories = await DatabaseClient.getCategories({})
+      const updatedNotes = await DatabaseClient.notes.getAll()
+      const updatedCategories = await DatabaseClient.categories.getAll({})
       const tree = buildCategoryTreeFromNotes(updatedNotes, updatedCategories)
       commit(types.SET_CATEGORIES, tree)
       // 删除该目录下的所有本地笔记（同时删除整个分类）
@@ -2111,7 +2179,7 @@ export default {
       }
 
       try {
-        const taggedLocalNotes = await DatabaseClient.getNotes()
+        const taggedLocalNotes = await DatabaseClient.notes.getAll()
         const localTagNotes = []
 
         for (const note of (taggedLocalNotes || [])) {
@@ -2158,9 +2226,9 @@ export default {
     const { kbGuid, isLogin, currentNote } = state
     if (!isLogin || !kbGuid) {
       try {
-        const tags = await DatabaseClient.getTags()
+        const tags = await DatabaseClient.tags.getAll()
         const countMap = {}
-        const allNotes = await DatabaseClient.getNotes()
+        const allNotes = await DatabaseClient.notes.getAll()
 
         for (const tag of tags) {
           let count = 0
@@ -2177,9 +2245,9 @@ export default {
         commit(types.UPDATE_TAG_NOTES_COUNT, countMap)
 
         if (currentNote?.info?.docGuid && currentNote.info.docGuid.startsWith('local_')) {
-          const localNote = await DatabaseClient.getNoteByDocGuid(currentNote.info.docGuid)
+          const localNote = await DatabaseClient.notes.getByDocGuid(currentNote.info.docGuid)
           if (localNote) {
-            const noteTags = await DatabaseClient.getNoteTags(localNote.id)
+            const noteTags = await DatabaseClient.tags.getNoteTags(localNote.id)
             commit(types.UPDATE_CURRENT_NOTE_TAGS, noteTags.map(t => t.tagGuid).join('*'))
           }
         }
@@ -2222,7 +2290,7 @@ export default {
     const { tagGuid: parentTagGuid } = parentTag
 
     if (!isLogin || !kbGuid) {
-      return await DatabaseClient.createTag({ name })
+      return await DatabaseClient.tags.create({ name })
     }
 
     return await api.KnowledgeBaseApi.createTag({
@@ -2255,10 +2323,10 @@ export default {
 
     if (!state.isLogin || !state.kbGuid || (info.docGuid && info.docGuid.startsWith('local_'))) {
       const localTagId = parseLocalTagId(tagGuid)
-      const localNote = await DatabaseClient.getNoteByDocGuid(info.docGuid)
+      const localNote = await DatabaseClient.notes.getByDocGuid(info.docGuid)
       if (localNote && localTagId) {
-        await DatabaseClient.attachTagToNote(localNote.id, localTagId)
-        await DatabaseClient.updateNote(localNote.id, {
+        await DatabaseClient.tags.attachToNote(localNote.id, localTagId)
+        await DatabaseClient.notes.update(localNote.id, {
           tags: newTagList.join('*'),
           local_modified: Date.now()
         })
@@ -2329,10 +2397,10 @@ export default {
 
     if (!state.isLogin || !state.kbGuid || (info.docGuid && info.docGuid.startsWith('local_'))) {
       const localTagId = parseLocalTagId(tagGuid)
-      const localNote = await DatabaseClient.getNoteByDocGuid(info.docGuid)
+      const localNote = await DatabaseClient.notes.getByDocGuid(info.docGuid)
       if (localNote && localTagId) {
-        await DatabaseClient.removeTagFromNote(localNote.id, localTagId)
-        await DatabaseClient.updateNote(localNote.id, {
+        await DatabaseClient.tags.removeFromNote(localNote.id, localTagId)
+        await DatabaseClient.notes.update(localNote.id, {
           tags: newTagList.join('*'),
           local_modified: Date.now()
         })
@@ -2360,7 +2428,7 @@ export default {
     if (!isLogin || !kbGuid) {
       const localTagId = parseLocalTagId(tagGuid)
       if (!localTagId) return
-      await DatabaseClient.deleteTag(localTagId)
+      await DatabaseClient.tags.remove(localTagId)
       this.dispatch('server/getAllTags')
       return
     }

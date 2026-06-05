@@ -5,7 +5,7 @@
  */
 
 import SyncService from './SyncService'
-import DatabaseService from '../services/DatabaseService'
+import DatabaseClient from '../utils/DatabaseClient'
 import SessionStorageService from './SessionStorageService'
 
 class CloudSyncService {
@@ -51,7 +51,7 @@ class CloudSyncService {
 
   async _refreshStats() {
     try {
-      const stats = await DatabaseService.getStats()
+      const stats = await DatabaseClient.getStats()
       this._status.total = stats.total || 0
       this._status.synced = stats.synced || 0
       this._status.pending = stats.pending || 0

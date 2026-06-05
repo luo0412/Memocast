@@ -4,7 +4,7 @@
  * 用 dirty 字段(0/1)跟踪待同步状态
  */
 
-import DatabaseService from './DatabaseService'
+import DatabaseClient from 'src/utils/DatabaseClient'
 import WizNoteApi from '../utils/api'
 import helper from '../utils/helper'
 import SessionStorageService from './SessionStorageService'
@@ -272,7 +272,7 @@ class SyncService {
       let skippedCount = 0
 
       // ✅ 预加载所有本地笔记的 (title, category, kbGuid) 用于快速去重检查
-      const localNotes = await DatabaseService.getAllNotesBasic() || []
+      const localNotes = await DatabaseClient.notes.getAllBasic() || []
 
       // 构建 Set 用于 O(1) 查找：key = "title|category(kbGuid normalized)|kbGuid"
       // category 需要与 pullFromCloud 中的 normalizeCategoryForMatch 保持一致
@@ -360,7 +360,7 @@ class SyncService {
 
     console.log(`[SyncService] ↓ Downloading: "${doc.title}" → category="${cloudCategory}" (original: "${doc.category}")`)
 
-    const note = await DatabaseService.createNote({
+    const note = await DatabaseClient.notes.create({
       doc_guid: docGuid,
       kb_guid: kbGuid,
       title: doc.title,
@@ -376,7 +376,7 @@ class SyncService {
     // 创建 GUID 映射
     if (note && note.id && docGuid) {
       try {
-        await DatabaseService.createGuidMapping(note.id, docGuid, 'wiznote')
+        await DatabaseClient.sync.createGuidMapping(note.id, docGuid, 'wiznote')
       } catch (e) {
         console.warn('[SyncService] GUID mapping failed (non-critical):', e.message)
       }
@@ -398,7 +398,7 @@ class SyncService {
       return { count: 0, errors: 0 }
     }
 
-    const pendingNotes = await DatabaseService.getPendingSyncNotesByKbGuid(kbGuid)
+    const pendingNotes = await DatabaseClient.notes.getPendingByKbGuid(kbGuid)
     console.log(`[SyncService] 📤 pushToCloud: found ${pendingNotes?.length || 0} dirty notes for kbGuid=${kbGuid}`)
 
     // ✅ 先把本地独有的目录同步到云端（离线创建的文件夹）
@@ -417,7 +417,7 @@ class SyncService {
 
       try {
         // 1. 从 SQLite 获取最新内容（确保使用用户最后编辑的版本）
-        const latestNote = await DatabaseService.getNoteById(note.id)
+        const latestNote = await DatabaseClient.notes.getById(note.id)
         if (latestNote) {
           note.content = latestNote.content
           note.title = latestNote.title || note.title
@@ -494,7 +494,7 @@ class SyncService {
         }
 
         // 3. 同步成功 → 更新本地记录（dirty=0）
-        await DatabaseService.updateNote(note.id, {
+        await DatabaseClient.notes.update(note.id, {
           doc_guid: cloudDocGuid,
           kb_guid: note.kb_guid || kbGuid,
           server_modified: Date.now()
@@ -503,7 +503,7 @@ class SyncService {
         // 创建 GUID 映射（如果还没有）
         if (note.id && cloudDocGuid) {
           try {
-            await DatabaseService.createGuidMapping(note.id, cloudDocGuid, 'wiznote')
+            await DatabaseClient.sync.createGuidMapping(note.id, cloudDocGuid, 'wiznote')
           } catch (e) {
             console.warn('[SyncService] GUID mapping failed (non-critical):', e.message)
           }
@@ -531,7 +531,7 @@ class SyncService {
    */
   async syncLocalCategoriesToCloud(kbGuid) {
     try {
-      const localCats = await DatabaseService.getCategories({ kbGuid })
+      const localCats = await DatabaseClient.categories.getAll({ kbGuid })
       const unsynced = localCats.filter(c => c.local_only === 1)
 
       if (unsynced.length === 0) {
@@ -567,13 +567,13 @@ class SyncService {
           })
 
           // 标记为已同步
-          await DatabaseService.syncCategoryToCloud({ category: cat.category })
+          await DatabaseClient.categories.syncToCloud({ category: cat.category })
           synced++
           console.log(`[SyncService] ✅ Category synced: ${cat.category}`)
         } catch (err) {
           // 幂等：云端已存在该目录（错误码 400/409），标记为已同步
           if (err?.response?.status === 400 || err?.response?.status === 409 || err?.message?.includes('exists')) {
-            await DatabaseService.syncCategoryToCloud({ category: cat.category })
+            await DatabaseClient.categories.syncToCloud({ category: cat.category })
             console.warn(`[SyncService] Category already exists on cloud, marked synced: ${cat.category}`)
             synced++
           } else {
@@ -594,7 +594,7 @@ class SyncService {
    * 获取同步状态
    */
   async getStatus() {
-    const stats = await DatabaseService.getStats()
+    const stats = await DatabaseClient.sync.getStats()
     return {
       isSyncing: this.isSyncing,
       ...stats

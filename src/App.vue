@@ -75,7 +75,7 @@ export default {
     async handleOfflineSync () {
       console.log('[App] handleOfflineSync: starting sync...')
       try {
-        const result = await this.sync()
+        const result = await this.runClientSync()
         if (result && result.success) {
           console.log('[App] Offline sync completed successfully')
         } else {
@@ -95,7 +95,10 @@ export default {
         this.$refs.conflictDialog.show(note)
       }
     },
-    ...mapClientActions(['initClientStore']),
+    ...mapClientActions({
+      initClientStore: 'initClientStore',
+      runClientSync: 'sync'
+    }),
     ...mapServerActions(['initServerStore', 'reLogin', 'getAllCategories', 'getCategoryNotes'])
   },
   beforeDestroy () {

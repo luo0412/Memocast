@@ -1,18 +1,28 @@
 /**
  * DatabaseClient - 渲染进程数据库客户端
- * 通过 IPC 与主进程通信，实现数据库操作
+ * 通过 IPC 与主进程通信，实现数据库操作。
+ *
+ * 保持原有扁平 API 不变，同时按领域暴露分组接口，
+ * 便于新代码按 notes/tags/categories/sync/appState/runes 组织调用。
  */
 
 import { ipcRenderer } from 'electron'
 
-const DatabaseClient = {
+const invoke = (channel, payload) => {
+  if (typeof payload === 'undefined') {
+    return ipcRenderer.invoke(channel)
+  }
+  return ipcRenderer.invoke(channel, payload)
+}
+
+const notes = {
   /**
    * 获取所有笔记
    * @param {Object} options - 查询选项
    * @returns {Promise<Array>}
    */
-  async getNotes(options = {}) {
-    return await ipcRenderer.invoke('db:getNotes', options)
+  async getAll(options = {}) {
+    return await invoke('db:getNotes', options)
   },
 
   /**
@@ -20,8 +30,8 @@ const DatabaseClient = {
    * @param {number} id
    * @returns {Promise<Object|null>}
    */
-  async getNote(id) {
-    return await ipcRenderer.invoke('db:getNote', id)
+  async getById(id) {
+    return await invoke('db:getNote', id)
   },
 
   /**
@@ -29,8 +39,8 @@ const DatabaseClient = {
    * @param {string} docGuid
    * @returns {Promise<Object|null>}
    */
-  async getNoteByDocGuid(docGuid) {
-    return await ipcRenderer.invoke('db:getNoteByDocGuid', docGuid)
+  async getByDocGuid(docGuid) {
+    return await invoke('db:getNoteByDocGuid', docGuid)
   },
 
   /**
@@ -38,16 +48,16 @@ const DatabaseClient = {
    * @param {string} docGuid
    * @returns {Promise<Object|null>}
    */
-  async getNoteByDocGuidWithPriority(docGuid) {
-    return await ipcRenderer.invoke('db:getNoteByDocGuidWithPriority', docGuid)
+  async getByDocGuidWithPriority(docGuid) {
+    return await invoke('db:getNoteByDocGuidWithPriority', docGuid)
   },
 
   /**
    * 获取所有笔记的基本信息（用于去重检查）
    * @returns {Promise<Array>} 返回 [{title, category, kb_guid}, ...]
    */
-  async getAllNotesBasic() {
-    return await ipcRenderer.invoke('db:getAllNotesBasic')
+  async getAllBasic() {
+    return await invoke('db:getAllNotesBasic')
   },
 
   /**
@@ -55,8 +65,8 @@ const DatabaseClient = {
    * @param {Object} note
    * @returns {Promise<Object|null>}
    */
-  async createNote(note) {
-    return await ipcRenderer.invoke('db:createNote', note)
+  async create(note) {
+    return await invoke('db:createNote', note)
   },
 
   /**
@@ -65,8 +75,8 @@ const DatabaseClient = {
    * @param {Object} updates
    * @returns {Promise<Object|null>}
    */
-  async updateNote(id, updates) {
-    return await ipcRenderer.invoke('db:updateNote', { id, updates })
+  async update(id, updates) {
+    return await invoke('db:updateNote', { id, updates })
   },
 
   /**
@@ -74,32 +84,71 @@ const DatabaseClient = {
    * @param {number} id
    * @returns {Promise<boolean>}
    */
-  async deleteNote(id) {
-    return await ipcRenderer.invoke('db:deleteNote', id)
+  async remove(id) {
+    return await invoke('db:deleteNote', id)
   },
 
   /**
    * 获取冲突笔记
    * @returns {Promise<Array>}
    */
-  async getConflictNotes() {
-    return await ipcRenderer.invoke('db:getConflictNotes')
+  async getConflicts() {
+    return await invoke('db:getConflictNotes')
   },
 
   /**
-   * 获取同步状态统计
-   * @returns {Promise<Object>}
+   * 按 kb_guid 删除所有笔记（logout 时清理旧账号数据）
+   * @param {string} kbGuid
+   * @returns {Promise<number>}
    */
-  async getStats() {
-    return await ipcRenderer.invoke('db:getStats')
+  async deleteByKbGuid(kbGuid) {
+    return await invoke('db:deleteNotesByKbGuid', kbGuid)
   },
 
+  /**
+   * logout 时清理旧账号数据
+   * @param {string} kbGuid
+   * @returns {Promise<number>}
+   */
+  async clearByKbGuid(kbGuid) {
+    return await invoke('db:clearNotesByKbGuid', kbGuid)
+  },
+
+  /**
+   * 清理不属于当前账号的所有笔记（login 时隔离旧账号数据）
+   * @param {string} currentKbGuid
+   * @returns {Promise<number>}
+   */
+  async clearOtherAccounts(currentKbGuid) {
+    return await invoke('db:clearOtherAccountNotes', currentKbGuid)
+  },
+
+  /**
+   * 获取指定账号的待同步笔记
+   * @param {string} kbGuid
+   * @returns {Promise<Array>}
+   */
+  async getPendingByKbGuid(kbGuid) {
+    return await invoke('db:getPendingSyncNotesByKbGuid', kbGuid)
+  },
+
+  /**
+   * 将 kb_guid=null 的离线笔记迁移到当前账号
+   * @param {string} currentKbGuid
+   * @returns {Promise<number>}
+   */
+  async migrateOffline(currentKbGuid) {
+    return await invoke('db:migrateOfflineNotes', currentKbGuid)
+  }
+}
+
+const tags = {
   /**
    * 获取所有标签
    * @returns {Promise<Array>}
    */
-  async getTags(options = {}) {
-    return await ipcRenderer.invoke('db:getTags', options)
+  async getAll(options = {}) {
+    return await invoke('db:getTags', options)
   },
 
   /**
@@ -107,36 +156,45 @@ const DatabaseClient = {
    * @param {Object} tag
    * @returns {Promise<Object|null>}
    */
-  async createTag(tag) {
-    return await ipcRenderer.invoke('db:createTag', tag)
+  async create(tag) {
+    return await invoke('db:createTag', tag)
+  },
+
+  async getByName(name) {
+    return await invoke('db:getTagByName', { name })
   },
 
   async getNoteTags(noteId) {
-    return await ipcRenderer.invoke('db:getNoteTags', { noteId })
+    return await invoke('db:getNoteTags', { noteId })
   },
 
-  async getTagByName(name) {
-    return await ipcRenderer.invoke('db:getTagByName', { name })
+  async attachToNote(noteId, tagId) {
+    return await invoke('db:attachTagToNote', { noteId, tagId })
   },
 
-  async attachTagToNote(noteId, tagId) {
-    return await ipcRenderer.invoke('db:attachTagToNote', { noteId, tagId })
-  },
+  async remove(id) {
+    return await invoke('db:deleteTag', id)
+  }
+}
 
-  async removeTagFromNote(noteId, tagId) {
-    return await ipcRenderer.invoke('db:removeTagFromNote', { noteId, tagId })
+const sync = {
+  /**
+   * 获取同步状态统计
+   * @returns {Promise<Object>}
+   */
+  async getStats() {
+    return await invoke('db:getStats')
   },
 
   /**
    * 创建本地 ID ↔ 云端 doc_guid 映射记录
-   * @param {number} localId - 本地笔记 ID
-   * @param {string} cloudGuid - 云端 doc_guid
-   * @param {string} source - 来源：'wiznote'
+   * @param {number} localId
+   * @param {string} cloudGuid
+   * @param {string} source
    * @returns {Promise<Object|null>}
    */
   async createGuidMapping(localId, cloudGuid, source = 'wiznote') {
-    // 主进程 handler 参数名: { localId, serverGuid, service }
-    return await ipcRenderer.invoke('db:createGuidMapping', { localId, serverGuid: cloudGuid, service: source })
+    return await invoke('db:createGuidMapping', { localId, serverGuid: cloudGuid, service: source })
   },
 
   /**
@@ -144,91 +202,123 @@ const DatabaseClient = {
    * @returns {Promise<boolean>}
    */
   async resetDatabase() {
-    return await ipcRenderer.invoke('db:resetDatabase')
-  },
-
-  /**
-   * 按 kb_guid 删除所有笔记（logout 时清理旧账号数据）
-   * @param {string} kbGuid
-   * @returns {Promise<number>} 删除的笔记数量
-   */
-  async deleteNotesByKbGuid(kbGuid) {
-    return await ipcRenderer.invoke('db:deleteNotesByKbGuid', kbGuid)
-  },
-
-  /**
-   * 清理不属于当前账号的所有笔记（login 时隔离旧账号数据）
-   * @param {string} currentKbGuid
-   * @returns {Promise<number>} 删除的笔记数量
-   */
-  async clearOtherAccountNotes(currentKbGuid) {
-    return await ipcRenderer.invoke('db:clearOtherAccountNotes', currentKbGuid)
-  },
-
-  /**
-   * 获取指定账号的待同步笔记（带 kb_guid 过滤，防止跨账号数据污染）
-   * @param {string} kbGuid
-   * @returns {Promise<Array>}
-   */
-  async getPendingSyncNotesByKbGuid(kbGuid) {
-    return await ipcRenderer.invoke('db:getPendingSyncNotesByKbGuid', kbGuid)
-  },
-
-  /**
-   * 将 kb_guid=null 的离线笔记迁移到当前账号（登录时调用）
-   * 永远本地优先：不禁用任何笔记
-   * @param {string} currentKbGuid
-   * @returns {Promise<number>} 迁移的笔记数量
-   */
-  migrateOfflineNotes(currentKbGuid) {
-    return ipcRenderer.invoke('db:migrateOfflineNotes', currentKbGuid)
-  },
-
-  // ==================== 离线文件夹（categories）====================
-
-  getCategories(options = {}) {
-    return ipcRenderer.invoke('db:getCategories', options)
-  },
-
-  createCategory(params) {
-    return ipcRenderer.invoke('db:createCategory', params)
-  },
-
-  deleteCategory(category) {
-    return ipcRenderer.invoke('db:deleteCategory', { category })
-  },
-
-  ensureOfflineRoot() {
-    return ipcRenderer.invoke('db:ensureOfflineRoot')
-  },
-
-  clearNotesByKbGuid(kbGuid) {
-    return ipcRenderer.invoke('db:clearNotesByKbGuid', kbGuid)
-  },
-
-  syncCategoryToCloud(params) {
-    return ipcRenderer.invoke('db:syncCategoryToCloud', params)
-  },
-
-  migrateOfflineCategories(currentKbGuid) {
-    return ipcRenderer.invoke('db:migrateOfflineCategories', currentKbGuid)
-  },
-
-  getAppState(key) {
-    return ipcRenderer.invoke('db:getAppState', key)
-  },
-
-  getAppStates(keys = []) {
-    return ipcRenderer.invoke('db:getAppStates', keys)
-  },
-
-  setAppState(key, value) {
-    return ipcRenderer.invoke('db:setAppState', { key, value })
-  },
-
-  removeAppState(key) {
-    return ipcRenderer.invoke('db:removeAppState', key)
+    return await invoke('db:resetDatabase')
   }
+}
+
+const categories = {
+  async getAll(options = {}) {
+    return await invoke('db:getCategories', options)
+  },
+
+  async create(params) {
+    return await invoke('db:createCategory', params)
+  },
+
+  async remove(category) {
+    return await invoke('db:deleteCategory', { category })
+  },
+
+  async ensureOfflineRoot() {
+    return await invoke('db:ensureOfflineRoot')
+  },
+
+  async syncToCloud(params) {
+    return await invoke('db:syncCategoryToCloud', params)
+  },
+
+  async migrateOffline(currentKbGuid) {
+    return await invoke('db:migrateOfflineCategories', currentKbGuid)
+  }
+}
+
+const appState = {
+  async get(key) {
+    return await invoke('db:getAppState', key)
+  },
+
+  async getMany(keys = []) {
+    return await invoke('db:getAppStates', keys)
+  },
+
+  async set(key, value) {
+    return await invoke('db:setAppState', { key, value })
+  },
+
+  async remove(key) {
+    return await invoke('db:removeAppState', key)
+  }
+}
+
+const runes = {
+  async getAll() {
+    return await invoke('db:getRunes')
+  },
+
+  async save(rune) {
+    return await invoke('db:saveRune', rune)
+  },
+
+  async saveMany(items) {
+    return await invoke('db:saveRunes', items)
+  },
+
+  async remove(id) {
+    return await invoke('db:deleteRune', id)
+  }
+}
+
+const DatabaseClient = {
+  notes,
+  tags,
+  sync,
+  categories,
+  appState,
+  runes,
+
+  getNotes: notes.getAll,
+  getNote: notes.getById,
+  getNoteByDocGuid: notes.getByDocGuid,
+  getNoteByDocGuidWithPriority: notes.getByDocGuidWithPriority,
+  getAllNotesBasic: notes.getAllBasic,
+  createNote: notes.create,
+  updateNote: notes.update,
+  deleteNote: notes.remove,
+  getConflictNotes: notes.getConflicts,
+  deleteNotesByKbGuid: notes.deleteByKbGuid,
+  clearNotesByKbGuid: notes.clearByKbGuid,
+  clearOtherAccountNotes: notes.clearOtherAccounts,
+  getPendingSyncNotesByKbGuid: notes.getPendingByKbGuid,
+  migrateOfflineNotes: notes.migrateOffline,
+
+  getTags: tags.getAll,
+  createTag: tags.create,
+  getTagByName: tags.getByName,
+  getNoteTags: tags.getNoteTags,
+  attachTagToNote: tags.attachToNote,
+  removeTagFromNote: tags.removeFromNote,
+  deleteTag: tags.remove,
+
+  getStats: sync.getStats,
+  createGuidMapping: sync.createGuidMapping,
+  resetDatabase: sync.resetDatabase,
+
+  getCategories: categories.getAll,
+  createCategory: categories.create,
+  deleteCategory: categories.remove,
+  ensureOfflineRoot: categories.ensureOfflineRoot,
+  syncCategoryToCloud: categories.syncToCloud,
+  migrateOfflineCategories: categories.migrateOffline,
+
+  getAppState: appState.get,
+  getAppStates: appState.getMany,
+  setAppState: appState.set,
+  removeAppState: appState.remove,
+
+  getRunes: runes.getAll,
+  saveRune: runes.save,
+  saveRunes: runes.saveMany,
+  deleteRune: runes.remove
 }
 
 export default DatabaseClient

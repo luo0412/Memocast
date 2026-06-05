@@ -120,10 +120,12 @@ export default {
 
     async syncNow() {
       this.isSyncing = true
-      this.$emit('sync')
-      setTimeout(() => {
+      try {
+        await this.$emit('sync')
+      } finally {
+        this.isSyncing = false
         this.hide()
-      }, 500)
+      }
     },
 
     skipSync() {

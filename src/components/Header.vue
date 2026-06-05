@@ -228,6 +228,8 @@ import events from 'src/constants/events'
 import SearchDialog from 'components/ui/dialog/SearchDialog'
 import ImDrawer from 'components/ui/ImDrawer'
 import { ipcRenderer } from 'electron'
+import DatabaseClient from 'src/utils/DatabaseClient'
+import types from 'src/store/client/types'
 
 const {
   mapState: mapServerState,
@@ -457,14 +459,28 @@ export default {
 
       try {
         const result = await this.sync()
+        const stats = await DatabaseClient.getStats()
+        this.$store.commit(`client/${types.UPDATE_SYNC_STATUS}`, {
+          isSyncing: false,
+          lastSyncTime: Date.now(),
+          ...stats
+        })
         if (result.success) {
-          const { stats = {} } = result
-          this.$q.notify({
-            message: this.$t('syncComplete'),
-            type: 'positive',
-            position: 'top',
-            caption: `↑${stats.pushed || 0} ↓${stats.pulled || 0}`
-          })
+          if ((stats.pending || 0) > 0) {
+            this.$q.notify({
+              message: this.$t('syncFailed'),
+              type: 'warning',
+              position: 'top',
+              caption: `仍有 ${stats.pending} 条未同步`
+            })
+          } else {
+            this.$q.notify({
+              message: this.$t('syncComplete'),
+              type: 'positive',
+              position: 'top',
+              caption: `↑${result.stats?.pushed || 0} ↓${result.stats?.pulled || 0}`
+            })
+          }
         } else {
           this.$q.notify({
             message: this.$t('syncFailed'),
@@ -474,6 +490,15 @@ export default {
         }
       } catch (error) {
         console.error('Sync failed:', error)
+        try {
+          const stats = await DatabaseClient.getStats()
+          this.$store.commit(`client/${types.UPDATE_SYNC_STATUS}`, {
+            isSyncing: false,
+            ...stats
+          })
+        } catch (statsError) {
+          console.error('Refresh sync status failed:', statsError)
+        }
         this.$q.notify({
           message: this.$t('syncFailed'),
           type: 'negative',

@@ -178,7 +178,7 @@ function wizIsPredefinedLocation (strLocation) {
  * @param {string[] | string[][]} categories
  * @param {{}} categoriesPos
  */
-function generateCategoryNodeTree (categories, categoriesPos) {
+function generateCategoryNodeTree (categories, categoriesPos = {}) {
   const result = []
   categories = categories || []
   categories = categories.map(category => {
@@ -209,8 +209,10 @@ function generateCategoryNodeTree (categories, categoriesPos) {
         key: `/${category[0]}/`
       })
       result.sort((c1, c2) => {
-        if (categoriesPos[c1.key] && categoriesPos[c2.key]) {
-          return categoriesPos[c1.key] - categoriesPos[c2.key]
+        const pos1 = categoriesPos?.[c1.key]
+        const pos2 = categoriesPos?.[c2.key]
+        if (pos1 !== undefined && pos2 !== undefined) {
+          return pos1 - pos2
         } else {
           return c1.originLabel.localeCompare(c2.originLabel)
         }
@@ -234,8 +236,10 @@ function generateCategoryNodeTree (categories, categoriesPos) {
       key: nodeKey
     })
     rootNode.children.sort((c1, c2) => {
-      if (categoriesPos[c1.key] && categoriesPos[c2.key]) {
-        return categoriesPos[c1.key] - categoriesPos[c2.key]
+      const pos1 = categoriesPos?.[c1.key]
+      const pos2 = categoriesPos?.[c2.key]
+      if (pos1 !== undefined && pos2 !== undefined) {
+        return pos1 - pos2
       } else {
         return c1.originLabel.localeCompare(c2.originLabel)
       }

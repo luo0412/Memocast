@@ -951,16 +951,34 @@ function registerDatabaseHandlers() {
       if (!normalizedCategory.startsWith('/')) normalizedCategory = '/' + normalizedCategory
       if (!normalizedCategory.endsWith('/')) normalizedCategory = normalizedCategory + '/'
 
-      // 幂等：如果已存在，直接返回
+      const normalizedParent = parent || ''
+      const normalizedKbGuid = kbGuid || ''
+      const normalizedLocalOnly = localOnly ? 1 : 0
+
+      // 幂等：同一路径若已存在，则按当前目标状态升级/回退，而不是重复插入
       const existing = execOne('SELECT * FROM local_categories WHERE category = ?', [normalizedCategory])
       if (existing) {
+        const needsUpdate =
+          (existing.parent || '') !== normalizedParent ||
+          (existing.kb_guid || '') !== normalizedKbGuid ||
+          Number(existing.local_only || 0) !== normalizedLocalOnly
+
+        if (needsUpdate) {
+          await db.run(
+            'UPDATE local_categories SET parent = ?, kb_guid = ?, local_only = ?, updated_at = ? WHERE category = ?',
+            [normalizedParent, normalizedKbGuid, normalizedLocalOnly, now, normalizedCategory]
+          )
+          saveDatabase()
+          return execOne('SELECT * FROM local_categories WHERE category = ?', [normalizedCategory])
+        }
+
         log.info(`[DB] createCategory: category "${normalizedCategory}" already exists, skipping`)
         return existing
       }
 
       await db.run(
         `INSERT INTO local_categories (category, parent, kb_guid, local_only, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-        [normalizedCategory, parent || '', kbGuid || '', localOnly ? 1 : 0, now, now]
+        [normalizedCategory, normalizedParent, normalizedKbGuid, normalizedLocalOnly, now, now]
       )
       saveDatabase()
       const lastId = getLastInsertRowid()

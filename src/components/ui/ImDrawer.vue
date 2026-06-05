@@ -23,12 +23,12 @@
       </div>
 
       <!-- Wujie micro-frontend container -->
-      <div class="im-wujie-wrapper" style="width: 100%; height: 100%;">
+      <div class="im-wujie-wrapper">
         <WujieVue
           key="imUrl"
           v-if="visible"
           name="box-im"
-          style="width: 100%; height: 100%;"
+          class="im-wujie-frame"
           :url="imUrl"
           :sync="false"
           :props="wujieProps"
@@ -138,7 +138,15 @@ export default {
 
 .im-wujie-wrapper {
   flex: 1;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   position: relative;
+}
+
+.im-wujie-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 </style>
