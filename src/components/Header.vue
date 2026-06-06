@@ -126,50 +126,6 @@
 
       <!-- 右侧图标组 -->
     <div class="header-right-icons">
-      <!-- 视图切换按钮 -->
-      <div
-        class="header-icon-btn q-electron-drag--exception"
-        :class="{ 'is-active': paneLayoutMode !== 0 }"
-        :title="$t('switchView')"
-        @click="switchViewHandler"
-      >
-        <a-icon type="layout" class="icon-custom layout-mirror" />
-      </div>
-
-      <!-- 换肤按钮 (Element UI Dropdown) -->
-      <el-dropdown trigger="click" @command="handleSkinCommand">
-        <div
-          class="header-icon-btn q-electron-drag--exception"
-          :title="$t('skin')"
-        >
-          <a-icon type="skin" class="icon-custom" />
-        </div>
-          <el-dropdown-menu slot="dropdown">
-          <el-dropdown-item command="nezha">哪吒</el-dropdown-item>
-          <el-dropdown-item command="baiyang">白羊</el-dropdown-item>
-          <el-dropdown-item command="infp">INFP</el-dropdown-item>
-        </el-dropdown-menu>
-      </el-dropdown>
-
-      <!-- 聊天图标 -->
-      <div
-        class="header-icon-btn q-electron-drag--exception"
-        :title="$t('imChat')"
-        @click="handleImChatClick"
-      >
-        <i class="el-icon-chat-dot-round icon-custom" />
-      </div>
-
-      <!-- 设置按钮 -->
-      <div
-        class="header-icon-btn q-electron-drag--exception"
-        :class="{ 'is-highlight': settingsHighlight }"
-        :title="$t('settings')"
-        @click="handleSettingsClick"
-      >
-        <i class="el-icon-setting icon-custom" />
-      </div>
-
       <!-- 全局同步按钮 -->
       <div
         v-if="isLogin"
@@ -232,6 +188,50 @@
             </el-dropdown-item>
           </el-dropdown-menu>
         </el-dropdown>
+      </div>
+
+      <!-- 视图切换按钮 -->
+      <div
+        class="header-icon-btn q-electron-drag--exception"
+        :class="{ 'is-active': paneLayoutMode !== 0 }"
+        :title="$t('switchView')"
+        @click="switchViewHandler"
+      >
+        <a-icon type="layout" class="icon-custom layout-mirror" />
+      </div>
+
+      <!-- 换肤按钮 (Element UI Dropdown) -->
+      <el-dropdown trigger="click" @command="handleSkinCommand">
+        <div
+          class="header-icon-btn q-electron-drag--exception"
+          :title="$t('skin')"
+        >
+          <a-icon type="skin" class="icon-custom" />
+        </div>
+          <el-dropdown-menu slot="dropdown">
+          <el-dropdown-item command="nezha">哪吒</el-dropdown-item>
+          <el-dropdown-item command="baiyang">白羊</el-dropdown-item>
+          <el-dropdown-item command="infp">INFP</el-dropdown-item>
+        </el-dropdown-menu>
+      </el-dropdown>
+
+      <!-- 聊天图标 -->
+      <div
+        class="header-icon-btn q-electron-drag--exception"
+        :title="$t('imChat')"
+        @click="handleImChatClick"
+      >
+        <i class="el-icon-chat-dot-round icon-custom" />
+      </div>
+
+      <!-- 设置按钮 -->
+      <div
+        class="header-icon-btn q-electron-drag--exception"
+        :class="{ 'is-highlight': settingsHighlight }"
+        :title="$t('settings')"
+        @click="handleSettingsClick"
+      >
+        <i class="el-icon-setting icon-custom" />
       </div>
 
       <!-- 窗口控制按钮 (Windows) -->

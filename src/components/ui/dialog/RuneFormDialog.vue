@@ -122,16 +122,23 @@
 <style lang="scss" scoped>
 .rune-form-card {
   min-width: 600px;
-  max-width: 80vw;
-  width: 720px;
+  max-width: 82vw;
+  width: 760px;
+  min-height: 78vh;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .rune-form-toolbar {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex: 0 0 auto;
 }
 
 .rune-form-body {
   padding: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .rune-form-field {
@@ -179,7 +186,8 @@
 }
 
 .rune-monaco-editor {
-  height: 320px;
+  height: 420px;
+  min-height: 420px;
   border: 1px solid #434343;
   border-radius: 4px;
   overflow: hidden;
@@ -189,6 +197,10 @@
 .rune-form-footer {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 8px 16px;
+  margin-top: auto;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(6px);
 }
 </style>
 
