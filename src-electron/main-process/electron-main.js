@@ -144,32 +144,7 @@ async function initDatabase() {
  * 初始化数据库表结构
  */
 function initSchema() {
-  const createDefaultRuneTemplate = (name) => `<template>
-  <div class="rune-card">
-    <h2>${name}{{ title }}</h2>
-  </div>
-</template>
-
-<script>
-export default {
-  name: 'RuneCard',
-  data () {
-    return {
-      title: 'Hello Rune'
-    }
-  }
-}
-</script>
-
-<style lang="scss" scoped>
-.rune-card {
-  padding: 16px;
-  h2 {
-    color: #7E57C2;
-    font-size: 18px;
-  }
-}
-</style>`
+  const createDefaultRuneTemplate = () => '<el-input />'
 
   // Notes 表（本地优先架构：使用 dirty 字段跟踪同步状态）
   db.run(`

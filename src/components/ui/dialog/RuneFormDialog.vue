@@ -295,32 +295,7 @@ const createUuid = () => {
   })
 }
 
-const DEFAULT_TEMPLATE = `<template>
-  <div class="rune-card">
-    <h2>{{ title }}</h2>
-  </div>
-</template>
-
-<script>
-export default {
-  name: 'RuneCard',
-  data () {
-    return {
-      title: 'Hello Rune'
-    }
-  }
-}
-<\/script>
-
-<style lang="scss" scoped>
-.rune-card {
-  padding: 16px;
-  h2 {
-    color: #7E57C2;
-    font-size: 18px;
-  }
-}
-</style>`
+const DEFAULT_TEMPLATE = `<template><el-input /></template>`
 
 const ICON_NAME_MAP = {
   whatshot: 'whatshot',
