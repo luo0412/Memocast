@@ -103,14 +103,14 @@ async function initDatabase() {
     // 动态导入 sql.js
     const initSqlJs = (await import('sql.js')).default
     console.log('[Main] sql.js loaded:', typeof initSqlJs)
-    
+
     dbPath = path.join(app.getPath('userData'), 'memocast.db')
     console.log('[Main] Database path:', dbPath)
     log.info(`[Main] Initializing SQLite database at: ${dbPath}`)
 
     // 初始化 sql.js
     const SQL = await initSqlJs()
-    
+
     // 尝试加载已有数据库
     if (fs.existsSync(dbPath)) {
       const fileBuffer = fs.readFileSync(dbPath)
@@ -127,7 +127,7 @@ async function initDatabase() {
 
     // 保存数据库到文件
     saveDatabase()
-    
+
     log.info('[Main] Database initialized successfully')
 
     // 注册数据库 IPC 处理器
@@ -144,11 +144,9 @@ async function initDatabase() {
  * 初始化数据库表结构
  */
 function initSchema() {
+  const BUILTIN_RUNE_IDS = new Set(['rune-1', 'rune-2', 'rune-3', 'rune-4', 'rune-5', 'rune-6'])
   const createDefaultRuneTemplate = () => `<template>
-    <el-input 
-        v-model="count" 
-        size="small" 
-    />
+   <span class="rune-text"> {{ text }}</span>
 </template>
 
 <script>
@@ -161,11 +159,15 @@ export default {
     },
     data() {
         return {
-            count: this.value
+            text: this.value
         }
     }
 }
-</script>`
+</script>
+
+<style lang="less" scoped>
+.rune-text { color: purple; }
+</style>`
 
   // Notes 表（本地优先架构：使用 dirty 字段跟踪同步状态）
   db.run(`
@@ -199,7 +201,7 @@ export default {
   try {
     const indexList = db.exec("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='notes'")
     const existingIndexes = indexList.length > 0 ? indexList[0].values.map(row => row[0]) : []
-    
+
     if (!existingIndexes.includes('idx_notes_category_title_kb')) {
       console.log('[DB] Migrating: adding unique index on (category, title, kb_guid)')
       db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_category_title_kb ON notes(category, title, kb_guid) WHERE category IS NOT NULL AND title IS NOT NULL AND kb_guid IS NOT NULL`)
@@ -213,7 +215,7 @@ export default {
   try {
     const tableInfo = db.exec("PRAGMA table_info(notes)")
     const columns = tableInfo[0].values.map(row => row[1])
-    
+
     if (!columns.includes('kb_guid')) {
       console.log('[DB] Migrating: adding kb_guid column to notes table')
       db.run("ALTER TABLE notes ADD COLUMN kb_guid TEXT")
@@ -230,7 +232,7 @@ export default {
     // ✅ 如果存在 sync_status 列，需要移除它（通过重建表）
     if (columns.includes('sync_status')) {
       console.log('[DB] Migrating: removing deprecated sync_status column, using dirty instead')
-      
+
       try {
         // 创建新表（不包含 sync_status）
         db.run(`
@@ -259,10 +261,10 @@ export default {
             data_created, data_modified, local_modified,
             server_modified, created_at, updated_at, dirty
           )
-          SELECT 
+          SELECT
             id, doc_guid, kb_guid, title, content, category, tags,
             data_created, data_modified, local_modified,
-            server_modified, created_at, updated_at, 
+            server_modified, created_at, updated_at,
             CASE WHEN sync_status IN ('local_only', 'pending_upload') THEN 1 ELSE 0 END as dirty
           FROM notes
         `)
@@ -415,11 +417,18 @@ export default {
   const emptyTemplateRunes = execToObjects(`SELECT id, name FROM runes WHERE template IS NULL OR trim(template) = ''`)
   if (emptyTemplateRunes.length > 0) {
     const now = Date.now()
-    for (const rune of emptyTemplateRunes) {
-      db.run('UPDATE runes SET template = ?, updated_at = ? WHERE id = ?', [createDefaultRuneTemplate(rune.name), now, rune.id])
+    const newRuneIds = emptyTemplateRunes
+      .filter(rune => rune && rune.id && !BUILTIN_RUNE_IDS.has(rune.id))
+      .map(rune => rune.id)
+
+    for (const runeId of newRuneIds) {
+      db.run('UPDATE runes SET template = ?, updated_at = ? WHERE id = ?', [createDefaultRuneTemplate(), now, runeId])
     }
-    saveDatabase()
-    log.info(`[DB] Backfilled default templates for ${emptyTemplateRunes.length} rune(s)`) 
+
+    if (newRuneIds.length > 0) {
+      saveDatabase()
+      log.info(`[DB] Backfilled default templates for ${newRuneIds.length} new rune(s)`)
+    }
   }
 
   log.info('[Main] Database schema initialized')
@@ -470,9 +479,9 @@ function registerDatabaseHandlers() {
   ipcMain.handle('db:getAllNotesBasic', async () => {
     try {
       return execToObjects(`
-        SELECT title, category, kb_guid 
-        FROM notes 
-        WHERE title IS NOT NULL AND title != '' 
+        SELECT title, category, kb_guid
+        FROM notes
+        WHERE title IS NOT NULL AND title != ''
           AND kb_guid IS NOT NULL AND kb_guid != ''
       `)
     } catch (error) {
@@ -506,9 +515,9 @@ function registerDatabaseHandlers() {
     try {
       // ✅ 核心原则：local_modified 最大的 = 用户最后操作的 = 应该显示的
       return execOne(`
-        SELECT * FROM notes 
-        WHERE doc_guid = ? 
-        ORDER BY 
+        SELECT * FROM notes
+        WHERE doc_guid = ?
+        ORDER BY
           CASE WHEN local_modified IS NULL OR local_modified = 0 THEN 0 ELSE local_modified END DESC,
           id DESC
         LIMIT 1
@@ -526,61 +535,61 @@ function registerDatabaseHandlers() {
       const toStr = (v) => (v == null) ? '' : (typeof v === 'string') ? v : (typeof v === 'number') ? String(v) : JSON.stringify(v)
       const toNum = (v) => (v == null) ? now : (typeof v === 'number') ? v : parseInt(v, 10) || now
       const toStrOrNull = (v) => (v == null) ? null : (typeof v === 'string') ? v : (typeof v === 'number') ? String(v) : JSON.stringify(v)
-      
+
       const title = toStr(note.title) || 'Untitled'
       const category = toStr(note.category) || DEFAULT_ROOT_CATEGORY
       const kbGuid = toStrOrNull(note.kb_guid)
       const docGuid = toStrOrNull(note.doc_guid)
-      
+
       // ✅ 调试日志：显示 createNote 的所有参数（便于排查 category 问题）
       console.log(`[DB] createNote called: title="${title}", category="${category}", kbGuid=${kbGuid}, docGuid=${docGuid}`)
-      
+
       // ✅ 警告：如果 category 是错误的根目录 "/"，记录详细信息
       if (category === '/' || (category && !category.endsWith('/'))) {
         console.warn(`[DB] ⚠️ INVALID CATEGORY: title="${title}", raw_category="${note.category}", normalized="${category}", should be "${DEFAULT_ROOT_CATEGORY}"`)
       }
-      
+
       let existingNote = null
-      
+
       // ✅ 优先级 1：按 doc_guid 精确匹配（最强）
       if (docGuid && !docGuid.startsWith('local_')) {
         existingNote = execOne(`SELECT * FROM notes WHERE doc_guid = ? LIMIT 1`, [docGuid])
       }
-      
+
       // ✅ 优先级 2：按 (category, title, kb_guid) 匹配（标准去重）
       if (!existingNote && kbGuid && title && title !== 'Untitled') {
         existingNote = execOne(`
-          SELECT * FROM notes 
+          SELECT * FROM notes
           WHERE category = ? AND title = ? AND kb_guid = ?
           ORDER BY local_modified DESC, id DESC
           LIMIT 1
         `, [category, title, kbGuid])
-        
+
         if (existingNote) {
           console.log(`[DB] createNote: Matched by (category, title, kb_guid)=(${category}, ${title}, ${kbGuid}), id=${existingNote.id}`)
         }
       }
-      
+
       // ✅ 优先级 3：按 (category, title) 匹配（kbGuid 为空时的兜底）
       if (!existingNote && title && title !== 'Untitled') {
         existingNote = execOne(`
-          SELECT * FROM notes 
+          SELECT * FROM notes
           WHERE category = ? AND title = ?
           ORDER BY local_modified DESC, id DESC
           LIMIT 1
         `, [category, title])
-        
+
         if (existingNote) {
           console.log(`[DB] createNote: Matched by (category, title)=(${category}, ${title}), id=${existingNote.id} (kbGuid was missing)`)
         }
       }
-      
+
       // ✅ 如果找到已有记录 → 更新它（永不创建副本）
       if (existingNote && existingNote.id) {
         console.log(`[DB] createNote: ✅ Updating EXISTING note id=${existingNote.id} instead of creating new`)
-        
+
         await db.run(`
-          UPDATE notes 
+          UPDATE notes
           SET doc_guid = COALESCE(?, doc_guid),
               kb_guid = COALESCE(?, kb_guid),
               title = ?,
@@ -604,11 +613,11 @@ function registerDatabaseHandlers() {
           now,
           existingNote.id
         ])
-        
+
         saveDatabase()
         return execOne('SELECT * FROM notes WHERE id = ?', [existingNote.id])
       }
-      
+
       // ✅ 没有找到 → 才 INSERT 新记录
       await db.run(`
         INSERT INTO notes (doc_guid, kb_guid, title, content, category, tags, data_created, data_modified, local_modified, created_at, updated_at, dirty)
@@ -627,7 +636,7 @@ function registerDatabaseHandlers() {
         now,
         1  // 新建笔记默认 dirty=1（待同步）
       ])
-      
+
       console.log(`[DB] createNote: id=?, dirty=1 (pending sync)`)
       // 保存到文件（sql.js 是 auto-commit，不需要手动 COMMIT）
       saveDatabase()
@@ -658,7 +667,7 @@ function registerDatabaseHandlers() {
       if (!createdNote) {
         log.warn('[DB] createNote: falling back to latest created_at query')
         createdNote = execOne(`
-          SELECT * FROM notes 
+          SELECT * FROM notes
           WHERE created_at = (SELECT MAX(created_at) FROM notes)
           ORDER BY id DESC LIMIT 1
         `)
@@ -742,13 +751,13 @@ function registerDatabaseHandlers() {
       saveDatabase()
 
       const updatedNote = execOne('SELECT * FROM notes WHERE id = ?', [id])
-      
+
       if (updatedNote) {
         console.log(`[DB] ✅ Update verified: id=${updatedNote.id}, dirty=${updatedNote.dirty}, local_modified=${updatedNote.local_modified}`)
       } else {
         console.error(`[DB] ❌ Failed to retrieve updated note ${id} after update`)
       }
-      
+
       return updatedNote
     } catch (error) {
       log.error('[DB] updateNote error:', error)
@@ -791,16 +800,16 @@ function registerDatabaseHandlers() {
            WHERE dirty = 1 AND (kb_guid IS NULL OR kb_guid = '')`
         )
       }
-      
+
       const stats = {
         total: total?.count || 0,
         synced: Math.max((total?.count || 0) - (pending?.count || 0), 0),
         pending: pending?.count || 0,
         syncing: 0
       }
-      
+
       console.log(`[DB] 📊 Stats: total=${stats.total}, pending=${stats.pending}, kbGuid=${currentKbGuid || 'offline'}`)
-      
+
       return stats
     } catch (error) {
       log.error('[DB] getStats error:', error)
@@ -1265,14 +1274,14 @@ function registerDatabaseHandlers() {
   ipcMain.handle('db:findDuplicateSyncedNote', async (event, { title, category }) => {
     try {
       // 规范化 category：'/My Notes/' 或 '/我的笔记/' → '/' （统一使用英文，排除国际化影响）
-      const normalizedCat = (!category || 
-                             category === '/My Notes/' || 
+      const normalizedCat = (!category ||
+                             category === '/My Notes/' ||
                              category === '/我的笔记/') ? '/' : (category || '')
-      
+
       const result = execToObjects(`
         SELECT id, doc_guid, kb_guid, title, category, dirty
-        FROM notes 
-        WHERE title = ? 
+        FROM notes
+        WHERE title = ?
           AND (
             (category = ? OR category IS NULL)
             OR (category = '/My Notes/' AND ? = '/')
@@ -1283,7 +1292,7 @@ function registerDatabaseHandlers() {
         ORDER BY server_modified DESC
         LIMIT 1
       `, [title, normalizedCat, normalizedCat, normalizedCat])
-      
+
       return result && result.length > 0 ? result[0] : null
     } catch (error) {
       log.error('[DB] findDuplicateSyncedNote error:', error)
@@ -1297,14 +1306,14 @@ function registerDatabaseHandlers() {
       const result = execToObjects(`
         SELECT id, doc_guid, kb_guid, title, category,
                local_modified, server_modified
-        FROM notes 
-        WHERE doc_guid IS NOT NULL 
+        FROM notes
+        WHERE doc_guid IS NOT NULL
           AND doc_guid NOT LIKE 'local_%'
-          AND title IS NOT NULL 
+          AND title IS NOT NULL
           AND title != ''
         ORDER BY category, title, server_modified DESC
       `)
-      
+
       return result || []
     } catch (error) {
       log.error('[DB] getAllSyncedNotesForCleanup error:', error)
@@ -1362,7 +1371,7 @@ function registerDatabaseHandlers() {
       const invalidNotes = execToObjects(`
         SELECT id, doc_guid, kb_guid
         FROM notes
-        WHERE doc_guid IS NOT NULL 
+        WHERE doc_guid IS NOT NULL
           AND doc_guid NOT LIKE 'local_%'
           AND (kb_guid IS NULL OR kb_guid = '')
       `)
@@ -1562,13 +1571,14 @@ function registerDatabaseHandlers() {
     try {
       const now = Date.now()
       const existing = execOne('SELECT id FROM runes WHERE id = ?', [rune.id])
+      const template = rune.template || (existing ? '' : createDefaultRuneTemplate())
       if (existing) {
         await db.run(`UPDATE runes SET name = ?, "desc" = ?, power = ?, color = ?, icon = ?, template = ?, updated_at = ? WHERE id = ?`, [
-          rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', rune.template || '', now, rune.id
+          rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, now, rune.id
         ])
       } else {
         await db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, template, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [rune.id, rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', rune.template || '', now, now])
+          [rune.id, rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, now, now])
       }
       saveDatabase()
       return execOne('SELECT * FROM runes WHERE id = ?', [rune.id])

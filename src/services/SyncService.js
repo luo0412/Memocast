@@ -614,16 +614,28 @@ class SyncService {
    */
   async pushToCloud() {
     const kbGuid = getKbGuid()
+    console.log('[SyncService] pushToCloud start', {
+      kbGuid,
+      isSyncing: this.isSyncing,
+      userId: SessionStorageService.getUserId(),
+      accountInfo: SessionStorageService.getAccountInfo()
+    })
+
     if (!kbGuid || kbGuid === 'null') {
-      console.warn('[SyncService] pushToCloud skipped: no kbGuid')
-      return { count: 0, errors: 0 }
+      console.warn('[SyncService] pushToCloud skipped: no kbGuid', {
+        kbGuid,
+        userId: SessionStorageService.getUserId(),
+        accountInfo: SessionStorageService.getAccountInfo()
+      })
+      return { count: 0, errors: 0, reason: 'not_logged_in' }
     }
 
     const pendingNotes = await DatabaseClient.notes.getPendingByKbGuid(kbGuid)
     console.log(`[SyncService] 📤 pushToCloud: found ${pendingNotes?.length || 0} dirty notes for kbGuid=${kbGuid}`)
 
     // ✅ 先把本地独有的目录同步到云端（离线创建的文件夹）
-    await this.syncLocalCategoriesToCloud(kbGuid)
+    const categorySyncResult = await this.syncLocalCategoriesToCloud(kbGuid)
+    console.log('[SyncService] Category sync result before note push', categorySyncResult)
 
     if (pendingNotes.length === 0) {
       console.log('[SyncService] No dirty notes to sync')
@@ -810,7 +822,9 @@ class SyncService {
     }
 
     console.log(`[SyncService] 📊 pushToCloud completed: ${pushedCount} synced, ${deleteSyncedCount} deleted, ${errors} errors`)
-    return { count: pushedCount, deleted: deleteSyncedCount, errors }
+    const finalResult = { count: pushedCount, deleted: deleteSyncedCount, errors }
+    console.log('[SyncService] pushToCloud final result payload', finalResult)
+    return finalResult
   }
 
   /**
@@ -874,10 +888,17 @@ class SyncService {
       }
 
       console.log(`[SyncService] syncLocalCategoriesToCloud: ${synced}/${unsynced.length} categories synced`)
-      return { synced, total: unsynced.length }
+      const summary = { synced, total: unsynced.length }
+      console.log('[SyncService] syncLocalCategoriesToCloud summary', summary)
+      return summary
     } catch (err) {
-      console.error('[SyncService] syncLocalCategoriesToCloud error:', err)
-      return { synced: 0, total: 0 }
+      console.error('[SyncService] syncLocalCategoriesToCloud error:', {
+        message: err?.message,
+        stack: err?.stack,
+        responseStatus: err?.response?.status,
+        responseData: err?.response?.data
+      })
+      return { synced: 0, total: 0, error: err?.message || String(err) }
     }
   }
 

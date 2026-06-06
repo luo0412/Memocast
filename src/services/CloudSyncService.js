@@ -22,6 +22,61 @@ class CloudSyncService {
     this._listeners = []
   }
 
+  _normalizeSyncResult(result, fallbackSuccessPayload = {}) {
+    const normalized = result && typeof result === 'object' ? { ...result } : null
+
+    if (!normalized) {
+      console.warn('[CloudSyncService] Sync returned empty result, treating as success payload fallback', {
+        resultType: typeof result,
+        fallbackSuccessPayload
+      })
+      return {
+        ...fallbackSuccessPayload,
+        success: true,
+        reason: null,
+        error: null
+      }
+    }
+
+    const hasExplicitSuccess = Object.prototype.hasOwnProperty.call(normalized, 'success')
+    const success = hasExplicitSuccess ? Boolean(normalized.success) : true
+
+    if (!success) {
+      const reason = normalized.reason || 'sync_failed'
+      const error = normalized.error || this._getReasonMessage(reason)
+      console.warn('[CloudSyncService] Normalized sync failure result', {
+        reason,
+        error,
+        normalized
+      })
+      return {
+        ...normalized,
+        success: false,
+        reason,
+        error
+      }
+    }
+
+    return {
+      ...fallbackSuccessPayload,
+      ...normalized,
+      success: true,
+      reason: normalized.reason || null,
+      error: null
+    }
+  }
+
+  _getReasonMessage(reason) {
+    const messages = {
+      not_logged_in: 'Cloud sync requires login first.',
+      already_syncing: 'A sync task is already running.',
+      preview_failed: 'Failed to load cloud restore preview.',
+      sync_failed: 'Cloud sync failed.'
+    }
+
+    return messages[reason] || 'Cloud sync failed.'
+  }
+
   get status() {
     return { ...this._status }
   }
@@ -90,22 +145,34 @@ class CloudSyncService {
    */
   async pullOnly() {
     if (!this.isLoggedIn) {
-      return { success: false, reason: 'not_logged_in' }
+      return this._normalizeSyncResult({ success: false, reason: 'not_logged_in' })
     }
     this._status.isSyncing = true
     this._status.error = null
     this._notify({ type: 'sync_start' })
 
     try {
-      const result = await SyncService.restoreFromCloud()
+      const result = this._normalizeSyncResult(await SyncService.restoreFromCloud())
+      if (!result.success) {
+        this._status.error = result.error
+        this._notify({ type: 'sync_error', error: result.error })
+        return result
+      }
+
+      const stats = result.stats || {}
       this._status.lastSyncTime = Date.now()
       await this._refreshStats()
       this._notify({ type: 'sync_complete', result })
-      return { success: true, pulled: result.count, skipped: result.skipped, backfilled: result.backfilled || 0 }
+      return {
+        ...result,
+        pulled: stats.pulled || 0,
+        skipped: stats.skipped || 0,
+        backfilled: stats.backfilled || 0
+      }
     } catch (error) {
       this._status.error = error.message
       this._notify({ type: 'sync_error', error: error.message })
-      return { success: false, error: error.message }
+      return this._normalizeSyncResult({ success: false, error: error.message, reason: 'sync_failed' })
     } finally {
       this._status.isSyncing = false
     }
@@ -116,24 +183,56 @@ class CloudSyncService {
    */
   async pushOnly() {
     if (!this.isLoggedIn) {
-      return { success: false, reason: 'not_logged_in' }
+      console.warn('[CloudSyncService] pushOnly blocked: SessionStorageService reports not logged in', {
+        account: this.accountInfo,
+        status: this._status
+      })
+      return this._normalizeSyncResult({ success: false, reason: 'not_logged_in' })
     }
     this._status.isSyncing = true
     this._status.error = null
     this._notify({ type: 'sync_start' })
 
     try {
-      const result = await SyncService.pushToCloud()
+      console.log('[CloudSyncService] pushOnly started', {
+        account: this.accountInfo,
+        pending: this._status.pending,
+        synced: this._status.synced,
+        total: this._status.total
+      })
+      const rawResult = await SyncService.pushToCloud()
+      console.log('[CloudSyncService] pushOnly raw SyncService result', rawResult)
+      const result = this._normalizeSyncResult(rawResult, { count: 0, errors: 0 })
+      if (!result.success) {
+        this._status.error = result.error
+        console.warn('[CloudSyncService] pushOnly finished with failure result', result)
+        this._notify({ type: 'sync_error', error: result.error })
+        return result
+      }
+
       this._status.lastSyncTime = Date.now()
       await this._refreshStats()
+      console.log('[CloudSyncService] pushOnly completed', {
+        result,
+        status: this._status
+      })
       this._notify({ type: 'sync_complete', result })
       return result
     } catch (error) {
       this._status.error = error.message
+      console.error('[CloudSyncService] pushOnly threw exception', {
+        message: error?.message,
+        stack: error?.stack,
+        responseStatus: error?.response?.status,
+        responseData: error?.response?.data
+      })
       this._notify({ type: 'sync_error', error: error.message })
-      return { success: false, error: error.message }
+      return this._normalizeSyncResult({ success: false, error: error.message, reason: 'sync_failed' })
     } finally {
       this._status.isSyncing = false
+      console.log('[CloudSyncService] pushOnly finished finally', {
+        status: this._status
+      })
     }
   }
 

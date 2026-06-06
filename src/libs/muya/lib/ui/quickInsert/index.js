@@ -52,9 +52,22 @@ const normalizeRuneIcon = (rune = {}) => {
   const color = rune.color || '#7E57C2'
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="${color}"/><text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-size="28" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Arial,PingFang SC,Microsoft YaHei,sans-serif" font-weight="700" fill="#fff">${glyph.toUpperCase()}</text></svg>`
 
-  return `data:image/svg+xml;base64,${typeof window !== 'undefined' && typeof window.btoa === 'function'
+  const encodedSvg = typeof window !== 'undefined' && typeof window.btoa === 'function'
     ? window.btoa(unescape(encodeURIComponent(svg)))
-    : svg}`
+    : svg
+  return `data:image/svg+xml;base64,${encodedSvg}`
+}
+
+const normalizeQuickInsertIcon = (item = {}) => {
+  if (item?.meta?.type === 'rune') {
+    return normalizeRuneIcon({
+      ...item.meta,
+      name: item.meta.runeName || item.name || item.label,
+      color: item.color || item.meta.color,
+      icon: item.icon
+    })
+  }
+  return item.icon
 }
 
 const createRuneQuickInsertItem = (rune = {}) => {
@@ -70,11 +83,13 @@ const createRuneQuickInsertItem = (rune = {}) => {
     label: `rune:${id || name}`,
     shortCut: '',
     icon: normalizeRuneIcon(rune),
+    color: rune.color || '#7E57C2',
     searchText,
     meta: {
       type: 'rune',
       runeTemplateId: id,
       runeName: name,
+      color: rune.color || '#7E57C2',
       insertContent: template
     }
   }
@@ -197,9 +212,9 @@ class QuickInsert extends BaseScrollFloat {
           const {
             title,
             subTitle,
-            label,
-            icon
+            label
           } = item
+          const icon = normalizeQuickInsertIcon(item)
           const iconVnode = h('div.icon-container', h('i.icon', {
             style: {
               background: `url(${icon}) 0% 0% / 100% no-repeat`,

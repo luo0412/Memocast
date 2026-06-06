@@ -18,99 +18,93 @@
         <q-btn flat round dense icon='close' v-close-popup />
       </q-toolbar>
 
-      <q-card-section class='scroll rune-form-body'>
-        <div class='rune-form-top'>
-          <div class='rune-form-main-fields'>
-            <div class='rune-form-field'>
-              <div class='rune-form-label'>{{ $t('runeCardName') }}</div>
-              <q-input
-                v-model='form.name'
-                dense
-                outlined
-                :placeholder="$t('runeCardName')"
-                class='rune-form-input rune-form-input--compact'
-              />
-            </div>
-
-            <div class='rune-form-field rune-form-field--desc'>
-              <div class='rune-form-label'>{{ $t('runeCardDesc') }}</div>
-              <q-input
-                v-model='form.desc'
-                dense
-                outlined
-                type='textarea'
-                autogrow
-                :placeholder="$t('runeCardDesc')"
-                class='rune-form-input rune-form-input--compact'
-              />
-            </div>
+      <q-card-section class='rune-form-body'>
+        <div class='rune-form-fields'>
+          <div class='rune-form-field'>
+            <div class='rune-form-label'>{{ $t('runeCardName') }}</div>
+            <q-input
+              v-model='form.name'
+              dense
+              outlined
+              :placeholder="$t('runeCardName')"
+              class='rune-form-input rune-form-input--compact'
+            />
           </div>
 
-          <div class='rune-form-side-fields'>
-            <div class='rune-form-side-card'>
-              <div class='rune-form-field rune-form-field--tight'>
-                <div class='rune-form-label'>{{ $t('runeCardPower') }}</div>
-                <q-slider
-                  v-model='form.power'
-                  :min='1'
-                  :max='100'
-                  label
-                  label-always
-                  color='primary'
-                  class='rune-form-slider'
-                />
-              </div>
+          <div class='rune-form-field rune-form-field--desc'>
+            <div class='rune-form-label'>{{ $t('runeCardDesc') }}</div>
+            <q-input
+              v-model='form.desc'
+              dense
+              outlined
+              type='textarea'
+              autogrow
+              :placeholder="$t('runeCardDesc')"
+              class='rune-form-input rune-form-input--compact'
+            />
+          </div>
 
-              <div class='rune-form-field rune-form-field--tight'>
-                <div class='rune-form-label'>图标</div>
-                <q-select
-                  v-model='form.icon'
-                  dense
-                  outlined
-                  :options='iconOptions'
-                  option-label='label'
-                  option-value='value'
-                  emit-value
-                  map-options
-                  class='rune-form-input rune-form-input--compact'
-                >
-                  <template v-slot:selected-item='scope'>
-                    <div class='row items-center'>
-                      <q-icon :name='getIconName(scope.opt.value)' size='1em' class='q-mr-xs' />
-                      <span>{{ scope.opt.label }}</span>
-                    </div>
-                  </template>
-                  <template v-slot:option='scope'>
-                    <q-item v-bind='scope.itemProps' v-on='scope.itemEvents'>
-                      <q-item-section avatar>
-                        <q-icon :name='getIconName(scope.opt.value)' />
-                      </q-item-section>
-                      <q-item-section>
-                        <q-item-label>{{ scope.opt.label }}</q-item-label>
-                      </q-item-section>
-                    </q-item>
-                  </template>
-                </q-select>
-              </div>
+          <div class='rune-form-field rune-form-field--tight'>
+            <div class='rune-form-label'>{{ $t('runeCardPower') }}</div>
+            <q-slider
+              v-model='form.power'
+              :min='1'
+              :max='100'
+              label
+              label-always
+              color='primary'
+              class='rune-form-slider'
+            />
+          </div>
 
-              <div class='rune-form-field rune-form-field--tight'>
-                <div class='rune-form-label'>颜色</div>
-                <div class='color-row'>
-                  <div
-                    v-for='c in colorOptions'
-                    :key='c.value'
-                    class='color-dot'
-                    :class="{ selected: form.color === c.value }"
-                    :style='{ background: c.value }'
-                    @click='form.color = c.value'
-                  />
+          <div class='rune-form-field rune-form-field--tight'>
+            <div class='rune-form-label'>图标</div>
+            <q-select
+              v-model='form.icon'
+              dense
+              outlined
+              :options='iconOptions'
+              option-label='label'
+              option-value='value'
+              emit-value
+              map-options
+              class='rune-form-input rune-form-input--compact'
+            >
+              <template v-slot:selected-item='scope'>
+                <div class='row items-center'>
+                  <q-icon :name='getIconName(scope.opt.value)' size='1em' class='q-mr-xs' />
+                  <span>{{ scope.opt.label }}</span>
                 </div>
-              </div>
+              </template>
+              <template v-slot:option='scope'>
+                <q-item v-bind='scope.itemProps' v-on='scope.itemEvents'>
+                  <q-item-section avatar>
+                    <q-icon :name='getIconName(scope.opt.value)' />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.label }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+          </div>
+
+          <div class='rune-form-field rune-form-field--tight'>
+            <div class='rune-form-label'>颜色</div>
+            <div class='color-row'>
+              <div
+                v-for='c in colorOptions'
+                :key='c.value'
+                class='color-dot'
+                :class="{ selected: form.color === c.value }"
+                :style='{ background: c.value }'
+                @click='form.color = c.value'
+              />
             </div>
           </div>
         </div>
 
-        <div class='rune-form-field rune-form-field--editor'>
+        <div class='rune-form-editor-wrap'>
           <div class='rune-form-label'>模板内容</div>
           <div
             ref='editorContainer'
@@ -131,48 +125,42 @@
 .rune-form-card {
   min-width: 600px;
   max-width: 82vw;
-  width: 820px;
-  min-height: 78vh;
-  max-height: 88vh;
+  width: 760px;
+  height: 78vh;
+  max-height: 86vh;
   display: flex;
   flex-direction: column;
 }
 
 .rune-form-toolbar {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex: 0 0 auto;
 }
 
 .rune-form-body {
-  padding: 12px 14px;
   flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  gap: 14px;
+}
+
+.rune-form-fields {
+  flex: 0 0 220px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
 
-.rune-form-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 248px;
-  gap: 12px;
-  align-items: start;
-}
-
-.rune-form-main-fields,
-.rune-form-side-fields {
+.rune-form-editor-wrap {
+  flex: 1 1 auto;
   min-width: 0;
-}
-
-.rune-form-side-card {
-  padding: 10px 10px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
 }
 
 .rune-form-field {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .rune-form-field:last-child {
@@ -187,11 +175,7 @@
   margin-bottom: 10px;
 }
 
-.rune-form-field--editor {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+.rune-form-field--tight:last-child {
   margin-bottom: 0;
 }
 
@@ -247,9 +231,8 @@
 }
 
 .rune-monaco-editor {
-  flex: 1 1 auto;
-  min-height: 500px;
-  height: 100%;
+  height: 420px;
+  min-height: 420px;
   border: 1px solid #434343;
   border-radius: 4px;
   overflow: hidden;
@@ -257,26 +240,28 @@
 }
 
 .rune-form-footer {
+  flex: 0 0 auto;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 8px 16px;
-  margin-top: auto;
-  flex: 0 0 auto;
   background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(6px);
 }
 
-@media (max-width: 960px) {
+@media (max-width: 680px) {
   .rune-form-card {
-    width: 92vw;
-    max-width: 92vw;
+    width: 96vw;
+    max-width: 96vw;
   }
 
-  .rune-form-top {
-    grid-template-columns: 1fr;
+  .rune-form-body {
+    flex-direction: column;
+  }
+
+  .rune-form-fields {
+    flex: 0 0 auto;
   }
 
   .rune-monaco-editor {
-    min-height: 420px;
+    min-height: 360px;
   }
 }
 </style>
@@ -295,7 +280,33 @@ const createUuid = () => {
   })
 }
 
-const DEFAULT_TEMPLATE = `<template><el-input /></template>`
+const createDefaultRuneTemplate = () => {
+  return `<template>
+  <span class="rune-text">{{ text }}</span>
+</temp` + `late>
+
+
+<script>
+export default {
+  props: {
+    value: {
+      type: [String, Number],
+      default: null
+    }
+  },
+  data() {
+    return {
+      text: this.value
+    }
+  }
+}
+</sc` + `ript>
+
+
+<style lang="less" scoped>
+.rune-text { color: purple; }
+</style>`
+}
 
 const ICON_NAME_MAP = {
   whatshot: 'local_fire_department',
@@ -333,6 +344,10 @@ export default {
   data () {
     return {
       dialog: null,
+      monacoInitTimer: null,
+      monacoReady: false,
+      monacoInitAttempt: 0,
+      _monacoRo: null,
       form: {
         id: '',
         name: '',
@@ -340,7 +355,7 @@ export default {
         power: 50,
         color: '#7E57C2',
         icon: 'whatshot',
-        template: DEFAULT_TEMPLATE
+        template: createDefaultRuneTemplate()
       },
       monacoEditor: null,
       iconOptions: [
@@ -383,19 +398,17 @@ export default {
   watch: {
     value (val) {
       if (val) {
-        this.$nextTick(() => {
-          this.initMonaco()
-        })
+        this.scheduleMonacoInit()
       } else {
-        if (this.monacoEditor) {
-          this.monacoEditor.layout()
-        }
+        this.clearMonacoInitTimer()
       }
     },
     rune: {
       immediate: true,
       handler (val) {
         if (val) {
+          this._prevRuneId = val.id
+          const template = val.template || createDefaultRuneTemplate()
           this.form = { ...val }
           console.log('\n[RuneFormDialog.rune watcher] Loaded editing rune:', {
             id: this.form.id,
@@ -403,6 +416,12 @@ export default {
             templateLen: (this.form.template || '').length,
             templatePreview: String(this.form.template || '').substring(0, 120)
           })
+          if (this.monacoEditor && this.monacoReady) {
+            const current = this.monacoEditor.getValue()
+            if (current !== template) {
+              this.monacoEditor.setValue(template)
+            }
+          }
         } else {
           this.form = {
             id: createUuid(),
@@ -411,7 +430,7 @@ export default {
             power: 50,
             color: '#7E57C2',
             icon: 'whatshot',
-            template: DEFAULT_TEMPLATE
+            template: createDefaultRuneTemplate()
           }
           console.log('\n[RuneFormDialog.rune watcher] Initialized new rune form:', {
             id: this.form.id,
@@ -424,58 +443,125 @@ export default {
   },
   mounted () {
     this.dialog = this.$refs.dialog
+    this.scheduleMonacoInit()
+  },
+  beforeDestroy () {
+    this.clearMonacoInitTimer()
+    if (this._monacoRo) {
+      this._monacoRo.disconnect()
+      this._monacoRo = null
+    }
+    this.disposeMonaco()
   },
   methods: {
     getIconName (value) {
       return ICON_NAME_MAP[value] || value
     },
-    initMonaco () {
-      if (!this.$refs.editorContainer) return
-      const template = this.form.template || DEFAULT_TEMPLATE
-      console.log('\n[RuneFormDialog.initMonaco] Preparing editor:', {
-        runeId: this.form.id,
-        runeName: this.form.name,
-        templateLen: template.length,
-        templatePreview: template.substring(0, 120)
-      })
-      if (!this.monacoEditor) {
-        this.monacoEditor = monaco.editor.create(this.$refs.editorContainer, {
-          value: template,
-          language: 'html',
-          theme: 'Memocast-Dark',
-          fontSize: 13,
-          minimap: { enabled: false },
-          scrollBeyondLastLine: false,
-          lineNumbers: 'on',
-          renderLineHighlight: 'line',
-          automaticLayout: true,
-          wordWrap: 'on',
-          fontFamily: 'JetBrains Mono, Fira Code, Monaco, PingFang SC, Hiragino Sans GB, 微软雅黑, Arial, sans-serif'
-        })
-        this.monacoEditor.onDidChangeModelContent(() => {
-          this.form.template = this.monacoEditor.getValue()
-          console.log('[RuneFormDialog.monaco change] template synced:', {
-            runeId: this.form.id,
-            runeName: this.form.name,
-            templateLen: this.form.template.length,
-            templatePreview: this.form.template.substring(0, 120)
-          })
-        })
-      } else {
-        const currentValue = this.monacoEditor.getValue()
-        if (currentValue !== template) {
-          console.log('[RuneFormDialog.initMonaco] Resetting existing editor value:', {
-            oldLen: currentValue.length,
-            newLen: template.length,
-            newPreview: template.substring(0, 120)
-          })
-          this.monacoEditor.setValue(template)
-        }
-        this.monacoEditor.layout()
+    clearMonacoInitTimer () {
+      if (this.monacoInitTimer) {
+        clearTimeout(this.monacoInitTimer)
+        this.monacoInitTimer = null
       }
+    },
+    disposeMonaco () {
+      this.monacoReady = false
+      if (this.monacoEditor) {
+        this.monacoEditor.dispose()
+        this.monacoEditor = null
+      }
+    },
+    scheduleMonacoInit () {
+      this.clearMonacoInitTimer()
+      this.monacoInitTimer = setTimeout(() => {
+        this.monacoInitTimer = null
+        this.initMonacoWithGuards()
+      }, 120)
+    },
+    initMonacoWithGuards () {
+      this.clearMonacoInitTimer()
+      this.monacoInitTimer = setTimeout(() => {
+        this.monacoInitTimer = null
+        this._initMonacoViaObserver()
+      }, 150)
+    },
+    _initMonacoViaObserver () {
+      if (!this.value) return
+      const container = this.$refs.editorContainer
+      if (!container) return
+      this._monacoRo && this._monacoRo.disconnect()
+      this._monacoRo = new ResizeObserver(() => {
+        this.$nextTick(() => {
+          const c = this.$refs.editorContainer
+          if (c && c.clientWidth > 40 && c.clientHeight > 120) {
+            this._monacoRo.disconnect()
+            this._monacoRo = null
+            this._createMonacoEditor(this.form.template || createDefaultRuneTemplate())
+          }
+        })
+      })
+      this._monacoRo.observe(container)
+      this._monacoRo.checkingTimeout && clearTimeout(this._monacoRo.checkingTimeout)
+      this._monacoRo.checkingTimeout = setTimeout(() => {
+        if (this._monacoRo) {
+          this._monacoRo.disconnect()
+          this._monacoRo = null
+          this.$nextTick(() => this._createMonacoEditor(this.form.template || createDefaultRuneTemplate()))
+        }
+      }, 1200)
+    },
+    initMonaco () {
+      this._initMonacoViaObserver()
+    },
+    _createMonacoEditor (template) {
+      if (!this.$refs.editorContainer) return
+      this.disposeMonaco()
+
+      monaco.editor.defineTheme('Memocast-Dark', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [],
+        colors: {
+          'editor.background': '#34383e',
+          'editorCursor.foreground': '#FFCC00'
+        }
+      })
+
+      this.monacoEditor = monaco.editor.create(this.$refs.editorContainer, {
+        value: template,
+        language: 'html',
+        theme: 'Memocast-Dark',
+        fontSize: 13,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        lineNumbers: 'on',
+        renderLineHighlight: 'line',
+        automaticLayout: true,
+        wordWrap: 'on',
+        readOnly: false,
+        domReadOnly: false,
+        fontFamily: 'JetBrains Mono, Fira Code, Monaco, PingFang SC, Hiragino Sans GB, 微软雅黑, Arial, sans-serif'
+      })
+      this.monacoEditor.onDidChangeModelContent(() => {
+        if (!this.monacoEditor) return
+        this.form.template = this.monacoEditor.getValue()
+        console.log('[RuneFormDialog.monaco change] template synced:', {
+          runeId: this.form.id,
+          runeName: this.form.name,
+          templateLen: this.form.template.length,
+          templatePreview: this.form.template.substring(0, 120)
+        })
+      })
+      this.monacoReady = true
+      this.monacoEditor.updateOptions({ readOnly: false, domReadOnly: false })
+      this.monacoEditor.layout()
+      this.monacoEditor.focus()
     },
     submit () {
       if (!this.form.name.trim()) return
+      if (!this.monacoReady) {
+        this.initMonacoWithGuards()
+        return
+      }
       if (this.monacoEditor) {
         this.form.template = this.monacoEditor.getValue()
       }

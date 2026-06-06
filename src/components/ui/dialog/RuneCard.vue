@@ -1,7 +1,10 @@
 <template>
   <div class='rune-card' :style='cardStyle'>
     <div class='rune-card-header' :style='headerStyle'>
-      <q-icon :name='rune.icon' class='rune-card-icon' />
+      <div class='rune-card-icon' :style='iconBadgeStyle'>
+        <q-icon v-if='hasIcon' :name='rune.icon' class='rune-card-icon-glyph' />
+        <span v-else class='rune-card-icon-text'>{{ runeInitial }}</span>
+      </div>
       <div class='rune-card-power'>
         <span class='power-label'>{{ $t('runeCardPower') }}</span>
         <span class='power-value'>{{ rune.power }}</span>
@@ -19,6 +22,19 @@
 </template>
 
 <script>
+const isChineseCharacter = char => /[\u3400-\u9FFF]/.test(char)
+const isAlphabetCharacter = char => /[A-Za-z]/.test(char)
+
+const getRuneInitial = rune => {
+  const sourceText = String(rune?.name || rune?.text || rune?.label || '').trim()
+  const firstChar = Array.from(sourceText)[0]
+
+  if (!firstChar) return '符'
+  if (isChineseCharacter(firstChar)) return firstChar
+  if (isAlphabetCharacter(firstChar)) return firstChar.toUpperCase()
+  return firstChar
+}
+
 export default {
   name: 'RuneCard',
   props: {
@@ -28,6 +44,18 @@ export default {
     }
   },
   computed: {
+    hasIcon () {
+      return Boolean(this.rune.icon)
+    },
+    runeInitial () {
+      return getRuneInitial(this.rune)
+    },
+    iconBadgeStyle () {
+      return {
+        background: 'rgba(255, 255, 255, 0.16)',
+        borderColor: `${this.rune.color || '#7E57C2'}66`
+      }
+    },
     cardStyle () {
       return {
         borderColor: this.rune.color + '66'
@@ -44,9 +72,12 @@ export default {
 
 <style scoped>
 .rune-card {
-  display: block;
-  width: 148px;
-  height: 160px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 160px;
+  height: 100%;
   border-radius: 12px;
   border: 2px solid;
   overflow: hidden;
@@ -78,9 +109,31 @@ export default {
 }
 
 .rune-card-icon {
-  font-size: 1.8rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #fff;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+  border: 1px solid transparent;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(6px);
+  flex-shrink: 0;
+}
+
+.rune-card-icon-glyph {
+  font-size: 1.15rem;
+  color: #fff;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+}
+
+.rune-card-icon-text {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .rune-card-power {
@@ -106,8 +159,9 @@ export default {
 }
 
 .rune-card-body {
+  flex: 1;
   padding: 6px 10px 2px;
-  height: 68px;
+  min-height: 0;
   box-sizing: border-box;
   overflow: hidden;
 }

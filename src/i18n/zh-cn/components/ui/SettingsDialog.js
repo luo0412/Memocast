@@ -54,6 +54,7 @@ export default {
   resetSqliteFailed: '重置失败，请重试',
   categoryCreated: '文件夹已创建',
   // 云同步
+  cloudSync: '云同步',
   cloudSyncNotLoggedIn: '未登录',
   cloudSyncNotLoggedInHint: '离线模式可用，本地笔记保留本地',
   cloudSyncSyncNow: '备份到云端',

@@ -378,6 +378,7 @@
                     @dragend='onDragEnd'
                   >
                     <RuneCard
+                      class='rune-card-item'
                       :rune='rune'
                       @edit='openEditRune'
                       @delete='confirmDeleteRune'
@@ -399,8 +400,11 @@
     <ImageUploadServiceDialog ref='imageUploadServiceDialog' />
     <UpdateDialog ref='updateDialog' />
     <RuneFormDialog
+      v-if='runeFormVisible'
+      :key='runeFormKey'
       v-model='runeFormVisible'
       :rune='editingRune'
+      @input='onRuneFormVisibleChange'
       @submit='onRuneSubmit'
     />
   </q-dialog>
@@ -421,11 +425,17 @@ import helper from 'src/utils/helper'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import CloudSyncService from 'src/services/CloudSyncService'
 import SessionStorageService from 'src/services/SessionStorageService'
+
+const SYNC_REASON_MESSAGES = {
+  not_logged_in: 'offlineMode',
+  already_syncing: 'cloudSyncSyncing'
+}
 import { Dark, Loading } from 'quasar'
 
 const {
   mapState: mapClientState,
-  mapActions: mapClientActions
+  mapActions: mapClientActions,
+  mapMutations: mapClientMutations
 } = createNamespacedHelpers('client')
 
 export default {
@@ -452,6 +462,7 @@ export default {
       version: version,
       checkingNotify: null,
       runeFormVisible: false,
+      runeFormKey: 0,
       editingRune: null,
       dragFromIndex: null,
       cloudSyncLoginState: {
@@ -662,7 +673,7 @@ export default {
         const success = await DatabaseClient.sync.resetDatabase()
         if (success) {
           // 重置同步状态
-          this.$store.commit('UPDATE_SYNC_STATUS', {
+          this.UPDATE_SYNC_STATUS({
             isSyncing: false,
             lastSyncTime: null,
             total: 0,
@@ -722,11 +733,29 @@ export default {
     },
     openEditRune: function (rune) {
       this.editingRune = { ...rune }
-      this.runeFormVisible = true
+      this.openRuneFormDialog()
     },
     openAddRune: function () {
       this.editingRune = null
+      this.openRuneFormDialog()
+    },
+    openRuneFormDialog: function () {
+      this.runeFormKey += 1
       this.runeFormVisible = true
+    },
+    onRuneFormVisibleChange: function (visible) {
+      this.runeFormVisible = visible
+      if (!visible) {
+        this.$nextTick(() => {
+          this.editingRune = null
+        })
+      }
+    },
+    destroyRuneFormDialog: function () {
+      this.runeFormVisible = false
+      this.$nextTick(() => {
+        this.editingRune = null
+      })
     },
     confirmDeleteRune: async function (rune) {
       this.$q.dialog({
@@ -755,7 +784,7 @@ export default {
           bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
         })
       }
-      this.editingRune = null
+      this.destroyRuneFormDialog()
     },
 
     // ==================== 云同步 ====================
@@ -764,6 +793,23 @@ export default {
         isLoggedIn: SessionStorageService.isLoggedIn(),
         accountInfo: SessionStorageService.getAccountInfo()
       }
+    },
+
+    formatSyncFailureMessage (result) {
+      if (!result) {
+        return this.$t('cloudSyncFailed')
+      }
+
+      if (result.error) {
+        return result.error
+      }
+
+      const messageKey = SYNC_REASON_MESSAGES[result.reason]
+      if (messageKey) {
+        return this.$t(messageKey)
+      }
+
+      return this.$t('cloudSyncFailed')
     },
 
     async refreshCloudSyncStatus () {
@@ -787,7 +833,7 @@ export default {
       if (result.success) {
         this.$q.notify({ message: this.$t('cloudBackupComplete'), type: 'positive', icon: 'cloud_upload' })
       } else {
-        this.syncError = result.error || this.$t('cloudSyncFailed')
+        this.syncError = this.formatSyncFailureMessage(result)
       }
     },
 
@@ -822,7 +868,7 @@ export default {
         if (result.success) {
           this.$q.notify({ message: `${this.$t('cloudRestoreComplete')} ↓${result.pulled || 0}`, type: 'positive', icon: 'cloud_download' })
         } else {
-          this.syncError = result.error || this.$t('cloudSyncFailed')
+          this.syncError = this.formatSyncFailureMessage(result)
         }
       })
     },
@@ -836,7 +882,7 @@ export default {
       if (result.success) {
         this.$q.notify({ message: `${this.$t('cloudBackupComplete')} ↑${result.count || 0}`, type: 'positive', icon: 'cloud_upload' })
       } else {
-        this.syncError = result.error || this.$t('cloudSyncFailed')
+        this.syncError = this.formatSyncFailureMessage(result)
       }
     },
 
@@ -880,7 +926,8 @@ export default {
       'saveRunes',
       'sync',
       'refreshSyncStatus'
-    ])
+    ]),
+    ...mapClientMutations({ UPDATE_SYNC_STATUS: 'update_sync_status' })
   },
   mounted () {
     bus.$on(events.UPDATE_EVENTS.updateAvailable, this.updateAvailableHandler)
@@ -994,15 +1041,21 @@ export default {
 }
 
 .rune-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
   padding: 4px;
   min-height: 80px;
+  align-items: stretch;
 }
 
 .rune-card-wrapper {
-  display: inline-block;
+  display: flex;
+  min-width: 0;
+}
+
+.rune-card-item {
+  width: 100%;
 }
 
 .rune-card-wrapper.rune-dragging {

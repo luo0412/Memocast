@@ -525,11 +525,13 @@ export default {
               label: `rune:${rune.id}`,
               shortCut: '',
               icon: rune.icon,
+              color: rune.color,
               searchText: [rune.name, rune.text, rune.label, rune.desc, rune.template].filter(Boolean).join(' '),
               meta: {
                 type: 'rune',
                 runeTemplateId: rune.id,
                 runeName: (rune.name || rune.text || rune.label || '').trim(),
+                color: rune.color,
                 insertContent: rune.template || ''
               }
             }))

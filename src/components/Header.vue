@@ -265,6 +265,11 @@ import { ipcRenderer } from 'electron'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import CloudSyncService from 'src/services/CloudSyncService'
 
+const SYNC_REASON_MESSAGES = {
+  not_logged_in: 'offlineMode',
+  already_syncing: 'cloudSyncSyncing'
+}
+
 const {
   mapState: mapServerState,
   mapGetters: mapServerGetters,
@@ -273,7 +278,8 @@ const {
 
 const {
   mapState: mapClientState,
-  mapActions: mapClientActions
+  mapActions: mapClientActions,
+  mapMutations: mapClientMutations
 } = createNamespacedHelpers('client')
 
 export default {
@@ -492,15 +498,33 @@ export default {
 
     ...mapServerActions(['logout', 'getCategoryNotes', 'refreshTagNotesCount']),
     ...mapClientActions(['toggleChanged', 'cyclePaneLayout', 'expandFullPaneLayout']),
+    ...mapClientMutations({ UPDATE_SYNC_STATUS: 'update_sync_status' }),
 
     async refreshSyncStatusFromDb (lastSyncTime = null) {
       const stats = await DatabaseClient.sync.getStats()
-      this.$store.commit('UPDATE_SYNC_STATUS', {
+      this.UPDATE_SYNC_STATUS({
         isSyncing: false,
         ...(lastSyncTime ? { lastSyncTime } : {}),
         ...stats
       })
       return stats
+    },
+
+    formatSyncFailureMessage (result) {
+      if (!result) {
+        return this.$t('cloudSyncFailed')
+      }
+
+      if (result.error) {
+        return result.error
+      }
+
+      const messageKey = SYNC_REASON_MESSAGES[result.reason]
+      if (messageKey) {
+        return this.$t(messageKey)
+      }
+
+      return this.$t('cloudSyncFailed')
     },
 
     async runSyncAction ({ key, action, successMessage, icon, getCount }) {
@@ -532,7 +556,7 @@ export default {
           })
         } else {
           this.$q.notify({
-            message: result.error || this.$t('cloudSyncFailed'),
+            message: this.formatSyncFailureMessage(result),
             type: 'negative',
             position: 'top'
           })
@@ -546,7 +570,7 @@ export default {
           console.error('Refresh sync status failed:', statsError)
         }
         this.$q.notify({
-          message: this.$t('cloudSyncFailed'),
+          message: error?.message || this.$t('cloudSyncFailed'),
           type: 'negative',
           position: 'top'
         })
