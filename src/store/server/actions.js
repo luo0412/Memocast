@@ -121,6 +121,13 @@ function getDefaultCategoryForMode (state, category = '') {
   return category || OFFLINE_ROOT_CATEGORY
 }
 
+function isCurrentCategoryAffected (currentCategory, categories = []) {
+  const normalizedCurrent = normalizeCategoryForMatch(currentCategory)
+  return categories
+    .map(category => normalizeCategoryForMatch(category))
+    .includes(normalizedCurrent)
+}
+
 export async function _getContent (kbGuid, docGuid) {
   
   // ✅ 关键改进：先检查 SQLite 是否有本地修改版本（比缓存更新）
@@ -412,6 +419,7 @@ export default {
   async logout ({ commit, state, dispatch }) {
     // 保存退出前的状态，避免 commit(LOGOUT) 后读取到被清空的数据
     const oldKbGuid = state.kbGuid
+    const previousCategory = state.currentCategory
     const wasTagSelection = !!(state.currentCategory && state.tags?.map(t => t.tagGuid).includes(state.currentCategory))
 
     await api.AccountServerApi.Logout()
@@ -442,10 +450,11 @@ export default {
     await dispatch('getAllTags')
     await dispatch('getAllCategories')
     commit(types.UPDATE_CATEGORIES_POS, {})
-    if (wasTagSelection) {
-      await dispatch('updateCurrentCategory', { data: OFFLINE_ROOT_CATEGORY, type: 'category' })
-    }
-    await dispatch('getCategoryNotes', { category: '' })
+
+    const nextCategory = wasTagSelection
+      ? OFFLINE_ROOT_CATEGORY
+      : getDefaultCategoryForMode({ isLogin: false, kbGuid: '' }, previousCategory)
+    await dispatch('updateCurrentCategory', { data: nextCategory, type: 'category' })
   },
   /**
    * 重新登录
@@ -458,6 +467,10 @@ export default {
       'password',
       'url'
     ])
+    const previousCategory = state.currentCategory
+    const previousSidebarTreeType = state.currentCategory && state.tags?.map(t => t.tagGuid).includes(state.currentCategory)
+      ? 'tag'
+      : 'category'
     const result = await api.AccountServerApi.Login({
       userId,
       password,
@@ -488,14 +501,11 @@ export default {
     await dispatch('getAllTags')
     await dispatch('getAllCategories')
 
-    if (state.currentCategory) {
-      await dispatch('updateCurrentCategory', {
-        data: state.currentCategory,
-        type: 'category'
-      })
-    } else {
-      await dispatch('getCategoryNotes')
-    }
+    const nextCategory = getDefaultCategoryForMode({ isLogin: true, kbGuid: result.kbGuid }, previousCategory)
+    await dispatch('updateCurrentCategory', {
+      data: nextCategory,
+      type: previousSidebarTreeType
+    })
   },
   /**
    * 获取指定文件夹下的笔记
@@ -1121,7 +1131,11 @@ export default {
       title,
       category
     } = payload
-    const nextCategory = category || state.currentNote?.info?.category || state.currentCategory
+    const currentCategory = state.currentCategory || OFFLINE_ROOT_CATEGORY
+    const previousCategory = state.currentNote?.info?.docGuid === docGuid
+      ? (state.currentNote?.info?.category || currentCategory)
+      : currentCategory
+    const nextCategory = category || previousCategory
 
     if (title && !title.toLowerCase().endsWith('.md')) {
       payload.title = `${title}.md`
@@ -1176,7 +1190,17 @@ export default {
           })
         }
 
-        await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
+        const affectedCategories = [currentCategory]
+        if (previousCategory !== currentCategory) {
+          affectedCategories.push(previousCategory)
+        }
+        if (nextCategory !== previousCategory) {
+          affectedCategories.push(nextCategory)
+        }
+
+        if (isCurrentCategoryAffected(currentCategory, affectedCategories)) {
+          await this.dispatch('server/getCategoryNotes', { category: currentCategory })
+        }
       } catch (err) {
         console.error('[updateNoteInfo/offline] SQLite update failed:', err)
       }
@@ -1766,14 +1790,12 @@ export default {
 
     // 计算完整路径（父路径 + 子文件夹名）
     let fullCategoryPath
+    const normalizedParentCategory = helper.isNullOrEmpty(parentCategory) ? state.currentCategory : parentCategory
     // 根目录（空、/、/My Notes/）下创建直接子文件夹
-    if (helper.isNullOrEmpty(parentCategory) || parentCategory === OFFLINE_ROOT_CATEGORY || parentCategory === '/') {
+    if (helper.isNullOrEmpty(normalizedParentCategory) || normalizedParentCategory === OFFLINE_ROOT_CATEGORY || normalizedParentCategory === '/') {
       fullCategoryPath = `${OFFLINE_ROOT_CATEGORY}${childCategoryName}/`
     } else {
-      // parentCategory 格式为 '/My Notes/Work/'，去掉末尾 / 后找倒数第二个 /
-      // '/My Notes/Work/'.slice(0, -1) = '/My Notes/Work' → .lastIndexOf('/') = 11 → parentBase = '/My Notes/'
-      const parentBase = parentCategory.slice(0, -1).slice(0, parentCategory.slice(0, -1).lastIndexOf('/') + 1)
-      fullCategoryPath = `${parentBase}${childCategoryName}/`
+      fullCategoryPath = `${normalizedParentCategory}${childCategoryName}/`
     }
 
     // 在线模式：同时创建云端目录 + 本地记录
@@ -1786,7 +1808,7 @@ export default {
         await api.KnowledgeBaseApi.createCategory({
           kbGuid,
           data: {
-            parent: helper.isNullOrEmpty(parentCategory) ? '/' : parentCategory,
+            parent: helper.isNullOrEmpty(normalizedParentCategory) ? '/' : normalizedParentCategory,
             pos: Math.floor(Date.now() / 1000).toFixed(0),
             child: childCategoryName
           }
@@ -1794,7 +1816,7 @@ export default {
         // 标记本地目录已同步到云端
         await DatabaseClient.categories.create({
           category: fullCategoryPath,
-          parent: helper.isNullOrEmpty(parentCategory) ? OFFLINE_ROOT_CATEGORY : parentCategory,
+          parent: helper.isNullOrEmpty(normalizedParentCategory) ? OFFLINE_ROOT_CATEGORY : normalizedParentCategory,
           kbGuid,
           localOnly: false
         })
@@ -1817,7 +1839,7 @@ export default {
       }
       await DatabaseClient.categories.create({
         category: fullCategoryPath,
-        parent: helper.isNullOrEmpty(parentCategory) ? OFFLINE_ROOT_CATEGORY : parentCategory,
+        parent: helper.isNullOrEmpty(normalizedParentCategory) ? OFFLINE_ROOT_CATEGORY : normalizedParentCategory,
         kbGuid: kbGuid || '',
         localOnly: true
       })
@@ -1825,9 +1847,9 @@ export default {
       // 乐观更新目录树：前端直接修改 state.categories（不查数据库，避免看不到刚创建的临时文件夹）
       const currentTree = state.categories
       if (currentTree && currentTree.length > 0) {
-        const root = currentTree[0]
+        const rootNode = currentTree.find(node => node.key === OFFLINE_ROOT_CATEGORY) || currentTree[0]
         // 找到父节点
-        const parentNode = findCategoryNode(root, parentCategory || OFFLINE_ROOT_CATEGORY)
+        const parentNode = findCategoryNode(rootNode, normalizedParentCategory || OFFLINE_ROOT_CATEGORY)
         if (parentNode) {
           // 避免重复
           if (!parentNode.children.find(c => c.key === fullCategoryPath)) {
@@ -1963,7 +1985,7 @@ export default {
         break
     }
   },
-  async moveNote ({ commit }, noteInfo) {
+  async moveNote ({ commit, state }, noteInfo) {
     const {
       kbGuid,
       docGuid,
@@ -1971,6 +1993,10 @@ export default {
       type,
       title
     } = noteInfo
+    const currentCategory = state.currentCategory || OFFLINE_ROOT_CATEGORY
+    const previousCategory = state.currentNote?.info?.docGuid === docGuid
+      ? (state.currentNote?.info?.category || currentCategory)
+      : currentCategory
 
     const duplicateCheck = await ensureUniqueNoteTitleInCategory({
       category,
@@ -1988,6 +2014,48 @@ export default {
         type: 'warning',
         icon: 'warning'
       })
+      return
+    }
+
+    const isOfflineNote = !state.isLogin || !kbGuid || (docGuid && docGuid.startsWith('local_'))
+    if (isOfflineNote) {
+      try {
+        const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
+        if (localNote) {
+          await DatabaseClient.notes.update(localNote.id, {
+            category,
+            local_modified: Date.now()
+          })
+        }
+
+        if (state.currentNote?.info?.docGuid === docGuid) {
+          commit(types.UPDATE_CURRENT_NOTE, {
+            ...state.currentNote,
+            info: {
+              ...(state.currentNote.info || {}),
+              ...noteInfo,
+              category
+            }
+          })
+        }
+
+        const affectedCategories = [currentCategory, previousCategory, category]
+        if (isCurrentCategoryAffected(currentCategory, affectedCategories)) {
+          await this.dispatch('server/getCategoryNotes', { category: currentCategory })
+        }
+        Notify.create({
+          message: i18n.t('moveToAnotherCategorySuccessfully'),
+          type: 'positive',
+          icon: 'check'
+        })
+      } catch (err) {
+        console.error('[moveNote/offline] SQLite move failed:', err)
+        Notify.create({
+          message: i18n.t('requestError'),
+          type: 'negative',
+          icon: 'error'
+        })
+      }
       return
     }
 
@@ -2009,9 +2077,73 @@ export default {
     const {
       kbGuid,
       docGuid,
-      category
+      category,
+      title
     } = noteInfo
     const { currentCategory } = state
+
+    const duplicateCheck = await ensureUniqueNoteTitleInCategory({
+      category,
+      title,
+      excludeDocGuid: null
+    })
+
+    if (duplicateCheck.exists) {
+      Notify.create({
+        message: i18n.t('noteTitleAlreadyExists'),
+        caption: i18n.t('noteTitleAlreadyExistsHint', {
+          category: duplicateCheck.normalizedCategory,
+          title: duplicateCheck.normalizedTitle
+        }),
+        type: 'warning',
+        icon: 'warning'
+      })
+      return
+    }
+
+    const isOfflineNote = !state.isLogin || !kbGuid || (docGuid && docGuid.startsWith('local_'))
+    if (isOfflineNote) {
+      try {
+        const sourceNote = await DatabaseClient.notes.getByDocGuid(docGuid)
+        if (!sourceNote) {
+          throw new Error(`Source note not found: ${docGuid}`)
+        }
+
+        const uniqueTitle = await generateUniqueNoteTitleInCategory({
+          category,
+          title: sourceNote.title || title || i18n.t('untitled')
+        })
+        const now = Date.now()
+        await createLocalDraftNote({
+          title: uniqueTitle,
+          content: sourceNote.content || '',
+          category,
+          now,
+          dataCreated: sourceNote.data_created || now,
+          dataModified: sourceNote.data_modified || now
+        })
+
+        const isCurrentCategory = category === currentCategory
+        if (isCurrentCategory || helper.isNullOrEmpty(currentCategory)) {
+          await this.dispatch('server/getCategoryNotes', { category: currentCategory || OFFLINE_ROOT_CATEGORY })
+        }
+
+        Notify.create({
+          message: i18n.t('copyToAnotherCategorySuccessfully'),
+          type: 'positive',
+          icon: 'check'
+        })
+      } catch (err) {
+        console.error('[copyNote/offline] SQLite copy failed:', err)
+        Notify.create({
+          message: i18n.t('requestError'),
+          type: 'negative',
+          icon: 'error'
+        })
+      }
+      return
+    }
+
     await api.KnowledgeBaseApi.copyNote({
       kbGuid,
       docGuid,

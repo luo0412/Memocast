@@ -553,12 +553,20 @@ export default {
     },
 
     async handlePullSyncAction () {
-      await this.runSyncAction({
-        key: 'isPullSyncing',
-        action: () => CloudSyncService.pullOnly(),
-        successMessage: this.$t('cloudRestoreComplete'),
-        icon: 'cloud_download',
-        getCount: result => (result.pulled > 0 ? `↓${result.pulled}` : '')
+      this.$q.dialog({
+        title: this.$t('syncPullConfirmTitle'),
+        message: this.$t('syncPullConfirmMessage'),
+        cancel: { label: this.$t('cancel') },
+        ok: { label: this.$t('syncPullConfirmOk'), color: 'primary' },
+        persistent: true
+      }).onOk(async () => {
+        await this.runSyncAction({
+          key: 'isPullSyncing',
+          action: () => CloudSyncService.pullOnly(),
+          successMessage: this.$t('cloudRestoreComplete'),
+          icon: 'cloud_download',
+          getCount: result => (result.pulled > 0 ? `↓${result.pulled}` : '')
+        })
       })
     },
 
