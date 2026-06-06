@@ -194,10 +194,9 @@ export default {
       return this.currentCategory === node.key
     },
     getCategoryDepth (categoryKey) {
-      if (!categoryKey) return 0
+      if (!categoryKey) return 1
       const segments = categoryKey.split('/').filter(Boolean)
-      if (segments.length === 0) return 0
-      return Math.max(0, segments.length - 1)
+      return Math.max(1, segments.length)
     },
     getCategoryContextMenuOptions (data, node) {
       if (this.noteMethod !== 'notesSixDaoLun') {
@@ -209,7 +208,7 @@ export default {
 
       const depth = this.getCategoryDepth(data?.key)
 
-      if (depth <= 1) {
+      if (depth === 1) {
         return {
           hideCreateCategory: false,
           hideCreateNote: false

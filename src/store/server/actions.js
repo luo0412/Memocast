@@ -121,9 +121,9 @@ function getDefaultCategoryForMode (state, category = '') {
 
 function getSixDaoFolderDepth (category = '') {
   const normalized = normalizeCategoryForMatch(category)
-  if (!normalized || normalized === OFFLINE_ROOT_CATEGORY) return 0
+  if (!normalized) return 1
   const segments = normalized.split('/').filter(Boolean)
-  return Math.max(0, segments.length - 1)
+  return Math.max(1, segments.length)
 }
 
 function isCurrentCategoryAffected (currentCategory, categories = []) {

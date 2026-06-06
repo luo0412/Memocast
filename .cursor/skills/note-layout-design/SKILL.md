@@ -184,12 +184,12 @@ categoryTreeVisible: function (val) {
 | 视图类型 | 组件 | 特点 |
 |----------|------|------|
 | 分类树 | `el-tree` | 树形层级结构 |
-| 标签树 | ECharts Treemap | 矩形面积图 |
-| 日历 | Ant Design Calendar | 按日期查看 |
+| 标签视图 | ECharts Treemap（由 `CategoryTreePanel.vue` 承载） | 面积矩形图，不是树节点 |
+| 日历视图 | `CalendarPanel.vue` + `a-calendar` | 日期筛选入口，会影响列表查询 |
 
 ### 标签矩形树图
 
-使用 ECharts 实现智能标签分布：
+标签视图不是树控件，而是 `CategoryTreePanel.vue` 中基于 ECharts 实现的 treemap：
 
 ```javascript
 function calculateTagTreeMapData(tags, tagNotesCount) {
@@ -202,6 +202,11 @@ function calculateTagTreeMapData(tags, tagNotesCount) {
   }
 }
 ```
+
+这意味着：
+- `sidebarTreeType === 'tag'` 时，左侧不是 `el-tree`，而是矩形面积图
+- 标签点击会更新当前分类语义，并调用 `expandFullPaneLayout()`
+- 标签数量展示依赖 `getTagNoteCount()` 聚合结果，不是静态标签列表
 
 ## 笔记列表设计
 

@@ -216,8 +216,8 @@ editor.copyAsMarkdown()
 // 复制选中内容为 HTML
 editor.copyAsHtml()
 
-// 复制选中内容为纯文本
-editor.copyAsPlaintext()
+// 纯文本粘贴
+editor.pasteAsPlainText()
 ```
 
 ## 调试技巧
@@ -240,7 +240,7 @@ console.log('Cursor:', cursor)
 ### 查看 Token 解析结果
 
 ```javascript
-import { tokenizer } from '@/libs/muya/lib/parser'
+import { tokenizer } from 'src/libs/muya/lib/parser'
 const tokens = tokenizer('# Hello **world**', {
   highlights: [],
   hasBeginRules: [],

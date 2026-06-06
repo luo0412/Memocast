@@ -172,6 +172,10 @@ cyclePaneLayout ({ state, dispatch }) {
 - `paneLayoutMode`
 - `expandFullPaneLayout()`
 
+补充细节：
+- `toggleTagDrawer()` 还会触发 `refreshTagNotesCount()`，因此切到标签视图不只是换 UI，也可能刷新 tag 计数。
+- `toggleCalendarDrawer()` 会先把 `calendarSelectedDate` 设为当天，再切换视图并刷新列表。
+
 ## sidebarTreeType 的当前语义
 
 当前左侧区域不是单一“分类树”，而是由 `sidebarTreeType` 控制显示：
@@ -215,12 +219,16 @@ cyclePaneLayout ({ state, dispatch }) {
 
 `src/components/CalendarPanel.vue` 当前会：
 
+- 使用 `a-calendar` 作为主日历组件（卡片模式，而非全屏日历）
 - 读取 `calendarSelectedDate`
 - 读取 `calendarDateBasis`
+- 读取 `noteOrderType`
 - 修改 `calendarSelectedDate`
-- 调用 `getCategoryNotes()` 触发列表刷新
+- 修改 `calendarDateBasis`
+- 触发 `getCategoryNotes()` 刷新列表
+- 触发 `fetchCalendarNoteDates()` 刷新当月“有笔记日期”标记
 
-这说明当前日历视图已经是一个真正的数据筛选入口，不是纯展示组件。
+这说明当前日历视图已经是一个真正的数据筛选入口，不是纯展示组件；它不仅影响日期过滤，还影响列表排序与当月打点显示。
 
 ## 分割器当前真实行为
 

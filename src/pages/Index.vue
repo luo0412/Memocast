@@ -407,10 +407,11 @@ export default {
       const yyyy = now.getFullYear()
       const category = this.currentCategory || ''
       const categoryName = category.split('/').filter(Boolean).pop() || ''
+      const noteBaseName = this.$t('noteTitleBase')
       const prefixOptions = ['Course', 'Book', 'Export', 'Model', 'Project', 'Trend']
       const selectedPrefix = prefixOptions.includes(this.noteMethodPrefix) ? this.noteMethodPrefix : 'Course'
       const defaultTitle = isSixDaoMode
-        ? `【${selectedPrefix}】${categoryName || this.$t('noteTitleBase')}-${yyyy}.md`
+        ? `${noteBaseName}-${yyyy}.md`
         : this.$t('defaultNoteTitle', {
             category: categoryName,
             date: `${yyyy}${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -458,8 +459,7 @@ export default {
         const prefixEl = container.querySelector(`.${prefixFieldClass}`)
         const titleEl = container.querySelector(`.${noteTitleInputClass}`)
         if (!prefixEl || !titleEl) return
-        const baseName = categoryName || this.$t('noteTitleBase')
-        titleEl.value = `【${prefixEl.value}】${baseName}-${yyyy}.md`
+        titleEl.value = `${noteBaseName}-${yyyy}.md`
       }
 
       const dialog = this.$q.dialog({

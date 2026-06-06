@@ -23,7 +23,9 @@ api.KnowledgeBaseApi      // 笔记、文件夹、标签、资源、搜索
 
 - Token 存储：`ServerFileStorage.getValueFromLocalStorage('token')`
 - kbGuid：知识库唯一标识，登录后从响应获取
-- 自定义服务器：需分别调用 `api.AccountServerApi.setBaseUrl(url)` 和 `api.KnowledgeBaseApi.setBaseUrl(url)`
+- 自定义服务器：**登录前**如需切换账户服务地址，可调用 `api.AccountServerApi.setBaseUrl(url)`
+- `AccountServerApi.Login()` 成功后会自动把 `KnowledgeBaseBaseUrl` 更新为返回的 `kbServer`
+- 仅在“跳过登录但已知目标知识库地址”这类特殊场景下，才需要额外手动调用 `api.KnowledgeBaseApi.setBaseUrl(url)`
 
 ### 与同步层的关系
 
@@ -148,7 +150,7 @@ await api.KnowledgeBaseApi.updateNote({
 })
 ```
 
-### 更新笔记信息（仅 metadata）
+### 更新笔记信息（metadata，可用于标题/分类/标签调整）
 
 ```javascript
 await api.KnowledgeBaseApi.updateNoteInfo({
@@ -157,10 +159,15 @@ await api.KnowledgeBaseApi.updateNoteInfo({
   data: {
     title: '新标题',
     tags: 'tag1*tag2',
-    // 注意: 不传 category 避免触发移动/删除文件夹逻辑
+    category: '/新的文件夹/'
   }
 })
 ```
+
+注意：
+- `updateNoteInfo()` 在当前项目里并不只用于改标题，也会用于改分类、改标签。
+- 传入 `category` 往往意味着移动笔记到新路径，调用前要明确这是你想要的结果。
+- 如果你只是想改标题/标签、不想改变目录，才应避免误传 `category`。
 
 ### 删除笔记
 
@@ -264,7 +271,9 @@ await api.KnowledgeBaseApi.getTagNoteCount({
   kbGuid,
   data: { tag: tagGuid }
 })
-// 返回: number（分页遍历后的总数）
+// 返回: number
+// 注意: 这是当前项目在 api.js 中通过分页拉取标签笔记后累计得到的总数，
+// 不是服务端单独提供的轻量 count 字段接口
 ```
 
 ### 创建标签

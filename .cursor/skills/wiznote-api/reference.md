@@ -62,6 +62,10 @@ KnowledgeBaseBaseUrl = result.kbServer
 
 因此登录不仅返回账号信息，还会更新后续知识库接口的目标地址。
 
+补充理解：
+- 正常登录流里，通常不需要你在登录成功后再手动 `setBaseUrl(kbServer)`。
+- 只有在特殊流程（例如跳过登录、手动恢复某个知识库上下文）下，才可能需要直接设置 `KnowledgeBaseApi` 的 baseUrl。
+
 ## KnowledgeBaseApi 当前能力
 
 ### Base URL
@@ -188,7 +192,7 @@ api.KnowledgeBaseApi.setBaseUrl(url)
 
 - 创建笔记前通常要用 `helper.embedMDNote()` 包装 Markdown
 - `updateNote()` 更偏向内容更新
-- `updateNoteInfo()` 更偏向标题、分类、标签等 metadata 更新
+- `updateNoteInfo()` 更偏向标题、分类、标签等 metadata 更新；在当前项目里它也会被用于移动笔记到新分类
 - 当前同步架构下，API 成功不等于本地已同步完成，还要更新本地 SQLite 的 `doc_guid / dirty / guid_mapping`
 
 ## 4. 分类同步

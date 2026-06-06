@@ -113,22 +113,38 @@ function renderBlock(parent, block, activeBlocks, matches, useCache) {
 
 ## 状态管理 (ContentState)
 
-ContentState 通过 Mixin 模式注入功能：
+ContentState 通过 Mixin 模式注入功能，核心思路是“Block 树 + 多控制器分工”，其中常见控制器包括：
 
 ```javascript
 const prototypes = [
-  coreApi,        // 核心API
-  tabCtrl,        // Tab处理
-  enterCtrl,     // 回车处理
-  updateCtrl,    // 更新处理
-  backspaceCtrl, // 退格处理
-  deleteCtrl,    // 删除处理
-  codeBlockCtrl, // 代码块
-  tableBlockCtrl, // 表格
-  formatCtrl,    // 格式化
-  searchCtrl,    // 搜索
+  coreApi,
+  tabCtrl,
+  enterCtrl,
+  updateCtrl,
+  backspaceCtrl,
+  deleteCtrl,
+  codeBlockCtrl,
+  arrowCtrl,
+  pasteCtrl,
+  copyCutCtrl,
+  tableBlockCtrl,
+  tableDragBarCtrl,
+  tableSelectCellsCtrl,
+  paragraphCtrl,
+  formatCtrl,
+  searchCtrl,
+  containerCtrl,
+  htmlBlockCtrl,
+  clickCtrl,
+  inputCtrl,
+  tocCtrl,
+  emojiCtrl,
+  imageCtrl,
+  linkCtrl,
+  dragDropCtrl,
+  footnoteCtrl,
+  importMarkdown
 ]
-prototypes.forEach(ctrl => ctrl(ContentState))
 ```
 
 ### Block 树操作 API
