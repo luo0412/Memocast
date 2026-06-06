@@ -11,10 +11,11 @@ import BaseScrollFloat from '../baseScrollFloat'
 import { quickInsertObj } from './config'
 import './index.css'
 
-// ============ 可配置常量 ============
-const GRID_COLUMNS = 3 // 网格列数，可随时修改
-
-// ==================================
+const DEFAULT_GRID_COLUMNS = 6
+const MIN_GRID_COLUMNS = 4
+const MAX_GRID_COLUMNS = 8
+const DEFAULT_RUNE_SECTION = 'last'
+const FALLBACK_RUNE_ICON = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%237E57C2"/><path d="M32 12 18 24l6 6-8 8 16 14 16-14-8-8 6-6-14-12z" fill="%23fff"/></svg>'
 
 /**
  * Simple substring-includes filter, replacing fuzzaldrin's fuzzy match for label search.
@@ -31,6 +32,48 @@ const customFilterByKey = (candidates, text, key) => {
     .sort((a, b) => String(a[key]).toLowerCase().indexOf(lower) - String(b[key]).toLowerCase().indexOf(lower))
 }
 
+const mergeRenderObjects = (baseObj, extensionObj = {}) => {
+  const result = deepCopy(baseObj)
+  Object.keys(extensionObj).forEach(sectionName => {
+    const sectionItems = Array.isArray(extensionObj[sectionName]) ? extensionObj[sectionName] : []
+    if (!result[sectionName]) {
+      result[sectionName] = []
+    }
+    result[sectionName].push(...sectionItems)
+  })
+  return result
+}
+
+const normalizeRuneIcon = (rune = {}) => {
+  if (rune.icon && /^data:image\//.test(rune.icon)) {
+    return rune.icon
+  }
+  const color = encodeURIComponent(rune.color || '#7E57C2')
+  return FALLBACK_RUNE_ICON.replace('%237E57C2', color)
+}
+
+const createRuneQuickInsertItem = (rune = {}) => {
+  const id = rune.id || `rune-${Date.now()}`
+  const name = (rune.name || '').trim() || 'Rune'
+  const desc = (rune.desc || '').trim()
+  const template = typeof rune.template === 'string' ? rune.template : ''
+  const searchText = [name, desc, template].filter(Boolean).join(' ')
+
+  return {
+    title: () => name,
+    subTitle: () => desc,
+    label: `rune:${id}`,
+    shortCut: '',
+    icon: normalizeRuneIcon(rune),
+    searchText,
+    meta: {
+      type: 'rune',
+      runeId: id,
+      insertContent: template
+    }
+  }
+}
+
 class QuickInsert extends BaseScrollFloat {
   static pluginName = 'quickInsert'
 
@@ -43,12 +86,58 @@ class QuickInsert extends BaseScrollFloat {
     this.renderArray = null
     this.activeItem = null
     this.block = null
-    this.columnsCount = GRID_COLUMNS // 使用常量定义列数
+    this.columnsCount = this.getColumnsCount()
     this.sectionOffsets = [] // 记录每个分区的起始索引
     this.shouldHideOnScroll = false // Prevent scroll from hiding the panel during keyboard navigation
-    this.renderObj = quickInsertObj
+    this.runeSectionName = DEFAULT_RUNE_SECTION
+    this.renderObj = this.getRenderObj()
     this.render()
     this.listen()
+  }
+
+  getDynamicRenderObj () {
+    const provider = this.muya.options.quickInsertProvider
+    if (typeof provider !== 'function') return {}
+
+    const provided = provider({
+      muya: this.muya,
+      block: this.block,
+      sectionName: this.runeSectionName,
+      createRuneItem: createRuneQuickInsertItem
+    })
+
+    if (provided && typeof provided === 'object') {
+      if (provided.sectionName && typeof provided.sectionName === 'string') {
+        this.runeSectionName = provided.sectionName
+      }
+      if (provided.items && typeof provided.items === 'object') {
+        return provided.items
+      }
+      return provided
+    }
+
+    return {}
+  }
+
+  getRenderObj () {
+    const { contentState } = this.muya
+    const canInsertFrontMatter = this.block ? contentState.canInsertFrontMatter(this.block) : true
+    const obj = deepCopy(quickInsertObj)
+    if (!canInsertFrontMatter) {
+      obj['basic block'].splice(2, 1)
+    }
+    return mergeRenderObjects(obj, this.getDynamicRenderObj())
+  }
+
+  getColumnsCount () {
+    if (typeof document === 'undefined') return DEFAULT_GRID_COLUMNS
+    const value = Number(
+      getComputedStyle(document.documentElement)
+        .getPropertyValue('--quick-insert-columns')
+        .trim()
+    )
+    if (!Number.isFinite(value)) return DEFAULT_GRID_COLUMNS
+    return Math.min(MAX_GRID_COLUMNS, Math.max(MIN_GRID_COLUMNS, value))
   }
 
   set renderObj(obj) {
@@ -74,6 +163,7 @@ class QuickInsert extends BaseScrollFloat {
       activeItem,
       _renderObj
     } = this
+    this.columnsCount = this.getColumnsCount()
     let children = Object.keys(_renderObj).filter(key => {
       return _renderObj[key].length !== 0
     })
@@ -83,6 +173,7 @@ class QuickInsert extends BaseScrollFloat {
         for (const item of _renderObj[key]) {
           const {
             title,
+            subTitle,
             label,
             icon
           } = item
@@ -93,9 +184,13 @@ class QuickInsert extends BaseScrollFloat {
             }
           }))
 
-          const description = h('div.description', [
+          const descriptionChildren = [
             h('div.big-title', title())
-          ])
+          ]
+          if (typeof subTitle === 'function' && subTitle()) {
+            descriptionChildren.push(h('div.sub-title', subTitle()))
+          }
+          const description = h('div.description', descriptionChildren)
           const selector =
             activeItem.label === label ? 'div.item.active' : 'div.item'
           items.push(
@@ -114,7 +209,11 @@ class QuickInsert extends BaseScrollFloat {
           )
         }
 
-        return h('section', [titleVnode, h('div.items-grid', items)])
+        return h('section', [titleVnode, h('div.items-grid', {
+          style: {
+            'grid-template-columns': `repeat(${this.columnsCount}, minmax(0, 1fr))`
+          }
+        }, items)])
       })
 
     if (children.length === 0) {
@@ -146,22 +245,36 @@ class QuickInsert extends BaseScrollFloat {
   }
 
   search(text) {
-    const { contentState } = this.muya
-    const canInsertFrontMatter = contentState.canInsertFrontMatter(this.block)
-    const obj = deepCopy(quickInsertObj)
-    if (!canInsertFrontMatter) {
-      obj['basic block'].splice(2, 1)
-    }
+    const obj = this.getRenderObj()
     let result = obj
     if (text !== '') {
       result = {}
       Object.keys(obj).forEach(key => {
         // [Fuzzaldrin] filter(arr, text, { key: 'label' }) → customFilterByKey(arr, text, 'label')
-        result[key] = customFilterByKey(obj[key], text, 'label')
+        result[key] = customFilterByKey(obj[key], text, 'searchText')
       })
     }
     this.renderObj = result
     this.render()
+  }
+
+  insertRuneTemplate(item) {
+    const { contentState } = this.muya
+    const insertContent = item?.meta?.insertContent || ''
+    const { key } = this.block
+    this.block.text = insertContent
+    const offset = insertContent.length
+    contentState.cursor = {
+      start: {
+        key,
+        offset
+      },
+      end: {
+        key,
+        offset
+      }
+    }
+    contentState.partialRender()
   }
 
   selectItem(item) {

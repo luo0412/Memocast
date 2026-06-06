@@ -151,6 +151,36 @@
                 <q-separator class='q-my-xs' />
                 <div>
                   <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
+                    <div class='row items-center no-wrap justify-between q-mb-xs'>
+                      <span>{{ $t('quickInsertColumns') }}</span>
+                      <div class='row items-center no-wrap q-gutter-xs'>
+                        <q-badge color='primary' align='middle'>{{ quickInsertColumns }}</q-badge>
+                        <span class='text-caption text-grey-6'>默认 6</span>
+                      </div>
+                    </div>
+                    <q-slider
+                      :value='quickInsertColumns'
+                      :min='4'
+                      :max='8'
+                      :step='1'
+                      label
+                      snap
+                      color='primary'
+                      markers
+                      @input="value => updateStateAndStore({ quickInsertColumns: value })"
+                    />
+                    <div class='row justify-between text-caption text-grey-6 q-mt-xs'>
+                      <span>4</span>
+                      <span>5</span>
+                      <span>6</span>
+                      <span>7</span>
+                      <span>8</span>
+                    </div>
+                  </div>
+                </div>
+                <q-separator class='q-my-xs' />
+                <div>
+                  <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
                     <span>{{ $t('noteOrder') }}</span>
                     <q-select
                       dense
@@ -395,7 +425,7 @@ import { Dark, Loading } from 'quasar'
 
 const {
   mapState: mapClientState,
-  mapActions: mapActions
+  mapActions: mapClientActions
 } = createNamespacedHelpers('client')
 
 export default {
@@ -490,6 +520,7 @@ export default {
       'markdownOnly',
       'imageUploadService',
       'noteOrderType',
+      'quickInsertColumns',
       'theme',
       'themes',
       'runeCards',
@@ -837,7 +868,7 @@ export default {
         this.syncError = event.error
       }
     },
-    ...mapActions([
+    ...mapClientActions([
       'toggleChanged',
       'updateStateAndStore',
       'loadRunes',

@@ -25,6 +25,7 @@ export default function () {
     theme: 'Default-Light',
     themes: [],
     autoSaveGap: 0,
+    quickInsertColumns: 6,
     splitterWidth: 580,
     sidebarTreeType: 'category',
     noteMethod: 'notesSixDaoLun',

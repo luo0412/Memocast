@@ -22,6 +22,7 @@ export default {
   calendarSortLabel: 'Sort',
   calendarFilterLabel: 'Filter',
   noteListDenseMode: 'Note List Dense Mode',
+  quickInsertColumns: 'Quick Insert Items Per Row',
   currentVersion: 'Current Version: {version}',
   getNewerVersion: 'New version detected: {version} !',
   update: 'Update',

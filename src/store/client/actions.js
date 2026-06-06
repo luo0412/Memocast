@@ -8,6 +8,15 @@ import _ from 'lodash'
 import { importImage, uploadImages } from 'src/ApiInvoker'
 import DatabaseClient from 'src/utils/DatabaseClient'
 
+const applyQuickInsertColumns = (value) => {
+  if (typeof document === 'undefined') return
+  const numericValue = Number(value)
+  const normalizedValue = Number.isFinite(numericValue)
+    ? Math.min(8, Math.max(4, numericValue))
+    : 6
+  document.documentElement.style.setProperty('--quick-insert-columns', String(normalizedValue))
+}
+
 export default {
   initClientStore ({ commit, state }) {
     const localStore = ClientFileStorage.getItemsFromStore(state)
@@ -18,15 +27,22 @@ export default {
       commit(types.UPDATE_STATES, patch)
       commit(types.SAVE_ITEMS_TO_LOCAL_STORE_SYNC, patch)
     }
+    applyQuickInsertColumns(state.quickInsertColumns)
     Dark.set(state.darkMode)
   },
   toggleChanged ({ commit }, { key, value }) {
     commit(types.TOGGLE_CHANGED, { key, value })
     commit(types.SAVE_TO_LOCAL_STORE_SYNC, [key, value])
+    if (key === 'quickInsertColumns') {
+      applyQuickInsertColumns(value)
+    }
   },
   updateStateAndStore ({ commit }, options) {
     commit(types.UPDATE_STATES, options)
     commit(types.SAVE_ITEMS_TO_LOCAL_STORE_SYNC, options)
+    if (Object.prototype.hasOwnProperty.call(options, 'quickInsertColumns')) {
+      applyQuickInsertColumns(options.quickInsertColumns)
+    }
   },
   cyclePaneLayout ({ state, dispatch }) {
     const next = (state.paneLayoutMode + 1) % 3

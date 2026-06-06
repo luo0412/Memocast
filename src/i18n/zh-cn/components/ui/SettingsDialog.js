@@ -24,6 +24,7 @@ export default {
   currentVersion: '当前版本： {version}',
   getNewerVersion: '检查到最新版本: {version} !',
   noteListDenseMode: '笔记列表简洁模式',
+  quickInsertColumns: '快捷面板每行元素数',
   update: '更新',
   checking: '检查更新中',
   noNewerVersion: '当前已是最新版本 !',
