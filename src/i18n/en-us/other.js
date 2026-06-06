@@ -25,22 +25,12 @@ export default {
   'character:': 'Characters: {character}',
   copyContent: 'Copy Content',
   defaultNoteTitle: '【{category}】New Note-{date}.md',
+  notePrefix: 'Prefix',
+  noteTitleBase: 'New Note',
 
   // Sync related
 
   // Sync related
-  syncConflict: 'Sync Conflict',
-  conflictNote: 'Local: {localTime} | Server: {serverTime}',
-  localVersion: 'Local Version',
-  serverVersion: 'Server Version',
-  keepLocal: 'Keep Local',
-  keepServer: 'Keep Server',
-  modifiedAt: 'Modified at {time}',
-  manualMerge: 'Manual Merge',
-  mergeContent: 'Merged Content',
-  enterMergedContent: 'Enter merged content...',
-  resolve: 'Resolve',
-  skipForNow: 'Skip for Now',
   skipLogin: 'Skip Login',
   localNotes: 'Local Notes',
   offlineMode: 'Offline Mode',
@@ -62,7 +52,7 @@ export default {
   offlineNotesFoundHint: '{count} note(s) created while offline. Would you like to sync them now?',
   offlineNotesMore: '...and {count} more',
   mergeRuleTitle: 'Sync Rule',
-  mergeRuleLocalOverride: 'Same title + folder: local overwrites cloud. No match: create as new note. Multiple same-name notes: each creates a new note, no overwriting.',
+  mergeRuleLocalOverride: 'Same title + folder: local overwrites cloud. No match: create as new note. The local side always keeps paths unique and never creates duplicate notes in the same path.',
   syncNow: 'Sync Now',
   skipSync: 'Skip',
   myNotes: 'My Notes',

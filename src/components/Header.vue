@@ -284,7 +284,8 @@ export default {
       'paneLayoutMode',
       'enablePreviewEditor',
       'sidebarTreeType',
-      'syncStatus'
+      'syncStatus',
+      'noteMethod'
     ]),
 
     pendingCount() {
@@ -347,12 +348,9 @@ export default {
       settingsHighlight: false,
       isPushSyncing: false,
       isPullSyncing: false,
-      noteMethod: 'notesSixDaoLun',
       noteMethodOptions: [
-        { label: '笔记六道论', value: 'notesSixDaoLun' },
-        { label: '漏斗式阅读', value: 'funnelReading' },
-        { label: '三层笔记法', value: 'threeLayerNotes' },
-        { label: '子弹笔记法', value: 'bulletJournal' }
+        { label: '六道笔记论', value: 'notesSixDaoLun' },
+        { label: '三层漏斗法', value: 'threeLayerFunnel' }
       ]
     }
   },
@@ -375,7 +373,7 @@ export default {
     },
 
     handleNoteMethodChange (value) {
-      this.noteMethod = value
+      this.toggleChanged({ key: 'noteMethod', value })
     },
 
     handleSearchClick () {

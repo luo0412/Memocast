@@ -74,8 +74,6 @@ function mergeCategoryCollections ({ localCategories = [], remoteCategories = []
 }
 import {
   createLocalDraftNote,
-  promoteLocalDraftToCloudGuid,
-  saveOfflineImportedNote,
   upsertLocalNoteByDocGuid
 } from 'src/store/server/notePersistenceService'
 import {
@@ -119,6 +117,13 @@ function getDefaultCategoryForMode (state, category = '') {
     return category
   }
   return category || OFFLINE_ROOT_CATEGORY
+}
+
+function getSixDaoFolderDepth (category = '') {
+  const normalized = normalizeCategoryForMatch(category)
+  if (!normalized || normalized === OFFLINE_ROOT_CATEGORY) return 0
+  const segments = normalized.split('/').filter(Boolean)
+  return Math.max(0, segments.length - 1)
 }
 
 function isCurrentCategoryAffected (currentCategory, categories = []) {
@@ -1353,26 +1358,24 @@ export default {
    * 创建笔记
    * @param commit
    * @param state
-   * @param rootState
    * @param title
    * @returns {Promise<void>}
    */
   async createNote ({
     commit,
-    state,
-    rootState
-  }, title) {
+    state
+  }, payload) {
     const {
       kbGuid,
       currentCategory = '',
       isLogin
     } = state
-    const userId = ClientFileStorage.getItemFromStore('userId')
-    const safeCategory = currentCategory || ''
-    const targetCategory = safeCategory || OFFLINE_ROOT_CATEGORY
-    const isLite = safeCategory.replace(/\//g, '') === 'Lite'
-    
-    let finalTitle = title || i18n.t('untitled')
+    const targetCategory = currentCategory || OFFLINE_ROOT_CATEGORY
+    const rawTitle = typeof payload === 'string' ? payload : payload?.title
+    const prefix = typeof payload === 'string' ? '' : (payload?.prefix || '')
+    const noteMethod = typeof payload === 'string' ? '' : (payload?.noteMethod || '')
+
+    let finalTitle = rawTitle || i18n.t('untitled')
     try {
       finalTitle = await generateUniqueNoteTitleInCategory({
         category: targetCategory,
@@ -1384,145 +1387,56 @@ export default {
 
     const initialContent = `# ${finalTitle}`
     const now = Date.now()
+    const draftPayload = {
+      ...(isLogin && kbGuid ? { kbGuid } : {}),
+      title: finalTitle,
+      content: initialContent,
+      category: targetCategory,
+      now
+    }
 
-    // 如果未登录，仅在本地 SQLite 创建，不推云端
-    if (!isLogin) {
-      let draft
-      try {
-        draft = await createLocalDraftNote({
-          title: finalTitle,
-          content: initialContent,
-          category: targetCategory,
-          now
-        })
-      } catch (err) {
-        console.error('[createNote/offline] SQLite create failed:', err)
-        Notify.create({
-          message: i18n.t('createNoteFailed'),
-          type: 'negative',
-          icon: 'error'
-        })
-        return
-      }
-      if (!draft?.note) {
-        console.error('[createNote/offline] SQLite create returned null')
-        Notify.create({
-          message: i18n.t('createNoteFailed'),
-          type: 'negative',
-          icon: 'error'
-        })
-        return
-      }
-      await this.dispatch('server/getCategoryNotes', { category: targetCategory })
-      commit(types.UPDATE_CURRENT_NOTE, {
-        _isRawMarkdown: true,
-        info: {
-          docGuid: draft.docGuid,
-          kbGuid: '',
-          title: finalTitle,
-          category: targetCategory,
-          dataCreated: now,
-          dataModified: now
-        },
-        html: initialContent,
-        resources: []
-      })
+    let draft
+    try {
+      draft = await createLocalDraftNote(draftPayload)
+    } catch (err) {
+      console.error('[createNote] SQLite create failed:', err)
       Notify.create({
-        message: i18n.t('saveNoteSuccessfully'),
-        type: 'positive',
-        icon: 'check'
+        message: i18n.t('createNoteFailed'),
+        type: 'negative',
+        icon: 'error'
       })
       return
     }
 
-    // 以下为已登录逻辑（原逻辑）
+    if (!draft?.note) {
+      console.error('[createNote] SQLite create returned null')
+      Notify.create({
+        message: i18n.t('createNoteFailed'),
+        type: 'negative',
+        icon: 'error'
+      })
+      return
+    }
 
-    // Step 1: 先在本地 SQLite 创建草稿（dirty=1，待同步）
-    let localNoteId = null
-    try {
-      const draft = await createLocalDraftNote({
-        docGuid: undefined,
-        kbGuid,
+    await this.dispatch('server/getCategoryNotes', { category: targetCategory })
+    commit(types.UPDATE_CURRENT_NOTE, {
+      _isRawMarkdown: true,
+      info: {
+        docGuid: draft.docGuid,
+        kbGuid: isLogin ? (kbGuid || '') : '',
         title: finalTitle,
-        content: initialContent,
-        category: currentCategory || OFFLINE_ROOT_CATEGORY,
-        now
-      })
-      localNoteId = draft.localNoteId
-    } catch (err) {
-      console.warn('[createNote] SQLite create failed, continuing with cloud:', err)
-    }
-
-    // Step 2: 推送到云端
-    try {
-      const result = await api.KnowledgeBaseApi.createNote({
-        kbGuid,
-        data: {
-          category: currentCategory,
-          kbGuid,
-          title: finalTitle,
-          owner: userId,
-          html: helper.embedMDNote(initialContent, [], { wrapWithPreTag: isLite }),
-          type: isLite ? 'lite/markdown' : 'document'
-        }
-      })
-      // 云端创建成功后，更新本地 doc_guid
-      if (localNoteId) {
-        try {
-          await promoteLocalDraftToCloudGuid({
-            localNoteId,
-            docGuid: result.guid,
-            source: 'wiznote'
-          })
-        } catch (e2) {
-          console.warn('[createNote] Failed to update local doc_guid:', e2)
-        }
-      }
-      // 直接 commit 本地已创建的笔记内容，不走 getNoteContent 重新请求云端
-      // 因为 result 是 { guid, returnCode, ... } 对象，字段名与 getNoteContent 期望的 { docGuid } 不匹配
-      // 本地已有 initialContent = `# ${finalTitle}`，直接使用本地版本即可
-      const docGuid = result.guid
-      commit(types.UPDATE_CURRENT_NOTE, {
-        _isRawMarkdown: true,
-        info: {
-          docGuid,
-          kbGuid,
-          title: finalTitle,
-          category: currentCategory || OFFLINE_ROOT_CATEGORY,
-          dataCreated: now,
-          dataModified: now
-        },
-        html: initialContent,
-        resources: []
-      })
-      await this.dispatch('server/getCategoryNotes')
-    } catch (err) {
-      console.error('[createNote] Cloud create failed:', err)
-      // 云端失败时保留本地草稿，用户仍可在离线模式下编辑
-      if (localNoteId) {
-        // 直接显示本地草稿内容，不等待 sync 完成
-        commit(types.UPDATE_CURRENT_NOTE, {
-          _isRawMarkdown: true,
-          info: {
-            docGuid: null,
-            kbGuid,
-            title,
-            category: currentCategory || OFFLINE_ROOT_CATEGORY,
-            dataCreated: now,
-            dataModified: now
-          },
-          html: initialContent,
-          resources: []
-        })
-        this.dispatch('client/sync', null, { root: true })
-      } else {
-        Notify.create({
-          message: i18n.t('createNoteFailed'),
-          type: 'negative',
-          icon: 'error'
-        })
-      }
-    }
+        category: targetCategory,
+        dataCreated: now,
+        dataModified: now
+      },
+      html: initialContent,
+      resources: []
+    })
+    Notify.create({
+      message: i18n.t('saveNoteSuccessfully'),
+      type: 'positive',
+      icon: 'check'
+    })
   },
   /**
    * 保存旧笔记内容（用于切换笔记时保存上一个笔记）
@@ -1602,88 +1516,48 @@ export default {
       currentCategory = '',
       isLogin
     } = state
-    const title = importFile.name
-    const userId = ClientFileStorage.getItemFromStore('userId')
     const targetCategory = currentCategory || OFFLINE_ROOT_CATEGORY
-    const isLite = currentCategory.replace(/\//g, '') === 'Lite'
     const reader = new FileReader()
     reader.readAsText(importFile)
     reader.onload = async () => {
       const text = reader.result
       const now = Date.now()
+      let finalTitle = importFile.name
 
-      // 离线导入：仅写入本地 SQLite，不推云端
-      if (!isLogin) {
-        try {
-          const { note, currentNote } = await saveOfflineImportedNote({ title, text, now, category: targetCategory })
-          if (note) {
-            await this.dispatch('server/getCategoryNotes', { category: targetCategory })
-          }
-          commit(types.UPDATE_CURRENT_NOTE, currentNote)
-        } catch (err) {
-          console.warn('[importNote/offline] SQLite create failed:', err)
-        }
-        return
+      try {
+        finalTitle = await generateUniqueNoteTitleInCategory({
+          category: targetCategory,
+          title: finalTitle
+        })
+      } catch (err) {
+        console.warn('[importNote] Failed to check duplicate titles:', err)
       }
 
-      // Step 1: 先写入本地 SQLite（dirty=1，待同步）
-      let localNoteId = null
       try {
         const draft = await createLocalDraftNote({
-          kbGuid,
-          title,
+          ...(isLogin && kbGuid ? { kbGuid } : {}),
+          title: finalTitle,
           content: text,
-          category: currentCategory || OFFLINE_ROOT_CATEGORY,
+          category: targetCategory,
           now
         })
-        localNoteId = draft.localNoteId
-      } catch (err) {
-        console.warn('[importNote] SQLite create failed:', err)
-      }
 
-      // Step 2: 推送到云端
-      try {
-        const result = await api.KnowledgeBaseApi.createNote({
-          kbGuid,
-          data: {
-            category: currentCategory,
-            kbGuid,
-            title,
-            owner: userId,
-            html: helper.embedMDNote(text, [], { wrapWithPreTag: isLite }),
-            type: isLite ? 'lite/markdown' : 'document'
-          }
-        })
-        const docGuid = result.guid
-        // 云端创建成功后更新本地 doc_guid
-        if (localNoteId) {
-          try {
-            await promoteLocalDraftToCloudGuid({
-              localNoteId,
-              docGuid,
-              source: 'wiznote'
-            })
-          } catch (e2) {
-            console.warn('[importNote] Failed to update local doc_guid:', e2)
-          }
-        }
-        // 直接 commit 本地内容，不走 getNoteContent 重新请求云端
+        await this.dispatch('server/getCategoryNotes', { category: targetCategory })
         commit(types.UPDATE_CURRENT_NOTE, {
           _isRawMarkdown: true,
           info: {
-            docGuid,
-            kbGuid,
-            title,
-            category: currentCategory || OFFLINE_ROOT_CATEGORY,
+            docGuid: draft.docGuid,
+            kbGuid: isLogin ? (kbGuid || '') : '',
+            title: finalTitle,
+            category: targetCategory,
             dataCreated: now,
             dataModified: now
           },
           html: text,
           resources: []
         })
-        await this.dispatch('server/getCategoryNotes')
       } catch (err) {
-        console.error('[importNote] Cloud import failed:', err)
+        console.error('[importNote] SQLite create failed:', err)
         Notify.create({
           message: i18n.t('importNoteFailed'),
           type: 'negative',
@@ -1707,62 +1581,30 @@ export default {
       kbGuid,
       docGuid
     } = payload
-    const isOfflineDelete = !state.isLogin || !kbGuid || (docGuid && docGuid.startsWith('local_'))
+    const isCloudBackedNote = state.isLogin && kbGuid && docGuid && !docGuid.startsWith('local_')
 
-    // 离线笔记/未登录删除：只删除本地记录，不调用云端接口
-    if (isOfflineDelete) {
-      try {
-        const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
-        if (localNote) {
-          await DatabaseClient.notes.remove(localNote.id)
-        }
-        // 刷新本地笔记列表
-        await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
-      } catch (err) {
-        console.warn('[deleteNote/offline] SQLite delete failed:', err)
-      }
-      if (state.currentNote && state.currentNote.info && state.currentNote.info.docGuid === docGuid) {
-        commit(types.CLEAR_CURRENT_NOTE)
-      }
-      Notify.create({
-        color: 'red-10',
-        message: i18n.t('deleteNoteSuccessfully'),
-        icon: 'delete'
-      })
-      return
-    }
-
-    // Step 1: 先在本地 SQLite 标记删除（软删，本地记录保留但标记为 deleted）
-    // 注意：当前 schema 没有 deleted 字段，这里直接物理删除本地记录
-    // 同步时检测到本地有删除日志（sync_log）则从云端删除
     try {
       const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
       if (localNote) {
+        if (isCloudBackedNote) {
+          await DatabaseClient.sync.logPendingDelete({
+            noteId: localNote.id,
+            docGuid,
+            kbGuid
+          })
+        }
         await DatabaseClient.notes.remove(localNote.id)
       }
+      await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
     } catch (err) {
       console.warn('[deleteNote] SQLite delete failed:', err)
     }
-
-    // Step 2: 从云端删除（同步进行，不阻塞 UI）
-    const _deleteFromCloud = async () => {
-      try {
-        await api.KnowledgeBaseApi.deleteNote({
-          kbGuid,
-          docGuid
-        })
-      } catch (err) {
-        console.error('[deleteNote] Cloud delete failed:', err)
-      }
-    }
-    _deleteFromCloud()
 
     const { currentNote } = state
     if (currentNote && currentNote.info.docGuid === docGuid) {
       commit(types.CLEAR_CURRENT_NOTE)
     }
 
-    // 乐观更新：立即从 UI 移除，云端删除异步进行
     const newNotes = state.currentNotes.filter(n => n.docGuid !== docGuid)
     commit(types.UPDATE_CURRENT_NOTES, newNotes)
 
@@ -1787,10 +1629,22 @@ export default {
     parentCategory
   }) {
     const { kbGuid, isLogin, categories } = state
+    const noteMethod = this.state?.client?.noteMethod || ''
 
     // 计算完整路径（父路径 + 子文件夹名）
     let fullCategoryPath
     const normalizedParentCategory = helper.isNullOrEmpty(parentCategory) ? state.currentCategory : parentCategory
+    const parentDepth = getSixDaoFolderDepth(normalizedParentCategory)
+
+    if (noteMethod === 'notesSixDaoLun' && parentDepth >= 3) {
+      Notify.create({
+        color: 'warning',
+        message: '六道笔记论下，第三层及以后只能创建文件，不能再创建文件夹',
+        icon: 'warning'
+      })
+      return
+    }
+
     // 根目录（空、/、/My Notes/）下创建直接子文件夹
     if (helper.isNullOrEmpty(normalizedParentCategory) || normalizedParentCategory === OFFLINE_ROOT_CATEGORY || normalizedParentCategory === '/') {
       fullCategoryPath = `${OFFLINE_ROOT_CATEGORY}${childCategoryName}/`

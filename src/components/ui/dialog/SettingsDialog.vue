@@ -429,7 +429,7 @@ export default {
         accountInfo: SessionStorageService.getAccountInfo()
       },
       // 云同步状态
-      syncStats: { total: 0, synced: 0, pending: 0, conflict: 0 },
+      syncStats: { total: 0, synced: 0, pending: 0 },
       lastSyncTimeDisplay: null,
       isSyncing: false,
       syncError: null
@@ -738,8 +738,7 @@ export default {
       this.syncStats = {
         total: stats.total || 0,
         synced: stats.synced || 0,
-        pending: stats.pending || 0,
-        conflict: stats.conflict || 0
+        pending: stats.pending || 0
       }
       const lastTime = CloudSyncService.formatLastSyncTime()
       this.lastSyncTimeDisplay = lastTime

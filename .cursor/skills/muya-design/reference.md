@@ -66,12 +66,20 @@ muya/
 ## 状态机流程
 
 ```
-用户输入 → Keyboard/Input 事件 → ContentState 处理 → stateChange 事件 → dispatchChange()
-                                                        ↓
-                                               EventCenter.dispatch('change')
-                                                        ↓
-                                               主应用监听 change 事件
+用户输入/点击/粘贴/拖拽
+  → Keyboard / Mouse / Clipboard / DragDrop 事件层
+  → ContentState 对 Block 树和 Cursor 做变更
+  → EventCenter.dispatch('stateChange')
+  → Muya.dispatchChange()
+  → EventCenter.dispatch('change')
+  → `src/components/ui/editor/Muya.vue` 监听 change / selectionChange / contextmenu
+  → 更新目录、字数、保存状态与右键菜单
 ```
+
+这里要特别注意：
+- `stateChange` 是 Muya 内部事件，主要用于驱动 `dispatchChange()`。
+- 主应用通常不直接订阅 `EventCenter.subscribe()`，而是通过 `editor.on()` / `editor.off()` / `editor.once()` 使用公开事件接口。
+- Memocast 的 Vue 封装层不仅监听 `change`，还监听 `selectionChange`、`contextmenu`、`muya-click`，并桥接到 `bus` 与 Vuex。
 
 ## 虚拟 DOM 更新机制
 
@@ -96,29 +104,43 @@ class StateRender {
 
 ## ContentState 控制器详解
 
-### coreApi - 核心 API
+`ContentState` 不是只由少数几个 ctrl 组成，当前实际通过 Mixin 注入的控制器包括：
 
-Block 树的基本操作方法。
+- `coreApi`：Block 树基础增删改查
+- `tabCtrl`：Tab/缩进处理
+- `enterCtrl`：回车拆分与续接
+- `updateCtrl`：内容更新与 rerender 触发
+- `backspaceCtrl`：退格合并、空块清理
+- `deleteCtrl`：Delete 前向删除
+- `codeBlockCtrl`：代码块编辑
+- `arrowCtrl`：方向键移动
+- `pasteCtrl`：粘贴处理
+- `copyCutCtrl`：复制/剪切处理
+- `tableBlockCtrl`：表格编辑
+- `tableDragBarCtrl`：表格拖拽条
+- `tableSelectCellsCtrl`：表格单元格选择
+- `paragraphCtrl`：段落级操作（插入、复制、删除）
+- `formatCtrl`：格式化
+- `searchCtrl`：搜索与替换
+- `containerCtrl`：容器块处理
+- `htmlBlockCtrl`：HTML block 处理
+- `clickCtrl`：点击相关行为
+- `inputCtrl`：输入事件处理
+- `tocCtrl`：目录提取
+- `emojiCtrl`：emoji 处理
+- `imageCtrl`：图片处理
+- `linkCtrl`：链接处理
+- `dragDropCtrl`：块拖拽
+- `footnoteCtrl`：脚注处理
+- `importMarkdown`：Markdown 导入
 
-### enterCtrl - 回车处理
+### 常见关注点
 
-处理回车键的行为，包括：
-- 段落拆分
-- 列表项续接
-- 引用块续接
-
-### backspaceCtrl - 退格处理
-
-处理退格键的行为，包括：
-- 块合并
-- 删除空块
-- 取消列表项
-
-### tableBlockCtrl - 表格块控制
-
-- 单元格导航
-- 表格内回车
-- 表格内退格
+- 修改键盘行为时，优先看 `enterCtrl` / `backspaceCtrl` / `deleteCtrl` / `arrowCtrl`
+- 修改块结构时，优先看 `coreApi` / `paragraphCtrl` / `containerCtrl`
+- 修改粘贴、复制或拖拽时，优先看 `pasteCtrl` / `copyCutCtrl` / `dragDropCtrl`
+- 修改查找替换时，优先看 `searchCtrl`
+- 修改 TOC、图片、链接、脚注时，分别看 `tocCtrl` / `imageCtrl` / `linkCtrl` / `footnoteCtrl`
 
 ### formatCtrl - 格式化
 

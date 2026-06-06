@@ -424,6 +424,5 @@ export default {
 .sync-local { color: #999; }
 .sync-pending { color: #e6a23c; }
 .sync-download { color: #409eff; }
-.sync-conflict { color: #f56c6c; }
 .sync-synced { color: #67c23a; }
 </style>

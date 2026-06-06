@@ -16,7 +16,6 @@ class CloudSyncService {
       total: 0,
       synced: 0,
       pending: 0,
-      conflict: 0,
       account: null,
       error: null
     }
@@ -55,7 +54,6 @@ class CloudSyncService {
       this._status.total = stats.total || 0
       this._status.synced = stats.synced || 0
       this._status.pending = stats.pending || 0
-      this._status.conflict = stats.conflict || 0
     } catch (e) {
       console.warn('[CloudSyncService] Failed to refresh stats:', e)
     }

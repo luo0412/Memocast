@@ -324,7 +324,9 @@ export default {
       'splitterWidth',
       'leftInnerSplitterRatio',
       'rightClickCategoryItem',
-      'sidebarTreeType'
+      'sidebarTreeType',
+      'noteMethod',
+      'noteMethodPrefix'
     ])
   },
   data () {
@@ -400,33 +402,104 @@ export default {
       this.updateStateAndStore({ splitterWidth: this.splitterWidthValue })
     },
     addNoteHandler: function () {
-      // 生成默认标题：【所在文件夹名】输入笔记名-YYYYMM（带 # 作为 Markdown 一级标题）
-      const category = this.currentCategory || ''
-      const categoryName = category.split('/').filter(Boolean).pop() || ''
+      const isSixDaoMode = this.noteMethod === 'notesSixDaoLun'
       const now = new Date()
       const yyyy = now.getFullYear()
-      const mm = String(now.getMonth() + 1).padStart(2, '0')
-      const defaultTitle = this.$t('defaultNoteTitle', {
-        category: categoryName,
-        date: `${yyyy}${mm}`
-      })
-      this.$q
-        .dialog({
-          title: this.$t('createNote'),
-          prompt: {
-            model: defaultTitle,
-            type: 'text',
-            attrs: {
-              spellcheck: false
+      const category = this.currentCategory || ''
+      const categoryName = category.split('/').filter(Boolean).pop() || ''
+      const prefixOptions = ['Course', 'Book', 'Export', 'Model', 'Project', 'Trend']
+      const selectedPrefix = prefixOptions.includes(this.noteMethodPrefix) ? this.noteMethodPrefix : 'Course'
+      const defaultTitle = isSixDaoMode
+        ? `【${selectedPrefix}】${categoryName || this.$t('noteTitleBase')}-${yyyy}.md`
+        : this.$t('defaultNoteTitle', {
+            category: categoryName,
+            date: `${yyyy}${String(now.getMonth() + 1).padStart(2, '0')}`
+          })
+
+      if (!isSixDaoMode) {
+        this.$q
+          .dialog({
+            title: this.$t('createNote'),
+            prompt: {
+              model: defaultTitle,
+              type: 'text',
+              attrs: {
+                spellcheck: false
+              },
+              label: this.$t('title')
             },
-            label: this.$t('title')
-          },
-          ok: this.$t('confirm'),
-          cancel: this.$t('cancel')
-        })
-        .onOk(data => {
-          this.createNote(data)
-        })
+            ok: this.$t('confirm'),
+            cancel: this.$t('cancel')
+          })
+          .onOk(data => {
+            this.createNote(data)
+          })
+        return
+      }
+
+      const prefixFieldClass = 'memocast-prefix-select-field'
+      const noteTitleInputClass = 'memocast-note-title-input'
+      const container = document.createElement('div')
+      container.className = 'six-dao-create-note-dialog'
+      container.innerHTML = `
+        <div class="q-mb-md">
+          <div class="text-caption text-grey-7 q-mb-xs">${this.$t('notePrefix')}</div>
+          <select class="q-field__native q-placeholder ${prefixFieldClass}">
+            ${prefixOptions.map(option => `<option value="${option}" ${option === selectedPrefix ? 'selected' : ''}>${option}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <div class="text-caption text-grey-7 q-mb-xs">${this.$t('title')}</div>
+          <input class="q-input-target q-field__native ${noteTitleInputClass}" type="text" spellcheck="false" value="${defaultTitle.replace(/"/g, '&quot;')}">
+        </div>
+      `
+
+      const syncTitleByPrefix = () => {
+        const prefixEl = container.querySelector(`.${prefixFieldClass}`)
+        const titleEl = container.querySelector(`.${noteTitleInputClass}`)
+        if (!prefixEl || !titleEl) return
+        const baseName = categoryName || this.$t('noteTitleBase')
+        titleEl.value = `【${prefixEl.value}】${baseName}-${yyyy}.md`
+      }
+
+      const dialog = this.$q.dialog({
+        title: this.$t('createNote'),
+        message: '<div class="six-dao-create-note-dialog-mount"></div>',
+        html: true,
+        ok: this.$t('confirm'),
+        cancel: this.$t('cancel'),
+        focus: 'ok'
+      })
+
+      dialog.onOk(() => {
+        const prefixEl = container.querySelector(`.${prefixFieldClass}`)
+        const titleEl = container.querySelector(`.${noteTitleInputClass}`)
+        const prefix = prefixEl ? prefixEl.value : selectedPrefix
+        const title = titleEl ? titleEl.value : defaultTitle
+        this.toggleChanged({ key: 'noteMethodPrefix', value: prefix })
+        this.createNote({ title, prefix, noteMethod: this.noteMethod })
+      })
+
+      dialog.onDismiss(() => {
+        if (container.parentNode) {
+          container.parentNode.removeChild(container)
+        }
+      })
+
+      this.$nextTick(() => {
+        const mountPoint = document.querySelector('.six-dao-create-note-dialog-mount')
+        if (!mountPoint) return
+        mountPoint.appendChild(container)
+        const prefixEl = container.querySelector(`.${prefixFieldClass}`)
+        const titleEl = container.querySelector(`.${noteTitleInputClass}`)
+        if (prefixEl) {
+          prefixEl.addEventListener('change', syncTitleByPrefix)
+        }
+        if (titleEl) {
+          titleEl.focus()
+          titleEl.select()
+        }
+      })
     },
     addCategoryHandler: function () {
       this.$q

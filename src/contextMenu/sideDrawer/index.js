@@ -20,8 +20,12 @@ import { popContextMenu } from 'src/ApiInvoker'
  * @param {string} category
  * @param {boolean} isLogin Whether user is logged in
  */
-export const showContextMenu = (event, isCurrentCategory, category, isLogin) => {
+export const showContextMenu = (event, isCurrentCategory, category, isLogin, options = {}) => {
   const isRootCategory = helper.isNullOrEmpty(category)
+  const {
+    hideCreateCategory = false,
+    hideCreateNote = false
+  } = options
 
   // 根目录禁用导出和删除
   EXPORT.enabled = !isRootCategory
@@ -32,8 +36,12 @@ export const showContextMenu = (event, isCurrentCategory, category, isLogin) => 
   // 离线未登录时，隐藏创建文件夹、导入、导出选项
   if (isLogin) {
     // ✅ 第一组：创建操作（创建文件夹 + 创建笔记）
-    ITEMS.push(CREATE_CATEGORY)
-    ITEMS.push(CREATE_NOTE)
+    if (!hideCreateCategory) {
+      ITEMS.push(CREATE_CATEGORY)
+    }
+    if (!hideCreateNote) {
+      ITEMS.push(CREATE_NOTE)
+    }
 
     // ✅ 第二组：导入导出（独立组，加分隔线）
     ITEMS.push(SEPARATOR)
@@ -41,8 +49,12 @@ export const showContextMenu = (event, isCurrentCategory, category, isLogin) => 
     ITEMS.push(EXPORT)
   } else {
     // 未登录时只显示创建笔记和创建文件夹（均走本地 SQLite）
-    ITEMS.push(CREATE_CATEGORY)
-    ITEMS.push(CREATE_NOTE)
+    if (!hideCreateCategory) {
+      ITEMS.push(CREATE_CATEGORY)
+    }
+    if (!hideCreateNote) {
+      ITEMS.push(CREATE_NOTE)
+    }
   }
 
   // ✅ 第三组：从夯到拉/标签排行榜（独立组，加分隔线）

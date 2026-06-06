@@ -1,6 +1,6 @@
 ---
 name: wiznote-api
-description: 为知笔记（WizNote）API集成指南。用于在Memocast中实现为知笔记的数据同步功能，包括：账号登录认证、笔记CRUD操作、文件夹管理、资源上传下载、标签操作、离线优先策略。本skill涵盖REST API调用规范、Token认证机制、错误处理，以及本地数据库与远程API的同步验证。
+description: 为知笔记（WizNote）API集成指南。用于在Memocast中调用 WizNote REST API，包括账号登录认证、笔记 CRUD、文件夹管理、标签操作、资源上传、笔记搜索、笔记复制。涵盖 API 调用规范、Token 认证机制、错误处理，以及与本地 SQLite 同步层（SyncService）的协作关系。
 ---
 
 # 为知笔记 API 操作指南
@@ -8,20 +8,41 @@ description: 为知笔记（WizNote）API集成指南。用于在Memocast中实�
 ## 快速参考
 
 ### API 入口
+
 ```javascript
 import api from 'src/utils/api'
-// api.AccountServerApi - 账户相关（登录、登出）
-// api.KnowledgeBaseApi - 笔记操作（CRUD、文件夹、标签）
+
+// 账户相关
+api.AccountServerApi     // 登录、登出、Token 续期、用户信息
+
+// 知识库相关
+api.KnowledgeBaseApi      // 笔记、文件夹、标签、资源、搜索
 ```
 
 ### 认证机制
+
 - Token 存储：`ServerFileStorage.getValueFromLocalStorage('token')`
 - kbGuid：知识库唯一标识，登录后从响应获取
-- 自定义服务器：需先调用 `api.AccountServerApi.setBaseUrl(url)`
+- 自定义服务器：需分别调用 `api.AccountServerApi.setBaseUrl(url)` 和 `api.KnowledgeBaseApi.setBaseUrl(url)`
+
+### 与同步层的关系
+
+`KnowledgeBaseApi` 是低层 HTTP 接口，`SyncService` 在其之上封装了本地优先同步策略：
+
+```
+SyncService (同步逻辑层)
+    ↓
+KnowledgeBaseApi (WizNote HTTP 接口)
+    ↓
+execRequest (HTTP 实际请求)
+```
+
+不要把 `KnowledgeBaseApi` 的返回值直接当作“已同步”或“已落库”，需要经过 `SyncService` 或 `DatabaseClient` 处理。
 
 ## 账户操作 (AccountServerApi)
 
 ### 登录
+
 ```javascript
 await api.AccountServerApi.Login({ userId, password })
 // 返回: { token, kbGuid, kbServer, userGuid, ... }
@@ -29,18 +50,51 @@ await api.AccountServerApi.Login({ userId, password })
 ```
 
 ### 登出
+
 ```javascript
 await api.AccountServerApi.Logout()
 ```
 
 ### Token 续期
+
 ```javascript
 await api.AccountServerApi.keepTokenAlive()
 ```
 
+### 获取用户信息
+
+```javascript
+await api.AccountServerApi.getUserInfo({ token })
+```
+
+### 获取用户头像
+
+```javascript
+await api.AccountServerApi.getUserAvatar({ userGuid })
+```
+
 ## 笔记操作 (KnowledgeBaseApi)
 
-### 获取笔记列表
+### 获取笔记信息（仅 metadata）
+
+```javascript
+await api.KnowledgeBaseApi.getNoteInfo({ kbGuid, docGuid })
+// 返回: { guid, title, category, dataCreated, dataModified, ... }
+```
+
+### 获取笔记内容（下载）
+
+```javascript
+await api.KnowledgeBaseApi.getNoteContent({
+  kbGuid,
+  docGuid,
+  data: { downloadInfo: 1, downloadData: 1 }
+})
+// 返回: { info: {...}, html: '...', resources: [...] }
+```
+
+### 获取分类下的笔记列表
+
 ```javascript
 await api.KnowledgeBaseApi.getCategoryNotes({
   kbGuid,
@@ -56,17 +110,8 @@ await api.KnowledgeBaseApi.getCategoryNotes({
 // 返回: [{ guid, title, category, dataCreated, dataModified, ... }]
 ```
 
-### 获取笔记内容
-```javascript
-await api.KnowledgeBaseApi.getNoteContent({
-  kbGuid,
-  docGuid,
-  data: { downloadInfo: 1, downloadData: 1 }
-})
-// 返回: { info: {...}, html: '...', resources: [...] }
-```
-
 ### 创建笔记（需用 embedMDNote 包装内容）
+
 ```javascript
 import helper from 'src/utils/helper'
 
@@ -89,7 +134,8 @@ await api.KnowledgeBaseApi.createNote({
 // 返回: { guid: '...', returnCode: 200 }
 ```
 
-### 更新笔记
+### 更新笔记内容
+
 ```javascript
 await api.KnowledgeBaseApi.updateNote({
   kbGuid,
@@ -100,15 +146,43 @@ await api.KnowledgeBaseApi.updateNote({
     type: 'document'
   }
 })
-// 注意: 不传 category 避免触发移动/删除文件夹逻辑
+```
+
+### 更新笔记信息（仅 metadata）
+
+```javascript
+await api.KnowledgeBaseApi.updateNoteInfo({
+  kbGuid,
+  docGuid,
+  data: {
+    title: '新标题',
+    tags: 'tag1*tag2',
+    // 注意: 不传 category 避免触发移动/删除文件夹逻辑
+  }
+})
 ```
 
 ### 删除笔记
+
 ```javascript
 await api.KnowledgeBaseApi.deleteNote({ kbGuid, docGuid })
 ```
 
+### 复制笔记
+
+```javascript
+await api.KnowledgeBaseApi.copyNote({
+  kbGuid,
+  docGuid,
+  data: {
+    targetKbGuid: '目标知识库',
+    targetCategory: '/目标文件夹/'
+  }
+})
+```
+
 ### 搜索笔记
+
 ```javascript
 await api.KnowledgeBaseApi.searchNote({
   kbGuid,
@@ -120,12 +194,14 @@ await api.KnowledgeBaseApi.searchNote({
 ## 文件夹操作
 
 ### 获取文件夹列表
+
 ```javascript
 await api.KnowledgeBaseApi.getCategories({ kbGuid })
 // 返回: { result: [...], pos: [...] }
 ```
 
 ### 创建文件夹
+
 ```javascript
 await api.KnowledgeBaseApi.createCategory({
   kbGuid,
@@ -138,6 +214,7 @@ await api.KnowledgeBaseApi.createCategory({
 ```
 
 ### 删除文件夹
+
 ```javascript
 await api.KnowledgeBaseApi.deleteCategory({
   kbGuid,
@@ -146,6 +223,7 @@ await api.KnowledgeBaseApi.deleteCategory({
 ```
 
 ### 重命名文件夹
+
 ```javascript
 await api.KnowledgeBaseApi.renameCategory({
   kbGuid,
@@ -159,12 +237,14 @@ await api.KnowledgeBaseApi.renameCategory({
 ## 标签操作
 
 ### 获取所有标签
+
 ```javascript
 await api.KnowledgeBaseApi.getAllTags({ kbGuid })
 // 返回: [{ tagGuid, name, ... }]
 ```
 
 ### 获取标签下的笔记
+
 ```javascript
 await api.KnowledgeBaseApi.getTagNotes({
   kbGuid,
@@ -177,7 +257,18 @@ await api.KnowledgeBaseApi.getTagNotes({
 })
 ```
 
+### 获取标签下的笔记数量
+
+```javascript
+await api.KnowledgeBaseApi.getTagNoteCount({
+  kbGuid,
+  data: { tag: tagGuid }
+})
+// 返回: number（分页遍历后的总数）
+```
+
 ### 创建标签
+
 ```javascript
 await api.KnowledgeBaseApi.createTag({
   kbGuid,
@@ -186,13 +277,39 @@ await api.KnowledgeBaseApi.createTag({
 ```
 
 ### 删除标签
+
 ```javascript
 await api.KnowledgeBaseApi.deleteTag({ kbGuid, tagGuid })
+```
+
+### 重命名标签
+
+```javascript
+await api.KnowledgeBaseApi.renameTag({
+  kbGuid,
+  data: {
+    tagGuid: '旧标签GUID',
+    name: '新标签名'
+  }
+})
+```
+
+### 移动标签
+
+```javascript
+await api.KnowledgeBaseApi.moveTag({
+  kbGuid,
+  data: {
+    tagGuid: '要移动的标签GUID',
+    parentTagGuid: '新的父标签GUID'
+  }
+})
 ```
 
 ## 资源上传
 
 ### 上传图片
+
 ```javascript
 const formData = new FormData()
 formData.append('file', fileBlob, 'image.png')
@@ -208,6 +325,7 @@ await api.KnowledgeBaseApi.uploadImage({
 ## Markdown 处理工具
 
 ### embedMDNote - 包装 Markdown 为 HTML
+
 ```javascript
 import helper from 'src/utils/helper'
 
@@ -218,7 +336,8 @@ const html = helper.embedMDNote(markdownContent, resources, {
 })
 ```
 
-### extractMarkdownFromMDNote - 提取 Markdown
+### extractMarkdownFromMDNote - 从 HTML 提取 Markdown
+
 ```javascript
 const markdown = helper.extractMarkdownFromMDNote(
   htmlContent,
@@ -228,50 +347,41 @@ const markdown = helper.extractMarkdownFromMDNote(
 )
 ```
 
-## 离线笔记规范
-
-### 离线根目录
-```javascript
-const OFFLINE_ROOT_CATEGORY = '/我的笔记/'
-```
-
-### normalizeCategory - 规范化分类路径
-```javascript
-function normalizeCategory(cat) {
-  if (!cat || cat === OFFLINE_ROOT_CATEGORY) {
-    return '/'  // 离线根目录转为云端根目录
-  }
-  return cat
-}
-```
-
-### 离线笔记 GUID 前缀
-```javascript
-const localDocGuid = `local_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
-// 例如: local_1715678901234_abc12345
-```
-
 ## 错误处理
 
 ### 常见错误码
-- `returnCode !== 200`: API 调用失败
-- `kbGuid is not match`: 笔记不属于当前知识库
-- 网络错误: 请求超时或无法连接
 
-### 账户不匹配处理
+- `returnCode !== 200`：API 调用失败
+- `kbGuid is not match`：笔记不属于当前知识库
+- `externCode`：服务端返回的业务错误码
+- 网络错误：请求超时或无法连接
+
+### kbGuid 不匹配处理
+
+当笔记被移动到其他账户时，会收到此错误，应将笔记降级为本地笔记：
+
 ```javascript
 if (error.message.includes('kbGuid is not match')) {
-  // 笔记被移动到其他账户，降级为本地笔记
-  await DatabaseClient.updateNote(noteId, {
+  // 清除云端关联，降级为本地笔记
+  await DatabaseClient.notes.update(note.id, {
     doc_guid: null,
-    sync_status: 'local_only'
+    dirty: 1
   })
 }
 ```
 
-## 相关文件
+## 相关文件索引
 
-- API 实现：`src/utils/api.js`
-- SyncService：`src/services/SyncService.js`
-- Vuex actions：`src/store/server/actions.js`
-- 详细 API 参考：[references/api.md](references/api.md)
+| 文件 | 用途 |
+|------|------|
+| `src/utils/api.js` | WizNote API 封装层（HTTP 请求） |
+| `src/utils/helper.js` | Markdown ↔ HTML 转换工具 |
+| `src/services/SyncService.js` | 同步逻辑层，封装 API 与本地优先策略 |
+| `src/services/CloudSyncService.js` | UI 层同步状态管理 |
+| `src/store/server/actions.js` | Vuex actions，调用 API 封装业务逻辑 |
+| `src/store/server/notePersistenceService.js` | 本地草稿创建、GUID 管理 |
+| `src/store/server/localSyncMigration.js` | 标签从本地迁移到云端 |
+
+## 扩展阅读
+
+详细设计文档见 [reference.md](reference.md)。

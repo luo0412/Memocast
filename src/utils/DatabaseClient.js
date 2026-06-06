@@ -89,14 +89,6 @@ const notes = {
   },
 
   /**
-   * 获取冲突笔记
-   * @returns {Promise<Array>}
-   */
-  async getConflicts() {
-    return await invoke('db:getConflictNotes')
-  },
-
-  /**
    * 按 kb_guid 删除所有笔记（logout 时清理旧账号数据）
    * @param {string} kbGuid
    * @returns {Promise<number>}
@@ -195,6 +187,36 @@ const sync = {
    */
   async createGuidMapping(localId, cloudGuid, source = 'wiznote') {
     return await invoke('db:createGuidMapping', { localId, serverGuid: cloudGuid, service: source })
+  },
+
+  /**
+   * 记录删除待同步日志
+   * @param {Object} payload
+   * @param {number} payload.noteId
+   * @param {string} payload.docGuid
+   * @param {string} payload.kbGuid
+   * @returns {Promise<boolean>}
+   */
+  async logPendingDelete({ noteId, docGuid, kbGuid }) {
+    return await invoke('db:logSyncAction', {
+      noteId,
+      action: 'delete',
+      direction: 'local_to_server',
+      docGuid,
+      kbGuid
+    })
+  },
+
+  async getPendingDeleteLogs() {
+    return await invoke('db:getPendingDeleteLogs')
+  },
+
+  async markSyncLogSynced(id) {
+    return await invoke('db:markSyncLogSynced', { id })
+  },
+
+  async cleanupSyncedDeleteLogs() {
+    return await invoke('db:cleanupSyncedDeleteLogs')
   },
 
   /**

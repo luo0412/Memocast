@@ -301,14 +301,12 @@ body {
 | `src/pages/Index.vue` | 主页面布局 |
 | `src/layouts/MainLayout.vue` | 布局容器 |
 | `src/components/Header.vue` | 顶部导航栏 |
-| `src/components/Sidebar.vue` | 侧边栏 |
 | `src/components/CategoryTreePanel.vue` | 分类树面板 |
 | `src/components/NoteList.vue` | 笔记列表 |
 | `src/components/ui/NoteItem.vue` | 笔记项组件 |
 | `src/components/ui/editor/Muya.vue` | 编辑器封装 |
 | `src/components/ui/NoteOutlineDrawer.vue` | 大纲抽屉 |
 | `src/store/client/state.js` | 布局状态 |
-| `src/utils/theme.js` | 主题管理 |
 | `src/css/style.css` | 全局样式 |
 
 ## 扩展阅读

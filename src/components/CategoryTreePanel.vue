@@ -152,7 +152,7 @@ export default {
     },
     ...mapServerGetters(['categories', 'tags', 'currentNotes']),
     ...mapServerState(['currentCategory', 'tagNotesCount', 'isLogin']),
-    ...mapClientState(['rightClickCategoryItem', 'sidebarTreeType'])
+    ...mapClientState(['rightClickCategoryItem', 'sidebarTreeType', 'noteMethod'])
   },
   methods: {
     ensureCategoryTreeVisibleState () {
@@ -192,6 +192,54 @@ export default {
     },
     isNodeSelected: function (node) {
       return this.currentCategory === node.key
+    },
+    getCategoryDepth (categoryKey) {
+      if (!categoryKey) return 0
+      const segments = categoryKey.split('/').filter(Boolean)
+      if (segments.length === 0) return 0
+      return Math.max(0, segments.length - 1)
+    },
+    getCategoryContextMenuOptions (data, node) {
+      if (this.noteMethod !== 'notesSixDaoLun') {
+        return {
+          hideCreateCategory: false,
+          hideCreateNote: false
+        }
+      }
+
+      const depth = this.getCategoryDepth(data?.key)
+
+      if (depth <= 1) {
+        return {
+          hideCreateCategory: false,
+          hideCreateNote: false
+        }
+      }
+
+      if (depth === 2) {
+        return {
+          hideCreateCategory: false,
+          hideCreateNote: true
+        }
+      }
+
+      return {
+        hideCreateCategory: true,
+        hideCreateNote: false
+      }
+    },
+    getRootContextMenuOptions () {
+      if (this.noteMethod !== 'notesSixDaoLun') {
+        return {
+          hideCreateCategory: false,
+          hideCreateNote: false
+        }
+      }
+
+      return {
+        hideCreateCategory: false,
+        hideCreateNote: true
+      }
     },
     initTagTreemap () {
       if (this.type !== 'tag' || !this.$refs.chartContainer) return
@@ -341,13 +389,25 @@ export default {
       if (this.type !== 'category') return
       this.setRightClickCategoryItem(data.key)
       e.stopPropagation()
-      showSideDrawerContextMenu(e, this.currentCategory === data.key, data.key, this.isLogin)
+      showSideDrawerContextMenu(
+        e,
+        this.currentCategory === data.key,
+        data.key,
+        this.isLogin,
+        this.getCategoryContextMenuOptions(data, node)
+      )
     },
     drawerContextMenuHandler: function (e) {
       if (this.type !== 'category') return
       this.setRightClickCategoryItem('')
       e.stopPropagation()
-      showSideDrawerContextMenu(e, this.currentCategory === '', '', this.isLogin)
+      showSideDrawerContextMenu(
+        e,
+        this.currentCategory === '',
+        '',
+        this.isLogin,
+        this.getRootContextMenuOptions()
+      )
     },
     tagTreemapContextMenuHandler: function (e) {
       e.preventDefault()

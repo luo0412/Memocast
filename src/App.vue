@@ -3,8 +3,6 @@
     <a-config-provider :locale='antdZhCN'>
       <router-view />
     </a-config-provider>
-    <!-- 冲突解决对话框 -->
-    <ConflictResolveDialog ref="conflictDialog" />
     <!-- 离线笔记同步提示对话框 -->
     <OfflineSyncPromptDialog ref="offlineSyncDialog" @sync="handleOfflineSync" @skip="handleOfflineSkipSync" />
   </div>
@@ -18,7 +16,6 @@ import { createNamespacedHelpers } from 'vuex'
 import bus from './components/bus'
 import events from './constants/events'
 import { checkUpdate } from './ApiInvoker'
-import ConflictResolveDialog from './components/ui/dialog/ConflictResolveDialog.vue'
 import OfflineSyncPromptDialog from './components/ui/dialog/OfflineSyncPromptDialog.vue'
 
 const { RegisterErrorHandler } = ErrorHandler
@@ -32,7 +29,7 @@ const {
 } = createNamespacedHelpers('server')
 export default {
   name: 'App',
-  components: { ConflictResolveDialog, OfflineSyncPromptDialog },
+  components: { OfflineSyncPromptDialog },
   data () {
     return {
       autoSaveInterval: null,
@@ -88,12 +85,6 @@ export default {
     // 跳过同步离线笔记
     handleOfflineSkipSync () {
       console.log('[App] handleOfflineSkipSync: skipped')
-    },
-    // 显示冲突解决对话框
-    showConflictDialog (note) {
-      if (this.$refs.conflictDialog) {
-        this.$refs.conflictDialog.show(note)
-      }
     },
     ...mapClientActions({
       initClientStore: 'initClientStore',

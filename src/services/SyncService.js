@@ -628,6 +628,45 @@ class SyncService {
 
     let pushedCount = 0
     let errors = 0
+    let deleteSyncedCount = 0
+
+    try {
+      const deleteLogs = await DatabaseClient.sync.getPendingDeleteLogs()
+      for (const logEntry of deleteLogs) {
+        const noteId = parseInt(logEntry.note_id, 10)
+        const docGuid = logEntry.doc_guid
+        const logKbGuid = logEntry.kb_guid || kbGuid
+
+        if (!docGuid || docGuid.startsWith('local_')) {
+          continue
+        }
+
+        try {
+          await api.deleteDoc(docGuid, logKbGuid)
+          await DatabaseClient.sync.markSyncLogSynced(logEntry.id)
+          deleteSyncedCount++
+          console.log(`[SyncService] ✅ Deleted cloud note: ${docGuid} (log=${logEntry.id})`)
+        } catch (deleteError) {
+          console.error('[SyncService] ❌ Failed to delete cloud note:', {
+            logId: logEntry.id,
+            noteId,
+            docGuid,
+            kbGuid: logKbGuid,
+            message: deleteError?.message,
+            responseStatus: deleteError?.response?.status,
+            responseData: deleteError?.response?.data
+          })
+          errors++
+        }
+      }
+
+      if (deleteSyncedCount > 0) {
+        await DatabaseClient.sync.cleanupSyncedDeleteLogs()
+      }
+    } catch (logError) {
+      console.error('[SyncService] Failed to process pending delete logs:', logError)
+      errors++
+    }
 
     for (const note of pendingNotes) {
       console.log(`[SyncService] Processing: id=${note.id}, title=${note.title}, doc_guid=${note.doc_guid || 'none'}`)
@@ -766,8 +805,8 @@ class SyncService {
       }
     }
 
-    console.log(`[SyncService] 📊 pushToCloud completed: ${pushedCount} synced, ${errors} errors`)
-    return { count: pushedCount, errors }
+    console.log(`[SyncService] 📊 pushToCloud completed: ${pushedCount} synced, ${deleteSyncedCount} deleted, ${errors} errors`)
+    return { count: pushedCount, deleted: deleteSyncedCount, errors }
   }
 
   /**

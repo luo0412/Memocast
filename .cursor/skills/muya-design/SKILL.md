@@ -21,7 +21,7 @@ Muya 是基于 snabbdom 的虚拟 DOM Markdown 编辑器，版本 0.1.2。
 ### 初始化
 
 ```javascript
-import Muya from '@/libs/muya'
+import Muya from 'src/libs/muya/lib'
 
 const editor = new Muya(containerElement, {
   markdown: '# Hello',
@@ -189,15 +189,26 @@ class EventCenter {
 editor.setMarkdown(markdown, cursor)   // 设置内容
 editor.getMarkdown()                    // 获取内容
 editor.setCursor(cursor)                // 设置光标
-editor.getCursor()                     // 获取光标
-editor.format(type)                    // 格式化
-editor.undo()                          // 撤销
-editor.redo()                          // 重做
+editor.getCursor()                      // 获取光标
+editor.format(type)                     // 格式化
+editor.updateParagraph(type)            // 切换段落类型
+editor.insertParagraph(location)        // 在当前块前/后插入段落
+editor.deleteParagraph()                // 删除当前段落
+editor.duplicate()                      // 复制当前段落
+editor.undo()                           // 撤销
+editor.redo()                           // 重做
+editor.selectAll()                      // 全选
 editor.insertImage(imageInfo)           // 插入图片
-editor.exportHtml()                    // 导出HTML
-editor.exportStyledHTML(options)        // 导出带样式HTML
-editor.copyAsMarkdown()                // 复制为Markdown
-editor.copyAsHtml()                    // 复制为HTML
+editor.search(value, options)           // 搜索
+editor.replace(value, options)          // 替换
+editor.find('next')                     // 定位下一个/上一个匹配
+editor.exportHtml()                     // 导出 HTML
+editor.exportStyledHTML(options)        // 导出带样式 HTML
+editor.copyAsMarkdown()                 // 复制为 Markdown
+editor.copyAsHtml()                     // 复制为 HTML
+editor.pasteAsPlainText()               // 纯文本粘贴
+editor.extractImages(markdown)          // 提取图片引用
+editor.setOptions(options, needRender)  // 动态更新编辑器选项
 ```
 
 ### 事件监听

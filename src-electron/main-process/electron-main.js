@@ -316,11 +316,21 @@ function initSchema() {
       note_id INTEGER,
       action TEXT NOT NULL CHECK(action IN ('create', 'update', 'delete')),
       direction TEXT NOT NULL CHECK(direction IN ('local_to_server', 'server_to_local')),
+      doc_guid TEXT,
+      kb_guid TEXT,
       timestamp INTEGER,
       synced INTEGER DEFAULT 0,
       FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
     )
   `)
+
+  try {
+    db.run('ALTER TABLE sync_log ADD COLUMN doc_guid TEXT')
+  } catch (error) {}
+
+  try {
+    db.run('ALTER TABLE sync_log ADD COLUMN kb_guid TEXT')
+  } catch (error) {}
 
   // GUID 映射表
   db.run(`
@@ -332,21 +342,6 @@ function initSchema() {
       created_at INTEGER,
       UNIQUE(local_id, server_guid),
       FOREIGN KEY (local_id) REFERENCES notes(id) ON DELETE CASCADE
-    )
-  `)
-
-  // 冲突备份表
-  db.run(`
-    CREATE TABLE IF NOT EXISTS conflict_backup (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      note_id INTEGER NOT NULL,
-      local_content TEXT,
-      server_content TEXT,
-      local_modified INTEGER,
-      server_modified INTEGER,
-      created_at INTEGER,
-      resolved INTEGER DEFAULT 0,
-      FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
     )
   `)
 
@@ -708,40 +703,7 @@ function registerDatabaseHandlers() {
 
       values.push(id)
 
-      // ✅ 冲突预检：如果更新 kb_guid 或 doc_guid，检查是否会导致 UNIQUE constraint 冲突
-      if (updates.kb_guid !== undefined || updates.doc_guid !== undefined) {
-        const newKbGuid = updates.kb_guid !== undefined ? (updates.kb_guid == null ? null : toStr(updates.kb_guid)) : null
-        const newDocGuid = updates.doc_guid !== undefined ? (updates.doc_guid == null ? null : toStr(updates.doc_guid)) : null
-        
-        // 只在两者都不为空且不是 local_ 开头时才检查（符合唯一索引的 WHERE 条件）
-        if (newKbGuid && newDocGuid && !newDocGuid.startsWith('local_')) {
-          try {
-            const conflictCheck = execOne(`
-              SELECT id, title, dirty FROM notes 
-              WHERE kb_guid = ? AND doc_guid = ? AND id != ?
-              LIMIT 1
-            `, [newKbGuid, newDocGuid, id])
-            
-            if (conflictCheck && conflictCheck.id) {
-              log.warn(`[DB] ⚠️ UNIQUE constraint conflict detected before update:`)
-              log.warn(`  - Current note: id=${id}, updating to kb_guid=${newKbGuid}, doc_guid=${newDocGuid}`)
-              log.warn(`  - Conflicting note: id=${conflictCheck.id}, title=${conflictCheck.title}, dirty=${conflictCheck.dirty}`)
-              
-              // 删除冲突的旧记录（保留当前正在更新的笔记）
-              await db.run('DELETE FROM notes WHERE id = ?', [conflictCheck.id])
-              
-              // 同时删除关联的 guid_mapping
-              await db.run('DELETE FROM guid_mapping WHERE note_id = ?', [conflictCheck.id])
-              
-              log.warn(`[DB] ✅ Deleted conflicting note ${conflictCheck.id} to resolve UNIQUE constraint`)
-              saveDatabase()
-            }
-          } catch (conflictError) {
-            log.warn('[DB] Conflict check failed (non-critical):', conflictError.message)
-          }
-        }
-      }
-
+      // 不再在数据库层静默删除冲突记录；若发生 GUID 冲突，应由上层同步逻辑显式处理。
       const query = `UPDATE notes SET ${fields.join(', ')} WHERE id = ?`
       await db.run(query, values)
       saveDatabase()
@@ -763,25 +725,15 @@ function registerDatabaseHandlers() {
   })
 
   // 删除笔记
-  ipcMain.handle('db:deleteNote', async (event, id) => {
+  ipcMain.handle('db:deleteNote', async (event, payload) => {
     try {
-      await db.run(`INSERT INTO sync_log (note_id, action, direction, timestamp, synced) VALUES (?, 'delete', 'local_to_server', ?, 0)`, [id, Date.now()])
-      await db.run('DELETE FROM notes WHERE id = ?', [id])
+      const noteId = typeof payload === 'object' && payload !== null ? payload.id : payload
+      await db.run('DELETE FROM notes WHERE id = ?', [noteId])
       saveDatabase()
       return true
     } catch (error) {
       log.error('[DB] deleteNote error:', error)
       return false
-    }
-  })
-
-  // 获取冲突笔记
-  ipcMain.handle('db:getConflictNotes', async () => {
-    try {
-      return execToObjects("SELECT * FROM notes WHERE dirty = 1")
-    } catch (error) {
-      log.error('[DB] getConflictNotes error:', error)
-      return []
     }
   })
 
@@ -811,8 +763,7 @@ function registerDatabaseHandlers() {
         total: total?.count || 0,
         synced: Math.max((total?.count || 0) - (pending?.count || 0), 0),
         pending: pending?.count || 0,
-        syncing: 0,
-        conflict: 0
+        syncing: 0
       }
       
       console.log(`[DB] 📊 Stats: total=${stats.total}, pending=${stats.pending}, kbGuid=${currentKbGuid || 'offline'}`)
@@ -820,7 +771,7 @@ function registerDatabaseHandlers() {
       return stats
     } catch (error) {
       log.error('[DB] getStats error:', error)
-      return { total: 0, synced: 0, pending: 0, conflict: 0 }
+      return { total: 0, synced: 0, pending: 0 }
     }
   })
 
@@ -1142,37 +1093,58 @@ function registerDatabaseHandlers() {
     }
   })
 
-  // 标记笔记为冲突状态
-  ipcMain.handle('db:markAsConflict', async (event, { id, serverData = {} }) => {
-    try {
-      const note = execOne('SELECT * FROM notes WHERE id = ?', [id])
-      if (!note) return false
-
-      // 备份到冲突表
-      await db.run(`
-        INSERT INTO conflict_backup (note_id, local_content, server_content, local_modified, server_modified)
-        VALUES (?, ?, ?, ?, ?)
-      `, [id, note.content, serverData.content || '', note.local_modified, serverData.data_modified || null])
-
-      // 标记为脏（需要同步）
-      await db.run(`UPDATE notes SET dirty = 1, updated_at = ? WHERE id = ?`, [Date.now(), id])
-      saveDatabase()
-      return true
-    } catch (error) {
-      log.error('[DB] markAsConflict error:', error)
-      return false
-    }
-  })
-
   // 记录同步操作日志
-  ipcMain.handle('db:logSyncAction', async (event, { noteId, action, direction }) => {
+  ipcMain.handle('db:logSyncAction', async (event, { noteId, action, direction, docGuid = null, kbGuid = null }) => {
     try {
-      await db.run(`INSERT INTO sync_log (note_id, action, direction, timestamp, synced) VALUES (?, ?, ?, ?, 0)`,
-        [noteId, action, direction, Date.now()])
+      await db.run(`INSERT INTO sync_log (note_id, action, direction, doc_guid, kb_guid, timestamp, synced) VALUES (?, ?, ?, ?, ?, ?, 0)`,
+        [noteId, action, direction, docGuid, kbGuid, Date.now()])
       saveDatabase()
       return true
     } catch (error) {
       log.error('[DB] logSyncAction error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('db:getPendingDeleteLogs', async () => {
+    try {
+      return execToObjects(`
+        SELECT id, note_id, doc_guid, kb_guid, timestamp
+        FROM sync_log
+        WHERE action = 'delete'
+          AND direction = 'local_to_server'
+          AND synced = 0
+        ORDER BY timestamp ASC
+      `)
+    } catch (error) {
+      log.error('[DB] getPendingDeleteLogs error:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle('db:markSyncLogSynced', async (event, { id }) => {
+    try {
+      await db.run('UPDATE sync_log SET synced = 1 WHERE id = ?', [id])
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] markSyncLogSynced error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('db:cleanupSyncedDeleteLogs', async () => {
+    try {
+      await db.run(`
+        DELETE FROM sync_log
+        WHERE action = 'delete'
+          AND direction = 'local_to_server'
+          AND synced = 1
+      `)
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] cleanupSyncedDeleteLogs error:', error)
       return false
     }
   })

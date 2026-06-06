@@ -27,6 +27,8 @@ export default function () {
     autoSaveGap: 0,
     splitterWidth: 580,
     sidebarTreeType: 'category',
+    noteMethod: 'notesSixDaoLun',
+    noteMethodPrefix: 'Course',
     calendarSelectedDate: '',
     calendarDateBasis: 'modified',
     leftInnerSplitterRatio: 280,
