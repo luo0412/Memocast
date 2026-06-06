@@ -93,7 +93,7 @@ export default {
     return state
   },
   [types.UPDATE_ALL_CATEGORIES] (state, payload) {
-    state.categories = payload
+    state.allCategories = payload
     return state
   },
   [types.UPDATE_CATEGORIES_POS] (state, payload) {

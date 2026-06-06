@@ -8,6 +8,17 @@ export const OFFLINE_ROOT_CATEGORY = '/My Notes/'
 
 export const OFFLINE_ROOT_CATEGORY_KEY = 'offline_my_notes'
 
+export function normalizeTitleForMatch (title) {
+  const normalized = typeof title === 'string' ? title.trim() : ''
+  return normalized || 'Untitled'
+}
+
+export function buildNoteUniqueKey (category, title) {
+  const normalizedCategory = normalizeCategoryForMatch(category)
+  const normalizedTitle = normalizeTitleForMatch(title)
+  return `${normalizedCategory}::${normalizedTitle}`.toLowerCase()
+}
+
 /**
  * 规范化 category 用于去重/search 匹配
  * - 将空值、/、/My Notes/、/我的笔记/ 统一为 OFFLINE_ROOT_CATEGORY

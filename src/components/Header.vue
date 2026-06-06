@@ -465,22 +465,22 @@ export default {
           lastSyncTime: Date.now(),
           ...stats
         })
-        if (result.success) {
-          if ((stats.pending || 0) > 0) {
-            this.$q.notify({
-              message: this.$t('syncFailed'),
-              type: 'warning',
-              position: 'top',
-              caption: `仍有 ${stats.pending} 条未同步`
-            })
-          } else {
-            this.$q.notify({
-              message: this.$t('syncComplete'),
-              type: 'positive',
-              position: 'top',
-              caption: `↑${result.stats?.pushed || 0} ↓${result.stats?.pulled || 0}`
-            })
-          }
+      if (result.success) {
+        if ((stats.pending || 0) > 0) {
+          this.$q.notify({
+            message: this.$t('syncFailed'),
+            type: 'warning',
+            position: 'top',
+            caption: `仍有 ${stats.pending} 条未备份`
+          })
+        } else {
+          this.$q.notify({
+            message: this.$t('cloudBackupComplete'),
+            type: 'positive',
+            position: 'top',
+            caption: `↑${result.stats?.pushed || 0}`
+          })
+        }
         } else {
           this.$q.notify({
             message: this.$t('syncFailed'),

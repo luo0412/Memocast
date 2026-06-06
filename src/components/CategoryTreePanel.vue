@@ -155,6 +155,26 @@ export default {
     ...mapClientState(['rightClickCategoryItem', 'sidebarTreeType'])
   },
   methods: {
+    ensureCategoryTreeVisibleState () {
+      if (this.type !== 'category' || !this.$refs.tree) return
+
+      const rootKeys = Array.isArray(this.items) ? this.items.map(item => item.key).filter(Boolean) : []
+      const nextExpandedKeys = new Set([...(this.expandedKeys || []), ...rootKeys])
+      this.expandedKeys = Array.from(nextExpandedKeys)
+
+      this.$nextTick(() => {
+        this.expandedKeys.forEach(key => {
+          const node = this.$refs.tree?.getNode(key)
+          if (node && this.$refs.tree?.store?.nodesMap?.[key]) {
+            this.$refs.tree.store.nodesMap[key].expanded = true
+          }
+        })
+
+        if (this.currentCategory) {
+          this.$refs.tree.setCurrentKey(this.currentCategory)
+        }
+      })
+    },
     nodeIconClass: function (node) {
       if (this.type !== 'category') return 'el-icon-price-tag'
 
@@ -349,9 +369,15 @@ export default {
     DatabaseClient.appState.get(WORKSPACE_STATE_KEYS.expandedKeys)
       .then((keys) => {
         this.expandedKeys = Array.isArray(keys) && keys.length > 0 ? keys : ['/My Notes/']
+        this.$nextTick(() => {
+          this.ensureCategoryTreeVisibleState()
+        })
       })
       .catch(() => {
         this.expandedKeys = ['/My Notes/']
+        this.$nextTick(() => {
+          this.ensureCategoryTreeVisibleState()
+        })
       })
   },
   beforeDestroy () {
@@ -397,16 +423,14 @@ export default {
         }
 
         if (this.type === 'category') {
-          const keys = Array.isArray(this.expandedKeys) && this.expandedKeys.length > 0
-            ? this.expandedKeys
-            : ['/My Notes/']
           this.$nextTick(() => {
-            keys.forEach(key => {
-              const node = this.$refs.tree?.getNode(key)
-              if (node) {
-                this.$refs.tree.store.nodesMap[key].expanded = true
-              }
+            console.log('[CategoryTreePanel] syncing tree visibility:', {
+              itemCount: Array.isArray(this.items) ? this.items.length : 0,
+              rootKeys: Array.isArray(this.items) ? this.items.map(item => item.key) : [],
+              expandedKeys: this.expandedKeys,
+              currentCategory: this.currentCategory
             })
+            this.ensureCategoryTreeVisibleState()
           })
         }
       }

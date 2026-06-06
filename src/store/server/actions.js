@@ -14,17 +14,23 @@ import {
   getCalendarNoteTimestamp,
   mapLocalNoteToSummary
 } from 'src/store/server/noteTree'
+import {
+  ensureUniqueNoteTitleInCategory,
+  generateUniqueNoteTitleInCategory
+} from 'src/store/server/noteUniquenessService'
 
 function mergeCategoryCollections ({ localCategories = [], remoteCategories = [], localNotes = [], remoteCategoryPos = {} }) {
   const normalizedMap = new Map()
 
-  const appendCategory = (rawCategory, source = {}) => {
-    const category = normalizeCategoryForMatch(rawCategory)
+  const appendCategory = (rawCategory, source = {}, options = {}) => {
+    const shouldNormalizeRoot = options.normalizeRoot !== false
+    const category = shouldNormalizeRoot ? normalizeCategoryForMatch(rawCategory) : rawCategory
     if (!category || category === '/') return
 
+    const defaultParent = shouldNormalizeRoot ? OFFLINE_ROOT_CATEGORY : (source.parent || '/')
     const existing = normalizedMap.get(category) || {
       category,
-      parent: source.parent || OFFLINE_ROOT_CATEGORY,
+      parent: source.parent || defaultParent,
       kbGuid: source.kbGuid || source.kb_guid || '',
       local_only: source.local_only || 0
     }
@@ -33,7 +39,7 @@ function mergeCategoryCollections ({ localCategories = [], remoteCategories = []
       ...existing,
       ...source,
       category,
-      parent: source.parent || existing.parent || OFFLINE_ROOT_CATEGORY,
+      parent: source.parent || existing.parent || defaultParent,
       kbGuid: source.kbGuid ?? source.kb_guid ?? existing.kbGuid ?? '',
       local_only: source.local_only ?? existing.local_only ?? 0
     })
@@ -52,11 +58,13 @@ function mergeCategoryCollections ({ localCategories = [], remoteCategories = []
   }
 
   for (const category of remoteCategories) {
-    appendCategory(category?.category, category)
+    appendCategory(category?.category, category, { normalizeRoot: false })
   }
 
   const mergedCategories = Array.from(normalizedMap.values())
-  const tree = buildCategoryTreeFromNotes(localNotes, mergedCategories)
+  const tree = remoteCategories.length > 0
+    ? buildCategoryTreeFromNotes([], mergedCategories)
+    : buildCategoryTreeFromNotes(localNotes, mergedCategories)
 
   return {
     categories: mergedCategories,
@@ -105,8 +113,15 @@ import {
 import html2canvas from 'html2canvas'
 import debugLogger from 'src/utils/debugLogger'
 
+function getDefaultCategoryForMode (state, category = '') {
+  if (state?.isLogin && state?.kbGuid) {
+    if (!category || category === OFFLINE_ROOT_CATEGORY) return ''
+    return category
+  }
+  return category || OFFLINE_ROOT_CATEGORY
+}
+
 export async function _getContent (kbGuid, docGuid) {
-  console.time('FetchNote')
   
   // ✅ 关键改进：先检查 SQLite 是否有本地修改版本（比缓存更新）
   try {
@@ -293,7 +308,9 @@ export default {
    */
   async login ({
     commit,
-    rootState
+    rootState,
+    state,
+    dispatch
   }, payload) {
     const { url } = payload
     api.AccountServerApi.setBaseUrl(url)
@@ -362,9 +379,18 @@ export default {
       console.warn('[login] Failed to check offline notes:', err)
     }
 
-    this.dispatch('server/getAllTags')
-    this.dispatch('server/getAllCategories')
-    this.dispatch('server/getCategoryNotes')
+    await this.dispatch('server/getAllTags')
+    await this.dispatch('server/getAllCategories')
+
+    const nextCategory = getDefaultCategoryForMode(state, state.currentCategory)
+    if (state.currentCategory) {
+      await dispatch('updateCurrentCategory', {
+        data: nextCategory,
+        type: 'category'
+      })
+    } else {
+      await this.dispatch('server/getCategoryNotes', { category: nextCategory })
+    }
 
     return result
   },
@@ -416,7 +442,7 @@ export default {
    * @param commit
    * @returns {Promise<void>}
    */
-  async reLogin ({ commit }) {
+  async reLogin ({ commit, dispatch, state }) {
     const [userId, password, url] = ClientFileStorage.getItemsFromStore([
       'userId',
       'password',
@@ -432,6 +458,34 @@ export default {
       ...result,
       isLogin: true
     })
+
+    if (result.kbGuid) {
+      try {
+        const migratedNotes = await DatabaseClient.notes.migrateOffline(result.kbGuid)
+        if (migratedNotes > 0) {
+          console.log(`[reLogin] Migrated ${migratedNotes} offline notes to kbGuid=${result.kbGuid}`)
+        }
+        await DatabaseClient.categories.migrateOffline(result.kbGuid)
+        console.log(`[reLogin] Migrated offline categories to kbGuid=${result.kbGuid}`)
+
+        const migratedTags = await migrateOfflineTagsToCloud(result.kbGuid)
+        console.log('[reLogin] Migrated offline tags to cloud:', migratedTags)
+      } catch (err) {
+        console.warn('[reLogin] Failed to migrate offline data:', err)
+      }
+    }
+
+    await dispatch('getAllTags')
+    await dispatch('getAllCategories')
+
+    if (state.currentCategory) {
+      await dispatch('updateCurrentCategory', {
+        data: state.currentCategory,
+        type: 'category'
+      })
+    } else {
+      await dispatch('getCategoryNotes')
+    }
   },
   /**
    * 获取指定文件夹下的笔记
@@ -587,29 +641,26 @@ export default {
       kbGuid,
       currentCategory,
       tags,
-      isLogin  // ✅ 添加登录状态检查
+      isLogin
     } = state
     const {
       category,
       start,
       count
     } = payload
-    const isTagCategory = tags?.map(t => t.tagGuid).includes(helper.isNullOrEmpty(category) ? currentCategory : category)
+    const resolvedCategory = helper.isNullOrEmpty(category) ? currentCategory : category
+    const isTagCategory = tags?.map(t => t.tagGuid).includes(resolvedCategory)
     if (isTagCategory) {
       this.dispatch('server/getTagNotes', { tag: currentCategory })
       return
     }
 
-    const targetCategory = category || currentCategory
+    const targetCategory = getDefaultCategoryForMode(state, resolvedCategory)
 
-    // ✅ 离线模式：完全从 SQLite 加载（不请求云端）
     if (!isLogin || !kbGuid) {
-      console.log('[getCategoryNotes] Offline mode, loading from SQLite only:', targetCategory)
-
       try {
-        const formattedNotes = await getOfflineNotesByCategory(targetCategory || OFFLINE_ROOT_CATEGORY)
-
-        console.log(`[getCategoryNotes] ✅ Loaded ${formattedNotes.length} notes from SQLite (offline mode)`)
+        const formattedNotes = await getOfflineNotesByCategory(targetCategory)
+        console.log(`[getCategoryNotes] Loaded ${formattedNotes.length} notes from SQLite:`, targetCategory)
         commit(types.UPDATE_CURRENT_NOTES, formattedNotes)
         return
       } catch (err) {
@@ -619,83 +670,27 @@ export default {
       }
     }
 
-    // ✅ 在线模式：合并云端和本地数据（本地优先）
-    const cloudResult = await api.KnowledgeBaseApi.getCategoryNotes({
-      kbGuid,
-      data: {
-        category: targetCategory,
-        start: start || 0,
-        count: count || 100,
-        withAbstract: true
-      }
-    })
-
-    // 获取本地 SQLite 中该分类下的所有笔记（包括 dirty=1 的）
+    commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, true)
     try {
-      const localNotes = await DatabaseClient.notes.getAll({ category: targetCategory })
-      
-      // ✅ 核心去重原则：按 (category + title + kbGuid) 唯一，本地优先
-      // 使用 Map 确保每个 (category, title, kbGuid) 只出现一次
-      const dedupeMap = new Map()  // key: "category|title|kbGuid", value: 合并后的笔记对象
-      
-      // 第一步：添加所有本地笔记（本地优先权最高）
-      for (const localNote of (localNotes || [])) {
-        if (!localNote.title || localNote.title === 'Untitled') continue
-        
-        const dedupeKey = `${localNote.category || targetCategory}|${localNote.title}|${kbGuid || ''}`
-        
-        // 如果这个 (category, title) 还没出现过 → 添加
-        if (!dedupeMap.has(dedupeKey)) {
-          dedupeMap.set(dedupeKey, {
-            docGuid: localNote.doc_guid,
-            guid: localNote.doc_guid,
-            title: localNote.title,
-            abstractText: localNote.content ? localNote.content.substring(0, 200) : '',
-            category: localNote.category || targetCategory,
-            dataCreated: localNote.data_created || Date.now(),
-            dataModified: localNote.data_modified || localNote.local_modified || Date.now(),
-            _localId: localNote.id,
-            _dirty: localNote.dirty === 1,
-            _source: 'local'
-          })
+      const result = await api.KnowledgeBaseApi.getCategoryNotes({
+        kbGuid,
+        data: {
+          category: targetCategory,
+          start: start || 0,
+          count: count || 100,
+          withAbstract: true
         }
-        // 如果已存在 → 跳过（保留先添加的本地版本）
-      }
-      
-      // 第二步：添加云端独有的笔记（本地没有的才添加）
-      for (const cloudNote of cloudResult) {
-        if (!cloudNote.title) continue
-
-        // ✅ 规范化 category 并加上 kbGuid，确保与本地 dedupe key 对称
-        const cloudCat = normalizeCategoryForMatch(cloudNote.category || targetCategory || '')
-        const dedupeKey = `${cloudCat}|${cloudNote.title}|${kbGuid || ''}`
-
-        // 只有当本地不存在这个 (category, title, kbGuid) 时才添加云端版本
-        if (!dedupeMap.has(dedupeKey)) {
-          dedupeMap.set(dedupeKey, {
-            ...cloudNote,
-            _source: 'cloud'
-          })
-        }
-        // 如果本地已有 → 跳过（保持本地优先）
-      }
-
-      // 转换为数组（本地笔记在前，云端的在后）
-      const mergedNotes = Array.from(dedupeMap.values())
-        .sort((a, b) => {
-          // 本地笔记优先显示在前
-          if (a._source === 'local' && b._source !== 'local') return -1
-          if (a._source !== 'local' && b._source === 'local') return 1
-          // 同源的按时间倒序
-          return (b.dataModified || 0) - (a.dataModified || 0)
-        })
-
-      console.log(`[getCategoryNotes] Deduped: ${cloudResult.length} cloud + ${(localNotes||[]).length} local → ${mergedNotes.length} unique (by category+title)`)
-      commit(types.UPDATE_CURRENT_NOTES, mergedNotes)
+      })
+      console.log('[getCategoryNotes] Loaded remote notes:', {
+        category: targetCategory || '/',
+        count: Array.isArray(result) ? result.length : 0
+      })
+      commit(types.UPDATE_CURRENT_NOTES, Array.isArray(result) ? result : [])
     } catch (err) {
-      console.warn('[getCategoryNotes] Failed to merge local notes:', err)
-      // 降级：只显示云端数据
-      commit(types.UPDATE_CURRENT_NOTES, cloudResult)
+      console.error('[getCategoryNotes] Failed to load remote notes:', err)
+      commit(types.UPDATE_CURRENT_NOTES, [])
+    } finally {
+      commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
     }
   },
   /**
@@ -727,7 +722,7 @@ export default {
     state
   }) {
     commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, true)
-    const { kbGuid, isLogin } = state
+    const { kbGuid, isLogin, currentCategory } = state
 
     try {
       const { categories: localCategories, notes: localNotes } = await loadLocalWorkspaceData()
@@ -744,16 +739,86 @@ export default {
       }
 
       const res = await api.KnowledgeBaseApi.getCategories({ kbGuid })
+      console.log('[getAllCategories] Raw remote categories response:', res)
+      const rawRemoteCategories = Array.isArray(res?.result)
+        ? res.result
+        : Array.isArray(res)
+          ? res
+          : Array.isArray(res?.categories)
+            ? res.categories
+            : []
+      const remoteCategories = rawRemoteCategories
+        .map(item => {
+          if (typeof item === 'string') {
+            const category = item
+            const trimmed = category.replace(/\/$/, '')
+            const lastSlashIndex = trimmed.lastIndexOf('/')
+            const parent = lastSlashIndex > 0
+              ? `${trimmed.slice(0, lastSlashIndex + 1)}`
+              : '/'
+            return {
+              category,
+              parent: parent === category ? '/' : parent,
+              kbGuid: kbGuid || ''
+            }
+          }
+
+          const category = item?.category || item?.name || item?.path || item?.categoryName || ''
+          const trimmed = category.replace(/\/$/, '')
+          const inferredParent = trimmed && trimmed !== '/My Notes'
+            ? `${trimmed.slice(0, trimmed.lastIndexOf('/') + 1)}`
+            : '/'
+
+          return {
+            ...item,
+            category,
+            parent: item?.parent || item?.parentCategory || item?.parentPath || inferredParent || '/',
+            kbGuid: item?.kbGuid || item?.kb_guid || item?.bizGuid || kbGuid || ''
+          }
+        })
+        .filter(item => !!item.category)
+      console.log('[getAllCategories] Remote category list:', remoteCategories.map(item => ({
+        category: item.category,
+        parent: item.parent,
+        kbGuid: item.kbGuid
+      })))
+      console.log('[getAllCategories] Merge inputs summary:', {
+        localCategoryCount: localCategories?.length || 0,
+        localNoteCount: localNotes?.length || 0,
+        remoteCategoryCount: remoteCategories.length,
+        remotePosKeys: Object.keys(res?.pos || res?.resultPos || {}).length
+      })
       const mergedOnline = mergeCategoryCollections({
         localCategories,
         localNotes,
-        remoteCategories: res.result || [],
-        remoteCategoryPos: res.pos || {}
+        remoteCategories,
+        remoteCategoryPos: res?.pos || res?.resultPos || {}
+      })
+      console.log('[getAllCategories] mergedOnline categories count:', mergedOnline.categories?.length || 0)
+      console.log('[getAllCategories] mergedOnline pos keys:', Object.keys(mergedOnline.pos || {}).length)
+      console.log('[getAllCategories] mergedOnline tree root keys:', (mergedOnline.tree || []).map(node => node.key))
+      console.log('[getAllCategories] mergedOnline tree snapshot:', JSON.stringify(mergedOnline.tree || [], null, 2))
+
+      const workspaceState = await loadWorkspaceState()
+      const savedCurrentCategory = workspaceState[APP_STATE_KEYS.currentCategory] || currentCategory || OFFLINE_ROOT_CATEGORY
+      const restoredCategory = categoryExistsInTree(mergedOnline.tree, savedCurrentCategory)
+        ? savedCurrentCategory
+        : OFFLINE_ROOT_CATEGORY
+      console.log('[getAllCategories] restoring currentCategory:', {
+        savedCurrentCategory,
+        currentCategory,
+        restoredCategory
       })
 
       commit(types.SET_CATEGORIES, mergedOnline.tree)
       commit(types.UPDATE_ALL_CATEGORIES, mergedOnline.categories)
       commit(types.UPDATE_CATEGORIES_POS, mergedOnline.pos)
+      commit(types.UPDATE_CURRENT_CATEGORY, restoredCategory)
+      console.log('[getAllCategories] committed category tree:', {
+        treeRootCount: mergedOnline.tree?.length || 0,
+        categoryCount: mergedOnline.categories?.length || 0,
+        restoredCategory
+      })
     } catch (err) {
       console.error('[getAllCategories] failed:', err)
       commit(types.SET_CATEGORIES, [])
@@ -1043,13 +1108,33 @@ export default {
     const {
       docGuid,
       kbGuid,
-      title
+      title,
+      category
     } = payload
-    
-    // ✅ 自动补全 .md 后缀（如果标题没有以 .md 结尾）
+    const nextCategory = category || state.currentNote?.info?.category || state.currentCategory
+
     if (title && !title.toLowerCase().endsWith('.md')) {
       payload.title = `${title}.md`
       console.log(`[updateNoteInfo] Auto-append .md suffix: "${title}" → "${payload.title}"`)
+    }
+
+    const duplicateCheck = await ensureUniqueNoteTitleInCategory({
+      category: nextCategory,
+      title: payload.title,
+      excludeDocGuid: docGuid
+    })
+
+    if (duplicateCheck.exists) {
+      Notify.create({
+        message: i18n.t('noteTitleAlreadyExists'),
+        caption: i18n.t('noteTitleAlreadyExistsHint', {
+          category: duplicateCheck.normalizedCategory,
+          title: duplicateCheck.normalizedTitle
+        }),
+        type: 'warning',
+        icon: 'warning'
+      })
+      return
     }
     
     await api.KnowledgeBaseApi.updateNoteInfo({
@@ -1216,26 +1301,12 @@ export default {
     const safeCategory = currentCategory || ''
     const isLite = safeCategory.replace(/\//g, '') === 'Lite'
     
-    // ✅ 同名检测：如果当前文件夹下已有同名笔记，自动添加编号 (1), (2)...
     let finalTitle = title || i18n.t('untitled')
     try {
-      const existingNotes = await DatabaseClient.notes.getAll({ category: safeCategory || '/' })
-      if (existingNotes && existingNotes.length > 0) {
-        const titleSet = new Set(existingNotes.map(n => n.title))
-        if (titleSet.has(finalTitle)) {
-          let counter = 1
-          // ✅ 分离文件名和扩展名，确保编号在扩展名之前
-          const lastDotIndex = finalTitle.lastIndexOf('.')
-          const baseName = lastDotIndex > 0 ? finalTitle.substring(0, lastDotIndex) : finalTitle
-          const ext = lastDotIndex > 0 ? finalTitle.substring(lastDotIndex) : ''
-          
-          while (titleSet.has(`${baseName} (${counter})${ext}`)) {
-            counter++
-          }
-          finalTitle = `${baseName} (${counter})${ext}`
-          console.log(`[createNote] Duplicate title detected: "${title}" → "${finalTitle}"`)
-        }
-      }
+      finalTitle = await generateUniqueNoteTitleInCategory({
+        category: safeCategory || OFFLINE_ROOT_CATEGORY,
+        title: finalTitle
+      })
     } catch (err) {
       console.warn('[createNote] Failed to check duplicate titles:', err)
     }
@@ -1849,8 +1920,29 @@ export default {
       kbGuid,
       docGuid,
       category,
-      type
+      type,
+      title
     } = noteInfo
+
+    const duplicateCheck = await ensureUniqueNoteTitleInCategory({
+      category,
+      title,
+      excludeDocGuid: docGuid
+    })
+
+    if (duplicateCheck.exists) {
+      Notify.create({
+        message: i18n.t('noteTitleAlreadyExists'),
+        caption: i18n.t('noteTitleAlreadyExistsHint', {
+          category: duplicateCheck.normalizedCategory,
+          title: duplicateCheck.normalizedTitle
+        }),
+        type: 'warning',
+        icon: 'warning'
+      })
+      return
+    }
+
     const isLite = category === '/Lite/' ? 'lite/markdown' : type
     await api.KnowledgeBaseApi.updateNoteInfo({
       kbGuid,

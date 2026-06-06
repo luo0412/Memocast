@@ -66,39 +66,29 @@ class CloudSyncService {
   }
 
   /**
-   * 完整同步：pull 新笔记 + push dirty 笔记
+   * 默认同步：仅备份本地变更到云端
    */
   async sync() {
-    if (this._status.isSyncing) {
-      return { success: false, reason: 'already_syncing' }
-    }
-    if (!this.isLoggedIn) {
-      return { success: false, reason: 'not_logged_in' }
-    }
-
-    this._status.isSyncing = true
-    this._status.error = null
-    this._notify({ type: 'sync_start' })
-
-    try {
-      const result = await SyncService.sync()
-      this._status.lastSyncTime = Date.now()
-      await this._refreshStats()
-      await this._refreshAccount()
-
-      this._notify({ type: 'sync_complete', result })
-      return result
-    } catch (error) {
-      this._status.error = error.message
-      this._notify({ type: 'sync_error', error: error.message })
-      return { success: false, error: error.message }
-    } finally {
-      this._status.isSyncing = false
-    }
+    return this.pushOnly()
   }
 
   /**
-   * 仅拉取：只从云端下载本地不存在的笔记，不推送
+   * 恢复预览：统计将新增/跳过/补全的笔记数
+   */
+  async getRestorePreview() {
+    if (!this.isLoggedIn) {
+      return {
+        success: false,
+        reason: 'not_logged_in',
+        stats: { total: 0, pulled: 0, skipped: 0, backfilled: 0 }
+      }
+    }
+
+    return await SyncService.previewRestoreFromCloud()
+  }
+
+  /**
+   * 仅拉取：作为手动恢复入口，只从云端下载本地不存在的笔记，不推送
    */
   async pullOnly() {
     if (!this.isLoggedIn) {
@@ -109,7 +99,7 @@ class CloudSyncService {
     this._notify({ type: 'sync_start' })
 
     try {
-      const result = await SyncService.pullFromCloud()
+      const result = await SyncService.restoreFromCloud()
       this._status.lastSyncTime = Date.now()
       await this._refreshStats()
       this._notify({ type: 'sync_complete', result })

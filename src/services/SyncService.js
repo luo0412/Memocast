@@ -230,11 +230,13 @@ class SyncService {
   }
 
   /**
-   * 执行同步（本地优先架构：先 pull 新文件，再 push dirty 文件）
-   * - Step 1: 从云端拉取本地不存在的笔记
-   * - Step 2: 将所有 dirty=1 的笔记推送到云端
+   * 默认同步：仅备份本地变更到云端，不执行恢复
    */
   async sync(options = {}) {
+    return this.backupToCloud(options)
+  }
+
+  async backupToCloud() {
     if (this.isSyncing) {
       console.info('[SyncService] Sync already in progress, skipping')
       return { success: false, reason: 'already_syncing' }
@@ -242,39 +244,209 @@ class SyncService {
 
     const kbGuid = getKbGuid()
     if (!kbGuid || kbGuid === 'null') {
-      console.warn('[SyncService] Sync skipped: no kbGuid (not logged in)')
+      console.warn('[SyncService] Backup skipped: no kbGuid (not logged in)')
       return { success: false, reason: 'not_logged_in' }
     }
 
     this.isSyncing = true
-    this.notifyListeners({ type: 'sync_start' })
+    this.notifyListeners({ type: 'sync_start', mode: 'backup' })
 
     try {
       const stats = { pulled: 0, pushed: 0, errors: 0, skipped: 0, backfilled: 0 }
       this._cloudCategoryNotesCache.clear()
 
-      // Step 1: 从云端拉取本地不存在的笔记（不覆盖已有内容）
-      console.info('[SyncService] Starting pull from cloud (new files only)...')
-      const pullResult = await this.pullFromCloud()
-      stats.pulled = pullResult.count
-      stats.skipped = pullResult.skipped || 0
-      stats.backfilled = pullResult.backfilled || 0
-
-      // Step 2: 推送本地变更到云端
-      console.info('[SyncService] Starting push to cloud...')
+      console.info('[SyncService] Starting backup to cloud...')
       const pushResult = await this.pushToCloud()
       stats.pushed = pushResult.count
       stats.errors += pushResult.errors
 
-      console.info(`[SyncService] ✅ Sync completed: ↓${stats.pulled} pulled, ↑${stats.pushed} pushed, ⏭️${stats.skipped} skipped, ♻️${stats.backfilled} backfilled, ${stats.errors} errors`)
-      this.notifyListeners({ type: 'sync_complete', stats })
-      return { success: true, stats }
+      console.info(`[SyncService] ✅ Backup completed: ↑${stats.pushed} pushed, ${stats.errors} errors`)
+      this.notifyListeners({ type: 'sync_complete', mode: 'backup', stats })
+      return { success: true, mode: 'backup', stats }
     } catch (error) {
-      console.error('[SyncService] Sync failed:', error)
-      this.notifyListeners({ type: 'sync_error', error: error.message })
-      return { success: false, error: error.message }
+      console.error('[SyncService] Backup failed:', error)
+      this.notifyListeners({ type: 'sync_error', mode: 'backup', error: error.message })
+      return { success: false, mode: 'backup', error: error.message }
     } finally {
       this.isSyncing = false
+    }
+  }
+
+  /**
+   * 手动恢复：从云端拉取本地不存在的笔记
+   */
+  async restoreFromCloud() {
+    if (this.isSyncing) {
+      console.info('[SyncService] Restore already in progress, skipping')
+      return { success: false, reason: 'already_syncing' }
+    }
+
+    const kbGuid = getKbGuid()
+    if (!kbGuid || kbGuid === 'null') {
+      console.warn('[SyncService] Restore skipped: no kbGuid (not logged in)')
+      return { success: false, reason: 'not_logged_in' }
+    }
+
+    this.isSyncing = true
+    this.notifyListeners({ type: 'sync_start', mode: 'restore' })
+
+    try {
+      this._cloudCategoryNotesCache.clear()
+      console.info('[SyncService] Starting restore from cloud (new files only)...')
+      const preview = await this.previewRestoreFromCloud()
+      const pullResult = await this.pullFromCloud()
+      const stats = {
+        pulled: pullResult.count || preview.stats?.pulled || 0,
+        pushed: 0,
+        errors: 0,
+        skipped: pullResult.skipped || preview.stats?.skipped || 0,
+        backfilled: pullResult.backfilled || preview.stats?.backfilled || 0,
+        total: preview.stats?.total || 0
+      }
+
+      console.info(`[SyncService] ✅ Restore completed: ↓${stats.pulled} pulled, ⏭️${stats.skipped} skipped, ♻️${stats.backfilled} backfilled`)
+      this.notifyListeners({ type: 'sync_complete', mode: 'restore', stats })
+      return { success: true, mode: 'restore', stats }
+    } catch (error) {
+      console.error('[SyncService] Restore failed:', error)
+      this.notifyListeners({ type: 'sync_error', mode: 'restore', error: error.message })
+      return { success: false, mode: 'restore', error: error.message }
+    } finally {
+      this.isSyncing = false
+    }
+  }
+
+  async previewRestoreFromCloud() {
+    const kbGuid = getKbGuid()
+    if (!kbGuid || kbGuid === 'null') {
+      return {
+        success: false,
+        reason: 'not_logged_in',
+        stats: { total: 0, pulled: 0, skipped: 0, backfilled: 0 }
+      }
+    }
+
+    try {
+      const docs = await this._fetchAllCloudDocs(kbGuid)
+      const preview = await this._buildRestorePreviewStats({ kbGuid, docs })
+      return {
+        success: true,
+        reason: null,
+        stats: preview
+      }
+    } catch (error) {
+      console.error('[SyncService] previewRestoreFromCloud failed:', error)
+      return {
+        success: false,
+        reason: 'preview_failed',
+        error: error.message,
+        stats: { total: 0, pulled: 0, skipped: 0, backfilled: 0 }
+      }
+    }
+  }
+
+  async _fetchAllCloudDocs(kbGuid) {
+    console.log('[SyncService] Fetching cloud note list...')
+    const docs = []
+    let start = 0
+    const count = 100
+
+    for (;;) {
+      const result = await WizNoteApi.KnowledgeBaseApi.getCategoryNotes({
+        kbGuid,
+        data: { category: '', start, count, withAbstract: false }
+      })
+
+      if (Array.isArray(result) && result.length > 0) {
+        docs.push(...result)
+        if (result.length < count) break
+        start += count
+      } else {
+        break
+      }
+    }
+
+    console.log(`[SyncService] Found ${docs.length} notes on cloud`)
+    return docs
+  }
+
+  async _buildRestorePreviewStats({ kbGuid, docs, executeBackfill = false }) {
+    let pulledCount = 0
+    let skippedCount = 0
+    let backfilledCount = 0
+
+    const localNotes = await DatabaseClient.notes.getAll() || []
+    const localNoteSet = new Set(
+      localNotes.map(note => {
+        const localCat = normalizeCategoryForMatch(note.category || '')
+        return `${note.title || ''}|${localCat}|${note.kb_guid || ''}`.toLowerCase()
+      })
+    )
+    const localNotesByDocGuid = new Map(
+      localNotes
+        .filter(note => note.doc_guid)
+        .map(note => [note.doc_guid, note])
+    )
+
+    console.log(`[SyncService] Loaded ${localNoteSet.size} local notes for dedup check`)
+
+    for (const doc of docs) {
+      const docGuid = doc.docGuid || doc.guid
+      if (!docGuid) continue
+
+      const existingLocalNote = localNotesByDocGuid.get(docGuid)
+      if (existingLocalNote && !existingLocalNote.doc_guid?.startsWith('local_')) {
+        const existingContent = typeof existingLocalNote.content === 'string' ? existingLocalNote.content.trim() : ''
+        if (!existingContent) {
+          if (executeBackfill) {
+            try {
+              const updated = await this._downloadAndUpdateEmptyNote(existingLocalNote, doc, kbGuid, docGuid)
+              if (updated) {
+                backfilledCount++
+                localNotesByDocGuid.set(docGuid, updated)
+              }
+            } catch (e) {
+              console.warn(`[SyncService] Failed to backfill empty note ${docGuid}:`, e.message)
+            }
+          } else {
+            backfilledCount++
+          }
+        }
+        skippedCount++
+        continue
+      }
+
+      const cloudCategory = normalizeCategoryForMatch(doc.category || '')
+      const dedupeKey = `${doc.title || 'Untitled'}|${cloudCategory}|${kbGuid}`.toLowerCase()
+
+      if (localNoteSet.has(dedupeKey)) {
+        skippedCount++
+        continue
+      }
+
+      if (executeBackfill) {
+        try {
+          const result = await this._downloadAndCreateNote(doc, kbGuid, docGuid)
+
+          if (result) {
+            pulledCount++
+            console.log(`[SyncService] ↓ Pulled NEW note: "${doc.title}" (${docGuid}) id=${result.id}`)
+            localNoteSet.add(dedupeKey)
+            localNotesByDocGuid.set(docGuid, result)
+          }
+        } catch (e) {
+          console.warn(`[SyncService] Failed to download note ${docGuid}:`, e.message)
+        }
+      } else {
+        pulledCount++
+      }
+    }
+
+    return {
+      total: docs.length,
+      pulled: pulledCount,
+      skipped: skippedCount,
+      backfilled: backfilledCount
     }
   }
 
@@ -292,97 +464,18 @@ class SyncService {
         return { count: 0, skipped: 0, backfilled: 0 }
       }
 
-      console.log('[SyncService] Fetching cloud note list...')
-      const docs = []
-      let start = 0
-      const count = 100
+      const docs = await this._fetchAllCloudDocs(kbGuid)
+      const stats = await this._buildRestorePreviewStats({
+        kbGuid,
+        docs,
+        executeBackfill: true
+      })
 
-      for (;;) {
-        const result = await WizNoteApi.KnowledgeBaseApi.getCategoryNotes({
-          kbGuid,
-          data: { category: '', start, count, withAbstract: false }
-        })
-
-        if (Array.isArray(result) && result.length > 0) {
-          docs.push(...result)
-          if (result.length < count) break
-          start += count
-        } else {
-          break
-        }
-      }
-
-      console.log(`[SyncService] Found ${docs.length} notes on cloud`)
-
-      let pulledCount = 0
-      let skippedCount = 0
-      let backfilledCount = 0
-
-      const localNotes = await DatabaseClient.notes.getAll() || []
-      const localNoteSet = new Set(
-        localNotes.map(note => {
-          const localCat = normalizeCategoryForMatch(note.category || '')
-          return `${note.title || ''}|${localCat}|${note.kb_guid || ''}`.toLowerCase()
-        })
-      )
-      const localNotesByDocGuid = new Map(
-        localNotes
-          .filter(note => note.doc_guid)
-          .map(note => [note.doc_guid, note])
-      )
-
-      console.log(`[SyncService] Loaded ${localNoteSet.size} local notes for dedup check`)
-
-      for (const doc of docs) {
-        const docGuid = doc.docGuid || doc.guid
-        if (!docGuid) continue
-
-        const existingLocalNote = localNotesByDocGuid.get(docGuid)
-        if (existingLocalNote && !existingLocalNote.doc_guid?.startsWith('local_')) {
-          const existingContent = typeof existingLocalNote.content === 'string' ? existingLocalNote.content.trim() : ''
-          if (!existingContent) {
-            try {
-              const updated = await this._downloadAndUpdateEmptyNote(existingLocalNote, doc, kbGuid, docGuid)
-              if (updated) {
-                backfilledCount++
-                localNotesByDocGuid.set(docGuid, updated)
-              }
-            } catch (e) {
-              console.warn(`[SyncService] Failed to backfill empty note ${docGuid}:`, e.message)
-            }
-          }
-          skippedCount++
-          continue
-        }
-
-        const cloudCategory = normalizeCategoryForMatch(doc.category || '')
-        const dedupeKey = `${doc.title || 'Untitled'}|${cloudCategory}|${kbGuid}`.toLowerCase()
-
-        if (localNoteSet.has(dedupeKey)) {
-          skippedCount++
-          console.log(`[SyncService] ⏭️ SKIPPED: "${doc.title}" already exists locally (same title + category)`)
-          continue
-        }
-
-        try {
-          const result = await this._downloadAndCreateNote(doc, kbGuid, docGuid)
-
-          if (result) {
-            pulledCount++
-            console.log(`[SyncService] ↓ Pulled NEW note: "${doc.title}" (${docGuid}) id=${result.id}`)
-            localNoteSet.add(dedupeKey)
-            localNotesByDocGuid.set(docGuid, result)
-          }
-        } catch (e) {
-          console.warn(`[SyncService] Failed to download note ${docGuid}:`, e.message)
-        }
-      }
-
-      console.log(`[SyncService] ✅ pullFromCloud completed: ${pulledCount} pulled, ${skippedCount} skipped (already exist locally), ${backfilledCount} backfilled`)
-      return { count: pulledCount, skipped: skippedCount, backfilled: backfilledCount }
+      console.log(`[SyncService] ✅ pullFromCloud completed: ${stats.pulled} pulled, ${stats.skipped} skipped (already exist locally), ${stats.backfilled} backfilled`)
+      return { count: stats.pulled, skipped: stats.skipped, backfilled: stats.backfilled, total: stats.total }
     } catch (error) {
       console.error('[SyncService] pullFromCloud failed:', error)
-      return { count: 0, skipped: 0, backfilled: 0 }
+      return { count: 0, skipped: 0, backfilled: 0, total: 0 }
     }
   }
 

@@ -118,7 +118,7 @@ export default {
     commit(types.UPDATE_SYNC_STATUS, { isSyncing: true })
 
     try {
-      const result = await SyncService.sync()
+      const result = await SyncService.backupToCloud()
 
       const stats = await DatabaseClient.sync.getStats()
       commit(types.UPDATE_SYNC_STATUS, {

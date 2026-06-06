@@ -31,19 +31,32 @@ export function mapLocalNoteToSummary (note, fallbackCategory = OFFLINE_ROOT_CAT
 
 export function buildCategoryTreeFromNotes (notes, localCategories) {
   const categorySet = new Set()
+  let hasOfflineRootContent = false
 
-  const addCategoryPath = (rawCategory) => {
-    const normalized = normalizeCategoryForMatch(rawCategory)
-    if (!normalized || normalized === '/' || normalized === '') return
+  const addCategoryPath = (rawCategory, options = {}) => {
+    const normalized = options.normalizeRoot === false
+      ? rawCategory
+      : normalizeCategoryForMatch(rawCategory)
+
+    if (!normalized || normalized === '') return
+    if (normalized === '/') return
+
+    if (normalized === OFFLINE_ROOT_CATEGORY) {
+      hasOfflineRootContent = true
+      categorySet.add(OFFLINE_ROOT_CATEGORY)
+      return
+    }
 
     const trimmed = normalized.replace(/\/$/, '')
     if (!trimmed) {
+      hasOfflineRootContent = true
       categorySet.add(OFFLINE_ROOT_CATEGORY)
       return
     }
 
     const segments = trimmed.split('/').filter(Boolean)
     if (segments.length === 0) {
+      hasOfflineRootContent = true
       categorySet.add(OFFLINE_ROOT_CATEGORY)
       return
     }
@@ -61,8 +74,20 @@ export function buildCategoryTreeFromNotes (notes, localCategories) {
 
   if (localCategories && localCategories.length > 0) {
     for (const cat of localCategories) {
-      addCategoryPath(cat.category)
+      addCategoryPath(cat.category, { normalizeRoot: false })
+      if (
+        cat.category === OFFLINE_ROOT_CATEGORY ||
+        cat.parent === OFFLINE_ROOT_CATEGORY ||
+        (typeof cat.category === 'string' && cat.category.startsWith(OFFLINE_ROOT_CATEGORY))
+      ) {
+        hasOfflineRootContent = true
+      }
     }
+  }
+
+  if (categorySet.size > 0 && Array.from(categorySet).some(path => path.startsWith(OFFLINE_ROOT_CATEGORY))) {
+    hasOfflineRootContent = true
+    categorySet.add(OFFLINE_ROOT_CATEGORY)
   }
 
   if (categorySet.size === 0) {
@@ -70,17 +95,20 @@ export function buildCategoryTreeFromNotes (notes, localCategories) {
   }
 
   const nodeMap = new Map()
-  nodeMap.set(OFFLINE_ROOT_CATEGORY, {
-    label: '我的笔记',
-    key: OFFLINE_ROOT_CATEGORY,
-    children: [],
-    selectable: true,
-    isOfflineRoot: true,
-    categoryPath: OFFLINE_ROOT_CATEGORY
-  })
+
+  if (hasOfflineRootContent || categorySet.has(OFFLINE_ROOT_CATEGORY)) {
+    nodeMap.set(OFFLINE_ROOT_CATEGORY, {
+      label: '我的笔记',
+      key: OFFLINE_ROOT_CATEGORY,
+      children: [],
+      selectable: true,
+      isOfflineRoot: true,
+      categoryPath: OFFLINE_ROOT_CATEGORY
+    })
+  }
 
   for (const path of categorySet) {
-    if (path === OFFLINE_ROOT_CATEGORY || nodeMap.has(path)) continue
+    if (nodeMap.has(path)) continue
     const label = path.replace(/\/$/, '').split('/').filter(Boolean).pop() || '我的笔记'
     nodeMap.set(path, {
       label,
@@ -91,13 +119,18 @@ export function buildCategoryTreeFromNotes (notes, localCategories) {
     })
   }
 
-  const roots = [nodeMap.get(OFFLINE_ROOT_CATEGORY)]
+  const roots = []
   for (const [path, node] of nodeMap) {
-    if (path === OFFLINE_ROOT_CATEGORY) continue
+    if (path === OFFLINE_ROOT_CATEGORY) {
+      roots.push(node)
+      continue
+    }
+
     const trimmed = path.replace(/\/$/, '')
     const lastSlashIndex = trimmed.lastIndexOf('/')
-    const parentPath = lastSlashIndex > 0 ? `${trimmed.slice(0, lastSlashIndex + 1)}` : OFFLINE_ROOT_CATEGORY
-    const parent = nodeMap.get(parentPath) || nodeMap.get(OFFLINE_ROOT_CATEGORY)
+    const parentPath = lastSlashIndex > 0 ? `${trimmed.slice(0, lastSlashIndex + 1)}` : null
+    const parent = parentPath ? nodeMap.get(parentPath) : null
+
     if (parent && parent !== node) {
       const alreadyExists = parent.children.some(child => child.key === node.key)
       if (!alreadyExists) {
@@ -114,9 +147,18 @@ export function buildCategoryTreeFromNotes (notes, localCategories) {
       sortChildren(child)
     }
   }
-  if (roots[0]) sortChildren(roots[0])
 
-  return roots[0] ? [roots[0]] : []
+  for (const root of roots) {
+    sortChildren(root)
+  }
+
+  roots.sort((a, b) => {
+    if (a.key === OFFLINE_ROOT_CATEGORY) return -1
+    if (b.key === OFFLINE_ROOT_CATEGORY) return 1
+    return a.label.localeCompare(b.label)
+  })
+
+  return roots
 }
 
 export function findCategoryNode (node, key) {

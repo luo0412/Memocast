@@ -47,6 +47,7 @@ export default {
   syncing: '同步中...',
   syncComplete: '同步完成',
   syncFailed: '同步失败',
+  cloudBackupComplete: '云端备份完成',
   pendingSync: '待同步 {count} 项',
   noPendingSync: '暂无待同步',
   clickToSync: '点击同步',
@@ -59,5 +60,7 @@ export default {
   mergeRuleLocalOverride: '同文件夹路径 + 同标题：本地版本覆盖云端；无匹配则新建为新笔记；多个同名笔记各自新建，不会互相覆盖。',
   syncNow: '立即同步',
   skipSync: '暂不同步',
-  myNotes: '我的笔记'
+  myNotes: '我的笔记',
+  noteTitleAlreadyExists: '当前文件夹下已存在同名笔记',
+  noteTitleAlreadyExistsHint: '“{category}”中已经存在“{title}”，请使用其他标题或移动到其他文件夹。'
 }

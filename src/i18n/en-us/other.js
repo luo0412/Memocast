@@ -49,6 +49,7 @@ export default {
   syncing: 'Syncing...',
   syncComplete: 'Sync Complete',
   syncFailed: 'Sync Failed',
+  cloudBackupComplete: 'Cloud backup completed',
   pendingSync: '{count} pending',
   noPendingSync: 'No pending sync',
   clickToSync: 'Click to sync',
@@ -61,5 +62,7 @@ export default {
   mergeRuleLocalOverride: 'Same title + folder: local overwrites cloud. No match: create as new note. Multiple same-name notes: each creates a new note, no overwriting.',
   syncNow: 'Sync Now',
   skipSync: 'Skip',
-  myNotes: 'My Notes'
+  myNotes: 'My Notes',
+  noteTitleAlreadyExists: 'A note with the same name already exists in this folder',
+  noteTitleAlreadyExistsHint: '“{title}” already exists in “{category}”. Please use another title or move it to a different folder.'
 }

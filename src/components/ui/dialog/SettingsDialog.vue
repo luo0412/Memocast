@@ -268,7 +268,7 @@
                       class='col'
                       color='primary'
                       :label="isSyncing ? $t('cloudSyncSyncing') : $t('cloudSyncSyncNow')"
-                      icon='sync'
+                      icon='cloud_upload'
                       unelevated
                       :loading='isSyncing'
                       @click='doSync'
@@ -282,16 +282,6 @@
                       :loading='isSyncing'
                       :disable='isSyncing'
                       @click='doPullOnly'
-                    />
-                    <q-btn
-                      flat
-                      class='col'
-                      color='blue'
-                      :label="$t('cloudSyncSyncPushOnly')"
-                      icon='cloud_upload'
-                      :loading='isSyncing'
-                      :disable='isSyncing'
-                      @click='doPushOnly'
                     />
                   </div>
 
@@ -400,6 +390,7 @@ import helper from 'src/utils/helper'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import CloudSyncService from 'src/services/CloudSyncService'
 import SessionStorageService from 'src/services/SessionStorageService'
+import { Dark, Loading } from 'quasar'
 
 const {
   mapState: mapClientState,
@@ -760,7 +751,7 @@ export default {
       this.isSyncing = false
       await this.refreshCloudSyncStatus()
       if (result.success) {
-        this.$q.notify({ message: this.$t('cloudSyncSuccess'), type: 'positive', icon: 'check' })
+        this.$q.notify({ message: this.$t('cloudBackupComplete'), type: 'positive', icon: 'cloud_upload' })
       } else {
         this.syncError = result.error || this.$t('cloudSyncFailed')
       }
@@ -768,15 +759,38 @@ export default {
 
     async doPullOnly () {
       this.syncError = null
-      this.isSyncing = true
-      const result = await CloudSyncService.pullOnly()
-      this.isSyncing = false
-      await this.refreshCloudSyncStatus()
-      if (result.success) {
-        this.$q.notify({ message: `${this.$t('cloudSyncSuccess')} ↓${result.pulled || 0}`, type: 'positive', icon: 'cloud_download' })
-      } else {
-        this.syncError = result.error || this.$t('cloudSyncFailed')
+      Loading.show({
+        message: this.$t('cloudRestorePreviewLoading')
+      })
+
+      let preview = { success: false, stats: { total: 0, pulled: 0, skipped: 0, backfilled: 0 } }
+      try {
+        preview = await CloudSyncService.getRestorePreview()
+      } finally {
+        Loading.hide()
       }
+
+      const stats = preview.stats || { total: 0, pulled: 0, skipped: 0, backfilled: 0 }
+      const message = `${this.$t('cloudRestoreConfirmMessage')}<br><br><strong>${this.$t('cloudRestorePreviewTitle')}</strong><br>${this.$t('cloudRestorePreviewTotal')}: ${stats.total || 0}<br>${this.$t('cloudRestorePreviewNew')}: ${stats.pulled || 0}<br>${this.$t('cloudRestorePreviewSkipped')}: ${stats.skipped || 0}<br>${this.$t('cloudRestorePreviewBackfilled')}: ${stats.backfilled || 0}`
+
+      this.$q.dialog({
+        title: this.$t('cloudRestoreConfirmTitle'),
+        message,
+        html: true,
+        cancel: { label: this.$t('cancel') },
+        ok: { label: this.$t('cloudSyncSyncPullOnly'), color: 'primary' }
+      }).onOk(async () => {
+        this.syncError = null
+        this.isSyncing = true
+        const result = await CloudSyncService.pullOnly()
+        this.isSyncing = false
+        await this.refreshCloudSyncStatus()
+        if (result.success) {
+          this.$q.notify({ message: `${this.$t('cloudRestoreComplete')} ↓${result.pulled || 0}`, type: 'positive', icon: 'cloud_download' })
+        } else {
+          this.syncError = result.error || this.$t('cloudSyncFailed')
+        }
+      })
     },
 
     async doPushOnly () {
