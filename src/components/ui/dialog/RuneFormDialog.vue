@@ -285,7 +285,6 @@ const createDefaultRuneTemplate = () => {
   <span class="rune-text">{{ text }}</span>
 </temp` + `late>
 
-
 <script>
 export default {
   props: {
@@ -301,7 +300,6 @@ export default {
   }
 }
 </sc` + `ript>
-
 
 <style lang="less" scoped>
 .rune-text { color: purple; }

@@ -237,19 +237,12 @@ const createRuneRendererCtor = (rune = {}) => {
       }
     },
     render (h) {
-      const slotValue = this.value
       const vnode = compiled.render.call(this, h)
       if (vnode && typeof vnode === 'object') {
-        const scopedSlots = vnode.data && vnode.data.scopedSlots
-        const textSlot = () => [slotValue]
-        vnode.data = {
-          ...(vnode.data || {}),
-          scopedSlots: {
-            ...(scopedSlots || {}),
-            [RUNE_TEXT_SLOT]: textSlot
-          }
+        const existingChildren = Array.isArray(vnode.children) ? vnode.children : []
+        if (!existingChildren.length) {
+          vnode.children = [this.$createTextVNode(this.value == null ? '' : String(this.value))]
         }
-        vnode.children = [slotValue]
       }
       return vnode
     },
