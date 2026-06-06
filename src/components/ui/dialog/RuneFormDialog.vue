@@ -19,97 +19,99 @@
       </q-toolbar>
 
       <q-card-section class='rune-form-body'>
-        <div class='rune-form-fields'>
-          <div class='rune-form-field'>
-            <div class='rune-form-label'>{{ $t('runeCardName') }}</div>
-            <q-input
-              v-model='form.name'
-              dense
-              outlined
-              :placeholder="$t('runeCardName')"
-              class='rune-form-input rune-form-input--compact'
-            />
-          </div>
-
-          <div class='rune-form-field rune-form-field--desc'>
-            <div class='rune-form-label'>{{ $t('runeCardDesc') }}</div>
-            <q-input
-              v-model='form.desc'
-              dense
-              outlined
-              type='textarea'
-              autogrow
-              :placeholder="$t('runeCardDesc')"
-              class='rune-form-input rune-form-input--compact'
-            />
-          </div>
-
-          <div class='rune-form-field rune-form-field--tight'>
-            <div class='rune-form-label'>{{ $t('runeCardPower') }}</div>
-            <q-slider
-              v-model='form.power'
-              :min='1'
-              :max='100'
-              label
-              label-always
-              color='primary'
-              class='rune-form-slider'
-            />
-          </div>
-
-          <div class='rune-form-field rune-form-field--tight'>
-            <div class='rune-form-label'>图标</div>
-            <q-select
-              v-model='form.icon'
-              dense
-              outlined
-              :options='iconOptions'
-              option-label='label'
-              option-value='value'
-              emit-value
-              map-options
-              class='rune-form-input rune-form-input--compact'
-            >
-              <template v-slot:selected-item='scope'>
-                <div class='row items-center'>
-                  <q-icon :name='getIconName(scope.opt.value)' size='1em' class='q-mr-xs' />
-                  <span>{{ scope.opt.label }}</span>
-                </div>
-              </template>
-              <template v-slot:option='scope'>
-                <q-item v-bind='scope.itemProps' v-on='scope.itemEvents'>
-                  <q-item-section avatar>
-                    <q-icon :name='getIconName(scope.opt.value)' />
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label>{{ scope.opt.label }}</q-item-label>
-                  </q-item-section>
-                </q-item>
-              </template>
-            </q-select>
-          </div>
-
-          <div class='rune-form-field rune-form-field--tight'>
-            <div class='rune-form-label'>颜色</div>
-            <div class='color-row'>
-              <div
-                v-for='c in colorOptions'
-                :key='c.value'
-                class='color-dot'
-                :class="{ selected: form.color === c.value }"
-                :style='{ background: c.value }'
-                @click='form.color = c.value'
+        <div class='rune-form-content'>
+          <div class='rune-form-fields'>
+            <div class='rune-form-field'>
+              <div class='rune-form-label'>{{ $t('runeCardName') }}</div>
+              <q-input
+                v-model='form.name'
+                dense
+                outlined
+                :placeholder="$t('runeCardName')"
+                class='rune-form-input rune-form-input--compact'
               />
             </div>
-          </div>
-        </div>
 
-        <div class='rune-form-editor-wrap'>
-          <div class='rune-form-label'>模板内容</div>
-          <div
-            ref='editorContainer'
-            class='rune-monaco-editor'
-          />
+            <div class='rune-form-field rune-form-field--desc'>
+              <div class='rune-form-label'>{{ $t('runeCardDesc') }}</div>
+              <q-input
+                v-model='form.desc'
+                dense
+                outlined
+                type='textarea'
+                autogrow
+                :placeholder="$t('runeCardDesc')"
+                class='rune-form-input rune-form-input--compact'
+              />
+            </div>
+
+            <div class='rune-form-field rune-form-field--tight'>
+              <div class='rune-form-label'>{{ $t('runeCardPower') }}</div>
+              <q-slider
+                v-model='form.power'
+                :min='1'
+                :max='100'
+                label
+                label-always
+                color='primary'
+                class='rune-form-slider'
+              />
+            </div>
+
+            <div class='rune-form-field rune-form-field--tight'>
+              <div class='rune-form-label'>图标</div>
+              <q-select
+                v-model='form.icon'
+                dense
+                outlined
+                :options='iconOptions'
+                option-label='label'
+                option-value='value'
+                emit-value
+                map-options
+                class='rune-form-input rune-form-input--compact'
+              >
+                <template v-slot:selected-item='scope'>
+                  <div class='row items-center'>
+                    <q-icon :name='getIconName(scope.opt.value)' size='1em' class='q-mr-xs' />
+                    <span>{{ scope.opt.label }}</span>
+                  </div>
+                </template>
+                <template v-slot:option='scope'>
+                  <q-item v-bind='scope.itemProps' v-on='scope.itemEvents'>
+                    <q-item-section avatar>
+                      <q-icon :name='getIconName(scope.opt.value)' />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label>{{ scope.opt.label }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
+            </div>
+
+            <div class='rune-form-field rune-form-field--tight'>
+              <div class='rune-form-label'>颜色</div>
+              <div class='color-row'>
+                <div
+                  v-for='c in colorOptions'
+                  :key='c.value'
+                  class='color-dot'
+                  :class="{ selected: form.color === c.value }"
+                  :style='{ background: c.value }'
+                  @click='form.color = c.value'
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class='rune-form-editor-wrap'>
+            <div class='rune-form-label'>模板内容</div>
+            <div
+              ref='editorContainer'
+              class='rune-monaco-editor'
+            />
+          </div>
         </div>
       </q-card-section>
 
@@ -130,6 +132,7 @@
   max-height: 86vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .rune-form-toolbar {
@@ -139,8 +142,13 @@
 .rune-form-body {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 16px;
+}
+
+.rune-form-content {
+  height: 100%;
+  overflow-y: auto;
   display: flex;
   gap: 14px;
 }
@@ -231,8 +239,9 @@
 }
 
 .rune-monaco-editor {
-  height: 420px;
-  min-height: 420px;
+  flex: 1 1 auto;
+  height: 380px;
+  min-height: 380px;
   border: 1px solid #434343;
   border-radius: 4px;
   overflow: hidden;
@@ -524,7 +533,8 @@ export default {
         }
       })
 
-      this.monacoEditor = monaco.editor.create(this.$refs.editorContainer, {
+      const container = this.$refs.editorContainer
+      this.monacoEditor = monaco.editor.create(container, {
         value: template,
         language: 'html',
         theme: 'Memocast-Dark',
@@ -533,7 +543,7 @@ export default {
         scrollBeyondLastLine: false,
         lineNumbers: 'on',
         renderLineHighlight: 'line',
-        automaticLayout: true,
+        automaticLayout: false,
         wordWrap: 'on',
         readOnly: false,
         domReadOnly: false,
@@ -551,8 +561,11 @@ export default {
       })
       this.monacoReady = true
       this.monacoEditor.updateOptions({ readOnly: false, domReadOnly: false })
-      this.monacoEditor.layout()
-      this.monacoEditor.focus()
+      this.$nextTick(() => {
+        if (!this.monacoEditor || !container) return
+        this.monacoEditor.layout({ width: container.clientWidth, height: 380 })
+        this.monacoEditor.focus()
+      })
     },
     submit () {
       if (!this.form.name.trim()) return
