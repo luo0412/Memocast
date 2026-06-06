@@ -342,6 +342,16 @@ export default {
       ClientFileStorage.removeItemFromStore('url')
     }
 
+    const shouldShowCategoryTree = rootState.client.paneLayoutMode !== 2 || rootState.client.categoryTreeVisible !== false
+    if (shouldShowCategoryTree && rootState.client.sidebarTreeType !== 'calendar') {
+      commit(`client/${clientTypes.UPDATE_STATES}`, {
+        paneLayoutMode: 0,
+        noteListVisible: true,
+        categoryTreeVisible: true,
+        sidebarTreeType: 'category'
+      }, { root: true })
+    }
+
     commit(types.LOGIN, {
       ...result,
       isLogin: true
