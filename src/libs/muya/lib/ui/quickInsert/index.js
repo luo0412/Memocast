@@ -86,13 +86,14 @@ const escapeHtmlAttribute = (value = '') => String(value)
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;')
 
-const createRunePlaceholderHtml = (item = {}, displayText = '') => {
+const createRunePlaceholderHtml = (item = {}, displayText = '', runeValue = '') => {
   const runeName = item?.meta?.runeName || 'Rune'
   const text = displayText || runeName
+  const normalizedRuneValue = String(runeValue || '').trim()
   const runeId = uuidv4()
   const nodeId = `rune-${getUniqueId()}`
 
-  return `<div data-rune-name="${escapeHtmlAttribute(runeName)}" data-rune-id="${escapeHtmlAttribute(runeId)}" data-rune-node-id="${escapeHtmlAttribute(nodeId)}">${escapeHtmlAttribute(text)}</div>`
+  return `<div data-rune-name="${escapeHtmlAttribute(runeName)}" data-rune-id="${escapeHtmlAttribute(runeId)}" data-rune-node-id="${escapeHtmlAttribute(nodeId)}" data-rune-value="${escapeHtmlAttribute(normalizedRuneValue)}">${escapeHtmlAttribute(text)}</div>`
 }
 
 class QuickInsert extends BaseScrollFloat {
@@ -294,10 +295,54 @@ class QuickInsert extends BaseScrollFloat {
     return withoutRuneName || runeName
   }
 
+  getPreviousNonEmptyLineText () {
+    const { contentState } = this.muya
+    if (!contentState || !this.block) return ''
+
+    const outMostBlock = typeof contentState.findOutMostBlock === 'function'
+      ? contentState.findOutMostBlock(this.block)
+      : this.block
+    const blocks = typeof contentState.getBlocks === 'function'
+      ? contentState.getBlocks()
+      : contentState.blocks || []
+    const currentIndex = Array.isArray(blocks) ? blocks.findIndex(block => block && block.key === outMostBlock.key) : -1
+
+    if (currentIndex <= 0) {
+      return ''
+    }
+
+    for (let index = currentIndex - 1; index >= 0; index--) {
+      const candidate = blocks[index]
+      const text = String(candidate?.text || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+      if (text) {
+        return text
+      }
+
+      const paragraphText = Array.isArray(candidate?.children)
+        ? candidate.children
+          .map(child => String(child?.text || '').trim())
+          .filter(Boolean)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        : ''
+
+      if (paragraphText) {
+        return paragraphText
+      }
+    }
+
+    return ''
+  }
+
   insertRuneTemplate(item) {
     const { contentState } = this.muya
     const displayText = this.getRuneDisplayText(item)
-    const insertContent = createRunePlaceholderHtml(item, displayText)
+    const runeValue = this.getPreviousNonEmptyLineText()
+    const insertContent = createRunePlaceholderHtml(item, displayText, runeValue)
     const { key } = this.block
     this.block.text = insertContent
     const offset = insertContent.length

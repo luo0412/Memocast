@@ -247,6 +247,7 @@ class StateRender {
         name: runeName,
         template: ''
       }
+      const runeValue = String(dataset.runeValue || '').trim()
       const renderKey = host.dataset.runeRenderKey || ''
       const mountedVm = this.runeVmMap.get(nodeId)
 
@@ -254,6 +255,7 @@ class StateRender {
         mountedVm.runeId = runeId
         mountedVm.nodeId = nodeId
         mountedVm.rune = rune
+        mountedVm.value = runeValue
         console.log('[Muya.StateRender.mountRuneVueHosts] reuse vm', {
           nodeId,
           runeId,
@@ -273,7 +275,8 @@ class StateRender {
         propsData: {
           runeId,
           nodeId,
-          rune
+          rune,
+          value: runeValue
         }
       })
       vm.__runeRenderKey = renderKey

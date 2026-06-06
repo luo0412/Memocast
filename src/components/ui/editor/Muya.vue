@@ -57,6 +57,7 @@ const compileTemplateToFunctions = vueSfcCompiler && typeof vueSfcCompiler.compi
     : null
 const LEGACY_RUNE_PLACEHOLDER_RE = /<div\s+[^>]*?(?:data-rune="([^"]+)"|data-rune-name="([^"]+)")[^>]*>([\s\S]*?)<\/div>/gi
 const CURRENT_RUNE_PLACEHOLDER_RE = /<div\s+[^>]*data-rune-name="([^"]+)"[^>]*>([\s\S]*?)<\/div>/gi
+const RUNE_TEXT_SLOT = 'default'
 
 const injectScopedAttribute = (template = '', scopeId = '') => {
   if (!scopeId || !template) return template
@@ -218,6 +219,10 @@ const createRuneRendererCtor = (rune = {}) => {
       rune: {
         type: Object,
         default: null
+      },
+      value: {
+        type: String,
+        default: ''
       }
     },
     data () {
@@ -226,7 +231,23 @@ const createRuneRendererCtor = (rune = {}) => {
         runeMeta: this.rune || rune
       }
     },
-    render: compiled.render,
+    render (h) {
+      const slotValue = this.value
+      const vnode = compiled.render.call(this, h)
+      if (vnode && typeof vnode === 'object') {
+        const scopedSlots = vnode.data && vnode.data.scopedSlots
+        const textSlot = () => [slotValue]
+        vnode.data = {
+          ...(vnode.data || {}),
+          scopedSlots: {
+            ...(scopedSlots || {}),
+            [RUNE_TEXT_SLOT]: textSlot
+          }
+        }
+        vnode.children = [slotValue]
+      }
+      return vnode
+    },
     staticRenderFns: compiled.staticRenderFns,
     _scopeId: scopeId
   })
@@ -246,6 +267,10 @@ const RunePreviewRenderer = Vue.extend({
     rune: {
       type: Object,
       default: null
+    },
+    value: {
+      type: String,
+      default: ''
     }
   },
   computed: {
@@ -263,7 +288,8 @@ const RunePreviewRenderer = Vue.extend({
       props: {
         runeId: this.runeId,
         nodeId: this.nodeId,
-        rune: this.rune
+        rune: this.rune,
+        value: this.value
       }
     })
   }
