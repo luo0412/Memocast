@@ -10,7 +10,7 @@
 import { createNamespacedHelpers } from 'vuex'
 import helper from 'src/utils/helper'
 import Vue from 'vue'
-import compiler from 'vue-template-compiler'
+import * as VueTemplateCompiler from 'vue-template-compiler'
 import Muya from 'src/libs/muya/lib'
 import bus from 'components/bus'
 import _ from 'lodash'
@@ -45,6 +45,16 @@ const {
 } = createNamespacedHelpers('client')
 
 const EMPTY_RUNE_TEMPLATE = '<div></div>'
+const vueSfcCompiler = VueTemplateCompiler && typeof VueTemplateCompiler.parseComponent === 'function'
+  ? VueTemplateCompiler
+  : VueTemplateCompiler?.default && typeof VueTemplateCompiler.default.parseComponent === 'function'
+    ? VueTemplateCompiler.default
+    : null
+const compileTemplateToFunctions = vueSfcCompiler && typeof vueSfcCompiler.compileToFunctions === 'function'
+  ? vueSfcCompiler.compileToFunctions.bind(vueSfcCompiler)
+  : vueSfcCompiler?.default && typeof vueSfcCompiler.default.compileToFunctions === 'function'
+    ? vueSfcCompiler.default.compileToFunctions.bind(vueSfcCompiler.default)
+    : null
 const LEGACY_RUNE_PLACEHOLDER_RE = /<div\s+[^>]*?(?:data-rune="([^"]+)"|data-rune-name="([^"]+)")[^>]*>([\s\S]*?)<\/div>/gi
 const CURRENT_RUNE_PLACEHOLDER_RE = /<div\s+[^>]*data-rune-name="([^"]+)"[^>]*>([\s\S]*?)<\/div>/gi
 
@@ -60,6 +70,10 @@ const injectScopedAttribute = (template = '', scopeId = '') => {
 
 const normalizeRuneSfc = (template = '') => {
   const source = String(template || '').trim()
+  console.log('[Muya.normalizeRuneSfc] received template source', {
+    sourceLen: source.length,
+    sourcePreview: source.substring(0, 160)
+  })
   if (!source) {
     return {
       template: EMPTY_RUNE_TEMPLATE,
@@ -69,8 +83,25 @@ const normalizeRuneSfc = (template = '') => {
     }
   }
 
-  const parsed = compiler.parseComponent(source)
+  if (!vueSfcCompiler) {
+    console.warn('[Muya.normalizeRuneSfc] vue-template-compiler unavailable, fallback to raw template')
+    return {
+      template: source,
+      script: 'export default {}',
+      styles: [],
+      hasTemplate: true
+    }
+  }
+
+  const parsed = vueSfcCompiler.parseComponent(source)
   const templateContent = (parsed.template && parsed.template.content && parsed.template.content.trim()) || ''
+  console.log('[Muya.normalizeRuneSfc] parsed template result', {
+    hasTemplateBlock: !!parsed.template,
+    templateContentLen: templateContent.length,
+    templateContentPreview: templateContent.substring(0, 160),
+    scriptLen: ((parsed.script && parsed.script.content) || '').length,
+    stylesCount: Array.isArray(parsed.styles) ? parsed.styles.length : 0
+  })
 
   return {
     template: templateContent || EMPTY_RUNE_TEMPLATE,
@@ -139,14 +170,36 @@ const ensureRuneStyle = (styleId, cssText) => {
 }
 
 const createRuneRendererCtor = (rune = {}) => {
+  console.log('[Muya.createRuneRendererCtor] building renderer', {
+    runeId: rune?.id || '',
+    runeName: rune?.name || '',
+    rawTemplateLen: String(rune?.template || '').length,
+    rawTemplatePreview: String(rune?.template || '').substring(0, 160)
+  })
   const { template, script, styles, hasTemplate } = normalizeRuneSfc(rune.template)
+  console.log('[Muya.createRuneRendererCtor] normalized rune sfc', {
+    runeId: rune?.id || '',
+    runeName: rune?.name || '',
+    hasTemplate,
+    normalizedTemplateLen: String(template || '').length,
+    normalizedTemplatePreview: String(template || '').substring(0, 160),
+    scriptLen: String(script || '').length,
+    stylesCount: Array.isArray(styles) ? styles.length : 0
+  })
   if (!hasTemplate) return null
 
   const scopeId = `data-rune-scope-${rune.id || 'default'}`
   const styleText = styles.map(style => style.content || '').join('\n')
   const componentOptions = evalRuneScript(script)
   const baseData = typeof componentOptions.data === 'function' ? componentOptions.data : () => ({})
-  const compiled = Vue.compile(injectScopedAttribute(template, scopeId))
+  if (!compileTemplateToFunctions) {
+    console.warn('[Muya.createRuneRendererCtor] compileToFunctions unavailable, skip renderer', {
+      runeId: rune?.id || '',
+      runeName: rune?.name || ''
+    })
+    return null
+  }
+  const compiled = compileTemplateToFunctions(injectScopedAttribute(template, scopeId))
 
   ensureRuneStyle(`rune-style-${rune.id || 'default'}`, styleText)
 
@@ -520,6 +573,14 @@ export default {
       })
 
       this.contentEditor.on('change', _.debounce(({ markdown: curData }) => {
+        console.log('[Muya.vue change] requesting rune rerender', {
+          markdownLen: (curData || '').length,
+          runeCardsCount: Array.isArray(this.runeCards) ? this.runeCards.length : 0
+        })
+        if (this.contentEditor?.contentState?.stateRender?.renderRunes) {
+          this.contentEditor.contentState.stateRender.renderRunes()
+        }
+
         // ✅ 兼容新格式：currentNote 可能是字符串或对象
         let currentNoteContent = ''
         
@@ -677,6 +738,9 @@ export default {
         this.contentEditor.refreshRuneCards(cards || [])
         this.$nextTick(() => {
           this.migrateCurrentNoteRunePlaceholders()
+          if (this.contentEditor?.contentState?.stateRender?.renderRunes) {
+            this.contentEditor.contentState.stateRender.renderRunes()
+          }
         })
       }
     }

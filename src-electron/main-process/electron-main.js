@@ -144,6 +144,33 @@ async function initDatabase() {
  * 初始化数据库表结构
  */
 function initSchema() {
+  const createDefaultRuneTemplate = (name) => `<template>
+  <div class="rune-card">
+    <h2>${name}{{ title }}</h2>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'RuneCard',
+  data () {
+    return {
+      title: 'Hello Rune'
+    }
+  }
+}
+</script>
+
+<style lang="scss" scoped>
+.rune-card {
+  padding: 16px;
+  h2 {
+    color: #7E57C2;
+    font-size: 18px;
+  }
+}
+</style>`
+
   // Notes 表（本地优先架构：使用 dirty 字段跟踪同步状态）
   db.run(`
     CREATE TABLE IF NOT EXISTS notes (
@@ -382,11 +409,21 @@ function initSchema() {
       { id: 'rune-6', name: '圣光庇护', desc: '免疫一次负面效果并治疗', power: 88, color: '#FFD54F', icon: 'wb_sunny' }
     ]
     for (const r of defaultRunes) {
-      db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [r.id, r.name, r.desc, r.power, r.color, r.icon, now, now])
+      db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, template, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [r.id, r.name, r.desc, r.power, r.color, r.icon, createDefaultRuneTemplate(r.name), now, now])
     }
     saveDatabase()
     log.info('[DB] Default runes seeded')
+  }
+
+  const emptyTemplateRunes = execToObjects(`SELECT id, name FROM runes WHERE template IS NULL OR trim(template) = ''`)
+  if (emptyTemplateRunes.length > 0) {
+    const now = Date.now()
+    for (const rune of emptyTemplateRunes) {
+      db.run('UPDATE runes SET template = ?, updated_at = ? WHERE id = ?', [createDefaultRuneTemplate(rune.name), now, rune.id])
+    }
+    saveDatabase()
+    log.info(`[DB] Backfilled default templates for ${emptyTemplateRunes.length} rune(s)`) 
   }
 
   log.info('[Main] Database schema initialized')

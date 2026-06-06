@@ -67,6 +67,9 @@ class Muya {
   refreshRuneCards (runeCards = []) {
     this.options.runeCards = Array.isArray(runeCards) ? runeCards : []
     this.contentState.render(false, true)
+    if (this.contentState?.stateRender?.renderRunes) {
+      this.contentState.stateRender.renderRunes()
+    }
   }
 
   mutationObserver () {

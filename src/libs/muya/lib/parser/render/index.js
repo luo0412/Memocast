@@ -7,7 +7,7 @@ import renderInlines from './renderInlines'
 import renderBlock from './renderBlock'
 import { i18n } from 'boot/i18n'
 
-const RUNE_PLACEHOLDER_SELECTOR = '[data-rune]'
+const RUNE_PLACEHOLDER_SELECTOR = '[data-rune-name][data-rune-id][data-rune-node-id]'
 const RUNE_HOST_CLASS = 'ag-rune-placeholder-host'
 const RUNE_CARD_CLASS = 'ag-rune-placeholder-card'
 
@@ -130,6 +130,11 @@ class StateRender {
 
     const runeMap = this.getRuneMap()
     const hosts = root.querySelectorAll(RUNE_PLACEHOLDER_SELECTOR)
+    console.log('[Muya.StateRender.renderRunePlaceholderNodes] scanning placeholders', {
+      selector: RUNE_PLACEHOLDER_SELECTOR,
+      hostCount: hosts.length,
+      runeMapSize: runeMap.size
+    })
 
     hosts.forEach(host => {
       const dataset = host.dataset || {}
@@ -152,6 +157,7 @@ class StateRender {
       host.classList.add(RUNE_HOST_CLASS)
       host.setAttribute('contenteditable', 'false')
       host.innerHTML = this.createRunePlaceholderMarkup(rune, dataset)
+      host.dataset.runeRenderKey = cacheKey
       this.runePlaceholderCache.set(host, cacheKey)
     })
   }
@@ -176,13 +182,26 @@ class StateRender {
   }
 
   renderRunes () {
+    console.log('[Muya.StateRender.renderRunes] start', {
+      enableRuneVueRenderer: !!this.muya?.options?.enableRuneVueRenderer,
+      runeCardsCount: Array.isArray(this.muya?.options?.runeCards) ? this.muya.options.runeCards.length : 0,
+      hostCount: (document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container)?.querySelectorAll?.(RUNE_PLACEHOLDER_SELECTOR)?.length || 0
+    })
     this.renderRunePlaceholderNodes()
     this.cleanupDetachedRunePlaceholders()
-    this.cleanupDetachedRuneVms()
+    if (this.muya?.options?.enableRuneVueRenderer) {
+      this.renderRunesWithVue()
+    } else {
+      this.cleanupDetachedRuneVms(true)
+    }
   }
 
   mountRuneVueHosts () {
     const RuneRenderer = this.muya?.options?.runeRendererCtor
+    console.log('[Muya.StateRender.mountRuneVueHosts] called', {
+      hasRuneRenderer: !!RuneRenderer,
+      enableRuneVueRenderer: !!this.muya?.options?.enableRuneVueRenderer
+    })
     if (!RuneRenderer) return
 
     const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
@@ -190,6 +209,11 @@ class StateRender {
 
     const runeMap = this.getRuneMap()
     const hosts = root.querySelectorAll(RUNE_PLACEHOLDER_SELECTOR)
+    console.log('[Muya.StateRender.mountRuneVueHosts] scanning hosts', {
+      hostCount: hosts.length,
+      runeMapSize: runeMap.size,
+      runeKeys: Array.from(runeMap.keys())
+    })
     const aliveNodeIds = new Set()
 
     hosts.forEach(host => {
@@ -197,24 +221,50 @@ class StateRender {
       const runeName = String(dataset.runeName || '').trim()
       const runeId = String(dataset.runeId || '')
       const nodeId = String(dataset.runeNodeId || '')
-      if (!runeName || !runeId || !nodeId) return
+      if (!runeName || !runeId || !nodeId) {
+        console.log('[Muya.StateRender.mountRuneVueHosts] skip host due to missing dataset', {
+          runeName,
+          runeId,
+          nodeId,
+          dataset
+        })
+        return
+      }
 
       aliveNodeIds.add(nodeId)
-      const rune = runeMap.get(runeName) || {
+      const matchedRune = runeMap.get(runeName) || null
+      console.log('[Muya.StateRender.mountRuneVueHosts] resolved rune by name', {
+        runeName,
+        runeId,
+        nodeId,
+        matched: !!matchedRune,
+        matchedRuneId: matchedRune?.id || '',
+        matchedTemplateLen: (matchedRune?.template || '').length,
+        matchedTemplatePreview: String(matchedRune?.template || '').substring(0, 120)
+      })
+      const rune = matchedRune || {
         id: '',
         name: runeName,
         template: ''
       }
+      const renderKey = host.dataset.runeRenderKey || ''
       const mountedVm = this.runeVmMap.get(nodeId)
 
-      if (mountedVm && mountedVm.$el && mountedVm.$el.parentNode === host) {
+      if (mountedVm && mountedVm.$el && mountedVm.$el.parentNode === host && mountedVm.__runeRenderKey === renderKey) {
         mountedVm.runeId = runeId
         mountedVm.nodeId = nodeId
         mountedVm.rune = rune
+        console.log('[Muya.StateRender.mountRuneVueHosts] reuse vm', {
+          nodeId,
+          runeId,
+          runeName,
+          templateLen: (rune?.template || '').length
+        })
         return
       }
 
       if (mountedVm && typeof mountedVm.$destroy === 'function') {
+        console.log('[Muya.StateRender.mountRuneVueHosts] destroy stale vm', { nodeId, runeId, runeName })
         mountedVm.$destroy()
       }
 
@@ -226,9 +276,17 @@ class StateRender {
           rune
         }
       })
+      vm.__runeRenderKey = renderKey
       vm.$mount()
       host.appendChild(vm.$el)
       this.runeVmMap.set(nodeId, vm)
+      console.log('[Muya.StateRender.mountRuneVueHosts] mounted vm', {
+        nodeId,
+        runeId,
+        runeName,
+        templateLen: (rune?.template || '').length,
+        renderKey
+      })
     })
 
     for (const [savedNodeId, vm] of this.runeVmMap.entries()) {
