@@ -144,7 +144,28 @@ async function initDatabase() {
  * 初始化数据库表结构
  */
 function initSchema() {
-  const createDefaultRuneTemplate = () => '<el-input />'
+  const createDefaultRuneTemplate = () => `<template>
+    <el-input 
+        v-model="count" 
+        size="small" 
+    />
+</template>
+
+<script>
+export default {
+    props: {
+        value: {
+            type: [String, Number],
+            default: null
+        }
+    },
+    data() {
+        return {
+            count: this.value
+        }
+    }
+}
+</script>`
 
   // Notes 表（本地优先架构：使用 dirty 字段跟踪同步状态）
   db.run(`
