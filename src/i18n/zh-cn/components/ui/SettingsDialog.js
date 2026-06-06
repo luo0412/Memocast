@@ -38,6 +38,7 @@ export default {
   never: '永不',
   openLogFiles: '打开日志文件',
   runeManagement: '符文管理',
+  runeSectionTitle: '我的符文',
   runeCardName: '名称',
   runeCardDesc: '描述',
   runeCardPower: '力量',

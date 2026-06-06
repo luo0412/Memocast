@@ -5,8 +5,9 @@
  *   filter(arr, text, { key: 'label' }) → customFilterByKey(arr, text, 'label')
  * Dependencies removed: fuzzaldrin
  */
+import { v4 as uuidv4 } from 'uuid'
 import { patch, h } from '../../parser/render/snabbdom'
-import { deepCopy } from '../../utils'
+import { deepCopy, getUniqueId } from '../../utils'
 import BaseScrollFloat from '../baseScrollFloat'
 import { quickInsertObj } from './config'
 import './index.css'
@@ -14,9 +15,6 @@ import './index.css'
 const DEFAULT_GRID_COLUMNS = 6
 const MIN_GRID_COLUMNS = 4
 const MAX_GRID_COLUMNS = 8
-const DEFAULT_RUNE_SECTION = 'last'
-const FALLBACK_RUNE_ICON = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%237E57C2"/><path d="M32 12 18 24l6 6-8 8 16 14 16-14-8-8 6-6-14-12z" fill="%23fff"/></svg>'
-
 /**
  * Simple substring-includes filter, replacing fuzzaldrin's fuzzy match for label search.
  * @param {Array} candidates - Array of objects to filter
@@ -48,12 +46,19 @@ const normalizeRuneIcon = (rune = {}) => {
   if (rune.icon && /^data:image\//.test(rune.icon)) {
     return rune.icon
   }
-  const color = encodeURIComponent(rune.color || '#7E57C2')
-  return FALLBACK_RUNE_ICON.replace('%237E57C2', color)
+
+  const sourceText = String(rune.name || rune.text || rune.label || '').trim()
+  const glyph = Array.from(sourceText)[0] || '符'
+  const color = rune.color || '#7E57C2'
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="${color}"/><text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-size="28" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Arial,PingFang SC,Microsoft YaHei,sans-serif" font-weight="700" fill="#fff">${glyph.toUpperCase()}</text></svg>`
+
+  return `data:image/svg+xml;base64,${typeof window !== 'undefined' && typeof window.btoa === 'function'
+    ? window.btoa(unescape(encodeURIComponent(svg)))
+    : svg}`
 }
 
 const createRuneQuickInsertItem = (rune = {}) => {
-  const id = rune.id || `rune-${Date.now()}`
+  const id = rune.id || ''
   const name = (rune.name || '').trim() || 'Rune'
   const desc = (rune.desc || '').trim()
   const template = typeof rune.template === 'string' ? rune.template : ''
@@ -62,16 +67,32 @@ const createRuneQuickInsertItem = (rune = {}) => {
   return {
     title: () => name,
     subTitle: () => desc,
-    label: `rune:${id}`,
+    label: `rune:${id || name}`,
     shortCut: '',
     icon: normalizeRuneIcon(rune),
     searchText,
     meta: {
       type: 'rune',
-      runeId: id,
+      runeTemplateId: id,
+      runeName: name,
       insertContent: template
     }
   }
+}
+
+const escapeHtmlAttribute = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/"/g, '&quot;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+
+const createRunePlaceholderHtml = (item = {}, displayText = '') => {
+  const runeName = item?.meta?.runeName || 'Rune'
+  const text = displayText || runeName
+  const runeId = uuidv4()
+  const nodeId = `rune-${getUniqueId()}`
+
+  return `<div data-rune-name="${escapeHtmlAttribute(runeName)}" data-rune-id="${escapeHtmlAttribute(runeId)}" data-rune-node-id="${escapeHtmlAttribute(nodeId)}">${escapeHtmlAttribute(text)}</div>`
 }
 
 class QuickInsert extends BaseScrollFloat {
@@ -89,7 +110,7 @@ class QuickInsert extends BaseScrollFloat {
     this.columnsCount = this.getColumnsCount()
     this.sectionOffsets = [] // 记录每个分区的起始索引
     this.shouldHideOnScroll = false // Prevent scroll from hiding the panel during keyboard navigation
-    this.runeSectionName = DEFAULT_RUNE_SECTION
+    this.runeSectionName = ''
     this.renderObj = this.getRenderObj()
     this.render()
     this.listen()
@@ -258,9 +279,25 @@ class QuickInsert extends BaseScrollFloat {
     this.render()
   }
 
+  getRuneDisplayText (item) {
+    const runeName = item?.meta?.runeName || 'Rune'
+    const rawText = String(this.block?.text || '')
+      .replace(/^@+/, '')
+      .trim()
+
+    if (!rawText) return runeName
+
+    const compactText = rawText.replace(/\s+/g, ' ').trim()
+    if (!compactText) return runeName
+
+    const withoutRuneName = compactText.replace(runeName, '').trim()
+    return withoutRuneName || runeName
+  }
+
   insertRuneTemplate(item) {
     const { contentState } = this.muya
-    const insertContent = item?.meta?.insertContent || ''
+    const displayText = this.getRuneDisplayText(item)
+    const insertContent = createRunePlaceholderHtml(item, displayText)
     const { key } = this.block
     this.block.text = insertContent
     const offset = insertContent.length
@@ -274,7 +311,7 @@ class QuickInsert extends BaseScrollFloat {
         offset
       }
     }
-    contentState.partialRender()
+    contentState.updateParagraph('html', true)
   }
 
   selectItem(item) {

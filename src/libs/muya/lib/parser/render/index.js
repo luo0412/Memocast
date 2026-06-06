@@ -7,6 +7,10 @@ import renderInlines from './renderInlines'
 import renderBlock from './renderBlock'
 import { i18n } from 'boot/i18n'
 
+const RUNE_PLACEHOLDER_SELECTOR = '[data-rune]'
+const RUNE_HOST_CLASS = 'ag-rune-placeholder-host'
+const RUNE_CARD_CLASS = 'ag-rune-placeholder-card'
+
 class StateRender {
   constructor (muya) {
     this.muya = muya
@@ -22,6 +26,8 @@ class StateRender {
     this.renderingTable = null
     this.renderingRowContainer = null
     this.container = null
+    this.runePlaceholderCache = new Map()
+    this.runeVmMap = new Map()
   }
 
   setContainer (container) {
@@ -94,6 +100,160 @@ class StateRender {
       selector += `.${CLASS_OR_ID.AG_SELECTED}`
     }
     return selector
+  }
+
+  getRuneMap () {
+    const runeCards = this.muya?.options?.runeCards || []
+    return (Array.isArray(runeCards) ? runeCards : []).reduce((acc, rune) => {
+      const runeName = String((rune?.name || '').trim())
+      if (runeName) {
+        acc.set(runeName, rune)
+      }
+      return acc
+    }, new Map())
+  }
+
+  createRunePlaceholderMarkup (rune, dataset = {}) {
+    const runeName = rune?.name || dataset.runeName || 'Rune'
+    return `
+      <div class="${RUNE_CARD_CLASS}" data-rune-mounted="true">
+        <div class="ag-rune-placeholder-body">
+          <div class="ag-rune-placeholder-title">${runeName}</div>
+        </div>
+      </div>
+    `
+  }
+
+  renderRunePlaceholderNodes () {
+    const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+    if (!root) return
+
+    const runeMap = this.getRuneMap()
+    const hosts = root.querySelectorAll(RUNE_PLACEHOLDER_SELECTOR)
+
+    hosts.forEach(host => {
+      const dataset = host.dataset || {}
+      const runeName = String(dataset.runeName || '').trim()
+      const instanceId = String(dataset.runeId || '')
+      const nodeId = String(dataset.runeNodeId || '')
+      const rune = runeMap.get(runeName) || null
+      const cacheKey = JSON.stringify({
+        runeName,
+        instanceId,
+        nodeId,
+        innerText: host.textContent || '',
+        template: rune?.template || ''
+      })
+
+      if (this.runePlaceholderCache.get(host) === cacheKey) {
+        return
+      }
+
+      host.classList.add(RUNE_HOST_CLASS)
+      host.setAttribute('contenteditable', 'false')
+      host.innerHTML = this.createRunePlaceholderMarkup(rune, dataset)
+      this.runePlaceholderCache.set(host, cacheKey)
+    })
+  }
+
+  cleanupDetachedRunePlaceholders () {
+    for (const host of Array.from(this.runePlaceholderCache.keys())) {
+      if (!host.isConnected) {
+        this.runePlaceholderCache.delete(host)
+      }
+    }
+  }
+
+  cleanupDetachedRuneVms (force = false) {
+    for (const [nodeId, vm] of this.runeVmMap.entries()) {
+      if (force || !vm || !vm.$el || !vm.$el.isConnected) {
+        if (vm && typeof vm.$destroy === 'function') {
+          vm.$destroy()
+        }
+        this.runeVmMap.delete(nodeId)
+      }
+    }
+  }
+
+  renderRunes () {
+    this.renderRunePlaceholderNodes()
+    this.cleanupDetachedRunePlaceholders()
+    this.cleanupDetachedRuneVms()
+  }
+
+  mountRuneVueHosts () {
+    const RuneRenderer = this.muya?.options?.runeRendererCtor
+    if (!RuneRenderer) return
+
+    const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+    if (!root) return
+
+    const runeMap = this.getRuneMap()
+    const hosts = root.querySelectorAll(RUNE_PLACEHOLDER_SELECTOR)
+    const aliveNodeIds = new Set()
+
+    hosts.forEach(host => {
+      const dataset = host.dataset || {}
+      const runeName = String(dataset.runeName || '').trim()
+      const runeId = String(dataset.runeId || '')
+      const nodeId = String(dataset.runeNodeId || '')
+      if (!runeName || !runeId || !nodeId) return
+
+      aliveNodeIds.add(nodeId)
+      const rune = runeMap.get(runeName) || {
+        id: '',
+        name: runeName,
+        template: ''
+      }
+      const mountedVm = this.runeVmMap.get(nodeId)
+
+      if (mountedVm && mountedVm.$el && mountedVm.$el.parentNode === host) {
+        mountedVm.runeId = runeId
+        mountedVm.nodeId = nodeId
+        mountedVm.rune = rune
+        return
+      }
+
+      if (mountedVm && typeof mountedVm.$destroy === 'function') {
+        mountedVm.$destroy()
+      }
+
+      host.innerHTML = ''
+      const vm = new RuneRenderer({
+        propsData: {
+          runeId,
+          nodeId,
+          rune
+        }
+      })
+      vm.$mount()
+      host.appendChild(vm.$el)
+      this.runeVmMap.set(nodeId, vm)
+    })
+
+    for (const [savedNodeId, vm] of this.runeVmMap.entries()) {
+      if (!aliveNodeIds.has(savedNodeId)) {
+        if (vm && typeof vm.$destroy === 'function') {
+          vm.$destroy()
+        }
+        this.runeVmMap.delete(savedNodeId)
+      }
+    }
+  }
+
+  renderRunesWithVue () {
+    this.mountRuneVueHosts()
+    this.cleanupDetachedRuneVms()
+  }
+
+  renderRunes () {
+    this.renderRunePlaceholderNodes()
+    this.cleanupDetachedRunePlaceholders()
+    if (this.muya?.options?.enableRuneVueRenderer) {
+      this.renderRunesWithVue()
+    } else {
+      this.cleanupDetachedRuneVms(true)
+    }
   }
 
   async renderMermaid () {
@@ -186,6 +346,7 @@ class StateRender {
     patch(oldVdom, newVdom)
     this.renderMermaid()
     this.renderDiagram()
+    this.renderRunes()
     this.codeCache.clear()
   }
 
@@ -230,6 +391,7 @@ class StateRender {
 
     this.renderMermaid()
     this.renderDiagram()
+    this.renderRunes()
     this.codeCache.clear()
   }
 
@@ -248,6 +410,7 @@ class StateRender {
     patch(oldVdom, newVdom)
     this.renderMermaid()
     this.renderDiagram()
+    this.renderRunes()
     this.codeCache.clear()
   }
 }

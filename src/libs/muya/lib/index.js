@@ -64,6 +64,11 @@ class Muya {
     })
   }
 
+  refreshRuneCards (runeCards = []) {
+    this.options.runeCards = Array.isArray(runeCards) ? runeCards : []
+    this.contentState.render(false, true)
+  }
+
   mutationObserver () {
     // Select the node that will be observed for mutations
     const { container, eventCenter } = this
@@ -472,6 +477,7 @@ class Muya {
     this.emojiPicker.destroy()
     this.imagePathPicker.destroy()
     this.eventCenter.detachAllDomEvents()
+    this.contentState.stateRender.cleanupDetachedRuneVms(true)
   }
 }
 

@@ -105,6 +105,7 @@
     "vega-embed": "^6.4.0",
     "vega-lite": "^4.7.0",
     "vue": "2.7.16",
+    "vue-template-compiler": "^2.7.16",
     "vue-i18n": "^8.0.0",
     "vue-router": "^3.6.5",
     "vue2-perfect-scrollbar": "^1.5.56",

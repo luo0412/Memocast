@@ -38,6 +38,7 @@ export default {
   never: 'Never',
   openLogFiles: 'Open Log Files',
   runeManagement: 'Rune Management',
+  runeSectionTitle: 'My Runes',
   runeCardName: 'Name',
   runeCardDesc: 'Description',
   runeCardPower: 'Power',
