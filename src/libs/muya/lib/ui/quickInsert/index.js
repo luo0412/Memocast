@@ -291,27 +291,34 @@ class QuickInsert extends BaseScrollFloat {
         this.hide()
         return
       }
-      this.block.text = ''
-      const offset = 0
-      contentState.cursor = {
-        start: {
-          key,
-          offset
-        },
-        end: {
-          key,
-          offset
-        }
-      }
-      switch (item.label) {
-        case 'paragraph':
-          contentState.partialRender()
-          break
-        case 'image':
-          contentState.format(item.label, true)
+      switch (item?.meta?.type) {
+        case 'rune':
+          this.insertRuneTemplate(item)
           break
         default:
-          contentState.updateParagraph(item.label, true)
+          this.block.text = ''
+          const offset = 0
+          contentState.cursor = {
+            start: {
+              key,
+              offset
+            },
+            end: {
+              key,
+              offset
+            }
+          }
+          switch (item.label) {
+            case 'paragraph':
+              contentState.partialRender()
+              break
+            case 'image':
+              contentState.format(item.label, true)
+              break
+            default:
+              contentState.updateParagraph(item.label, true)
+              break
+          }
           break
       }
     } catch (err) {

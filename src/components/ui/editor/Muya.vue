@@ -73,7 +73,7 @@ export default {
     },
     ...mapServerState(['isCurrentNoteLoading', 'contentsList', 'noteState']),
     ...mapServerGetters(['currentNote', 'uploadImageUrl', 'currentNoteResources', 'currentNoteResourceUrl']),
-    ...mapClientState(['darkMode', 'enablePreviewEditor', 'theme'])
+    ...mapClientState(['darkMode', 'enablePreviewEditor', 'theme', 'runeCards'])
   },
   methods: {
     getValue: function () {
@@ -239,6 +239,29 @@ export default {
       Muya.use(TableBarTools)
 
       const { container } = this.contentEditor = new Muya(this.$refs.muya, {
+        quickInsertProvider: () => {
+          const runeItems = (this.runeCards || [])
+            .filter(rune => rune && rune.name)
+            .map(rune => ({
+              title: () => rune.name,
+              subTitle: () => rune.desc || rune.template || '',
+              label: `rune:${rune.id}`,
+              shortCut: '',
+              icon: rune.icon,
+              searchText: [rune.name, rune.desc, rune.template].filter(Boolean).join(' '),
+              meta: {
+                type: 'rune',
+                runeId: rune.id,
+                insertContent: rune.template || ''
+              }
+            }))
+          return {
+            sectionName: 'last',
+            items: {
+              last: runeItems
+            }
+          }
+        },
         imagePathPicker: () => {
           return new Promise((resolve, reject) => {
             this.importImageFromLocal().then(paths => {

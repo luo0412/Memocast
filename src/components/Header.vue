@@ -126,48 +126,6 @@
 
       <!-- 右侧图标组 -->
     <div class="header-right-icons">
-      <!-- 全局同步按钮 -->
-      <div
-        v-if="isLogin"
-        class="header-sync-group q-electron-drag--exception"
-      >
-        <div
-          class="header-icon-btn sync-btn sync-btn--push"
-          :class="{ 'has-pending': pendingCount > 0, 'is-syncing': isPushSyncing }"
-          @click="handlePushSyncClick"
-        >
-          <i v-if="isPushSyncing" class="el-icon-loading icon-custom sync-icon" />
-          <i v-else class="el-icon-top icon-custom sync-icon" />
-          <span v-if="pendingCount > 0" class="sync-badge">{{ pendingCount > 99 ? '99+' : pendingCount }}</span>
-          <q-tooltip
-            transition-show="fade"
-            transition-hide="fade"
-            anchor="bottom middle"
-            self="top middle"
-            :offset="[0, 8]"
-          >
-            {{ syncPushTooltip }}
-          </q-tooltip>
-        </div>
-        <div
-          class="header-icon-btn sync-btn sync-btn--pull"
-          :class="{ 'is-syncing': isPullSyncing }"
-          @click="handlePullSyncClick"
-        >
-          <i v-if="isPullSyncing" class="el-icon-loading icon-custom sync-icon" />
-          <i v-else class="el-icon-bottom icon-custom sync-icon" />
-          <q-tooltip
-            transition-show="fade"
-            transition-hide="fade"
-            anchor="bottom middle"
-            self="top middle"
-            :offset="[0, 8]"
-          >
-            {{ syncPullTooltip }}
-          </q-tooltip>
-        </div>
-      </div>
-
       <!-- 视图切换按钮 -->
       <div
         class="header-icon-btn q-electron-drag--exception"
@@ -210,6 +168,48 @@
         @click="handleSettingsClick"
       >
         <i class="el-icon-setting icon-custom" />
+      </div>
+
+      <!-- 全局同步按钮 -->
+      <div
+        v-if="isLogin"
+        class="header-sync-group q-electron-drag--exception"
+      >
+        <div
+          class="header-icon-btn sync-btn sync-btn--push"
+          :class="{ 'has-pending': pendingCount > 0, 'is-syncing': isPushSyncing }"
+          @click="handlePushSyncClick"
+        >
+          <i v-if="isPushSyncing" class="el-icon-loading icon-custom sync-icon" />
+          <i v-else class="el-icon-top icon-custom sync-icon" />
+          <span v-if="pendingCount > 0" class="sync-badge">{{ pendingCount > 99 ? '99+' : pendingCount }}</span>
+          <q-tooltip
+            transition-show="fade"
+            transition-hide="fade"
+            anchor="bottom middle"
+            self="top middle"
+            :offset="[0, 8]"
+          >
+            {{ syncPushTooltip }}
+          </q-tooltip>
+        </div>
+        <div
+          class="header-icon-btn sync-btn sync-btn--pull"
+          :class="{ 'is-syncing': isPullSyncing }"
+          @click="handlePullSyncClick"
+        >
+          <i v-if="isPullSyncing" class="el-icon-loading icon-custom sync-icon" />
+          <i v-else class="el-icon-bottom icon-custom sync-icon" />
+          <q-tooltip
+            transition-show="fade"
+            transition-hide="fade"
+            anchor="bottom middle"
+            self="top middle"
+            :offset="[0, 8]"
+          >
+            {{ syncPullTooltip }}
+          </q-tooltip>
+        </div>
       </div>
 
       <!-- 头像下拉菜单 (Ant Design Vue) -->
