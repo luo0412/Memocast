@@ -198,10 +198,8 @@ const sync = {
    * @returns {Promise<boolean>}
    */
   async logPendingDelete({ noteId, docGuid, kbGuid }) {
-    return await invoke('db:logSyncAction', {
+    return await invoke('db:logPendingDelete', {
       noteId,
-      action: 'delete',
-      direction: 'local_to_server',
       docGuid,
       kbGuid
     })

@@ -1,6 +1,6 @@
 ---
 name: wiznote-api
-description: 为知笔记（WizNote）API集成指南。用于在Memocast中调用 WizNote REST API，包括账号登录认证、笔记 CRUD、文件夹管理、标签操作、资源上传、笔记搜索、笔记复制。涵盖 API 调用规范、Token 认证机制、错误处理，以及与本地 SQLite 同步层（SyncService）的协作关系。
+description: 为知笔记（WizNote）API 集成指南。用于在 Memocast 中调用 WizNote REST API，包括账号登录认证、笔记 CRUD、文件夹管理、标签操作、资源上传、笔记搜索、笔记复制。涵盖 API 调用规范、Token 认证机制、错误处理，以及与本地 SQLite 同步层（SyncService）的协作关系。遇到登录认证、baseUrl、kbGuid、WizNote 接口调用、标签/分类 API、资源上传、笔记元数据更新、搜索，或云端请求链路问题时应自动使用。
 ---
 
 # 为知笔记 API 操作指南

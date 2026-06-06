@@ -240,7 +240,7 @@ function initSchema() {
             id, doc_guid, kb_guid, title, content, category, tags,
             data_created, data_modified, local_modified,
             server_modified, created_at, updated_at, 
-            CASE WHEN sync_status IN ('local_only', 'pending_upload', 'conflict') THEN 1 ELSE 0 END as dirty
+            CASE WHEN sync_status IN ('local_only', 'pending_upload') THEN 1 ELSE 0 END as dirty
           FROM notes
         `)
 
@@ -1093,15 +1093,15 @@ function registerDatabaseHandlers() {
     }
   })
 
-  // 记录同步操作日志
-  ipcMain.handle('db:logSyncAction', async (event, { noteId, action, direction, docGuid = null, kbGuid = null }) => {
+  // 记录待同步的删除日志
+  ipcMain.handle('db:logPendingDelete', async (event, { noteId, docGuid = null, kbGuid = null }) => {
     try {
-      await db.run(`INSERT INTO sync_log (note_id, action, direction, doc_guid, kb_guid, timestamp, synced) VALUES (?, ?, ?, ?, ?, ?, 0)`,
-        [noteId, action, direction, docGuid, kbGuid, Date.now()])
+      await db.run(`INSERT INTO sync_log (note_id, action, direction, doc_guid, kb_guid, timestamp, synced) VALUES (?, 'delete', 'local_to_server', ?, ?, ?, 0)`,
+        [noteId, docGuid, kbGuid, Date.now()])
       saveDatabase()
       return true
     } catch (error) {
-      log.error('[DB] logSyncAction error:', error)
+      log.error('[DB] logPendingDelete error:', error)
       return false
     }
   })
@@ -1347,7 +1347,7 @@ function registerDatabaseHandlers() {
 
       const result = {
         normalized: updatedCount,
-        markedAsConflict: invalidNotes.length,
+        markedDirty: invalidNotes.length,
         totalProcessed: tempNotes.length + invalidNotes.length
       }
 
@@ -1356,7 +1356,7 @@ function registerDatabaseHandlers() {
 
     } catch (error) {
       log.error('[DB] normalizeNoteGuids error:', error)
-      return { error: error.message, normalized: 0, markedAsConflict: 0 }
+      return { error: error.message, normalized: 0, markedDirty: 0 }
     }
   })
 

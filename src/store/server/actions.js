@@ -1419,6 +1419,29 @@ export default {
     }
 
     await this.dispatch('server/getCategoryNotes', { category: targetCategory })
+
+    const refreshedNotes = Array.isArray(this.state?.server?.currentNotes)
+      ? this.state.server.currentNotes
+      : []
+    const createdSummary = refreshedNotes.find(note => note.docGuid === draft.docGuid || note.guid === draft.docGuid)
+
+    if (!createdSummary) {
+      commit(types.UPDATE_CURRENT_NOTES, [
+        mapLocalNoteToSummary({
+          id: draft.note.id,
+          doc_guid: draft.docGuid,
+          title: finalTitle,
+          content: initialContent,
+          category: targetCategory,
+          data_created: now,
+          data_modified: now,
+          local_modified: now,
+          dirty: 1
+        }, targetCategory),
+        ...refreshedNotes
+      ])
+    }
+
     commit(types.UPDATE_CURRENT_NOTE, {
       _isRawMarkdown: true,
       info: {

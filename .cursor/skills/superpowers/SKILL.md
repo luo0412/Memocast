@@ -1,6 +1,6 @@
 ---
 name: superpowers
-description: coolma/Memocast 项目专用复杂任务工作流。用于分析、修改或扩展 Memocast 的核心能力，包括笔记编辑、布局交互、离线优先同步、WizNote 集成、Electron/Quasar/Vue2 架构与本地 SQLite 数据流。遇到跨文件实现、需求澄清、架构取舍、同步策略、编辑器行为、笔记管理规则或需要先规划再落地的任务时应自动使用。
+description: coolma/Memocast 项目专用复杂任务工作流指南。用于分析、修改或扩展 Memocast 的核心能力，包括笔记编辑、布局交互、离线优先同步、WizNote 集成、Electron/Quasar/Vue2 架构与本地 SQLite 数据流。遇到跨文件实现、需求澄清、架构取舍、同步策略、编辑器行为、笔记管理规则，或需要先规划再落地的任务时应自动使用。
 ---
 
 # Superpowers for coolma / Memocast
@@ -35,10 +35,10 @@ description: coolma/Memocast 项目专用复杂任务工作流。用于分析、
 
 | 技能 | 处理范围 | 本技能负责 |
 |------|----------|-----------|
-| `muya-design` | Muya Block 树、Parser、Renderer、ContentState、事件、快捷键、编辑行为 | 涉及多个子系统时的入口判断、步骤组织、收尾检查 |
-| `note-layout-design` | 三栏布局、分割器、面板显隐、响应式、主题 CSS | 涉及布局与编辑器联动时的全局协调 |
-| `wiznote-api` | WizNote REST API、Token 认证、笔记 CRUD、文件夹、标签、资源上传 | 涉及 API 与本地数据库协同时的数据流梳理 |
-| `sync-design` | SQLite 数据库、同步状态机、冲突处理、GUID 映射、离线策略 | 涉及同步逻辑扩展或修改时的一致性校验 |
+| `muya-design` | Muya Block 树、Parser、Renderer、ContentState、事件、快捷键、编辑行为 | 涉及多个子系统时的入口判断、步骤组织、收尾检查；并提醒同时检查 `src/components/ui/editor/Muya.vue` / `Monaco.vue` 的封装层联动 |
+| `note-layout-design` | 三栏布局、分割器、面板显隐、响应式、主题 CSS | 涉及布局与编辑器联动时的全局协调，并提醒区分分类树、标签 treemap、日历筛选三种左侧语义 |
+| `wiznote-api` | WizNote REST API、Token 认证、笔记 CRUD、文件夹、标签、资源上传 | 涉及 API 与本地数据库协同时的数据流梳理，并提醒登录会自动更新知识库 baseUrl、`updateNoteInfo()` 可能承载分类移动语义 |
+| `sync-design` | SQLite 数据库、dirty 状态模型、本地优先同步、GUID 映射、恢复/备份策略 | 涉及同步逻辑扩展或修改时的一致性校验，避免重新引入传统 conflict 状态思维 |
 
 当任务落在单一专项技能的职责范围时，优先使用该技能；当任务跨越多个技能范围，或用户要求“先分析再改”时，使用本技能作为入口工作流。
 
@@ -55,6 +55,7 @@ description: coolma/Memocast 项目专用复杂任务工作流。用于分析、
 - Muya block / parser / renderer / contentState 链路
 - 编辑器切换时的数据一致性
 - 所见即所得模式与源码模式之间的状态同步
+- `src/components/ui/editor/Muya.vue` 与 `Monaco.vue` 的封装层事件、保存状态与 Vuex / bus 联动
 
 ### 2. 布局与交互子系统 → 优先读 `note-layout-design`
 
@@ -65,6 +66,7 @@ description: coolma/Memocast 项目专用复杂任务工作流。用于分析、
 - 现有 splitters、pane layout mode、显示状态字段
 - 不同布局模式下的行为一致性
 - UI 改动是否破坏编辑器区域稳定性
+- 左侧当前到底是分类树、标签 treemap，还是日历筛选面板，以及它是否会改变笔记列表查询语义
 
 ### 3. 同步与数据子系统 → 优先读 `sync-design` + `wiznote-api`
 
@@ -76,6 +78,8 @@ description: coolma/Memocast 项目专用复杂任务工作流。用于分析、
 - 云端拉取是否只是补缺，不覆盖本地
 - 本地上传是否坚持本地覆盖云端
 - 是否引入了新的重名、映射或状态流转问题
+- `AccountServerApi.Login()` 是否已自动刷新知识库 baseUrl，是否还存在多余或缺失的 baseUrl 设置
+- `updateNoteInfo()` / 分类操作是否会改变路径语义，从而影响列表、同步与本地落库
 
 ## 推荐工作流程
 

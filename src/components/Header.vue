@@ -27,7 +27,11 @@
     <div class="header-left-icons">
       <!-- 笔记方法下拉框 -->
       <el-dropdown trigger="click" @command="handleNoteMethodChange" popper-class="note-method-popper">
-        <span class="header-icon-btn q-electron-drag--exception note-method-btn" :class="{ 'is-active': noteMethod }">
+        <span
+          class="header-icon-btn q-electron-drag--exception note-method-btn"
+          :class="{ 'is-active': noteMethod }"
+          :title="currentNoteMethodDescription"
+        >
           <i class="el-icon-notebook-2 icon-custom" />
           {{ currentNoteMethodLabel }}
         </span>
@@ -316,6 +320,10 @@ export default {
       const opt = this.noteMethodOptions.find(o => o.value === this.noteMethod)
       return opt ? opt.label : ''
     },
+    currentNoteMethodDescription () {
+      const opt = this.noteMethodOptions.find(o => o.value === this.noteMethod)
+      return opt ? opt.description : ''
+    },
     title: function () {
       if (this.currentNote.info) {
         let { title } = this.currentNote.info
@@ -349,8 +357,16 @@ export default {
       isPushSyncing: false,
       isPullSyncing: false,
       noteMethodOptions: [
-        { label: '六道笔记论', value: 'notesSixDaoLun' },
-        { label: '三层漏斗法', value: 'threeLayerFunnel' }
+        {
+          label: '六道笔记论',
+          value: 'notesSixDaoLun',
+          description: '强目的性归类笔记'
+        },
+        {
+          label: '三层漏斗法',
+          value: 'threeLayerFunnel',
+          description: '收集游离态笔记碎片成体系'
+        }
       ]
     }
   },

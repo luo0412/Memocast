@@ -411,7 +411,7 @@ export default {
       const prefixOptions = ['Course', 'Book', 'Export', 'Model', 'Project', 'Trend']
       const selectedPrefix = prefixOptions.includes(this.noteMethodPrefix) ? this.noteMethodPrefix : 'Course'
       const defaultTitle = isSixDaoMode
-        ? `${noteBaseName}-${yyyy}.md`
+        ? `【${selectedPrefix}】${noteBaseName}-${yyyy}.md`
         : this.$t('defaultNoteTitle', {
             category: categoryName,
             date: `${yyyy}${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -459,7 +459,7 @@ export default {
         const prefixEl = container.querySelector(`.${prefixFieldClass}`)
         const titleEl = container.querySelector(`.${noteTitleInputClass}`)
         if (!prefixEl || !titleEl) return
-        titleEl.value = `${noteBaseName}-${yyyy}.md`
+        titleEl.value = `【${prefixEl.value}】${noteBaseName}-${yyyy}.md`
       }
 
       const dialog = this.$q.dialog({

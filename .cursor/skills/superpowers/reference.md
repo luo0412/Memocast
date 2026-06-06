@@ -28,7 +28,7 @@ src-electron/
 
 优先查看这些位置来判断 UI、布局和组件装配关系：
 
-- `src/pages/`：页面级入口，常能看到编辑区、列表区、侧边栏如何拼装
+- `src/pages/Index.vue`：页面级入口，常能看到编辑区、列表区、左侧分类/标签/日历区域如何拼装
 - `src/layouts/`：主布局、Header、窗口级结构与全局交互入口
 - `src/components/`：分类树、笔记列表、编辑器包装组件、抽屉、浮动操作栏
 
@@ -54,9 +54,11 @@ src-electron/
 
 当任务涉及分栏、面板显隐、切换源码模式、编辑区稳定性时，优先关注：
 
-- `src/pages/` 中承载主编辑页的页面组件
-- `src/components/` 中的 `NoteList`、`CategoryTreePanel`、`NoteOutlineDrawer`、编辑器容器组件
-- `src/layouts/` 中的 Header、全局操作入口
+- `src/pages/Index.vue`：主分割器、内部分割器、Muya / Monaco、浮动操作栏、大纲抽屉
+- `src/components/Header.vue`：左侧 category / tag / calendar 切换，右侧 push / pull / layout 交互
+- `src/components/CategoryTreePanel.vue`：分类树与标签 treemap 共享承载组件
+- `src/components/CalendarPanel.vue`：日历筛选、日期依据、排序联动
+- `src/components/NoteList.vue`：列表查询语义如何受 `sidebarTreeType` / `calendarSelectedDate` 影响
 - `src/css/` 中的主题变量、布局样式、编辑器容器样式
 
 优先配合技能：`note-layout-design`
@@ -71,6 +73,12 @@ src-electron/
 - `src/store/server/`：服务端业务动作、落库辅助、标签迁移
 - `src/utils/api.js`：WizNote HTTP API 封装层
 - `src-electron/main-process/electron-main.js`：主进程数据库 schema、迁移与 IPC handlers
+
+补充判断要点：
+
+- 登录成功后，`AccountServerApi.Login()` 会自动更新知识库 baseUrl，不要重复假设必须手动同步设置
+- `updateNoteInfo()` 在当前项目里不只是“改标题”，也可能承担分类移动、标签更新等路径语义
+- 当前同步模型以 `dirty` + 本地优先为核心，不要把传统 conflict 状态机当作默认前提
 
 优先配合技能：`sync-design`、`wiznote-api`
 

@@ -1,6 +1,6 @@
 ---
 name: muya-design
-description: Muya Markdown 编辑器架构与实现指南。用于分析、修改或扩展 Memocast 中的 Muya 编辑器功能，包括 Block 结构、Parser 设计、Renderer 机制、事件系统和主应用集成。
+description: Muya Markdown 编辑器架构与实现指南。用于分析、修改或扩展 Memocast 中的 Muya 编辑器功能，包括 Block 结构、Parser 设计、Renderer 机制、事件系统和主应用集成。遇到 Muya/Monaco 编辑器切换、Markdown 解析渲染、快捷键、复制粘贴、光标/选区、编辑行为异常，或需要调整编辑器交互时应自动使用。
 ---
 
 # Muya 编辑器设计
