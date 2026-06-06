@@ -8,7 +8,7 @@ import DatabaseClient from 'src/utils/DatabaseClient'
 import WizNoteApi from '../utils/api'
 import helper from '../utils/helper'
 import SessionStorageService from './SessionStorageService'
-import { OFFLINE_ROOT_CATEGORY, normalizeCategoryForMatch } from '../utils/constants'
+import { OFFLINE_ROOT_CATEGORY, normalizeNbsp, normalizeCategoryForMatch } from '../utils/constants'
 
 function getKbGuid() {
   return SessionStorageService.getKbGuid()
@@ -514,8 +514,10 @@ class SyncService {
 
   async _downloadAndUpdateEmptyNote(localNote, doc, kbGuid, docGuid) {
     const { markdownContent, content, html } = await this.downloadCloudNoteMarkdown(kbGuid, docGuid)
+    const normalizedTitle = normalizeNbsp(doc.title) || localNote.title
+    const normalizedMarkdown = normalizeNbsp(markdownContent)
 
-    if (!markdownContent) {
+    if (!normalizedMarkdown) {
       console.warn('[SyncService] Skip backfill because downloaded content is still empty:', {
         title: doc.title,
         docGuid,
@@ -529,8 +531,8 @@ class SyncService {
 
     const serverModified = doc.dataModified || doc.data_modified || Date.now()
     const updated = await DatabaseClient.notes.update(localNote.id, {
-      title: doc.title || localNote.title,
-      content: markdownContent,
+      title: normalizedTitle,
+      content: normalizedMarkdown,
       category: doc.category || localNote.category,
       tags: doc.tags || localNote.tags || '',
       kb_guid: kbGuid,
@@ -549,6 +551,8 @@ class SyncService {
    */
   async _downloadAndCreateNote(doc, kbGuid, docGuid) {
     const { markdownContent, content, html } = await this.downloadCloudNoteMarkdown(kbGuid, docGuid)
+    const normalizedTitle = normalizeNbsp(doc.title)
+    const normalizedMarkdown = normalizeNbsp(markdownContent)
     const serverModified = doc.dataModified || doc.data_modified || Date.now()
 
     let cloudCategory = doc.category
@@ -565,13 +569,13 @@ class SyncService {
       }
     }
 
-    console.log(`[SyncService] ↓ Downloading: "${doc.title}" → category="${cloudCategory}" (original: "${doc.category}"), html_len=${html.length}, md_len=${markdownContent.length}`)
+    console.log(`[SyncService] ↓ Downloading: "${doc.title}" → category="${cloudCategory}" (original: "${doc.category}"), html_len=${html.length}, md_len=${normalizedMarkdown.length}`)
 
     const note = await DatabaseClient.notes.create({
       doc_guid: docGuid,
       kb_guid: kbGuid,
-      title: doc.title,
-      content: markdownContent,
+      title: normalizedTitle,
+      content: normalizedMarkdown,
       category: cloudCategory,
       tags: doc.tags || '',
       data_created: doc.dataCreated || doc.data_created,
@@ -588,7 +592,7 @@ class SyncService {
       }
     }
 
-    if (!markdownContent) {
+    if (!normalizedMarkdown) {
       console.warn('[SyncService] Downloaded note has empty markdown content:', {
         title: doc.title,
         docGuid,

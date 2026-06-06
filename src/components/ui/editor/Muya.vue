@@ -135,6 +135,11 @@ const migrateLegacyRunePlaceholders = (markdown = '', runeCards = []) => {
   if (!runeMap.size) return source
 
   return source.replace(LEGACY_RUNE_PLACEHOLDER_RE, (match, legacyRuneValue = '', legacyRuneNameAttr = '', innerHtml = '') => {
+    const hasModernRuneAttributes = /data-rune-name\s*=/.test(match) && /data-rune-id\s*=/.test(match) && /data-rune-node-id\s*=/.test(match)
+    if (hasModernRuneAttributes) {
+      return match
+    }
+
     const runeName = String(legacyRuneNameAttr || legacyRuneValue || '').trim()
     const rune = runeMap.get(runeName)
     if (!rune?.name) return match

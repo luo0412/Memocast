@@ -8,8 +8,12 @@ export const OFFLINE_ROOT_CATEGORY = '/My Notes/'
 
 export const OFFLINE_ROOT_CATEGORY_KEY = 'offline_my_notes'
 
+export function normalizeNbsp (value) {
+  return typeof value === 'string' ? value.replace(/\u00a0/g, ' ') : value
+}
+
 export function normalizeTitleForMatch (title) {
-  const normalized = typeof title === 'string' ? title.trim() : ''
+  const normalized = typeof title === 'string' ? normalizeNbsp(title).trim() : ''
   return normalized || 'Untitled'
 }
 

@@ -662,7 +662,7 @@ export default {
         const success = await DatabaseClient.sync.resetDatabase()
         if (success) {
           // 重置同步状态
-          this.$store.commit('client/UPDATE_SYNC_STATUS', {
+          this.$store.commit('UPDATE_SYNC_STATUS', {
             isSyncing: false,
             lastSyncTime: null,
             total: 0,
@@ -751,6 +751,9 @@ export default {
           cards.push(saved)
         }
         this.updateStateAndStore({ runeCards: cards })
+        this.$nextTick(() => {
+          bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
+        })
       }
       this.editingRune = null
     },

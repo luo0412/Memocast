@@ -557,7 +557,7 @@ const paragraphCtrl = ContentState => {
           ? end.offset + newLevel - hash.length + 1
           : end.offset - hash.length
         let newText = newLevel > 0
-          ? '#'.repeat(newLevel) + `${String.fromCharCode(160)}${partText}` // &nbsp; code: 160
+          ? '#'.repeat(newLevel) + ` ${partText}`
           : partText
 
         // Remove <hr> content when converting to paragraph.

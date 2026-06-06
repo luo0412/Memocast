@@ -1,16 +1,18 @@
 import DatabaseClient from 'src/utils/DatabaseClient'
-import { OFFLINE_ROOT_CATEGORY } from 'src/utils/constants'
+import { OFFLINE_ROOT_CATEGORY, normalizeNbsp } from 'src/utils/constants'
 
 export function createLocalDocGuid () {
   return `local_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
 }
 
 export async function saveOfflineImportedNote ({ title, text, now, category = OFFLINE_ROOT_CATEGORY }) {
+  const normalizedTitle = normalizeNbsp(title)
+  const normalizedText = normalizeNbsp(text)
   const localDocGuid = createLocalDocGuid()
   const note = await DatabaseClient.notes.create({
     doc_guid: localDocGuid,
-    title,
-    content: text,
+    title: normalizedTitle,
+    content: normalizedText,
     category,
     data_created: now,
     data_modified: now,
@@ -25,12 +27,12 @@ export async function saveOfflineImportedNote ({ title, text, now, category = OF
       info: {
         docGuid: localDocGuid,
         kbGuid: '',
-        title,
+        title: normalizedTitle,
         category,
         dataCreated: now,
         dataModified: now
       },
-      html: text,
+      html: normalizedText,
       resources: []
     }
   }
@@ -46,11 +48,13 @@ export async function createLocalDraftNote ({
   dataCreated = now,
   dataModified = now
 }) {
+  const normalizedTitle = normalizeNbsp(title)
+  const normalizedContent = normalizeNbsp(content)
   const note = await DatabaseClient.notes.create({
     doc_guid: docGuid,
     kb_guid: kbGuid,
-    title,
-    content,
+    title: normalizedTitle,
+    content: normalizedContent,
     category,
     data_created: dataCreated,
     data_modified: dataModified,
@@ -82,11 +86,13 @@ export async function upsertLocalNoteByDocGuid ({
   dataCreated = now,
   dataModified = now
 }) {
+  const normalizedTitle = normalizeNbsp(title)
+  const normalizedContent = normalizeNbsp(content)
   const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
   if (localNote) {
     const updatedNote = await DatabaseClient.notes.update(localNote.id, {
-      title,
-      content,
+      title: normalizedTitle,
+      content: normalizedContent,
       category,
       local_modified: now
     })
@@ -102,8 +108,8 @@ export async function upsertLocalNoteByDocGuid ({
 
   const created = await DatabaseClient.notes.create({
     doc_guid: docGuid,
-    title,
-    content,
+    title: normalizedTitle,
+    content: normalizedContent,
     category,
     data_created: dataCreated,
     data_modified: dataModified,

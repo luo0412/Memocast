@@ -100,6 +100,7 @@ class QuickInsert extends BaseScrollFloat {
   static pluginName = 'quickInsert'
 
   constructor(muya) {
+    console.log('[QuickInsert] constructor loaded')
     const name = 'ag-quick-insert'
     super(muya, name)
     this.reference = null
@@ -295,56 +296,130 @@ class QuickInsert extends BaseScrollFloat {
     return withoutRuneName || runeName
   }
 
-  getPreviousNonEmptyLineText () {
+  getPreviousNonEmptyLine () {
     const { contentState } = this.muya
-    if (!contentState || !this.block) return ''
+    if (!contentState || !this.block) return null
 
-    const outMostBlock = typeof contentState.findOutMostBlock === 'function'
-      ? contentState.findOutMostBlock(this.block)
-      : this.block
-    const blocks = typeof contentState.getBlocks === 'function'
-      ? contentState.getBlocks()
-      : contentState.blocks || []
-    const currentIndex = Array.isArray(blocks) ? blocks.findIndex(block => block && block.key === outMostBlock.key) : -1
+    const isPlainTextSpan = block => Boolean(
+      block &&
+      block.type === 'span' &&
+      /paragraphContent|atxLine|cellContent/.test(block.functionType || '')
+    )
 
-    if (currentIndex <= 0) {
-      return ''
-    }
+    const getNormalizedText = block => String(block?.text || '').replace(/\s+/g, ' ').trim()
 
-    for (let index = currentIndex - 1; index >= 0; index--) {
-      const candidate = blocks[index]
-      const text = String(candidate?.text || '')
-        .replace(/\s+/g, ' ')
-        .trim()
+    const getPlainTextFromBlock = block => {
+      if (!block) return null
 
-      if (text) {
+      if (isPlainTextSpan(block)) {
+        const text = getNormalizedText(block)
         return text
+          ? { block, text, removeTarget: block, isPlainText: true }
+          : null
       }
 
-      const paragraphText = Array.isArray(candidate?.children)
-        ? candidate.children
-          .map(child => String(child?.text || '').trim())
-          .filter(Boolean)
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-        : ''
-
-      if (paragraphText) {
-        return paragraphText
+      if (block.type === 'p' && Array.isArray(block.children)) {
+        const plainTextChild = block.children.find(child => isPlainTextSpan(child) && getNormalizedText(child))
+        if (plainTextChild) {
+          return {
+            block,
+            text: getNormalizedText(plainTextChild),
+            removeTarget: block,
+            isPlainText: true
+          }
+        }
       }
+
+      return null
     }
 
-    return ''
+    const activeBlock = typeof contentState.getBlock === 'function'
+      ? contentState.getBlock(this.block.key)
+      : this.block
+
+    if (!activeBlock) return null
+
+    const topLevelBlock = typeof contentState.findOutMostBlock === 'function'
+      ? contentState.findOutMostBlock(activeBlock)
+      : activeBlock
+
+    let candidate = typeof contentState.getPreSibling === 'function'
+      ? contentState.getPreSibling(topLevelBlock)
+      : null
+
+    while (candidate) {
+      const resolved = getPlainTextFromBlock(candidate)
+
+      console.log('[QuickInsert.getPreviousNonEmptyLine]', {
+        currentBlockKey: this.block?.key,
+        activeBlockKey: activeBlock?.key,
+        topLevelBlockKey: topLevelBlock?.key,
+        candidateKey: candidate?.key,
+        candidateType: candidate?.type,
+        candidateFunctionType: candidate?.functionType,
+        candidateText: getNormalizedText(candidate),
+        resolved
+      })
+
+      if (resolved) {
+        return resolved
+      }
+
+      candidate = typeof contentState.getPreSibling === 'function'
+        ? contentState.getPreSibling(candidate)
+        : null
+    }
+
+    return null
   }
 
   insertRuneTemplate(item) {
     const { contentState } = this.muya
     const displayText = this.getRuneDisplayText(item)
-    const runeValue = this.getPreviousNonEmptyLineText()
+    const rawCurrentText = String(this.block?.text || '')
+    const hasExistingRunePlaceholder = /data-rune-name\s*=|data-rune-id\s*=|data-rune-node-id\s*=/.test(rawCurrentText)
+    const isFirstInsertionFromQuickInsert = /^@/.test(rawCurrentText) && !hasExistingRunePlaceholder
+    const currentBlock = this.block && typeof contentState.getBlock === 'function'
+      ? contentState.getBlock(this.block.key)
+      : null
+    const parentBlock = currentBlock && typeof contentState.getParent === 'function'
+      ? contentState.getParent(currentBlock)
+      : null
+    const grandParentBlock = parentBlock && typeof contentState.getParent === 'function'
+      ? contentState.getParent(parentBlock)
+      : null
+    const previousLine = isFirstInsertionFromQuickInsert ? this.getPreviousNonEmptyLine() : null
+    const runeValue = previousLine?.isPlainText ? previousLine.text : ''
     const insertContent = createRunePlaceholderHtml(item, displayText, runeValue)
-    const { key } = this.block
-    this.block.text = insertContent
+
+    console.log('[QuickInsert.insertRuneTemplate]', {
+      currentBlockKey: this.block?.key,
+      currentBlockText: this.block?.text,
+      hasExistingRunePlaceholder,
+      isFirstInsertionFromQuickInsert,
+      currentBlock,
+      parentBlock,
+      grandParentBlock,
+      previousSiblingOfCurrent: currentBlock && typeof contentState.getPreSibling === 'function'
+        ? contentState.getPreSibling(currentBlock)
+        : null,
+      previousSiblingOfParent: parentBlock && typeof contentState.getPreSibling === 'function'
+        ? contentState.getPreSibling(parentBlock)
+        : null,
+      previousLine,
+      runeValue,
+      insertContentPreview: insertContent.slice(0, 160)
+    })
+
+    if (isFirstInsertionFromQuickInsert && previousLine?.isPlainText && previousLine.removeTarget && this.block) {
+      contentState.removeBlock(previousLine.removeTarget)
+    }
+
+    const activeBlock = this.block && contentState.getBlock(this.block.key)
+    if (!activeBlock) return
+
+    const { key } = activeBlock
+    activeBlock.text = insertContent
     const offset = insertContent.length
     contentState.cursor = {
       start: {
@@ -360,6 +435,13 @@ class QuickInsert extends BaseScrollFloat {
   }
 
   selectItem(item) {
+    console.log('[QuickInsert.selectItem]', {
+      label: item?.label,
+      metaType: item?.meta?.type,
+      runeName: item?.meta?.runeName,
+      currentBlockKey: this.block?.key,
+      currentBlockText: this.block?.text
+    })
     const { contentState } = this.muya
     try {
       // Guard against null block

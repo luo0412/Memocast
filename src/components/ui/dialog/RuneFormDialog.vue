@@ -298,11 +298,11 @@ const createUuid = () => {
 const DEFAULT_TEMPLATE = `<template><el-input /></template>`
 
 const ICON_NAME_MAP = {
-  whatshot: 'whatshot',
+  whatshot: 'local_fire_department',
   ac_unit: 'ac_unit',
   flash_on: 'flash_on',
   favorite: 'favorite',
-  nights_stay: 'nights_stay',
+  nights_stay: 'dark_mode',
   wb_sunny: 'wb_sunny',
   star: 'star',
   ring: 'filter_frames',

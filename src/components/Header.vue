@@ -495,7 +495,7 @@ export default {
 
     async refreshSyncStatusFromDb (lastSyncTime = null) {
       const stats = await DatabaseClient.sync.getStats()
-      this.$store.commit('client/UPDATE_SYNC_STATUS', {
+      this.$store.commit('UPDATE_SYNC_STATUS', {
         isSyncing: false,
         ...(lastSyncTime ? { lastSyncTime } : {}),
         ...stats
