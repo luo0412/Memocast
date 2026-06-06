@@ -14,6 +14,56 @@ import {
   getCalendarNoteTimestamp,
   mapLocalNoteToSummary
 } from 'src/store/server/noteTree'
+
+function mergeCategoryCollections ({ localCategories = [], remoteCategories = [], localNotes = [], remoteCategoryPos = {} }) {
+  const normalizedMap = new Map()
+
+  const appendCategory = (rawCategory, source = {}) => {
+    const category = normalizeCategoryForMatch(rawCategory)
+    if (!category || category === '/') return
+
+    const existing = normalizedMap.get(category) || {
+      category,
+      parent: source.parent || OFFLINE_ROOT_CATEGORY,
+      kbGuid: source.kbGuid || source.kb_guid || '',
+      local_only: source.local_only || 0
+    }
+
+    normalizedMap.set(category, {
+      ...existing,
+      ...source,
+      category,
+      parent: source.parent || existing.parent || OFFLINE_ROOT_CATEGORY,
+      kbGuid: source.kbGuid ?? source.kb_guid ?? existing.kbGuid ?? '',
+      local_only: source.local_only ?? existing.local_only ?? 0
+    })
+  }
+
+  for (const category of localCategories) {
+    appendCategory(category?.category, category)
+  }
+
+  for (const note of localNotes) {
+    appendCategory(note?.category, {
+      parent: OFFLINE_ROOT_CATEGORY,
+      kbGuid: note?.kb_guid || '',
+      local_only: 1
+    })
+  }
+
+  for (const category of remoteCategories) {
+    appendCategory(category?.category, category)
+  }
+
+  const mergedCategories = Array.from(normalizedMap.values())
+  const tree = buildCategoryTreeFromNotes(localNotes, mergedCategories)
+
+  return {
+    categories: mergedCategories,
+    tree,
+    pos: remoteCategoryPos || {}
+  }
+}
 import {
   createLocalDraftNote,
   promoteLocalDraftToCloudGuid,
@@ -679,27 +729,39 @@ export default {
     commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, true)
     const { kbGuid, isLogin } = state
 
-    if (!isLogin || !kbGuid) {
-      try {
-        const { categories: localCategories, tree } = await loadLocalWorkspaceData()
-        commit(types.SET_CATEGORIES, tree)
-        commit(types.UPDATE_ALL_CATEGORIES, localCategories)
-        commit(types.UPDATE_CATEGORIES_POS, [])
-      } catch (err) {
-        console.error('[getAllCategories] Offline load failed:', err)
-        commit(types.SET_CATEGORIES, [])
-        commit(types.UPDATE_ALL_CATEGORIES, [])
-        commit(types.UPDATE_CATEGORIES_POS, [])
-      } finally {
-        commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
-      }
-      return
-    }
+    try {
+      const { categories: localCategories, notes: localNotes } = await loadLocalWorkspaceData()
 
-    const res = await api.KnowledgeBaseApi.getCategories({ kbGuid })
-    commit(types.UPDATE_ALL_CATEGORIES, res.result)
-    commit(types.UPDATE_CATEGORIES_POS, res.pos)
-    commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
+      if (!isLogin || !kbGuid) {
+        const mergedOffline = mergeCategoryCollections({
+          localCategories,
+          localNotes
+        })
+        commit(types.SET_CATEGORIES, mergedOffline.tree)
+        commit(types.UPDATE_ALL_CATEGORIES, mergedOffline.categories)
+        commit(types.UPDATE_CATEGORIES_POS, mergedOffline.pos)
+        return
+      }
+
+      const res = await api.KnowledgeBaseApi.getCategories({ kbGuid })
+      const mergedOnline = mergeCategoryCollections({
+        localCategories,
+        localNotes,
+        remoteCategories: res.result || [],
+        remoteCategoryPos: res.pos || {}
+      })
+
+      commit(types.SET_CATEGORIES, mergedOnline.tree)
+      commit(types.UPDATE_ALL_CATEGORIES, mergedOnline.categories)
+      commit(types.UPDATE_CATEGORIES_POS, mergedOnline.pos)
+    } catch (err) {
+      console.error('[getAllCategories] failed:', err)
+      commit(types.SET_CATEGORIES, [])
+      commit(types.UPDATE_ALL_CATEGORIES, [])
+      commit(types.UPDATE_CATEGORIES_POS, {})
+    } finally {
+      commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
+    }
   },
   /**
    * 获取笔记内容
