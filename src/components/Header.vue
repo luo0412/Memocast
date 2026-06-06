@@ -120,19 +120,48 @@
 
     <q-space />
 
-    <!-- 右侧图标组 -->
+      <!-- 右侧图标组 -->
     <div class="header-right-icons">
       <!-- 全局同步按钮 -->
       <div
         v-if="isLogin"
-        class="header-icon-btn q-electron-drag--exception sync-btn"
-        :class="{ 'is-syncing': isSyncing, 'has-pending': pendingCount > 0 }"
-        :title="syncTooltip"
-        @click="handleSyncClick"
+        class="header-sync-group q-electron-drag--exception"
       >
-        <i v-if="isSyncing" class="el-icon-loading icon-custom sync-icon" />
-        <i v-else class="el-icon-refresh icon-custom sync-icon" />
-        <span v-if="pendingCount > 0" class="sync-badge">{{ pendingCount > 99 ? '99+' : pendingCount }}</span>
+        <div
+          class="header-icon-btn sync-btn sync-btn--push"
+          :class="{ 'has-pending': pendingCount > 0, 'is-syncing': isPushSyncing }"
+          @click="handlePushSyncClick"
+        >
+          <i v-if="isPushSyncing" class="el-icon-loading icon-custom sync-icon" />
+          <i v-else class="el-icon-top icon-custom sync-icon" />
+          <span v-if="pendingCount > 0" class="sync-badge">{{ pendingCount > 99 ? '99+' : pendingCount }}</span>
+          <q-tooltip
+            transition-show="fade"
+            transition-hide="fade"
+            anchor="bottom middle"
+            self="top middle"
+            :offset="[0, 8]"
+          >
+            {{ syncPushTooltip }}
+          </q-tooltip>
+        </div>
+        <div
+          class="header-icon-btn sync-btn sync-btn--pull"
+          :class="{ 'is-syncing': isPullSyncing }"
+          @click="handlePullSyncClick"
+        >
+          <i v-if="isPullSyncing" class="el-icon-loading icon-custom sync-icon" />
+          <i v-else class="el-icon-bottom icon-custom sync-icon" />
+          <q-tooltip
+            transition-show="fade"
+            transition-hide="fade"
+            anchor="bottom middle"
+            self="top middle"
+            :offset="[0, 8]"
+          >
+            {{ syncPullTooltip }}
+          </q-tooltip>
+        </div>
       </div>
 
       <!-- 视图切换按钮 -->
@@ -222,6 +251,7 @@ import LoginDialog from './ui/dialog/LoginDialog'
 import SettingsDialog from './ui/dialog/SettingsDialog'
 import { createNamespacedHelpers } from 'vuex'
 import helper from 'src/utils/helper'
+import debounce from 'lodash/debounce'
 import TagDialog from 'components/ui/dialog/TagDialog'
 import bus from 'components/bus'
 import events from 'src/constants/events'
@@ -229,7 +259,7 @@ import SearchDialog from 'components/ui/dialog/SearchDialog'
 import ImDrawer from 'components/ui/ImDrawer'
 import { ipcRenderer } from 'electron'
 import DatabaseClient from 'src/utils/DatabaseClient'
-import types from 'src/store/client/types'
+import CloudSyncService from 'src/services/CloudSyncService'
 
 const {
   mapState: mapServerState,
@@ -257,21 +287,26 @@ export default {
       'syncStatus'
     ]),
 
-    // 同步状态
-    isSyncing() {
-      return this.syncStatus?.isSyncing || false
-    },
     pendingCount() {
       return this.syncStatus?.pending || 0
     },
-    syncTooltip() {
-      if (this.isSyncing) {
-        return this.$t('syncing')
+    isSyncing() {
+      return this.isPushSyncing || this.isPullSyncing
+    },
+    syncPushTooltip() {
+      if (this.isPushSyncing) {
+        return this.$t('cloudSyncSyncing')
       }
       if (this.pendingCount > 0) {
-        return this.$t('pendingSync', { count: this.pendingCount })
+        return `${this.$t('cloudSyncSyncPushOnly')} (${this.pendingCount})`
       }
-      return this.$t('clickToSync')
+      return this.$t('cloudSyncSyncPushOnly')
+    },
+    syncPullTooltip() {
+      if (this.isPullSyncing) {
+        return this.$t('cloudSyncSyncing')
+      }
+      return this.$t('cloudSyncSyncPullOnly')
     },
     darkMode: function () {
       return this.$q.dark.isActive
@@ -310,6 +345,8 @@ export default {
       isMaximized: false,
       searchHighlight: false,
       settingsHighlight: false,
+      isPushSyncing: false,
+      isPullSyncing: false,
       noteMethod: 'notesSixDaoLun',
       noteMethodOptions: [
         { label: '笔记六道论', value: 'notesSixDaoLun' },
@@ -440,12 +477,21 @@ export default {
     },
 
     ...mapServerActions(['logout', 'getCategoryNotes', 'refreshTagNotesCount']),
-    ...mapClientActions(['toggleChanged', 'cyclePaneLayout', 'expandFullPaneLayout', 'sync']),
+    ...mapClientActions(['toggleChanged', 'cyclePaneLayout', 'expandFullPaneLayout']),
 
-    // 同步按钮点击处理
-    async handleSyncClick() {
+    async refreshSyncStatusFromDb (lastSyncTime = null) {
+      const stats = await DatabaseClient.sync.getStats()
+      this.$store.commit('client/UPDATE_SYNC_STATUS', {
+        isSyncing: false,
+        ...(lastSyncTime ? { lastSyncTime } : {}),
+        ...stats
+      })
+      return stats
+    },
+
+    async runSyncAction ({ key, action, successMessage, icon, getCount }) {
       if (this.isSyncing) {
-        return // 正在同步中，不重复触发
+        return
       }
 
       if (!this.isLogin) {
@@ -457,55 +503,72 @@ export default {
         return
       }
 
+      this[key] = true
+
       try {
-        const result = await this.sync()
-        const stats = await DatabaseClient.sync.getStats()
-        this.$store.commit(`client/${types.UPDATE_SYNC_STATUS}`, {
-          isSyncing: false,
-          lastSyncTime: Date.now(),
-          ...stats
-        })
-      if (result.success) {
-        if ((stats.pending || 0) > 0) {
+        const result = await action()
+        await this.refreshSyncStatusFromDb(Date.now())
+        if (result.success) {
+          const count = getCount(result)
           this.$q.notify({
-            message: this.$t('syncFailed'),
-            type: 'warning',
-            position: 'top',
-            caption: `仍有 ${stats.pending} 条未备份`
-          })
-        } else {
-          this.$q.notify({
-            message: this.$t('cloudBackupComplete'),
+            message: count ? `${successMessage} ${count}` : successMessage,
             type: 'positive',
             position: 'top',
-            caption: `↑${result.stats?.pushed || 0}`
+            icon
           })
-        }
         } else {
           this.$q.notify({
-            message: this.$t('syncFailed'),
+            message: result.error || this.$t('cloudSyncFailed'),
             type: 'negative',
             position: 'top'
           })
         }
+        return result
       } catch (error) {
-        console.error('Sync failed:', error)
+        console.error('Sync action failed:', error)
         try {
-          const stats = await DatabaseClient.sync.getStats()
-          this.$store.commit(`client/${types.UPDATE_SYNC_STATUS}`, {
-            isSyncing: false,
-            ...stats
-          })
+          await this.refreshSyncStatusFromDb()
         } catch (statsError) {
           console.error('Refresh sync status failed:', statsError)
         }
         this.$q.notify({
-          message: this.$t('syncFailed'),
+          message: this.$t('cloudSyncFailed'),
           type: 'negative',
           position: 'top'
         })
+        return null
+      } finally {
+        this[key] = false
       }
-    }
+    },
+
+    async handlePushSyncAction () {
+      await this.runSyncAction({
+        key: 'isPushSyncing',
+        action: () => CloudSyncService.pushOnly(),
+        successMessage: this.$t('cloudBackupComplete'),
+        icon: 'cloud_upload',
+        getCount: result => (result.count > 0 ? `↑${result.count}` : '')
+      })
+    },
+
+    async handlePullSyncAction () {
+      await this.runSyncAction({
+        key: 'isPullSyncing',
+        action: () => CloudSyncService.pullOnly(),
+        successMessage: this.$t('cloudRestoreComplete'),
+        icon: 'cloud_download',
+        getCount: result => (result.pulled > 0 ? `↓${result.pulled}` : '')
+      })
+    },
+
+    handlePushSyncClick: debounce(function () {
+      this.handlePushSyncAction()
+    }, 500, { leading: true, trailing: false }),
+
+    handlePullSyncClick: debounce(function () {
+      this.handlePullSyncAction()
+    }, 500, { leading: true, trailing: false }),
   },
 
   mounted () {
@@ -527,6 +590,8 @@ export default {
     }
   },
   beforeDestroy () {
+    this.handlePushSyncClick.cancel()
+    this.handlePullSyncClick.cancel()
     bus.$off(events.VIEW_SHORTCUT_CALL.switchView, this.switchViewHandler)
     bus.$off('showLoginDialog')
   }
@@ -766,6 +831,12 @@ export default {
 }
 
 /* 同步按钮样式 */
+.header-sync-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .sync-btn {
   position: relative;
 }

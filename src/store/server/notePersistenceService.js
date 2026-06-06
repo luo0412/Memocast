@@ -5,13 +5,13 @@ export function createLocalDocGuid () {
   return `local_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
 }
 
-export async function saveOfflineImportedNote ({ title, text, now }) {
+export async function saveOfflineImportedNote ({ title, text, now, category = OFFLINE_ROOT_CATEGORY }) {
   const localDocGuid = createLocalDocGuid()
   const note = await DatabaseClient.notes.create({
     doc_guid: localDocGuid,
     title,
     content: text,
-    category: OFFLINE_ROOT_CATEGORY,
+    category,
     data_created: now,
     data_modified: now,
     local_modified: now
@@ -26,7 +26,7 @@ export async function saveOfflineImportedNote ({ title, text, now }) {
         docGuid: localDocGuid,
         kbGuid: '',
         title,
-        category: OFFLINE_ROOT_CATEGORY,
+        category,
         dataCreated: now,
         dataModified: now
       },

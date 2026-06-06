@@ -1146,6 +1146,42 @@ export default {
       })
       return
     }
+
+    const isOfflineNote = !state.isLogin || !kbGuid || (docGuid && docGuid.startsWith('local_'))
+    if (isOfflineNote) {
+      try {
+        const localNote = await DatabaseClient.notes.getByDocGuid(docGuid)
+        if (localNote) {
+          await DatabaseClient.notes.update(localNote.id, {
+            title: payload.title,
+            category: nextCategory,
+            local_modified: Date.now()
+          })
+        }
+
+        const currentState = state.currentNote
+        if (currentState && currentState.info) {
+          commit(types.UPDATE_CURRENT_NOTE, {
+            ...currentState,
+            info: {
+              ...(currentState.info || {}),
+              ...payload,
+              category: nextCategory
+            }
+          })
+        } else {
+          commit(types.UPDATE_CURRENT_NOTE, {
+            ...payload,
+            category: nextCategory
+          })
+        }
+
+        await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
+      } catch (err) {
+        console.error('[updateNoteInfo/offline] SQLite update failed:', err)
+      }
+      return
+    }
     
     await api.KnowledgeBaseApi.updateNoteInfo({
       kbGuid,
@@ -1309,12 +1345,13 @@ export default {
     } = state
     const userId = ClientFileStorage.getItemFromStore('userId')
     const safeCategory = currentCategory || ''
+    const targetCategory = safeCategory || OFFLINE_ROOT_CATEGORY
     const isLite = safeCategory.replace(/\//g, '') === 'Lite'
     
     let finalTitle = title || i18n.t('untitled')
     try {
       finalTitle = await generateUniqueNoteTitleInCategory({
-        category: safeCategory || OFFLINE_ROOT_CATEGORY,
+        category: targetCategory,
         title: finalTitle
       })
     } catch (err) {
@@ -1331,7 +1368,7 @@ export default {
         draft = await createLocalDraftNote({
           title: finalTitle,
           content: initialContent,
-          category: OFFLINE_ROOT_CATEGORY,
+          category: targetCategory,
           now
         })
       } catch (err) {
@@ -1352,14 +1389,14 @@ export default {
         })
         return
       }
-      await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
+      await this.dispatch('server/getCategoryNotes', { category: targetCategory })
       commit(types.UPDATE_CURRENT_NOTE, {
         _isRawMarkdown: true,
         info: {
           docGuid: draft.docGuid,
           kbGuid: '',
           title: finalTitle,
-          category: OFFLINE_ROOT_CATEGORY,
+          category: targetCategory,
           dataCreated: now,
           dataModified: now
         },
@@ -1543,6 +1580,7 @@ export default {
     } = state
     const title = importFile.name
     const userId = ClientFileStorage.getItemFromStore('userId')
+    const targetCategory = currentCategory || OFFLINE_ROOT_CATEGORY
     const isLite = currentCategory.replace(/\//g, '') === 'Lite'
     const reader = new FileReader()
     reader.readAsText(importFile)
@@ -1553,9 +1591,9 @@ export default {
       // 离线导入：仅写入本地 SQLite，不推云端
       if (!isLogin) {
         try {
-          const { note, currentNote } = await saveOfflineImportedNote({ title, text, now })
+          const { note, currentNote } = await saveOfflineImportedNote({ title, text, now, category: targetCategory })
           if (note) {
-            await this.dispatch('server/getCategoryNotes', { category: state.currentCategory || OFFLINE_ROOT_CATEGORY })
+            await this.dispatch('server/getCategoryNotes', { category: targetCategory })
           }
           commit(types.UPDATE_CURRENT_NOTE, currentNote)
         } catch (err) {

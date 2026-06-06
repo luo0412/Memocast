@@ -267,11 +267,12 @@
                     <q-btn
                       class='col'
                       color='primary'
-                      :label="isSyncing ? $t('cloudSyncSyncing') : $t('cloudSyncSyncNow')"
+                      :label="$t('cloudSyncSyncPushOnly')"
                       icon='cloud_upload'
                       unelevated
                       :loading='isSyncing'
-                      @click='doSync'
+                      :disable='isSyncing'
+                      @click='doPushOnly'
                     />
                     <q-btn
                       flat
@@ -800,7 +801,7 @@ export default {
       this.isSyncing = false
       await this.refreshCloudSyncStatus()
       if (result.success) {
-        this.$q.notify({ message: `${this.$t('cloudSyncSuccess')} ↑${result.count || 0}`, type: 'positive', icon: 'cloud_upload' })
+        this.$q.notify({ message: `${this.$t('cloudBackupComplete')} ↑${result.count || 0}`, type: 'positive', icon: 'cloud_upload' })
       } else {
         this.syncError = result.error || this.$t('cloudSyncFailed')
       }
