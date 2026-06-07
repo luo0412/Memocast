@@ -6,7 +6,7 @@
         <span v-else class='rune-card-icon-text'>{{ runeInitial }}</span>
       </div>
       <div class='rune-card-power'>
-        <span class='power-label'>{{ $t('runeCardPower') }}</span>
+        <span class='power-label'>{{ resolvedPowerLabel }}</span>
         <span class='power-value'>{{ rune.power }}</span>
       </div>
     </div>
@@ -15,8 +15,8 @@
       <div class='rune-card-desc'>{{ rune.desc }}</div>
     </div>
     <div class='rune-card-footer'>
-      <q-btn flat dense size='sm' :label="$t('runeCardEdit')" color='white' @click='$emit("edit", rune)' />
-      <q-btn flat dense size='sm' :label="$t('runeCardDelete')" color='red-3' @click='$emit("delete", rune)' />
+      <q-btn flat dense size='sm' :label="resolvedEditLabel" color='white' @click='$emit("edit", rune)' />
+      <q-btn flat dense size='sm' :label="resolvedDeleteLabel" color='red-3' @click='$emit("delete", rune)' />
     </div>
   </div>
 </template>
@@ -41,6 +41,26 @@ export default {
     rune: {
       type: Object,
       required: true
+    },
+    nameLabel: {
+      type: String,
+      default: ''
+    },
+    descLabel: {
+      type: String,
+      default: ''
+    },
+    powerLabel: {
+      type: String,
+      default: ''
+    },
+    editLabel: {
+      type: String,
+      default: ''
+    },
+    deleteLabel: {
+      type: String,
+      default: ''
     }
   },
   computed: {
@@ -65,6 +85,15 @@ export default {
       return {
         background: `linear-gradient(135deg, ${this.rune.color}dd 0%, ${this.rune.color}88 100%)`
       }
+    },
+    resolvedPowerLabel () {
+      return this.powerLabel || this.$t('runeCardPower')
+    },
+    resolvedEditLabel () {
+      return this.editLabel || this.$t('runeCardEdit')
+    },
+    resolvedDeleteLabel () {
+      return this.deleteLabel || this.$t('runeCardDelete')
     }
   }
 }

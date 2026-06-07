@@ -57,6 +57,7 @@ const compileTemplateToFunctions = vueSfcCompiler && typeof vueSfcCompiler.compi
     : null
 const LEGACY_RUNE_PLACEHOLDER_RE = /<div\s+[^>]*?(?:data-rune="([^"]+)"|data-rune-name="([^"]+)")[^>]*>([\s\S]*?)<\/div>/gi
 const CURRENT_RUNE_PLACEHOLDER_RE = /<div\s+[^>]*data-rune-name="([^"]+)"[^>]*>([\s\S]*?)<\/div>/gi
+const ECHO_DIRECTIVE_RE = /@anno(?:\[echo\])?\(([^\)]*)\)(?:\{([^}]*)\})?/gi
 const RUNE_TEXT_SLOT = 'default'
 
 const injectScopedAttribute = (template = '', scopeId = '') => {
@@ -120,6 +121,53 @@ const createRuneMigrationMap = (runeCards = []) => {
     }
     return acc
   }, new Map())
+}
+
+const parseEchoDirectiveAttrs = (source = '') => {
+  return String(source || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+    .reduce((acc, pair) => {
+      const separatorIndex = pair.indexOf(':')
+      if (separatorIndex === -1) return acc
+      const key = pair.slice(0, separatorIndex).trim()
+      const value = pair.slice(separatorIndex + 1).trim().replace(/^['"]|['"]$/g, '')
+      if (key) {
+        acc[key] = value
+      }
+      return acc
+    }, {})
+}
+
+const migrateEchoPlaceholders = (markdown = '', echoCards = []) => {
+  const source = String(markdown || '')
+  if (!source || source.indexOf('@anno') === -1) return source
+
+  const echoMap = (Array.isArray(echoCards) ? echoCards : []).reduce((acc, echo) => {
+    const echoName = String((echo?.name || '').trim())
+    if (echoName) {
+      acc.set(echoName, echo)
+    }
+    return acc
+  }, new Map())
+
+  return source.replace(ECHO_DIRECTIVE_RE, (match, rawArgs = '', rawAttrs = '') => {
+    const argParts = String(rawArgs || '')
+      .split(',')
+      .map(item => item.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(Boolean)
+    const attrs = parseEchoDirectiveAttrs(rawAttrs)
+    const echoName = attrs.name || attrs.echo || argParts[0] || ''
+    if (!echoName) return match
+    const echo = echoMap.get(echoName)
+    const text = attrs.text || argParts[1] || echoName
+    const color = attrs.color || echo?.color || '#26A69A'
+    const power = attrs.power || echo?.power || 50
+    const icon = attrs.icon || echo?.icon || 'graphic_eq'
+    const description = attrs.desc || attrs.description || echo?.desc || ''
+    return `<div data-echo-name="${echoName}" data-echo-color="${color}" data-echo-power="${power}" data-echo-icon="${icon}" data-echo-desc="${description}">${text}</div>`
+  })
 }
 
 const createRuneInstanceId = () => uuidv4()
@@ -326,7 +374,7 @@ export default {
     },
     ...mapServerState(['isCurrentNoteLoading', 'contentsList', 'noteState']),
     ...mapServerGetters(['currentNote', 'uploadImageUrl', 'currentNoteResources', 'currentNoteResourceUrl']),
-    ...mapClientState(['darkMode', 'enablePreviewEditor', 'theme', 'runeCards'])
+    ...mapClientState(['darkMode', 'enablePreviewEditor', 'theme', 'runeCards', 'echoCards'])
   },
   methods: {
     migrateCurrentNoteRunePlaceholders () {
@@ -335,7 +383,7 @@ export default {
       }
 
       const markdown = this.contentEditor.getMarkdown()
-      const migrated = migrateLegacyRunePlaceholders(markdown, this.runeCards)
+      const migrated = migrateEchoPlaceholders(migrateLegacyRunePlaceholders(markdown, this.runeCards), this.echoCards)
       if (migrated === markdown) {
         return false
       }
@@ -718,10 +766,10 @@ export default {
       try {
         this.contentEditor.focus()
         console.log(`[Muya watcher] 📝 Loading into editor: len=${markdownContent.length}`)
-        const migratedMarkdown = migrateLegacyRunePlaceholders(markdownContent, this.runeCards)
-        
-        // ✅ 强制设置内容（空字符串也是有效内容，会清空编辑器）
-        this.contentEditor.setMarkdown(migratedMarkdown)
+          const migratedMarkdown = migrateEchoPlaceholders(migrateLegacyRunePlaceholders(markdownContent, this.runeCards), this.echoCards)
+
+          // ✅ 强制设置内容（空字符串也是有效内容，会清空编辑器）
+          this.contentEditor.setMarkdown(migratedMarkdown)
         if (migratedMarkdown !== markdownContent) {
           this.updateNoteState('changed')
         }
@@ -769,6 +817,14 @@ export default {
           }
         })
       }
+    },
+    echoCards: function () {
+      this.$nextTick(() => {
+        this.migrateCurrentNoteRunePlaceholders()
+        if (this.contentEditor?.contentState?.stateRender?.renderRunes) {
+          this.contentEditor.contentState.stateRender.renderRunes()
+        }
+      })
     }
   }
 }

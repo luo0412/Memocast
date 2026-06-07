@@ -12,7 +12,7 @@
         <q-icon name='star' color='primary' size='1.5em' />
         <q-toolbar-title>
           <span class='text-weight-bold non-selectable'>
-            {{ isEditing ? $t('runeCardEdit') : $t('runeCardAdd') }}
+            {{ isEditing ? resolvedEditTitle : resolvedAddTitle }}
           </span>
         </q-toolbar-title>
         <q-btn flat round dense icon='close' v-close-popup />
@@ -22,31 +22,31 @@
         <div class='rune-form-content'>
           <div class='rune-form-fields'>
             <div class='rune-form-field'>
-              <div class='rune-form-label'>{{ $t('runeCardName') }}</div>
+              <div class='rune-form-label'>{{ resolvedNameLabel }}</div>
               <q-input
                 v-model='form.name'
                 dense
                 outlined
-                :placeholder="$t('runeCardName')"
+                :placeholder="resolvedNameLabel"
                 class='rune-form-input rune-form-input--compact'
               />
             </div>
 
             <div class='rune-form-field rune-form-field--desc'>
-              <div class='rune-form-label'>{{ $t('runeCardDesc') }}</div>
+              <div class='rune-form-label'>{{ resolvedDescLabel }}</div>
               <q-input
                 v-model='form.desc'
                 dense
                 outlined
                 type='textarea'
                 autogrow
-                :placeholder="$t('runeCardDesc')"
+                :placeholder="resolvedDescLabel"
                 class='rune-form-input rune-form-input--compact'
               />
             </div>
 
             <div class='rune-form-field rune-form-field--tight'>
-              <div class='rune-form-label'>{{ $t('runeCardPower') }}</div>
+              <div class='rune-form-label'>{{ resolvedPowerLabel }}</div>
               <q-slider
                 v-model='form.power'
                 :min='1'
@@ -346,6 +346,10 @@ export default {
     rune: {
       type: Object,
       default: null
+    },
+    mode: {
+      type: String,
+      default: 'rune'
     }
   },
   data () {
@@ -400,6 +404,24 @@ export default {
   computed: {
     isEditing () {
       return !!this.rune
+    },
+    isEchoMode () {
+      return this.mode === 'echo'
+    },
+    resolvedAddTitle () {
+      return this.isEchoMode ? this.$t('echoCardAdd') : this.$t('runeCardAdd')
+    },
+    resolvedEditTitle () {
+      return this.isEchoMode ? this.$t('echoCardEdit') : this.$t('runeCardEdit')
+    },
+    resolvedNameLabel () {
+      return this.isEchoMode ? this.$t('echoCardName') : this.$t('runeCardName')
+    },
+    resolvedDescLabel () {
+      return this.isEchoMode ? this.$t('echoCardDesc') : this.$t('runeCardDesc')
+    },
+    resolvedPowerLabel () {
+      return this.isEchoMode ? this.$t('echoCardPower') : this.$t('runeCardPower')
     }
   },
   watch: {

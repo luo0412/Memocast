@@ -109,21 +109,40 @@ export default {
   async loadRunes ({ commit }) {
     try {
       const runes = await DatabaseClient.runes.getAll()
-      if (runes && runes.length > 0) {
+      if (Array.isArray(runes)) {
         commit(types.TOGGLE_CHANGED, { key: 'runeCards', value: runes })
       }
     } catch (err) {
       console.error('[Runes] loadRunes error:', err)
     }
   },
+  async loadEchoes ({ commit }) {
+    try {
+      const echoes = await DatabaseClient.echoes.getAll()
+      if (Array.isArray(echoes)) {
+        commit(types.TOGGLE_CHANGED, { key: 'echoCards', value: echoes })
+      }
+    } catch (err) {
+      console.error('[Echoes] loadEchoes error:', err)
+    }
+  },
   async saveRune (_, rune) {
     return await DatabaseClient.runes.save(rune)
+  },
+  async saveEcho (_, echo) {
+    return await DatabaseClient.echoes.save(echo)
   },
   async deleteRune (_, id) {
     return await DatabaseClient.runes.remove(id)
   },
+  async deleteEcho (_, id) {
+    return await DatabaseClient.echoes.remove(id)
+  },
   async saveRunes (_, runes) {
     return await DatabaseClient.runes.saveMany(runes)
+  },
+  async saveEchoes (_, echoes) {
+    return await DatabaseClient.echoes.saveMany(echoes)
   },
   /**
    * 执行同步（调用 SyncService）

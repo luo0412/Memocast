@@ -310,6 +310,24 @@ const runes = {
   }
 }
 
+const echoes = {
+  async getAll() {
+    return await invoke('db:getEchoes')
+  },
+
+  async save(echo) {
+    return await invoke('db:saveEcho', echo)
+  },
+
+  async saveMany(items) {
+    return await invoke('db:saveEchoes', items)
+  },
+
+  async remove(id) {
+    return await invoke('db:deleteEcho', id)
+  }
+}
+
 const DatabaseClient = {
   notes,
   tags,
@@ -317,7 +335,8 @@ const DatabaseClient = {
   categories,
   appState,
   aiModels,
-  runes
+  runes,
+  echoes
 }
 
 export default DatabaseClient

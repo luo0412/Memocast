@@ -37,6 +37,7 @@ export default function () {
     calendarDateBasis: DEFAULT_CALENDAR_DATE_BASIS,
     leftInnerSplitterRatio: 280,
     runeCards: [],
+    echoCards: [],
     syncStatus: {
       isSyncing: false,
       lastSyncTime: null,

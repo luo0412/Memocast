@@ -455,6 +455,22 @@ export default {
     )
   `)
 
+  // 回响卡片表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS echoes (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      "desc" TEXT,
+      power INTEGER DEFAULT 50,
+      color TEXT DEFAULT '#26A69A',
+      icon TEXT DEFAULT 'graphic_eq',
+      template TEXT,
+      render_type TEXT DEFAULT 'card',
+      created_at INTEGER,
+      updated_at INTEGER
+    )
+  `)
+
   // AI 模型配置表
   db.run(`
     CREATE TABLE IF NOT EXISTS ai_model_configs (
@@ -539,6 +555,33 @@ export default {
       saveDatabase()
       log.info(`[DB] Backfilled default templates for ${newRuneIds.length} new rune(s)`)
     }
+  }
+
+  // 初始化默认回响数据（仅当表为空时）
+  const echoCount = execOne('SELECT COUNT(*) as count FROM echoes')
+  if (echoCount && echoCount.count === 0) {
+    const now = Date.now()
+    const defaultEchoes = [
+      { id: 'echo-1', name: '晨星批注', desc: '适合在正文中插入强调型提示卡片', power: 82, color: '#26A69A', icon: 'graphic_eq' },
+      { id: 'echo-2', name: '折光回声', desc: '把段落转成带说明的注解块', power: 74, color: '#5C6BC0', icon: 'auto_fix_high' },
+      { id: 'echo-3', name: '边界低语', desc: '适合提示风险、注意事项与旁白信息', power: 91, color: '#EC407A', icon: 'campaign' }
+    ]
+    for (const echo of defaultEchoes) {
+      db.run(`INSERT INTO echoes (id, name, "desc", power, color, icon, template, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [echo.id, echo.name, echo.desc, echo.power, echo.color, echo.icon, createDefaultRuneTemplate(echo.name), 'card', now, now])
+    }
+    saveDatabase()
+    log.info('[DB] Default echoes seeded')
+  }
+
+  const emptyTemplateEchoes = execToObjects(`SELECT id, name FROM echoes WHERE template IS NULL OR trim(template) = ''`)
+  if (emptyTemplateEchoes.length > 0) {
+    const now = Date.now()
+    for (const echo of emptyTemplateEchoes) {
+      db.run('UPDATE echoes SET template = ?, updated_at = ?, render_type = COALESCE(render_type, ?) WHERE id = ?', [createDefaultRuneTemplate(echo.name), now, 'card', echo.id])
+    }
+    saveDatabase()
+    log.info(`[DB] Backfilled default templates for ${emptyTemplateEchoes.length} echo(es)`)
   }
 
   log.info('[Main] Database schema initialized')
@@ -1846,6 +1889,67 @@ function registerDatabaseHandlers() {
       return true
     } catch (error) {
       log.error('[DB] saveRunes error:', error)
+      return false
+    }
+  })
+
+  // 获取所有回响
+  ipcMain.handle('db:getEchoes', async () => {
+    try {
+      return execToObjects('SELECT * FROM echoes ORDER BY created_at ASC')
+    } catch (error) {
+      log.error('[DB] getEchoes error:', error)
+      return []
+    }
+  })
+
+  // 创建或更新回响
+  ipcMain.handle('db:saveEcho', async (event, echo) => {
+    try {
+      const now = Date.now()
+      const existing = execOne('SELECT id FROM echoes WHERE id = ?', [echo.id])
+      const template = echo.template || (existing ? '' : createDefaultRuneTemplate(echo.name))
+      const renderType = echo.render_type || 'card'
+      if (existing) {
+        await db.run(`UPDATE echoes SET name = ?, "desc" = ?, power = ?, color = ?, icon = ?, template = ?, render_type = ?, updated_at = ? WHERE id = ?`, [
+          echo.name, echo.desc || '', echo.power || 50, echo.color || '#26A69A', echo.icon || 'graphic_eq', template, renderType, now, echo.id
+        ])
+      } else {
+        await db.run(`INSERT INTO echoes (id, name, "desc", power, color, icon, template, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [echo.id, echo.name, echo.desc || '', echo.power || 50, echo.color || '#26A69A', echo.icon || 'graphic_eq', template, renderType, now, now])
+      }
+      saveDatabase()
+      return execOne('SELECT * FROM echoes WHERE id = ?', [echo.id])
+    } catch (error) {
+      log.error('[DB] saveEcho error:', error)
+      return null
+    }
+  })
+
+  // 删除回响
+  ipcMain.handle('db:deleteEcho', async (event, id) => {
+    try {
+      await db.run('DELETE FROM echoes WHERE id = ?', [id])
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] deleteEcho error:', error)
+      return false
+    }
+  })
+
+  // 批量保存回响（用于排序更新）
+  ipcMain.handle('db:saveEchoes', async (event, echoes) => {
+    try {
+      const now = Date.now()
+      for (const echo of echoes) {
+        await db.run(`INSERT OR REPLACE INTO echoes (id, name, "desc", power, color, icon, template, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [echo.id, echo.name, echo.desc || '', echo.power || 50, echo.color || '#26A69A', echo.icon || 'graphic_eq', echo.template || '', echo.render_type || 'card', echo.created_at || now, now])
+      }
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] saveEchoes error:', error)
       return false
     }
   })

@@ -31,6 +31,12 @@
                 class='text-purple-5'
               />
               <q-tab
+                name='echo'
+                icon='graphic_eq'
+                :label="$t('echo')"
+                class='text-teal-5'
+              />
+              <q-tab
                 name='server'
                 icon='storage'
                 :label="$t('server')"
@@ -454,10 +460,10 @@
                     :key='rune.id'
                     draggable='true'
                     class='rune-card-wrapper'
-                    @dragstart='onDragStart($event, index)'
-                    @dragover.prevent='onDragOver($event, index)'
-                    @drop='onDrop($event, index)'
-                    @dragend='onDragEnd'
+                    @dragstart='onDragStart($event, index, "rune")'
+                    @dragover.prevent='onDragOver($event, index, "rune")'
+                    @drop='onDrop($event, index, "rune")'
+                    @dragend='onDragEnd($event, "rune")'
                   >
                     <RuneCard
                       class='rune-card-item'
@@ -470,6 +476,54 @@
                 <div v-if='!localRuneCards || localRuneCards.length === 0' class='text-center text-grey q-pa-xl'>
                   <q-icon name='star' size='3rem' />
                   <div class='q-mt-sm'>{{ $t('runeCardAdd') }}</div>
+                </div>
+              </q-tab-panel>
+
+              <q-tab-panel name='echo' class='q-pa-sm'>
+                <div class='row items-center no-wrap q-mb-xs panel-title'>
+                  <div class='panel-title-bar bg-teal-5' />
+                  <span class='text-subtitle2 text-weight-medium'>{{ $t('echoManagement') }}</span>
+                  <q-space />
+                  <q-btn
+                    dense flat no-caps
+                    :label="$t('echoCardAdd')"
+                    color='teal-5'
+                    icon='add'
+                    size='sm'
+                    @click='openAddEcho'
+                  />
+                </div>
+                <div class='text-caption text-grey-6 q-mb-sm'>
+                  <q-icon name='drag_indicator' size='xs' /> {{ $t('echoDragTip') }}
+                </div>
+                <q-separator class='q-my-xs' />
+                <div class='rune-grid'>
+                  <div
+                    v-for='(echo, index) in localEchoCards'
+                    :key='echo.id'
+                    draggable='true'
+                    class='rune-card-wrapper echo-card-wrapper'
+                    @dragstart='onDragStart($event, index, "echo")'
+                    @dragover.prevent='onDragOver($event, index, "echo")'
+                    @drop='onDrop($event, index, "echo")'
+                    @dragend='onDragEnd($event, "echo")'
+                  >
+                    <RuneCard
+                      class='rune-card-item'
+                      :rune='echo'
+                      :name-label="$t('echoCardName')"
+                      :desc-label="$t('echoCardDesc')"
+                      :power-label="$t('echoCardPower')"
+                      :edit-label="$t('echoCardEdit')"
+                      :delete-label="$t('echoCardDelete')"
+                      @edit='openEditEcho'
+                      @delete='confirmDeleteEcho'
+                    />
+                  </div>
+                </div>
+                <div v-if='!localEchoCards || localEchoCards.length === 0' class='text-center text-grey q-pa-xl'>
+                  <q-icon name='graphic_eq' size='3rem' />
+                  <div class='q-mt-sm'>{{ $t('echoCardAdd') }}</div>
                 </div>
               </q-tab-panel>
 
@@ -488,6 +542,15 @@
       :rune='editingRune'
       @input='onRuneFormVisibleChange'
       @submit='onRuneSubmit'
+    />
+    <RuneFormDialog
+      v-if='echoFormVisible'
+      :key='echoFormKey'
+      v-model='echoFormVisible'
+      :rune='editingEcho'
+      mode='echo'
+      @input='onEchoFormVisibleChange'
+      @submit='onEchoSubmit'
     />
 
     <q-dialog v-model='aiModelDialogVisible' persistent>
@@ -633,7 +696,11 @@ export default {
       runeFormVisible: false,
       runeFormKey: 0,
       editingRune: null,
+      echoFormVisible: false,
+      echoFormKey: 0,
+      editingEcho: null,
       dragFromIndex: null,
+      dragEntityType: null,
       cloudSyncLoginState: {
         isLoggedIn: SessionStorageService.isLoggedIn(),
         accountInfo: SessionStorageService.getAccountInfo()
@@ -692,6 +759,14 @@ export default {
       },
       set (val) {
         this.updateStateAndStore({ runeCards: val })
+      }
+    },
+    localEchoCards: {
+      get () {
+        return this.echoCards
+      },
+      set (val) {
+        this.updateStateAndStore({ echoCards: val })
       }
     },
     lastSyncTimeFormatted () {
@@ -781,6 +856,7 @@ export default {
       'theme',
       'themes',
       'runeCards',
+      'echoCards',
       'syncStatus'
     ])
   },
@@ -1129,39 +1205,47 @@ export default {
     onRuneSortEnd: function () {
       this.saveRunes(this.localRuneCards)
     },
-    onDragStart: function (e, index) {
+    onDragStart: function (e, index, entityType = 'rune') {
       this.dragFromIndex = index
+      this.dragEntityType = entityType
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('text/plain', index)
       e.target.closest('.rune-card-wrapper').classList.add('rune-dragging')
     },
-    onDragOver: function (e, index) {
+    onDragOver: function (e, index, entityType = 'rune') {
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
       const wrapper = e.target.closest('.rune-card-wrapper')
-      if (wrapper && this.dragFromIndex !== index) {
+      if (wrapper && this.dragEntityType === entityType && this.dragFromIndex !== index) {
         document.querySelectorAll('.rune-card-wrapper').forEach(el => el.classList.remove('rune-dragover'))
         wrapper.classList.add('rune-dragover')
       }
     },
-    onDrop: function (e, toIndex) {
+    onDrop: function (e, toIndex, entityType = 'rune') {
       e.preventDefault()
       document.querySelectorAll('.rune-card-wrapper').forEach(el => el.classList.remove('rune-dragover'))
+      if (this.dragEntityType !== entityType) return
       const fromIndex = this.dragFromIndex
       if (fromIndex === null || fromIndex === toIndex) return
-      const cards = [...this.localRuneCards]
+      const cards = [...(entityType === 'echo' ? this.localEchoCards : this.localRuneCards)]
       const [moved] = cards.splice(fromIndex, 1)
       cards.splice(toIndex, 0, moved)
-      this.updateStateAndStore({ runeCards: cards })
-      this.saveRunes(cards)
+      if (entityType === 'echo') {
+        this.updateStateAndStore({ echoCards: cards })
+        this.saveEchoes(cards)
+      } else {
+        this.updateStateAndStore({ runeCards: cards })
+        this.saveRunes(cards)
+      }
     },
-    onDragEnd: function (e) {
+    onDragEnd: function (e, entityType = 'rune') {
       const wrapper = e.target.closest('.rune-card-wrapper')
       if (wrapper) {
         wrapper.classList.remove('rune-dragging')
       }
       document.querySelectorAll('.rune-card-wrapper').forEach(el => el.classList.remove('rune-dragover'))
       this.dragFromIndex = null
+      this.dragEntityType = null
     },
     openEditRune: function (rune) {
       this.editingRune = { ...rune }
@@ -1189,6 +1273,32 @@ export default {
         this.editingRune = null
       })
     },
+    openEditEcho: function (echo) {
+      this.editingEcho = { ...echo }
+      this.openEchoFormDialog()
+    },
+    openAddEcho: function () {
+      this.editingEcho = null
+      this.openEchoFormDialog()
+    },
+    openEchoFormDialog: function () {
+      this.echoFormKey += 1
+      this.echoFormVisible = true
+    },
+    onEchoFormVisibleChange: function (visible) {
+      this.echoFormVisible = visible
+      if (!visible) {
+        this.$nextTick(() => {
+          this.editingEcho = null
+        })
+      }
+    },
+    destroyEchoFormDialog: function () {
+      this.echoFormVisible = false
+      this.$nextTick(() => {
+        this.editingEcho = null
+      })
+    },
     confirmDeleteRune: async function (rune) {
       this.$q.dialog({
         title: this.$t('runeCardDelete'),
@@ -1199,6 +1309,18 @@ export default {
         await this.deleteRune(rune.id)
         const filtered = this.localRuneCards.filter(r => r.id !== rune.id)
         this.updateStateAndStore({ runeCards: filtered })
+      })
+    },
+    confirmDeleteEcho: async function (echo) {
+      this.$q.dialog({
+        title: this.$t('echoCardDelete'),
+        message: this.$t('echoCardDeleteConfirm'),
+        cancel: { label: this.$t('cancel') },
+        persistent: true
+      }).onOk(async () => {
+        await this.deleteEcho(echo.id)
+        const filtered = this.localEchoCards.filter(item => item.id !== echo.id)
+        this.updateStateAndStore({ echoCards: filtered })
       })
     },
     onRuneSubmit: async function (data) {
@@ -1212,11 +1334,32 @@ export default {
           cards.push(saved)
         }
         this.updateStateAndStore({ runeCards: cards })
-      this.$nextTick(() => {
-        bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
-      })
+        this.$nextTick(() => {
+          bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
+        })
       }
       this.destroyRuneFormDialog()
+    },
+    onEchoSubmit: async function (data) {
+      const payload = {
+        ...data,
+        render_type: data.render_type || 'card'
+      }
+      const saved = await this.saveEcho(payload)
+      if (saved) {
+        const cards = [...this.localEchoCards]
+        const idx = cards.findIndex(item => item.id === data.id)
+        if (idx >= 0) {
+          cards.splice(idx, 1, saved)
+        } else {
+          cards.push(saved)
+        }
+        this.updateStateAndStore({ echoCards: cards })
+        this.$nextTick(() => {
+          bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
+        })
+      }
+      this.destroyEchoFormDialog()
     },
 
     // ==================== 云同步 ====================
@@ -1353,9 +1496,13 @@ export default {
       'toggleChanged',
       'updateStateAndStore',
       'loadRunes',
+      'loadEchoes',
       'saveRune',
+      'saveEcho',
       'deleteRune',
+      'deleteEcho',
       'saveRunes',
+      'saveEchoes',
       'sync',
       'refreshSyncStatus'
     ]),
@@ -1366,6 +1513,7 @@ export default {
     bus.$on(events.UPDATE_EVENTS.updateNotAvailable, this.updateUnavailableHandler)
     bus.$on(events.UPDATE_EVENTS.updateError, this.updateErrorHandler)
     this.loadRunes()
+    this.loadEchoes()
     this.loadAiModelConfigs()
     // 初始化云同步状态
     CloudSyncService.addListener(this.onCloudSyncStatusChange)
