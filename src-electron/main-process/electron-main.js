@@ -229,6 +229,30 @@ export default {
 <style lang="less" scoped>
 .rune-text { color: purple; }
 </style>`
+  const createDefaultEchoAnnoSource = (echoName = '回响') => `export default {
+    kind: 'echo',
+    version: 1,
+    name: '${String(echoName || '回响').replace(/'/g, "\\'")}',
+    render (context = {}) {
+      const attrs = context.attrs || {}
+      const prompt = context.prompt || ''
+      const icon = attrs.icon || context.echo?.icon || 'graphic_eq'
+      const color = attrs.color || context.echo?.color || '#26A69A'
+      const title = attrs.title || context.echo?.name || '${String(echoName || '回响').replace(/'/g, "\\'")}'
+      const description = attrs.desc || context.echo?.desc || ''
+
+      return {
+        type: 'card',
+        icon,
+        color,
+        title,
+        description,
+        prompt,
+        attrs,
+        html: attrs.html || ''
+      }
+    }
+  }`
 
   // Notes 表（本地优先架构：使用 dirty 字段跟踪同步状态）
   db.run(`
@@ -461,11 +485,10 @@ export default {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       "desc" TEXT,
-      power INTEGER DEFAULT 50,
       color TEXT DEFAULT '#26A69A',
       icon TEXT DEFAULT 'graphic_eq',
-      template TEXT,
-      render_type TEXT DEFAULT 'card',
+      anno_source TEXT,
+      render_type TEXT DEFAULT 'anno',
       created_at INTEGER,
       updated_at INTEGER
     )
@@ -562,26 +585,49 @@ export default {
   if (echoCount && echoCount.count === 0) {
     const now = Date.now()
     const defaultEchoes = [
-      { id: 'echo-1', name: '晨星批注', desc: '适合在正文中插入强调型提示卡片', power: 82, color: '#26A69A', icon: 'graphic_eq' },
-      { id: 'echo-2', name: '折光回声', desc: '把段落转成带说明的注解块', power: 74, color: '#5C6BC0', icon: 'auto_fix_high' },
-      { id: 'echo-3', name: '边界低语', desc: '适合提示风险、注意事项与旁白信息', power: 91, color: '#EC407A', icon: 'campaign' }
+      { id: 'echo-1', name: '晨星批注', desc: '适合在正文中插入强调型提示卡片', color: '#26A69A', icon: 'graphic_eq', anno_source: createDefaultEchoAnnoSource('晨星批注') },
+      { id: 'echo-2', name: '折光回声', desc: '把段落转成带说明的注解块', color: '#5C6BC0', icon: 'auto_fix_high', anno_source: createDefaultEchoAnnoSource('折光回声') },
+      { id: 'echo-3', name: '边界低语', desc: '适合提示风险、注意事项与旁白信息', color: '#EC407A', icon: 'campaign', anno_source: createDefaultEchoAnnoSource('边界低语') }
     ]
     for (const echo of defaultEchoes) {
-      db.run(`INSERT INTO echoes (id, name, "desc", power, color, icon, template, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [echo.id, echo.name, echo.desc, echo.power, echo.color, echo.icon, createDefaultRuneTemplate(echo.name), 'card', now, now])
+      db.run(`INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [echo.id, echo.name, echo.desc, echo.color, echo.icon, echo.anno_source, 'anno', now, now])
     }
     saveDatabase()
     log.info('[DB] Default echoes seeded')
   }
 
-  const emptyTemplateEchoes = execToObjects(`SELECT id, name FROM echoes WHERE template IS NULL OR trim(template) = ''`)
-  if (emptyTemplateEchoes.length > 0) {
-    const now = Date.now()
-    for (const echo of emptyTemplateEchoes) {
-      db.run('UPDATE echoes SET template = ?, updated_at = ?, render_type = COALESCE(render_type, ?) WHERE id = ?', [createDefaultRuneTemplate(echo.name), now, 'card', echo.id])
+  try {
+    const echoTableInfo = db.exec("PRAGMA table_info(echoes)")
+    const echoColumns = echoTableInfo.length > 0 ? echoTableInfo[0].values.map(row => row[1]) : []
+
+    if (!echoColumns.includes('anno_source')) {
+      db.run("ALTER TABLE echoes ADD COLUMN anno_source TEXT")
+    }
+    if (!echoColumns.includes('render_type')) {
+      db.run("ALTER TABLE echoes ADD COLUMN render_type TEXT DEFAULT 'anno'")
+    }
+    if (echoColumns.includes('template')) {
+      const legacyEchoes = execToObjects(`SELECT id, name, template, anno_source FROM echoes`)
+      const now = Date.now()
+      for (const echo of legacyEchoes) {
+        const annoSource = echo.anno_source || echo.template || createDefaultEchoAnnoSource(echo.name)
+        db.run('UPDATE echoes SET anno_source = COALESCE(anno_source, ?), render_type = COALESCE(render_type, ?), updated_at = ? WHERE id = ?', [annoSource, 'anno', now, echo.id])
+      }
     }
     saveDatabase()
-    log.info(`[DB] Backfilled default templates for ${emptyTemplateEchoes.length} echo(es)`)
+  } catch (echoMigrationError) {
+    console.warn('[DB] Echo schema migration failed:', echoMigrationError.message)
+  }
+
+  const emptyAnnoSourceEchoes = execToObjects(`SELECT id, name FROM echoes WHERE anno_source IS NULL OR trim(anno_source) = ''`)
+  if (emptyAnnoSourceEchoes.length > 0) {
+    const now = Date.now()
+    for (const echo of emptyAnnoSourceEchoes) {
+      db.run('UPDATE echoes SET anno_source = ?, updated_at = ?, render_type = COALESCE(render_type, ?) WHERE id = ?', [createDefaultEchoAnnoSource(echo.name), now, 'anno', echo.id])
+    }
+    saveDatabase()
+    log.info(`[DB] Backfilled default anno sources for ${emptyAnnoSourceEchoes.length} echo(es)`)
   }
 
   log.info('[Main] Database schema initialized')
@@ -1907,16 +1953,16 @@ function registerDatabaseHandlers() {
   ipcMain.handle('db:saveEcho', async (event, echo) => {
     try {
       const now = Date.now()
-      const existing = execOne('SELECT id FROM echoes WHERE id = ?', [echo.id])
-      const template = echo.template || (existing ? '' : createDefaultRuneTemplate(echo.name))
-      const renderType = echo.render_type || 'card'
+      const existing = execOne('SELECT id, created_at FROM echoes WHERE id = ?', [echo.id])
+      const annoSource = echo.anno_source || echo.template || createDefaultEchoAnnoSource(echo.name)
+      const renderType = echo.render_type || 'anno'
       if (existing) {
-        await db.run(`UPDATE echoes SET name = ?, "desc" = ?, power = ?, color = ?, icon = ?, template = ?, render_type = ?, updated_at = ? WHERE id = ?`, [
-          echo.name, echo.desc || '', echo.power || 50, echo.color || '#26A69A', echo.icon || 'graphic_eq', template, renderType, now, echo.id
+        await db.run(`UPDATE echoes SET name = ?, "desc" = ?, color = ?, icon = ?, anno_source = ?, render_type = ?, updated_at = ? WHERE id = ?`, [
+          echo.name, echo.desc || '', echo.color || '#26A69A', echo.icon || 'graphic_eq', annoSource, renderType, now, echo.id
         ])
       } else {
-        await db.run(`INSERT INTO echoes (id, name, "desc", power, color, icon, template, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [echo.id, echo.name, echo.desc || '', echo.power || 50, echo.color || '#26A69A', echo.icon || 'graphic_eq', template, renderType, now, now])
+        await db.run(`INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [echo.id, echo.name, echo.desc || '', echo.color || '#26A69A', echo.icon || 'graphic_eq', annoSource, renderType, existing?.created_at || now, now])
       }
       saveDatabase()
       return execOne('SELECT * FROM echoes WHERE id = ?', [echo.id])
@@ -1943,8 +1989,9 @@ function registerDatabaseHandlers() {
     try {
       const now = Date.now()
       for (const echo of echoes) {
-        await db.run(`INSERT OR REPLACE INTO echoes (id, name, "desc", power, color, icon, template, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [echo.id, echo.name, echo.desc || '', echo.power || 50, echo.color || '#26A69A', echo.icon || 'graphic_eq', echo.template || '', echo.render_type || 'card', echo.created_at || now, now])
+        const annoSource = echo.anno_source || echo.template || createDefaultEchoAnnoSource(echo.name)
+        await db.run(`INSERT OR REPLACE INTO echoes (id, name, "desc", color, icon, anno_source, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [echo.id, echo.name, echo.desc || '', echo.color || '#26A69A', echo.icon || 'graphic_eq', annoSource, echo.render_type || 'anno', echo.created_at || now, now])
       }
       saveDatabase()
       return true

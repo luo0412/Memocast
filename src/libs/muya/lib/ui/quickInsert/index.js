@@ -129,6 +129,19 @@ const createRunePlaceholderHtml = (item = {}, displayText = '', runeValue = '') 
   return `<div data-rune-name="${escapeHtmlAttribute(runeName)}" data-rune-id="${escapeHtmlAttribute(runeId)}" data-rune-node-id="${escapeHtmlAttribute(nodeId)}" data-rune-value="${escapeHtmlAttribute(normalizedRuneValue)}">${escapeHtmlAttribute(text)}</div>`
 }
 
+const escapeEchoAttrValue = (value = '') => String(value)
+  .replace(/\\/g, '\\\\')
+  .replace(/'/g, "\\'")
+  .replace(/\r/g, '\\r')
+  .replace(/\n/g, '\\n')
+  .replace(/\t/g, '\\t')
+
+const createEchoPlaceholderMarkup = (item = {}, prompt = '') => {
+  const echoName = item?.meta?.echoName || item?.title?.() || '回响'
+  const normalizedPrompt = String(prompt || '')
+  return `@${echoName}{value: '${escapeEchoAttrValue(normalizedPrompt)}'}()`
+}
+
 class QuickInsert extends BaseScrollFloat {
   static pluginName = 'quickInsert'
 
@@ -146,6 +159,9 @@ class QuickInsert extends BaseScrollFloat {
     this.sectionOffsets = [] // 记录每个分区的起始索引
     this.shouldHideOnScroll = false // Prevent scroll from hiding the panel during keyboard navigation
     this.runeSectionName = ''
+    this.echoSectionName = typeof this.muya?.options?.echoSectionName === 'string'
+      ? this.muya.options.echoSectionName
+      : ''
     this.renderObj = this.getRenderObj()
     this.render()
     this.listen()
@@ -166,6 +182,9 @@ class QuickInsert extends BaseScrollFloat {
       if (provided.sectionName && typeof provided.sectionName === 'string') {
         this.runeSectionName = provided.sectionName
       }
+      if (provided.echoSectionName && typeof provided.echoSectionName === 'string') {
+        this.echoSectionName = provided.echoSectionName
+      }
       if (provided.items && typeof provided.items === 'object') {
         return provided.items
       }
@@ -184,6 +203,9 @@ class QuickInsert extends BaseScrollFloat {
 
     if (this.runeSectionName && Array.isArray(obj[this.runeSectionName])) {
       preferredSections.push(this.runeSectionName)
+    }
+    if (this.echoSectionName && Array.isArray(obj[this.echoSectionName])) {
+      preferredSections.push(this.echoSectionName)
     }
     if (Array.isArray(obj.diagram)) {
       preferredSections.push('diagram')
@@ -490,6 +512,38 @@ class QuickInsert extends BaseScrollFloat {
     contentState.updateParagraph('html', true)
   }
 
+  insertEchoTemplate (item) {
+    const { contentState } = this.muya
+    const rawCurrentText = String(this.block?.text || '')
+    const isFirstInsertionFromQuickInsert = /^@/.test(rawCurrentText)
+    const activeBlock = this.block && contentState.getBlock(this.block.key)
+    if (!activeBlock) return false
+
+    const previousLine = isFirstInsertionFromQuickInsert ? this.getPreviousNonEmptyLine() : null
+    const echoValue = previousLine?.isPlainText ? previousLine.text : ''
+    const insertContent = createEchoPlaceholderMarkup(item, echoValue)
+    const { key } = activeBlock
+
+    activeBlock.text = insertContent
+    const cursorOffset = insertContent.indexOf("''") + 1
+    const offset = cursorOffset > 0 ? cursorOffset : insertContent.length
+    contentState.cursor = {
+      start: {
+        key,
+        offset
+      },
+      end: {
+        key,
+        offset
+      }
+    }
+
+    contentState.partialRender()
+    this.muya.dispatchSelectionChange()
+    this.muya.dispatchChange()
+    return true
+  }
+
   selectItem(item) {
     console.log('[QuickInsert.selectItem]', {
       label: item?.label,
@@ -499,6 +553,7 @@ class QuickInsert extends BaseScrollFloat {
       currentBlockText: this.block?.text
     })
     const { contentState } = this.muya
+    let shouldDelayHide = true
     try {
       // Guard against null block
       if (!this.block) {
@@ -515,6 +570,15 @@ class QuickInsert extends BaseScrollFloat {
         case 'rune':
           this.insertRuneTemplate(item)
           break
+        case 'echo': {
+          shouldDelayHide = false
+          this.hide()
+          const inserted = this.insertEchoTemplate(item)
+          if (inserted) {
+            return
+          }
+          break
+        }
         default:
           this.block.text = ''
           const offset = 0
@@ -544,8 +608,9 @@ class QuickInsert extends BaseScrollFloat {
     } catch (err) {
       console.error('QuickInsert selectItem error:', err)
     } finally {
-      // Always hide the panel after selection, regardless of success or failure
-      setTimeout(this.hide.bind(this))
+      if (shouldDelayHide) {
+        setTimeout(this.hide.bind(this))
+      }
     }
   }
 

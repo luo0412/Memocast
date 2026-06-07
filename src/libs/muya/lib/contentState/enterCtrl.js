@@ -1,4 +1,5 @@
 import selection from '../selection'
+import { tokenizer } from '../parser/'
 import { isOsx } from '../config'
 
 /* eslint-disable no-useless-escape */
@@ -15,6 +16,19 @@ const getIndentSpace = text => {
 }
 
 const enterCtrl = ContentState => {
+  ContentState.prototype.hasEchoTokenInBlock = function (block) {
+    if (!block || !/atxLine|paragraphContent|cellContent/.test(block.functionType || '')) {
+      return false
+    }
+    const text = String(block.text || '')
+    if (!text || text.indexOf('@') === -1) return false
+    const tokens = tokenizer(text, {
+      hasBeginRules: false,
+      options: this.muya.options
+    })
+    return tokens.some(token => token.type === 'echo_anno')
+  }
+
   // TODO@jocs this function need opti.
   ContentState.prototype.chopBlockByCursor = function (block, key, offset) {
     const newBlock = this.createBlock('p')
@@ -540,6 +554,10 @@ const enterCtrl = ContentState => {
 
     if (this.isCollapse() && cursorBlock.type === 'p') {
       this.checkInlineUpdate(cursorBlock.children[0])
+      needRenderAll = true
+    }
+
+    if (!needRenderAll && this.hasEchoTokenInBlock(block)) {
       needRenderAll = true
     }
 

@@ -543,12 +543,11 @@
       @input='onRuneFormVisibleChange'
       @submit='onRuneSubmit'
     />
-    <RuneFormDialog
+    <EchoFormDialog
       v-if='echoFormVisible'
       :key='echoFormKey'
       v-model='echoFormVisible'
-      :rune='editingEcho'
-      mode='echo'
+      :echo='editingEcho'
       @input='onEchoFormVisibleChange'
       @submit='onEchoSubmit'
     />
@@ -651,6 +650,7 @@ import ImageUploadServiceDialog from './ImageUploadServiceDialog'
 import UpdateDialog from 'components/ui/dialog/UpdateDialog'
 import RuneCard from 'components/ui/dialog/RuneCard'
 import RuneFormDialog from 'components/ui/dialog/RuneFormDialog'
+import EchoFormDialog from 'components/ui/dialog/EchoFormDialog'
 import { i18n } from 'boot/i18n'
 import bus from 'components/bus'
 import events from 'src/constants/events'
@@ -681,7 +681,8 @@ export default {
     ImageUploadServiceDialog,
     UpdateDialog,
     RuneCard,
-    RuneFormDialog
+    RuneFormDialog,
+    EchoFormDialog
   },
   data () {
     return {
@@ -1233,6 +1234,9 @@ export default {
       if (entityType === 'echo') {
         this.updateStateAndStore({ echoCards: cards })
         this.saveEchoes(cards)
+        this.$nextTick(() => {
+          bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
+        })
       } else {
         this.updateStateAndStore({ runeCards: cards })
         this.saveRunes(cards)
@@ -1321,6 +1325,9 @@ export default {
         await this.deleteEcho(echo.id)
         const filtered = this.localEchoCards.filter(item => item.id !== echo.id)
         this.updateStateAndStore({ echoCards: filtered })
+        this.$nextTick(() => {
+          bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
+        })
       })
     },
     onRuneSubmit: async function (data) {
@@ -1343,7 +1350,8 @@ export default {
     onEchoSubmit: async function (data) {
       const payload = {
         ...data,
-        render_type: data.render_type || 'card'
+        anno_source: data.anno_source || data.template || '',
+        render_type: data.render_type || 'anno'
       }
       const saved = await this.saveEcho(payload)
       if (saved) {

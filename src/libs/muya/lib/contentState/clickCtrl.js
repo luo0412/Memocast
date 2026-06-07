@@ -11,7 +11,10 @@ const clickCtrl = ContentState => {
     if (isMuyaEditorElement(target)) {
       const lastBlock = this.getLastBlock()
       const archor = this.findOutMostBlock(lastBlock)
-      const archorParagraph = document.querySelector(`#${archor.key}`)
+      const archorParagraph = archor && document.querySelector(`#${archor.key}`)
+      if (!archorParagraph) {
+        return
+      }
       const rect = archorParagraph.getBoundingClientRect()
       // If click below the last paragraph
       // and the last paragraph is not empty, create a new empty paragraph

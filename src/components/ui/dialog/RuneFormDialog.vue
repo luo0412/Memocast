@@ -106,7 +106,10 @@
           </div>
 
           <div class='rune-form-editor-wrap'>
-            <div class='rune-form-label'>模板内容</div>
+            <div class='row items-center justify-between q-mb-xs'>
+              <div class='rune-form-label q-mb-none'>模板内容</div>
+              <q-btn flat dense no-caps size='sm' color='primary' icon='refresh' label='重置模板' @click='resetTemplate' />
+            </div>
             <div
               ref='editorContainer'
               class='rune-monaco-editor'
@@ -289,7 +292,7 @@ const createUuid = () => {
   })
 }
 
-const createDefaultRuneTemplate = () => {
+export const createDefaultRuneTemplate = () => {
   return `<template>
   <span class="rune-text">{{ text }}</span>
 </temp` + `late>
@@ -588,6 +591,13 @@ export default {
         this.monacoEditor.layout({ width: container.clientWidth, height: 380 })
         this.monacoEditor.focus()
       })
+    },
+    resetTemplate () {
+      const nextTemplate = createDefaultRuneTemplate()
+      this.form.template = nextTemplate
+      if (this.monacoEditor && this.monacoReady) {
+        this.monacoEditor.setValue(nextTemplate)
+      }
     },
     submit () {
       if (!this.form.name.trim()) return

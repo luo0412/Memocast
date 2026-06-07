@@ -32,6 +32,8 @@ import Transformer from 'src/libs/muya/lib/ui/transformer'
 import debugLogger from 'src/utils/debugLogger'
 import { attachThemeColor } from 'src/utils/theme'
 import { showContextMenu as showEditorContextMenu } from 'src/contextMenu/muya'
+import EchoRegistry from './echo/EchoRegistry'
+import { decodeEchoPayload, encodeEchoPayload, createEchoPlaceholderPayload } from './echo/EchoRuntime'
 
 const {
   mapGetters: mapServerGetters,
@@ -57,7 +59,6 @@ const compileTemplateToFunctions = vueSfcCompiler && typeof vueSfcCompiler.compi
     : null
 const LEGACY_RUNE_PLACEHOLDER_RE = /<div\s+[^>]*?(?:data-rune="([^"]+)"|data-rune-name="([^"]+)")[^>]*>([\s\S]*?)<\/div>/gi
 const CURRENT_RUNE_PLACEHOLDER_RE = /<div\s+[^>]*data-rune-name="([^"]+)"[^>]*>([\s\S]*?)<\/div>/gi
-const ECHO_DIRECTIVE_RE = /@anno(?:\[echo\])?\(([^\)]*)\)(?:\{([^}]*)\})?/gi
 const RUNE_TEXT_SLOT = 'default'
 
 const injectScopedAttribute = (template = '', scopeId = '') => {
@@ -123,55 +124,31 @@ const createRuneMigrationMap = (runeCards = []) => {
   }, new Map())
 }
 
-const parseEchoDirectiveAttrs = (source = '') => {
-  return String(source || '')
-    .split(',')
-    .map(item => item.trim())
-    .filter(Boolean)
-    .reduce((acc, pair) => {
-      const separatorIndex = pair.indexOf(':')
-      if (separatorIndex === -1) return acc
-      const key = pair.slice(0, separatorIndex).trim()
-      const value = pair.slice(separatorIndex + 1).trim().replace(/^['"]|['"]$/g, '')
-      if (key) {
-        acc[key] = value
-      }
-      return acc
-    }, {})
-}
-
-const migrateEchoPlaceholders = (markdown = '', echoCards = []) => {
-  const source = String(markdown || '')
-  if (!source || source.indexOf('@anno') === -1) return source
-
-  const echoMap = (Array.isArray(echoCards) ? echoCards : []).reduce((acc, echo) => {
-    const echoName = String((echo?.name || '').trim())
-    if (echoName) {
-      acc.set(echoName, echo)
-    }
-    return acc
-  }, new Map())
-
-  return source.replace(ECHO_DIRECTIVE_RE, (match, rawArgs = '', rawAttrs = '') => {
-    const argParts = String(rawArgs || '')
-      .split(',')
-      .map(item => item.trim().replace(/^['"]|['"]$/g, ''))
-      .filter(Boolean)
-    const attrs = parseEchoDirectiveAttrs(rawAttrs)
-    const echoName = attrs.name || attrs.echo || argParts[0] || ''
-    if (!echoName) return match
-    const echo = echoMap.get(echoName)
-    const text = attrs.text || argParts[1] || echoName
-    const color = attrs.color || echo?.color || '#26A69A'
-    const power = attrs.power || echo?.power || 50
-    const icon = attrs.icon || echo?.icon || 'graphic_eq'
-    const description = attrs.desc || attrs.description || echo?.desc || ''
-    return `<div data-echo-name="${echoName}" data-echo-color="${color}" data-echo-power="${power}" data-echo-icon="${icon}" data-echo-desc="${description}">${text}</div>`
-  })
-}
-
 const createRuneInstanceId = () => uuidv4()
 const createRuneNodeId = () => `rune-${uuidv4()}`
+const LEGACY_ECHO_INSERT_RE = /@([^\s{}()@]+)\{\}\(\)/g
+const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]+)\{([\s\S]*?)\}\(([^)]*)\)/g
+const escapeHtmlAttribute = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/"/g, '&quot;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+
+const escapeEchoAttrValue = (value = '') => String(value)
+  .replace(/\\/g, '\\\\')
+  .replace(/'/g, "\\'")
+  .replace(/\r/g, '\\r')
+  .replace(/\n/g, '\\n')
+  .replace(/\t/g, '\\t')
+
+const buildEchoAnnotationText = (echoName = '回响', payload = '') => {
+  const decoded = decodeEchoPayload(payload)
+  const value = decoded.prompt || decoded?.attrs?.value || ''
+  return `@${echoName}{value: '${escapeEchoAttrValue(value)}'}()`
+}
+
+const createEchoInstanceId = () => uuidv4()
+const createEchoNodeId = () => `echo-${uuidv4()}`
 
 const migrateLegacyRunePlaceholders = (markdown = '', runeCards = []) => {
   const source = String(markdown || '')
@@ -200,6 +177,30 @@ const migrateLegacyRunePlaceholders = (markdown = '', runeCards = []) => {
     const text = plainText && plainText !== 'Rune' ? plainText : rune.name
 
     return `<div data-rune-name="${rune.name}" data-rune-id="${createRuneInstanceId()}" data-rune-node-id="${createRuneNodeId()}">${text}</div>`
+  })
+}
+
+const createEchoPlaceholderMarkup = (echo = {}) => {
+  const echoName = String(echo?.name || '回响').trim() || '回响'
+  const payload = createEchoPlaceholderPayload(echo)
+  return buildEchoAnnotationText(echoName, payload)
+}
+
+const migrateLegacyEchoPlaceholders = (markdown = '', echoCards = []) => {
+  const source = String(markdown || '')
+  if (!source || source.indexOf('@') === -1) return source
+  const echoMap = (Array.isArray(echoCards) ? echoCards : []).reduce((acc, echo) => {
+    const name = String(echo?.name || '').trim()
+    if (name) acc.set(name, echo)
+    return acc
+  }, new Map())
+  if (!echoMap.size) return source
+
+  return source.replace(LEGACY_ECHO_INSERT_RE, (match, rawEchoName = '') => {
+    const echoName = String(rawEchoName || '').trim()
+    const echo = echoMap.get(echoName)
+    if (!echo) return match
+    return createEchoPlaceholderMarkup(echo)
   })
 }
 
@@ -341,6 +342,149 @@ const RunePreviewRenderer = Vue.extend({
   }
 })
 
+const EchoPlaceholderHost = Vue.extend({
+  name: 'EchoPlaceholderHost',
+  props: {
+    echoId: {
+      type: String,
+      default: ''
+    },
+    nodeId: {
+      type: String,
+      default: ''
+    },
+    echo: {
+      type: Object,
+      default: null
+    },
+    payload: {
+      type: String,
+      default: ''
+    },
+    onCommit: {
+      type: Function,
+      default: null
+    }
+  },
+    data () {
+    const decoded = decodeEchoPayload(this.payload)
+    return {
+      isExpanded: false,
+      draftPrompt: decoded.prompt || decoded?.attrs?.value || ''
+    }
+  },
+  computed: {
+    resolvedPayload () {
+      return decodeEchoPayload(this.payload)
+    },
+    renderModel () {
+      return this.$root?.echoRegistry?.render?.({
+        echoName: this.echo?.name || '',
+        payloadRaw: this.payload,
+        payload: this.payload
+      }, this.echo) || {
+        title: this.echo?.name || '回响',
+        description: this.echo?.desc || '',
+        prompt: this.draftPrompt || ''
+      }
+    },
+    cardStyle () {
+      return {
+        '--echo-accent': this.renderModel.color || this.echo?.color || '#26A69A'
+      }
+    }
+  },
+  watch: {
+    payload: {
+      immediate: false,
+      handler (value) {
+        const decoded = decodeEchoPayload(value)
+        const nextDraftPrompt = decoded.prompt || decoded?.attrs?.value || ''
+        if (nextDraftPrompt !== this.draftPrompt) {
+          this.draftPrompt = nextDraftPrompt
+        }
+      }
+    }
+  },
+  methods: {
+    toggleExpanded () {
+      this.isExpanded = !this.isExpanded
+    },
+    commitPayload () {
+      if (typeof this.onCommit !== 'function') return
+      const nextPayload = encodeEchoPayload({
+        prompt: this.draftPrompt,
+        attrs: {
+          ...(this.resolvedPayload.attrs || {}),
+          value: this.draftPrompt
+        }
+      })
+      this.onCommit({
+        echoId: this.echoId,
+        nodeId: this.nodeId,
+        echoName: this.echo?.name || '',
+        payload: nextPayload
+      })
+    }
+  },
+  render (h) {
+    const model = this.renderModel
+    const iconText = model.icon || 'graphic_eq'
+    const summaryText = model.prompt || model.description || '点击展开并编辑回响内容'
+    return h('div', {
+      staticClass: 'ag-echo-placeholder-card ag-echo-vue-card',
+      style: this.cardStyle,
+      attrs: {
+        contenteditable: 'false'
+      }
+    }, [
+      h('button', {
+        staticClass: 'ag-echo-placeholder-main',
+        attrs: {
+          type: 'button'
+        },
+        on: {
+          click: this.toggleExpanded
+        }
+      }, [
+        h('span', { staticClass: 'ag-echo-placeholder-icon' }, [
+          h('i', { staticClass: 'material-icons ag-echo-placeholder-icon-font' }, [iconText])
+        ]),
+        h('span', { staticClass: 'ag-echo-placeholder-body' }, [
+          h('span', { staticClass: 'ag-echo-placeholder-title' }, [model.title || this.echo?.name || '回响']),
+          h('span', { staticClass: 'ag-echo-placeholder-desc' }, [summaryText])
+        ])
+      ]),
+      this.isExpanded
+        ? h('div', { staticClass: 'ag-echo-placeholder-editor' }, [
+            h('textarea', {
+              staticClass: 'ag-echo-placeholder-textarea',
+              domProps: {
+                value: this.draftPrompt
+              },
+              attrs: {
+                placeholder: '输入回响内容'
+              },
+              on: {
+                input: event => {
+                  this.draftPrompt = event.target.value
+                },
+                blur: this.commitPayload
+              }
+            }),
+            h('div', { staticClass: 'ag-echo-placeholder-actions' }, [
+              h('button', {
+                staticClass: 'ag-echo-placeholder-save',
+                attrs: { type: 'button' },
+                on: { click: this.commitPayload }
+              }, ['保存'])
+            ])
+          ])
+        : null
+    ])
+  }
+})
+
 export default {
   name: 'Muya',
   props: {
@@ -365,7 +509,8 @@ export default {
       firstTimeLoad: false,
       previousNoteInfo: null,
       previousResources: [],
-      pendingSaveData: null // 编辑变化时预捕获的数据（备用）
+      pendingSaveData: null, // 编辑变化时预捕获的数据（备用）
+      echoRegistry: new EchoRegistry([])
     }
   },
   computed: {
@@ -383,7 +528,7 @@ export default {
       }
 
       const markdown = this.contentEditor.getMarkdown()
-      const migrated = migrateEchoPlaceholders(migrateLegacyRunePlaceholders(markdown, this.runeCards), this.echoCards)
+      const migrated = migrateLegacyRunePlaceholders(markdown, this.runeCards)
       if (migrated === markdown) {
         return false
       }
@@ -393,6 +538,62 @@ export default {
       this.updateContentsList(this.contentEditor.getTOC())
       this.updateNoteState('changed')
       return true
+    },
+    migrateCurrentNoteEchoPlaceholders () {
+      if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function' || typeof this.contentEditor.setMarkdown !== 'function') {
+        return false
+      }
+
+      const markdown = this.contentEditor.getMarkdown()
+      const migrated = migrateLegacyEchoPlaceholders(markdown, this.echoCards)
+      if (migrated === markdown) {
+        return false
+      }
+
+      const cursor = typeof this.contentEditor.getCursor === 'function' ? this.contentEditor.getCursor() : null
+      this.contentEditor.setMarkdown(migrated, cursor)
+      this.updateContentsList(this.contentEditor.getTOC())
+      this.updateNoteState('changed')
+      return true
+    },
+    updateEchoPlaceholderPayload ({ echoId = '', nodeId = '', echoName = '', payload = '' } = {}) {
+      if (!this.contentEditor || !payload) return false
+      const markdown = this.contentEditor.getMarkdown()
+      if (!markdown) return false
+
+      let updated = false
+      const nextMarkdown = markdown.replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, matchedName = '', matchedAttrs = '', matchedPrompt = '') => {
+        const currentName = matchedName || echoName || '回响'
+        if (echoName && currentName !== echoName) return match
+        updated = true
+        return buildEchoAnnotationText(currentName, payload)
+      })
+
+      if (!updated || nextMarkdown === markdown) return false
+      const cursor = typeof this.contentEditor.getCursor === 'function' ? this.contentEditor.getCursor() : null
+      this.contentEditor.setMarkdown(nextMarkdown, cursor, false)
+      this.updateContentsList(this.contentEditor.getTOC())
+      this.updateNoteState('changed')
+      return true
+    },
+    refreshEchoDefinitions () {
+      this.echoRegistry.refresh(this.echoCards || [])
+      if (this.contentEditor) {
+        this.contentEditor.options.echoRegistry = this.echoRegistry
+        this.contentEditor.options.echoCards = this.echoCards || []
+        const quickInsert = this.contentEditor.ui && this.contentEditor.ui.quickInsert
+        if (quickInsert) {
+          quickInsert.renderObj = quickInsert.getRenderObj()
+          if (quickInsert.oldVnode) {
+            quickInsert.render()
+          }
+        }
+        if (this.contentEditor?.contentState?.stateRender?.renderRunes) {
+          this.contentEditor.contentState.stateRender.renderRunes()
+        } else {
+          this.contentEditor.contentState.render(false, true)
+        }
+      }
     },
     getValue: function () {
       return this.contentEditor?.getMarkdown()
@@ -556,6 +757,7 @@ export default {
       Muya.use(Transformer)
       Muya.use(TableBarTools)
 
+      this.echoRegistry.refresh(this.echoCards || [])
       const { container } = this.contentEditor = new Muya(this.$refs.muya, {
         quickInsertProvider: () => {
           const runeItems = (this.runeCards || [])
@@ -576,17 +778,42 @@ export default {
                 insertContent: rune.template || ''
               }
             }))
+          const echoItems = (this.echoCards || [])
+            .filter(echo => echo && echo.name)
+            .map(echo => ({
+              title: () => echo.name || 'Echo',
+              subTitle: () => echo.desc || '',
+              label: `echo:${echo.id || echo.name}`,
+              shortCut: '',
+              icon: `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="${echo.color || '#26A69A'}"/><text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-size="28" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Arial,PingFang SC,Microsoft YaHei,sans-serif" font-weight="700" fill="#fff">${Array.from(String(echo.name || '回').trim())[0] || '回'}</text></svg>`)))}`,
+              color: echo.color || '#26A69A',
+              searchText: [echo.name, echo.desc, echo.anno_source].filter(Boolean).join(' '),
+              insertContent: `@${echo.name || '回响'}{}()`,
+              meta: {
+                type: 'echo',
+                echoName: (echo.name || '回响').trim(),
+                color: echo.color || '#26A69A'
+              }
+            }))
           const runeSectionTitle = this.$t('runeSectionTitle')
+          const echoSectionTitle = this.$t('echoSectionTitle') || this.$t('echo') || 'Echo'
           return {
             sectionName: runeSectionTitle,
             items: {
-              [runeSectionTitle]: runeItems
-            }
+              [runeSectionTitle]: runeItems,
+              [echoSectionTitle]: echoItems
+            },
+            echoSectionName: echoSectionTitle
           }
         },
         runeCards: this.runeCards,
+        echoSectionName: this.$t('echo') || 'Echo',
+        echoRegistry: this.echoRegistry,
+        echoCards: this.echoCards,
         runeRendererCtor: RunePreviewRenderer,
+        echoRendererCtor: EchoPlaceholderHost,
         enableRuneVueRenderer: true,
+        onEchoPlaceholderCommit: this.updateEchoPlaceholderPayload,
         imagePathPicker: () => {
           return new Promise((resolve, reject) => {
             this.importImageFromLocal().then(paths => {
@@ -647,14 +874,6 @@ export default {
       })
 
       this.contentEditor.on('change', _.debounce(({ markdown: curData }) => {
-        console.log('[Muya.vue change] requesting rune rerender', {
-          markdownLen: (curData || '').length,
-          runeCardsCount: Array.isArray(this.runeCards) ? this.runeCards.length : 0
-        })
-        if (this.contentEditor?.contentState?.stateRender?.renderRunes) {
-          this.contentEditor.contentState.stateRender.renderRunes()
-        }
-
         // ✅ 兼容新格式：currentNote 可能是字符串或对象
         let currentNoteContent = ''
         
@@ -766,7 +985,8 @@ export default {
       try {
         this.contentEditor.focus()
         console.log(`[Muya watcher] 📝 Loading into editor: len=${markdownContent.length}`)
-          const migratedMarkdown = migrateEchoPlaceholders(migrateLegacyRunePlaceholders(markdownContent, this.runeCards), this.echoCards)
+          const runeMigratedMarkdown = migrateLegacyRunePlaceholders(markdownContent, this.runeCards)
+          const migratedMarkdown = migrateLegacyEchoPlaceholders(runeMigratedMarkdown, this.echoCards)
 
           // ✅ 强制设置内容（空字符串也是有效内容，会清空编辑器）
           this.contentEditor.setMarkdown(migratedMarkdown)
@@ -820,7 +1040,8 @@ export default {
     },
     echoCards: function () {
       this.$nextTick(() => {
-        this.migrateCurrentNoteRunePlaceholders()
+        this.refreshEchoDefinitions()
+        this.migrateCurrentNoteEchoPlaceholders()
         if (this.contentEditor?.contentState?.stateRender?.renderRunes) {
           this.contentEditor.contentState.stateRender.renderRunes()
         }
@@ -840,22 +1061,37 @@ export default {
 </style>
 
 <style>
-.ag-rune-placeholder-host {
+.ag-rune-placeholder-host,
+.ag-echo-placeholder-host {
   display: block;
   margin: 6px 0;
 }
 
 .ag-rune-placeholder-card,
-.ag-rune-vue-card {
+.ag-rune-vue-card,
+.ag-echo-placeholder-card,
+.ag-echo-vue-card {
   display: flex;
   align-items: center;
   gap: 12px;
   min-height: 56px;
   padding: 12px 14px;
   border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+}
+
+.ag-rune-placeholder-card,
+.ag-rune-vue-card {
   border: 1px solid rgba(126, 87, 194, 0.18);
   background: linear-gradient(180deg, rgba(126, 87, 194, 0.12), rgba(126, 87, 194, 0.06));
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+}
+
+.ag-echo-placeholder-card,
+.ag-echo-vue-card {
+  flex-direction: column;
+  align-items: stretch;
+  border: 1px solid rgba(38, 166, 154, 0.2);
+  background: linear-gradient(180deg, rgba(38, 166, 154, 0.12), rgba(38, 166, 154, 0.05));
 }
 
 .ag-rune-placeholder-icon {
@@ -887,6 +1123,86 @@ export default {
 .ag-rune-placeholder-body {
   min-width: 0;
   flex: 1;
+}
+
+.ag-echo-placeholder-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ag-echo-placeholder-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--echo-accent, #26A69A);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 10px;
+}
+
+.ag-echo-placeholder-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.ag-echo-placeholder-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ag-echo-placeholder-desc {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.78;
+  word-break: break-word;
+}
+
+.ag-echo-placeholder-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ag-echo-placeholder-textarea {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid rgba(38, 166, 154, 0.24);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.86);
+  font: inherit;
+  color: inherit;
+  box-sizing: border-box;
+}
+
+.ag-echo-placeholder-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ag-echo-placeholder-save {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--echo-accent, #26A69A);
+  color: #fff;
+  cursor: pointer;
 }
 
 .ag-rune-placeholder-title {

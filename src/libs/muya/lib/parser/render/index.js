@@ -5,11 +5,15 @@ import { patch, toVNode, toHTML, h } from './snabbdom'
 import { beginRules } from '../rules'
 import renderInlines from './renderInlines'
 import renderBlock from './renderBlock'
+import { tokenizer } from '../index'
 import { i18n } from 'boot/i18n'
 
 const RUNE_PLACEHOLDER_SELECTOR = '[data-rune-name][data-rune-id][data-rune-node-id]'
 const RUNE_HOST_CLASS = 'ag-rune-placeholder-host'
 const RUNE_CARD_CLASS = 'ag-rune-placeholder-card'
+const ECHO_PLACEHOLDER_SELECTOR = '[data-echo-name][data-echo-id][data-echo-node-id][data-echo-payload]'
+const ECHO_HOST_CLASS = 'ag-echo-placeholder-host'
+const ECHO_CARD_CLASS = 'ag-echo-placeholder-card'
 
 class StateRender {
   constructor (muya) {
@@ -28,6 +32,8 @@ class StateRender {
     this.container = null
     this.runePlaceholderCache = new Map()
     this.runeVmMap = new Map()
+    this.echoPlaceholderCache = new Map()
+    this.echoVmMap = new Map()
   }
 
   setContainer (container) {
@@ -113,12 +119,35 @@ class StateRender {
     }, new Map())
   }
 
+  getEchoMap () {
+    const echoRegistry = this.muya?.options?.echoRegistry
+    const echoCards = echoRegistry?.getAll?.() || this.muya?.options?.echoCards || []
+    return (Array.isArray(echoCards) ? echoCards : []).reduce((acc, echo) => {
+      const echoName = String((echo?.name || '').trim())
+      if (echoName) {
+        acc.set(echoName, echo)
+      }
+      return acc
+    }, new Map())
+  }
+
   createRunePlaceholderMarkup (rune, dataset = {}) {
     const runeName = rune?.name || dataset.runeName || 'Rune'
     return `
       <div class="${RUNE_CARD_CLASS}" data-rune-mounted="true">
         <div class="ag-rune-placeholder-body">
           <div class="ag-rune-placeholder-title">${runeName}</div>
+        </div>
+      </div>
+    `
+  }
+
+  createEchoPlaceholderMarkup (echo, dataset = {}) {
+    const echoName = echo?.name || dataset.echoName || '回响'
+    return `
+      <div class="${ECHO_CARD_CLASS}" data-echo-mounted="true">
+        <div class="ag-echo-placeholder-body">
+          <div class="ag-echo-placeholder-title">${echoName}</div>
         </div>
       </div>
     `
@@ -170,6 +199,48 @@ class StateRender {
     }
   }
 
+  renderEchoPlaceholderNodes () {
+    const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+    if (!root) return
+
+    const echoMap = this.getEchoMap()
+    const hosts = root.querySelectorAll(ECHO_PLACEHOLDER_SELECTOR)
+
+    hosts.forEach(host => {
+      const dataset = host.dataset || {}
+      const echoName = String(dataset.echoName || '').trim()
+      const echoId = String(dataset.echoId || '')
+      const nodeId = String(dataset.echoNodeId || '')
+      const payload = String(dataset.echoPayload || '')
+      const echo = echoMap.get(echoName) || null
+      const cacheKey = JSON.stringify({
+        echoName,
+        echoId,
+        nodeId,
+        payload,
+        desc: echo?.desc || '',
+        color: echo?.color || ''
+      })
+
+      if (this.echoPlaceholderCache.get(host) === cacheKey) {
+        return
+      }
+
+      host.classList.add(ECHO_HOST_CLASS)
+      host.setAttribute('contenteditable', 'false')
+      host.dataset.echoRenderKey = cacheKey
+      this.echoPlaceholderCache.set(host, cacheKey)
+    })
+  }
+
+  cleanupDetachedEchoPlaceholders () {
+    for (const host of Array.from(this.echoPlaceholderCache.keys())) {
+      if (!host.isConnected) {
+        this.echoPlaceholderCache.delete(host)
+      }
+    }
+  }
+
   cleanupDetachedRuneVms (force = false) {
     for (const [nodeId, vm] of this.runeVmMap.entries()) {
       if (force || !vm || !vm.$el || !vm.$el.isConnected) {
@@ -181,18 +252,14 @@ class StateRender {
     }
   }
 
-  renderRunes () {
-    console.log('[Muya.StateRender.renderRunes] start', {
-      enableRuneVueRenderer: !!this.muya?.options?.enableRuneVueRenderer,
-      runeCardsCount: Array.isArray(this.muya?.options?.runeCards) ? this.muya.options.runeCards.length : 0,
-      hostCount: (document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container)?.querySelectorAll?.(RUNE_PLACEHOLDER_SELECTOR)?.length || 0
-    })
-    this.renderRunePlaceholderNodes()
-    this.cleanupDetachedRunePlaceholders()
-    if (this.muya?.options?.enableRuneVueRenderer) {
-      this.renderRunesWithVue()
-    } else {
-      this.cleanupDetachedRuneVms(true)
+  cleanupDetachedEchoVms (force = false) {
+    for (const [nodeId, vm] of this.echoVmMap.entries()) {
+      if (force || !vm || !vm.$el || !vm.$el.isConnected) {
+        if (vm && typeof vm.$destroy === 'function') {
+          vm.$destroy()
+        }
+        this.echoVmMap.delete(nodeId)
+      }
     }
   }
 
@@ -302,18 +369,92 @@ class StateRender {
     }
   }
 
+  mountEchoVueHosts () {
+    const EchoRenderer = this.muya?.options?.echoRendererCtor
+    const echoRegistry = this.muya?.options?.echoRegistry
+    if (!EchoRenderer || !echoRegistry) return
+
+    const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+    if (!root) return
+
+    const echoMap = this.getEchoMap()
+    const hosts = root.querySelectorAll(ECHO_PLACEHOLDER_SELECTOR)
+    const aliveNodeIds = new Set()
+
+    hosts.forEach(host => {
+      const dataset = host.dataset || {}
+      const echoName = String(dataset.echoName || '').trim()
+      const echoId = String(dataset.echoId || '')
+      const nodeId = String(dataset.echoNodeId || '')
+      const payload = String(dataset.echoPayload || '')
+      if (!echoName || !echoId || !nodeId) {
+        return
+      }
+
+      aliveNodeIds.add(nodeId)
+      const echo = echoMap.get(echoName) || { name: echoName }
+      const renderKey = host.dataset.echoRenderKey || ''
+      const mountedVm = this.echoVmMap.get(nodeId)
+
+      if (mountedVm && mountedVm.$el && mountedVm.$el.parentNode === host && mountedVm.__echoRenderKey === renderKey) {
+        mountedVm.echoId = echoId
+        mountedVm.nodeId = nodeId
+        mountedVm.echo = echo
+        mountedVm.payload = payload
+        return
+      }
+
+      if (mountedVm && typeof mountedVm.$destroy === 'function') {
+        mountedVm.$destroy()
+      }
+
+      while (host.firstChild) {
+        host.removeChild(host.firstChild)
+      }
+      const vm = new EchoRenderer({
+        propsData: {
+          echoId,
+          nodeId,
+          echo,
+          payload,
+          onCommit: this.muya?.options?.onEchoPlaceholderCommit || null
+        }
+      })
+      vm.echoRegistry = echoRegistry
+      vm.$root = { echoRegistry }
+      vm.__echoRenderKey = renderKey
+      vm.$mount()
+      host.appendChild(vm.$el)
+      this.echoVmMap.set(nodeId, vm)
+    })
+
+    for (const [savedNodeId, vm] of this.echoVmMap.entries()) {
+      if (!aliveNodeIds.has(savedNodeId)) {
+        if (vm && typeof vm.$destroy === 'function') {
+          vm.$destroy()
+        }
+        this.echoVmMap.delete(savedNodeId)
+      }
+    }
+  }
+
   renderRunesWithVue () {
     this.mountRuneVueHosts()
+    this.mountEchoVueHosts()
     this.cleanupDetachedRuneVms()
+    this.cleanupDetachedEchoVms()
   }
 
   renderRunes () {
     this.renderRunePlaceholderNodes()
+    this.renderEchoPlaceholderNodes()
     this.cleanupDetachedRunePlaceholders()
+    this.cleanupDetachedEchoPlaceholders()
     if (this.muya?.options?.enableRuneVueRenderer) {
       this.renderRunesWithVue()
     } else {
       this.cleanupDetachedRuneVms(true)
+      this.cleanupDetachedEchoVms(true)
     }
   }
 
@@ -394,6 +535,29 @@ class StateRender {
     }
   }
 
+  hasEchoInlineToken (block) {
+    if (!block || !/span/.test(block.type) || !/atxLine|paragraphContent|cellContent/.test(block.functionType || '')) {
+      return false
+    }
+    const text = String(block.text || '')
+    if (!text || text.indexOf('@') === -1) {
+      return false
+    }
+    const tokens = tokenizer(text, {
+      hasBeginRules: false,
+      options: this.muya.options
+    })
+    return tokens.some(token => token.type === 'echo_anno')
+  }
+
+  hasEchoInlineTokenInBlocks (blocks = []) {
+    return (Array.isArray(blocks) ? blocks : []).some(block => {
+      if (!block) return false
+      if (this.hasEchoInlineToken(block)) return true
+      return Array.isArray(block.children) && this.hasEchoInlineTokenInBlocks(block.children)
+    })
+  }
+
   render (blocks, activeBlocks, matches) {
     const selector = `div#${CLASS_OR_ID.AG_EDITOR_ID}`
     const children = blocks.map(block => {
@@ -413,6 +577,9 @@ class StateRender {
 
   // Only render the blocks which you updated
   partialRender (blocks, activeBlocks, matches, startKey, endKey) {
+    if (this.hasEchoInlineTokenInBlocks(blocks) || this.hasEchoInlineTokenInBlocks(activeBlocks)) {
+      return this.render(this.muya.contentState.blocks, activeBlocks, matches)
+    }
     const cursorOutMostBlock = activeBlocks[activeBlocks.length - 1]
     // If cursor is not in render blocks, need to render cursor block independently
     const needRenderCursorBlock = blocks.indexOf(cursorOutMostBlock) === -1

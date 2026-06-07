@@ -2,6 +2,7 @@ import { beginRules, inlineRules, inlineExtensionRules } from './rules'
 import { isLengthEven, union } from '../utils'
 import { findClosingBracket } from './marked/utils'
 import { getAttributes, parseSrcAndTitle, validateEmphasize, lowerPriority } from './utils'
+import { parseEchoAttrs } from 'src/components/ui/editor/echo/EchoRuntime'
 
 // const CAN_NEST_RULES = ['strong', 'em', 'link', 'del', 'a_link', 'reference_link', 'html_tag']
 // disallowed html tags in https://github.github.com/gfm/#raw-html
@@ -162,11 +163,11 @@ const tokenizerFac = (src, beginRules, inlineRules, pos = 0, top, labels, option
     }
     if (inChunk) continue
 
-    // strong | em | emoji | inline_code | del | inline_math
-    const chunks = ['inline_code', 'del', 'emoji', 'inline_math']
+    // strong | em | emoji | inline_code | del | inline_math | echo_anno
+    const chunks = ['inline_code', 'del', 'emoji', 'inline_math', 'echo_anno']
     for (const rule of chunks) {
       const to = inlineRules[rule].exec(src)
-      if (to && isLengthEven(to[3])) {
+      if (to && (rule === 'echo_anno' || isLengthEven(to[3]))) {
         if (rule === 'emoji' && !lowerPriority(src, to[0].length, validateRules)) break
         inChunk = true
         pushPending()
@@ -184,6 +185,18 @@ const tokenizerFac = (src, beginRules, inlineRules, pos = 0, top, labels, option
             parent: tokens,
             content: to[2],
             backlash: to[3]
+          })
+        } else if (rule === 'echo_anno') {
+          tokens.push({
+            type: 'echo_anno',
+            raw: to[0],
+            range,
+            marker,
+            parent: tokens,
+            echoName: to[1],
+            attrsRaw: to[2],
+            attrsParsed: parseEchoAttrs(to[2]),
+            prompt: to[3]
           })
         } else {
           tokens.push({
