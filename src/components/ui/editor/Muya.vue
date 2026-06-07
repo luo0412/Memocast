@@ -708,7 +708,7 @@ export default {
     },
     refreshEchoDefinitions () {
       this.echoRegistry.refresh(this.echoCards || [])
-      if (this.contentEditor) {
+      if (this.contentEditor && this.contentEditor.options) {
         this.contentEditor.options.echoRegistry = this.echoRegistry
         this.contentEditor.options.echoCards = this.echoCards || []
         const quickInsert = this.contentEditor.ui && this.contentEditor.ui.quickInsert
@@ -720,7 +720,7 @@ export default {
         }
         if (this.contentEditor?.contentState?.stateRender?.renderRunes) {
           this.contentEditor.contentState.stateRender.renderRunes()
-        } else {
+        } else if (this.contentEditor?.contentState) {
           this.contentEditor.contentState.render(false, true)
         }
       }

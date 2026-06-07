@@ -443,14 +443,11 @@ class StateRender {
 
   renderRunes () {
     this.renderRunePlaceholderNodes()
-    this.renderEchoPlaceholderNodes()
     this.cleanupDetachedRunePlaceholders()
-    this.cleanupDetachedEchoPlaceholders()
     if (this.muya?.options?.enableRuneVueRenderer) {
       this.renderRunesWithVue()
     } else {
       this.cleanupDetachedRuneVms(true)
-      this.cleanupDetachedEchoVms(true)
     }
   }
 
