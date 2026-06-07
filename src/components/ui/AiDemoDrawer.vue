@@ -11,7 +11,7 @@
   >
     <div class="ai-drawer-demo">
       <div class="ai-demo-chat-shell">
-        <perfect-scrollbar ref="scrollbar" class="ai-demo-scroll" :options="scrollOptions">
+        <div ref="scrollbar" class="ai-demo-scroll">
           <div class="ai-demo-scroll__inner">
             <el-x-welcome
               icon="el-icon-chat-dot-round"
@@ -43,7 +43,7 @@
               </div>
             </div>
           </div>
-        </perfect-scrollbar>
+        </div>
 
         <div class="ai-demo-composer">
           <div class="ai-demo-composer__hint">{{ composerHint }}</div>
@@ -62,14 +62,10 @@
 
 <script>
 import { i18n } from 'boot/i18n'
-import PerfectScrollbar from 'vue2-perfect-scrollbar'
 import PortkeyService from 'src/services/PortkeyService'
 
 export default {
   name: 'AiDemoDrawer',
-  components: {
-    PerfectScrollbar
-  },
   data () {
     return {
       visible: false,
@@ -83,11 +79,7 @@ export default {
           role: 'assistant',
           content: i18n.t('aiDrawerIntroMessage')
         }
-      ],
-      scrollOptions: {
-        suppressScrollX: true,
-        wheelPropagation: false
-      }
+      ]
     }
   },
   computed: {
@@ -201,8 +193,7 @@ export default {
     },
     scrollToBottom () {
       this.$nextTick(() => {
-        const root = this.$refs.scrollbar && this.$refs.scrollbar.$el
-        const scrollEl = root && root.querySelector('.ps')
+        const scrollEl = this.$refs.scrollbar
         if (scrollEl) {
           scrollEl.scrollTop = scrollEl.scrollHeight
         }
@@ -280,6 +271,7 @@ export default {
   flex: 1;
   min-height: 0;
   padding: 16px 16px 0;
+  overflow-y: auto;
 }
 
 .ai-demo-scroll__inner {

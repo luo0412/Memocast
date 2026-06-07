@@ -118,6 +118,8 @@ const PortkeyService = {
 
     const missingFields = []
     const providerType = String(modelConfig.provider_type || '').trim()
+    const hasApiKey = Boolean(modelConfig.api_key || modelConfig.hasApiKey)
+    const hasVirtualKey = Boolean(modelConfig.virtual_key || modelConfig.hasVirtualKey)
 
     if (!providerType) {
       missingFields.push('provider_type')
@@ -132,11 +134,11 @@ const PortkeyService = {
       missingFields.push('model')
     }
 
-    if (!modelConfig.api_key) {
+    if (!hasApiKey) {
       missingFields.push('api_key')
     }
 
-    if (providerType === AI_MODEL_PROVIDER_PORTKEY && !modelConfig.virtual_key) {
+    if (providerType === AI_MODEL_PROVIDER_PORTKEY && !hasVirtualKey) {
       missingFields.push('virtual_key')
     }
 

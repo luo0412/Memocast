@@ -1212,9 +1212,9 @@ export default {
           cards.push(saved)
         }
         this.updateStateAndStore({ runeCards: cards })
-        this.$nextTick(() => {
-          bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
-        })
+      this.$nextTick(() => {
+        bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
+      })
       }
       this.destroyRuneFormDialog()
     },

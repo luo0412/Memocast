@@ -70,5 +70,8 @@ export default {
     saveAsPNG: 'mark.map.context.menu.save.as.png',
     saveAsSVG: 'mark.map.context.menu.save.as.svg',
     saveAsHTML: 'mark.map.context.menu.save.as.html'
+  },
+  RENDER_EVENTS: {
+    codeStyleUpdate: 'render.events.code.style.update'
   }
 }
