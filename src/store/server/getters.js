@@ -2,6 +2,7 @@ import api from 'src/utils/api'
 import _ from 'lodash'
 import helper from 'src/utils/helper'
 import ServerFileStorage from 'src/utils/storage/ServerFileStorage'
+import { DEFAULT_NOTE_ORDER_TYPE } from 'src/constants/noteOrderTypes'
 
 export default {
   avatarUrl: ({ userGuid }) => {
@@ -41,7 +42,7 @@ export default {
         return true
       })
 
-      const orderType = rootState.client.noteOrderType || 'orderByNoteTitleAsc'
+      const orderType = rootState.client.noteOrderType || DEFAULT_NOTE_ORDER_TYPE
       const compareStrings = (v1 = '', v2 = '') => v1.localeCompare(v2, 'zh-Hans-CN', { sensitivity: 'base', numeric: true })
       const compareNumbers = (v1 = 0, v2 = 0) => (v1 || 0) - (v2 || 0)
       const comparators = {
@@ -53,7 +54,7 @@ export default {
         orderByModifiedTimeDesc: (n1, n2) => compareNumbers(n2.dataModified, n1.dataModified)
       }
 
-      return filteredNotes.sort(comparators[orderType] || comparators.orderByNoteTitleAsc)
+      return filteredNotes.sort(comparators[orderType] || comparators[DEFAULT_NOTE_ORDER_TYPE])
     }
     return []
   },

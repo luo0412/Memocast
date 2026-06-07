@@ -1,6 +1,6 @@
 import { execRequest } from 'boot/request'
 import FormData from 'form-data'
-import { UploadImageToCustomWebService } from 'src/service/imageCustomWebUploadService'
+import { UploadImageToCustomWebService } from 'src/services/imageCustomWebUploadService'
 import ServerFileStorage from 'src/utils/storage/ServerFileStorage'
 let AccountServerBaseUrl = 'https://as.wiz.cn'
 let KnowledgeBaseBaseUrl = 'https://kshttps0.wiz.cn'

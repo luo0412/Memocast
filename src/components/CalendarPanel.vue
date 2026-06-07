@@ -30,23 +30,12 @@
                 :get-popup-container="getMonthPickerPopupContainer"
                 @change="onNoteOrderChange"
               >
-              <a-select-option value="orderByNoteTitleAsc">
-                  {{ $t('orderByNoteTitleAsc') }}
-                </a-select-option>
-                <a-select-option value="orderByNoteTitleDesc">
-                  {{ $t('orderByNoteTitleDesc') }}
-                </a-select-option>
-                <a-select-option value="orderByModifiedTimeAsc">
-                  {{ $t('orderByModifiedTimeAsc') }}
-                </a-select-option>
-                <a-select-option value="orderByModifiedTimeDesc">
-                  {{ $t('orderByModifiedTimeDesc') }}
-                </a-select-option>
-                <a-select-option value="orderByCreatedTimeAsc">
-                  {{ $t('orderByCreatedTimeAsc') }}
-                </a-select-option>
-                <a-select-option value="orderByCreatedTimeDesc">
-                  {{ $t('orderByCreatedTimeDesc') }}
+                <a-select-option
+                  v-for="orderType in noteOrderTypes"
+                  :key="orderType"
+                  :value="orderType"
+                >
+                  {{ $t(orderType) }}
                 </a-select-option>
               </a-select>
             </div>
@@ -59,11 +48,12 @@
                 :get-popup-container="getMonthPickerPopupContainer"
                 @change="onDateBasisChange"
               >
-                <a-select-option value="created">
-                  {{ $t('calendarBasisCreated') }}
-                </a-select-option>
-                <a-select-option value="modified">
-                  {{ $t('calendarBasisModified') }}
+                <a-select-option
+                  v-for="basis in calendarDateBasisTypes"
+                  :key="basis"
+                  :value="basis"
+                >
+                  {{ $t(calendarDateBasisLabels[basis]) }}
                 </a-select-option>
               </a-select>
             </div>
@@ -85,6 +75,8 @@
 <script>
 import moment from 'moment'
 import { createNamespacedHelpers } from 'vuex'
+import { CALENDAR_DATE_BASIS_LABELS, CALENDAR_DATE_BASIS_TYPES } from 'src/constants/calendarDateBasis'
+import { NOTE_ORDER_TYPES } from 'src/constants/noteOrderTypes'
 
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 const { mapActions: mapServerActions } = createNamespacedHelpers('server')
@@ -98,6 +90,15 @@ export default {
     }
   },
   computed: {
+    calendarDateBasisLabels () {
+      return CALENDAR_DATE_BASIS_LABELS
+    },
+    calendarDateBasisTypes () {
+      return CALENDAR_DATE_BASIS_TYPES
+    },
+    noteOrderTypes () {
+      return NOTE_ORDER_TYPES
+    },
     thumbStyle () {
       return { display: 'none' }
     },

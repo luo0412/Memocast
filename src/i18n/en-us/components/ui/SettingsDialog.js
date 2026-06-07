@@ -125,5 +125,14 @@ export default {
   aiApiKeySavedMasked: 'Saved API Key: {masked}',
   aiVirtualKeySavedMasked: 'Saved Virtual Key: {masked}',
   aiNoModelConfigured: 'No AI model configured yet',
-  aiModelRequiredFields: 'Please fill in name, Base URL, and model name'
+  aiModelRequiredFields: 'Please fill in name, Base URL, and model name',
+  aiDefaultModelStatusReady: 'Ready',
+  aiDefaultModelStatusIncomplete: 'Incomplete',
+  aiDefaultModelStatusReadyHint: 'The current default model is fully configured and ready to use in the AI drawer.',
+  aiDefaultModelStatusIncompleteHint: 'The current default model is missing: {fields}',
+  aiField_provider_type: 'Provider Type',
+  aiField_base_url: 'Base URL',
+  aiField_model: 'Model Name',
+  aiField_api_key: 'API Key',
+  aiField_virtual_key: 'Virtual Key'
 }

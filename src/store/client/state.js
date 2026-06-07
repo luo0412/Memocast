@@ -1,3 +1,6 @@
+import { DEFAULT_NOTE_ORDER_TYPE } from 'src/constants/noteOrderTypes'
+import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/constants/calendarDateBasis'
+
 export default function () {
   return {
     language: null,
@@ -9,7 +12,7 @@ export default function () {
     enableSelfHostServer: false,
     imageUploadService: 'wizOfficialImageUploadService',
     imageUploadServiceParam: {},
-    noteOrderType: 'orderByNoteTitleAsc',
+    noteOrderType: DEFAULT_NOTE_ORDER_TYPE,
     apiServerUrl: '',
     postParam: '',
     jsonPath: '',
@@ -31,7 +34,7 @@ export default function () {
     noteMethod: 'notesSixDaoLun',
     noteMethodPrefix: 'Course',
     calendarSelectedDate: '',
-    calendarDateBasis: 'modified',
+    calendarDateBasis: DEFAULT_CALENDAR_DATE_BASIS,
     leftInnerSplitterRatio: 280,
     runeCards: [],
     syncStatus: {

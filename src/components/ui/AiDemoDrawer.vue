@@ -1,6 +1,6 @@
 <template>
   <el-drawer
-    title="AI 助手"
+    :title="$t('aiAssistant')"
     :visible.sync="visible"
     direction="rtl"
     size="420px"
@@ -28,7 +28,7 @@
                 :class="`ai-demo-message-item--${message.role}`"
               >
                 <div class="ai-demo-message-label">
-                  {{ message.role === 'user' ? '你' : 'AI 助手' }}
+                  {{ message.role === 'user' ? $t('aiDrawerUserLabel') : $t('aiAssistant') }}
                 </div>
                 <el-x-bubble
                   :placement="message.role === 'user' ? 'end' : 'start'"
@@ -38,8 +38,8 @@
               </div>
 
               <div v-if="loading" class="ai-demo-message-item ai-demo-message-item--assistant">
-                <div class="ai-demo-message-label">AI 助手</div>
-                <el-x-bubble placement="start" content="正在思考中..." />
+                <div class="ai-demo-message-label">{{ $t('aiAssistant') }}</div>
+                <el-x-bubble placement="start" :content="$t('aiDrawerThinking')" />
               </div>
             </div>
           </div>
@@ -61,6 +61,7 @@
 </template>
 
 <script>
+import { i18n } from 'boot/i18n'
 import PerfectScrollbar from 'vue2-perfect-scrollbar'
 import PortkeyService from 'src/services/PortkeyService'
 
@@ -80,7 +81,7 @@ export default {
         {
           id: 1,
           role: 'assistant',
-          content: '这里会直接读取默认 Portkey 模型配置。配置好后，发送消息即可得到真实回复。'
+          content: i18n.t('aiDrawerIntroMessage')
         }
       ],
       scrollOptions: {
@@ -90,28 +91,63 @@ export default {
     }
   },
   computed: {
+    providerLabel () {
+      if (!this.defaultConfig) {
+        return this.$t('aiProviderLabelGeneric')
+      }
+
+      return PortkeyService.getProviderLabel(this.defaultConfig.provider_type)
+    },
     isReady () {
-      return Boolean(this.defaultConfig && this.defaultConfig.provider_type === 'portkey')
+      return PortkeyService.isConfigUsable(this.defaultConfig)
     },
     welcomeTitle () {
-      return this.isReady ? 'Portkey AI 助手' : '尚未配置默认 Portkey 模型'
+      return this.isReady
+        ? this.$t('aiDrawerWelcomeReadyTitle', { provider: this.providerLabel })
+        : this.$t('aiDrawerWelcomeNotReadyTitle')
     },
     welcomeDescription () {
-      if (!this.isReady) {
-        return '请先到设置中添加一个 Portkey provider 的模型配置，并将其设为默认。'
+      if (!this.defaultConfig) {
+        return this.$t('aiDrawerWelcomeNoDefaultDescription')
       }
 
-      return `当前默认模型：${this.defaultConfig.name} · ${this.defaultConfig.model}`
+      if (!this.isReady) {
+        return this.$t('aiDrawerWelcomeIncompleteDescription', {
+          name: this.defaultConfig.name,
+          provider: this.providerLabel
+        })
+      }
+
+      return this.$t('aiDrawerWelcomeReadyDescription', {
+        name: this.defaultConfig.name,
+        model: this.defaultConfig.model
+      })
     },
     composerHint () {
-      if (!this.isReady) {
-        return '当前不可发送：缺少默认 Portkey 模型配置。'
+      if (!this.defaultConfig) {
+        return this.$t('aiDrawerComposerHintNoDefault')
       }
 
-      return '输入内容后回车，消息会通过默认 Portkey 模型发送。'
+      if (!this.isReady) {
+        return this.$t('aiDrawerComposerHintIncomplete', {
+          provider: this.providerLabel
+        })
+      }
+
+      return this.$t('aiDrawerComposerHintReady', {
+        provider: this.providerLabel
+      })
     },
     composerPlaceholder () {
-      return this.isReady ? '输入一句话，开始真实 AI 对话' : '请先在设置里完成默认 Portkey 配置'
+      if (!this.defaultConfig) {
+        return this.$t('aiDrawerComposerPlaceholderNoDefault')
+      }
+
+      return this.isReady
+        ? this.$t('aiDrawerComposerPlaceholderReady')
+        : this.$t('aiDrawerComposerPlaceholderIncomplete', {
+          provider: this.providerLabel
+        })
     }
   },
   methods: {
@@ -123,10 +159,14 @@ export default {
 
       if (!this.isReady && options.redirectToSettings !== false) {
         this.$q.dialog({
-          title: '尚未配置 AI Provider',
-          message: '当前没有可用的默认 AI Provider 配置。现在去设置里新增一个默认配置吗？',
-          cancel: { label: '取消' },
-          ok: { label: '去配置', color: 'green-7' },
+          title: this.defaultConfig
+            ? this.$t('aiDrawerDialogIncompleteTitle')
+            : this.$t('aiDrawerDialogNoDefaultTitle'),
+          message: this.defaultConfig
+            ? this.$t('aiDrawerDialogIncompleteMessage', { name: this.defaultConfig.name })
+            : this.$t('aiDrawerDialogNoDefaultMessage'),
+          cancel: { label: this.$t('cancel') },
+          ok: { label: this.$t('aiDrawerDialogGoConfigure'), color: 'green-7' },
           persistent: true
         }).onOk(() => {
           this.$emit('request-ai-provider-config')
@@ -157,7 +197,7 @@ export default {
       this.messageId += 1
     },
     extractAssistantContent (response) {
-      return response?.choices?.[0]?.message?.content || '模型返回了空响应。'
+      return response?.choices?.[0]?.message?.content || this.$t('aiDrawerEmptyResponse')
     },
     scrollToBottom () {
       this.$nextTick(() => {
@@ -174,10 +214,14 @@ export default {
 
       if (!content || this.loading) return
 
+      await this.refreshDefaultConfig()
+
       if (!this.isReady) {
         this.$q.notify({
           type: 'warning',
-          message: '请先在设置中配置默认 Portkey 模型。',
+          message: this.defaultConfig
+            ? this.$t('aiDrawerNotifyIncompleteConfig', { provider: this.providerLabel })
+            : this.$t('aiDrawerNotifyNoDefaultConfig'),
           position: 'top'
         })
         return
@@ -195,10 +239,10 @@ export default {
         ])
         this.pushMessage('assistant', this.extractAssistantContent(response))
       } catch (error) {
-        this.pushMessage('assistant', `调用失败：${error.message || '未知错误'}`)
+        this.pushMessage('assistant', this.$t('aiDrawerRequestFailedMessage', { message: error.message || this.$t('loading') }))
         this.$q.notify({
           type: 'negative',
-          message: error.message || 'Portkey 请求失败',
+          message: error.message || this.$t('aiDrawerRequestFailedNotify'),
           position: 'top'
         })
       } finally {
@@ -262,26 +306,21 @@ export default {
   align-items: flex-end;
 }
 
-.ai-demo-message-item--assistant {
-  align-items: flex-start;
-}
-
 .ai-demo-message-label {
   font-size: 12px;
-  font-weight: 600;
   color: #909399;
 }
 
 .ai-demo-composer {
-  flex-shrink: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
   padding: 12px 16px 16px;
-  border-top: 1px solid rgba(235, 238, 245, 0.9);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 -8px 24px rgba(31, 35, 41, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .ai-demo-composer__hint {
-  margin-bottom: 10px;
   font-size: 12px;
   color: #909399;
 }

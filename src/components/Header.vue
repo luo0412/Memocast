@@ -449,7 +449,7 @@ export default {
       if (shouldOpenAiAdd) {
         this.$nextTick(() => {
           dialog.tab = 'server'
-          dialog.openAiModelDialog()
+          dialog.openAiModelDialog(null, { markAsDefault: true })
         })
       }
     },

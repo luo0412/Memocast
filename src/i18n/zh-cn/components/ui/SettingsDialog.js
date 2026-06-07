@@ -125,5 +125,14 @@ export default {
   aiApiKeySavedMasked: '当前已保存 API Key：{masked}',
   aiVirtualKeySavedMasked: '当前已保存 Virtual Key：{masked}',
   aiNoModelConfigured: '还没有配置任何 AI 模型',
-  aiModelRequiredFields: '请填写名称、Base URL 和模型名'
+  aiModelRequiredFields: '请填写名称、Base URL 和模型名',
+  aiDefaultModelStatusReady: '可用',
+  aiDefaultModelStatusIncomplete: '未完成',
+  aiDefaultModelStatusReadyHint: '当前默认模型配置完整，可直接在 AI 抽屉中使用。',
+  aiDefaultModelStatusIncompleteHint: '当前默认模型缺少以下字段：{fields}',
+  aiField_provider_type: 'Provider 类型',
+  aiField_base_url: 'Base URL',
+  aiField_model: '模型名',
+  aiField_api_key: 'API Key',
+  aiField_virtual_key: 'Virtual Key'
 }

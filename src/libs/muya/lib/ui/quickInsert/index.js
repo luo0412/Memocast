@@ -101,6 +101,24 @@ const escapeHtmlAttribute = (value = '') => String(value)
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;')
 
+const reorderRenderObj = (obj = {}, preferredSections = []) => {
+  const ordered = {}
+  const remaining = { ...obj }
+
+  preferredSections.forEach(sectionName => {
+    if (sectionName && Array.isArray(remaining[sectionName])) {
+      ordered[sectionName] = remaining[sectionName]
+      delete remaining[sectionName]
+    }
+  })
+
+  Object.keys(remaining).forEach(sectionName => {
+    ordered[sectionName] = remaining[sectionName]
+  })
+
+  return ordered
+}
+
 const createRunePlaceholderHtml = (item = {}, displayText = '', runeValue = '') => {
   const runeName = item?.meta?.runeName || 'Rune'
   const text = displayText || runeName
@@ -160,11 +178,23 @@ class QuickInsert extends BaseScrollFloat {
   getRenderObj () {
     const { contentState } = this.muya
     const canInsertFrontMatter = this.block ? contentState.canInsertFrontMatter(this.block) : true
-    const obj = deepCopy(quickInsertObj)
-    if (!canInsertFrontMatter) {
-      obj['basic block'].splice(2, 1)
+    const dynamicObj = this.getDynamicRenderObj()
+    const obj = mergeRenderObjects(quickInsertObj, dynamicObj)
+    const preferredSections = []
+
+    if (this.runeSectionName && Array.isArray(obj[this.runeSectionName])) {
+      preferredSections.push(this.runeSectionName)
     }
-    return mergeRenderObjects(obj, this.getDynamicRenderObj())
+    if (Array.isArray(obj.diagram)) {
+      preferredSections.push('diagram')
+    }
+
+    const orderedObj = reorderRenderObj(obj, preferredSections)
+
+    if (!canInsertFrontMatter) {
+      orderedObj['basic block'].splice(2, 1)
+    }
+    return orderedObj
   }
 
   getColumnsCount () {
@@ -405,7 +435,18 @@ class QuickInsert extends BaseScrollFloat {
       : null
     const previousLine = isFirstInsertionFromQuickInsert ? this.getPreviousNonEmptyLine() : null
     const runeValue = previousLine?.isPlainText ? previousLine.text : ''
-    const insertContent = createRunePlaceholderHtml(item, displayText, runeValue)
+    const createPlaceholder = typeof createRunePlaceholderHtml === 'function'
+      ? createRunePlaceholderHtml
+      : (currentItem = {}, currentDisplayText = '', currentRuneValue = '') => {
+          const runeName = currentItem?.meta?.runeName || 'Rune'
+          const text = currentDisplayText || runeName
+          const normalizedRuneValue = String(currentRuneValue || '').trim()
+          const runeId = uuidv4()
+          const nodeId = `rune-${getUniqueId()}`
+
+          return `<div data-rune-name="${escapeHtmlAttribute(runeName)}" data-rune-id="${escapeHtmlAttribute(runeId)}" data-rune-node-id="${escapeHtmlAttribute(nodeId)}" data-rune-value="${escapeHtmlAttribute(normalizedRuneValue)}">${escapeHtmlAttribute(text)}</div>`
+        }
+    const insertContent = createPlaceholder(item, displayText, runeValue)
 
     console.log('[QuickInsert.insertRuneTemplate]', {
       currentBlockKey: this.block?.key,

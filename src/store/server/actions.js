@@ -5,6 +5,7 @@ import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from 'src/components/bus'
 import { OFFLINE_ROOT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY, normalizeCategoryForMatch } from 'src/utils/constants'
 import SessionStorageService from 'src/services/SessionStorageService'
+import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/constants/calendarDateBasis'
 import { APP_STATE_KEYS, loadWorkspaceState, saveWorkspaceStateValue } from 'src/store/server/workspaceState'
 import {
   buildCategoryTreeFromNotes,
@@ -529,7 +530,7 @@ export default {
     rootState
   }, payload = {}) {
     const { kbGuid, isLogin } = state
-    const basis = rootState.client.calendarDateBasis === 'created' ? 'created' : 'modified'
+    const basis = rootState.client.calendarDateBasis === 'created' ? 'created' : DEFAULT_CALENDAR_DATE_BASIS
     let ymd = payload.date || rootState.client.calendarSelectedDate
     if (helper.isNullOrEmpty(ymd)) {
       const n = new Date()
@@ -596,7 +597,7 @@ export default {
    */
   async fetchCalendarNoteDates ({ commit, state, rootState }, { year, month }) {
     const { kbGuid, isLogin } = state
-    const basis = rootState.client.calendarDateBasis === 'created' ? 'created' : 'modified'
+    const basis = rootState.client.calendarDateBasis === 'created' ? 'created' : DEFAULT_CALENDAR_DATE_BASIS
     const monthStart = new Date(year, month - 1, 1, 0, 0, 0, 0).getTime()
     const monthEnd = new Date(year, month, 1, 0, 0, 0, 0).getTime()
     const dateSet = new Set()

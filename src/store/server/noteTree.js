@@ -1,6 +1,7 @@
 import { OFFLINE_ROOT_CATEGORY, normalizeCategoryForMatch } from 'src/utils/constants'
+import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/constants/calendarDateBasis'
 
-export function getCalendarNoteTimestamp (note, basis) {
+export function getCalendarNoteTimestamp (note, basis = DEFAULT_CALENDAR_DATE_BASIS) {
   if (basis === 'created') {
     const c = note.dataCreated || note.data_created
     if (c != null && !Number.isNaN(Number(c))) return Number(c)

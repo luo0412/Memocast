@@ -301,15 +301,45 @@
 
                     <q-card flat bordered class='q-mb-sm ai-model-default-card' v-if='defaultAiModel'>
                       <q-card-section class='q-pa-sm'>
-                        <div class='row items-center no-wrap'>
-                          <q-icon name='psychology' size='1.25rem' color='green-7' class='q-mr-sm' />
+                        <div class='row items-start no-wrap'>
+                          <q-icon
+                            name='psychology'
+                            size='1.25rem'
+                            :color='defaultAiModelStatusColor'
+                            class='q-mr-sm q-mt-xs'
+                          />
                           <div class='col'>
-                            <div class='text-body2 text-weight-medium'>{{ defaultAiModel.name }}</div>
-                            <div class='text-caption text-grey-6'>
-                              {{ defaultAiModel.provider_type }} · {{ defaultAiModel.model }}
+                            <div class='row items-center no-wrap q-gutter-xs'>
+                              <div class='text-body2 text-weight-medium'>{{ defaultAiModel.name }}</div>
+                              <q-badge color='positive' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
+                              <q-badge :color='defaultAiModelStatusColor' outline>
+                                {{ defaultAiModelStatusLabel }}
+                              </q-badge>
+                            </div>
+                            <div class='text-caption text-grey-6 q-mt-xs'>
+                              {{ getAiProviderLabel(defaultAiModel.provider_type) }} · {{ defaultAiModel.model }}
+                            </div>
+                            <div class='text-caption text-grey-7 q-mt-xs'>{{ defaultAiModel.base_url }}</div>
+                            <div
+                              class='text-caption q-mt-xs'
+                              :class='defaultAiModelUsable ? "text-positive" : "text-warning"'
+                            >
+                              {{ defaultAiModelStatusHint }}
+                            </div>
+                            <div
+                              v-if='!defaultAiModelUsable && defaultAiModelMissingFieldLabels.length > 0'
+                              class='row items-center q-gutter-xs q-mt-sm'
+                            >
+                              <q-badge
+                                v-for='field in defaultAiModelMissingFieldLabels'
+                                :key='field'
+                                color='warning'
+                                outline
+                              >
+                                {{ field }}
+                              </q-badge>
                             </div>
                           </div>
-                          <q-badge color='positive' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
                         </div>
                       </q-card-section>
                     </q-card>
@@ -354,7 +384,7 @@
                                 <div class='text-body2 text-weight-medium'>{{ item.name }}</div>
                                 <q-badge v-if='item.is_default' color='primary' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
                               </div>
-                              <div class='text-caption text-grey-6 q-mt-xs'>{{ item.provider_type }}</div>
+                              <div class='text-caption text-grey-6 q-mt-xs'>{{ getAiProviderLabel(item.provider_type) }}</div>
                               <div class='text-caption text-grey-7 q-mt-xs'>{{ item.base_url }}</div>
                               <div class='text-caption text-grey-7 q-mt-xs'>{{ item.model }}</div>
                               <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasApiKey'>
@@ -567,6 +597,8 @@ import helper from 'src/utils/helper'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import CloudSyncService from 'src/services/CloudSyncService'
 import SessionStorageService from 'src/services/SessionStorageService'
+import PortkeyService from 'src/services/PortkeyService'
+import { NOTE_ORDER_TYPES } from 'src/constants/noteOrderTypes'
 
 const SYNC_REASON_MESSAGES = {
   not_logged_in: 'offlineMode',
@@ -595,14 +627,6 @@ export default {
         'wizOfficialImageUploadService',
         'picgoServer',
         'none'
-      ],
-      noteOrderOptionsPlain: [
-        'orderByNoteTitleAsc',
-        'orderByNoteTitleDesc',
-        'orderByModifiedTimeAsc',
-        'orderByModifiedTimeDesc',
-        'orderByCreatedTimeAsc',
-        'orderByCreatedTimeDesc'
       ],
       version: version,
       checkingNotify: null,
@@ -657,7 +681,7 @@ export default {
       ]
     },
     noteOrderOptions: function () {
-      return this.noteOrderOptionsPlain.map(option => this.$t(option))
+      return NOTE_ORDER_TYPES.map(option => this.$t(option))
     },
     // ✅ 已移除 autoSaveGapLabel！不再需要
     // autoSaveGapLabel: function () { ... },
@@ -688,6 +712,34 @@ export default {
     },
     defaultAiModel () {
       return this.aiModelConfigs.find(item => item.is_default) || null
+    },
+    defaultAiModelUsable () {
+      return PortkeyService.isConfigUsable(this.defaultAiModel)
+    },
+    defaultAiModelMissingFields () {
+      return PortkeyService.getMissingFields(this.defaultAiModel)
+    },
+    defaultAiModelMissingFieldLabels () {
+      return this.defaultAiModelMissingFields.map(field => this.$t(`aiField_${field}`))
+    },
+    defaultAiModelStatusColor () {
+      return this.defaultAiModelUsable ? 'positive' : 'warning'
+    },
+    defaultAiModelStatusLabel () {
+      return this.defaultAiModelUsable ? this.$t('aiDefaultModelStatusReady') : this.$t('aiDefaultModelStatusIncomplete')
+    },
+    defaultAiModelStatusHint () {
+      if (!this.defaultAiModel) {
+        return ''
+      }
+
+      if (this.defaultAiModelUsable) {
+        return this.$t('aiDefaultModelStatusReadyHint')
+      }
+
+      return this.$t('aiDefaultModelStatusIncompleteHint', {
+        fields: this.defaultAiModelMissingFieldLabels.join('、')
+      })
     },
     aiModelApiKeyHint () {
       if (!this.aiModelForm.id) {
@@ -738,6 +790,11 @@ export default {
       this.refreshCloudSyncStatus()
       return this.$refs.dialog.toggle()
     },
+    show: function () {
+      this.refreshCloudSyncLoginState()
+      this.refreshCloudSyncStatus()
+      return this.$refs.dialog.show()
+    },
     languageChangeHandler: function (lan) {
       lan = i18n.availableLocales.find(l => {
         return i18n.t(l) === lan
@@ -765,7 +822,7 @@ export default {
       this.updateStateAndStore({ imageUploadService: servicePlain })
     },
     noteOrderChangeHandler: function (type) {
-      const typePlain = this.noteOrderOptionsPlain.find(
+      const typePlain = NOTE_ORDER_TYPES.find(
         i => this.$t(i) === type
       )
       this.updateStateAndStore({ noteOrderType: typePlain })
@@ -861,7 +918,7 @@ export default {
       return {
         id: null,
         name: '',
-        provider_type: 'portkey',
+        provider_type: 'openai-compatible',
         base_url: '',
         model: '',
         api_key: '',
@@ -873,6 +930,9 @@ export default {
         virtualKeyMasked: ''
       }
     },
+    getAiProviderLabel (providerType) {
+      return PortkeyService.getProviderLabel(providerType)
+    },
     async loadAiModelConfigs () {
       this.aiModelsLoading = true
       try {
@@ -881,9 +941,12 @@ export default {
         this.aiModelsLoading = false
       }
     },
-    async openAiModelDialog (id = null) {
+    async openAiModelDialog (id = null, options = {}) {
       this.showAiApiKey = false
-      this.aiModelForm = this.createEmptyAiModelForm()
+      this.aiModelForm = {
+        ...this.createEmptyAiModelForm(),
+        ...(options.markAsDefault ? { is_default: true } : {})
+      }
 
       if (id) {
         const config = await DatabaseClient.aiModels.getById(id)
