@@ -30,14 +30,23 @@
                 :get-popup-container="getMonthPickerPopupContainer"
                 @change="onNoteOrderChange"
               >
-                <a-select-option value="orderByNoteTitle">
-                  {{ $t('orderByNoteTitle') }}
+              <a-select-option value="orderByNoteTitleAsc">
+                  {{ $t('orderByNoteTitleAsc') }}
                 </a-select-option>
-                <a-select-option value="orderByModifiedTime">
-                  {{ $t('orderByModifiedTime') }}
+                <a-select-option value="orderByNoteTitleDesc">
+                  {{ $t('orderByNoteTitleDesc') }}
                 </a-select-option>
-                <a-select-option value="orderByCreatedTime">
-                  {{ $t('orderByCreatedTime') }}
+                <a-select-option value="orderByModifiedTimeAsc">
+                  {{ $t('orderByModifiedTimeAsc') }}
+                </a-select-option>
+                <a-select-option value="orderByModifiedTimeDesc">
+                  {{ $t('orderByModifiedTimeDesc') }}
+                </a-select-option>
+                <a-select-option value="orderByCreatedTimeAsc">
+                  {{ $t('orderByCreatedTimeAsc') }}
+                </a-select-option>
+                <a-select-option value="orderByCreatedTimeDesc">
+                  {{ $t('orderByCreatedTimeDesc') }}
                 </a-select-option>
               </a-select>
             </div>
@@ -51,10 +60,10 @@
                 @change="onDateBasisChange"
               >
                 <a-select-option value="created">
-                  创建日期
+                  {{ $t('calendarBasisCreated') }}
                 </a-select-option>
                 <a-select-option value="modified">
-                  修改日期
+                  {{ $t('calendarBasisModified') }}
                 </a-select-option>
               </a-select>
             </div>

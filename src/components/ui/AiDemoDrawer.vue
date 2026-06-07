@@ -118,8 +118,22 @@ export default {
     async refreshDefaultConfig () {
       this.defaultConfig = await PortkeyService.getDefaultConfig()
     },
-    async show () {
+    async show (options = {}) {
       await this.refreshDefaultConfig()
+
+      if (!this.isReady && options.redirectToSettings !== false) {
+        this.$q.dialog({
+          title: '尚未配置 AI Provider',
+          message: '当前没有可用的默认 AI Provider 配置。现在去设置里新增一个默认配置吗？',
+          cancel: { label: '取消' },
+          ok: { label: '去配置', color: 'green-7' },
+          persistent: true
+        }).onOk(() => {
+          this.$emit('request-ai-provider-config')
+        })
+        return
+      }
+
       this.visible = true
       this.scrollToBottom()
     },

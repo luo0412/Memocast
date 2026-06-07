@@ -217,12 +217,20 @@
 
       <!-- AI 按钮 -->
       <div
-        class="header-icon-btn q-electron-drag--exception header-ai-btn"
+        class="header-icon-btn q-electron-drag--exception"
         :class="{ 'is-highlight': aiDrawerHighlight }"
-        title="AI 助手"
         @click="handleAiDrawerClick"
       >
-        <span class="header-ai-btn__label">AI</span>
+        <i class="el-icon-magic-stick icon-custom" />
+        <q-tooltip
+          transition-show="fade"
+          transition-hide="fade"
+          anchor="bottom middle"
+          self="top middle"
+          :offset="[0, 8]"
+        >
+          {{ $t('aiAssistant') }}
+        </q-tooltip>
       </div>
 
       <!-- 聊天图标 -->
@@ -257,7 +265,7 @@
     <SearchDialog ref='searchDialog' />
     <TagDialog ref="tagDialog" />
     <ImDrawer ref="imDrawer" />
-    <AiDemoDrawer ref="aiDemoDrawer" />
+    <AiDemoDrawer ref="aiDemoDrawer" @request-ai-provider-config="handleAiProviderConfigRequest" />
   </q-bar>
 </template>
 
@@ -424,14 +432,35 @@ export default {
       })
     },
 
-    handleSettingsClick () {
+    handleSettingsClick (options = {}) {
       this.handleHighlight('settingsHighlight')
-      this.$refs.settingsDialog.toggle()
+      const dialog = this.$refs.settingsDialog
+      if (!dialog) return
+
+      const shouldOpenAiAdd = Boolean(options.openAiAdd)
+      const toggleMode = options.toggle !== false
+
+      if (!toggleMode) {
+        dialog.show()
+      } else {
+        dialog.toggle()
+      }
+
+      if (shouldOpenAiAdd) {
+        this.$nextTick(() => {
+          dialog.tab = 'server'
+          dialog.openAiModelDialog()
+        })
+      }
     },
 
     handleAiDrawerClick () {
       this.handleHighlight('aiDrawerHighlight')
       this.$refs.aiDemoDrawer.toggle()
+    },
+
+    handleAiProviderConfigRequest () {
+      this.handleSettingsClick({ toggle: false, openAiAdd: true })
     },
 
     handleImChatClick () {
@@ -680,19 +709,6 @@ export default {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.header-ai-btn {
-  gap: 4px;
-  padding: 0 10px;
-  width: auto;
-  min-width: 48px;
-}
-
-.header-ai-btn__label {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
 }
 
 .header-left-icons {

@@ -18,5 +18,6 @@ export default {
   pptPreview: 'PPT 预览',
   link: '链接',
   imChat: '聊天',
+  aiAssistant: 'AI 助手',
   noteMethod: '笔记方法'
 }

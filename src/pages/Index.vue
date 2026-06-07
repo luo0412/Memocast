@@ -388,7 +388,8 @@ export default {
     copyNoteLink: function () {
       const { docGuid, kbGuid } = this.currentNoteInfo || {}
       if (!docGuid || !kbGuid) return
-      const baseUrl = window.location.origin || ''
+      const baseUrl = (this.$store.state.server.kbServer || this.$store.getters.noteViewUrl || '').replace(/\/ks\/note\/view\/.*/, '')
+      if (!baseUrl) return
       const noteViewUrl = `${baseUrl}/ks/note/view/${kbGuid}/${docGuid}/`
       const clipboard = window.__electronClipboard
       if (clipboard?.writeText) {

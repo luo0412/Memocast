@@ -8,7 +8,7 @@
         <q-btn flat round dense icon='close' size='sm' v-close-popup />
       </q-toolbar>
 
-      <q-card-section class='scroll hide-scrollbar settings-dialog-body'>
+      <q-card-section class='scroll settings-dialog-body'>
         <div class='settings-dialog-layout'>
           <div class='settings-dialog-nav'>
             <q-tabs v-model='tab' vertical dense class='text-teal no-border settings-dialog-tabs'>
@@ -39,7 +39,7 @@
             </q-tabs>
           </div>
           <q-separator vertical class='settings-dialog-sep' />
-          <div class='settings-dialog-panels hide-scrollbar'>
+          <div class='settings-dialog-panels'>
             <q-tab-panels
               v-model='tab'
               animated
@@ -120,7 +120,7 @@
 
               <q-tab-panel name='editor' class='q-pa-sm'>
                 <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-primary' />
+                  <div class='panel-title-bar bg-amber-10' />
                   <span class='text-subtitle2 text-weight-medium'>{{ $t('editor') }}</span>
                 </div>
                 <q-separator class='q-my-xs' />
@@ -129,7 +129,7 @@
                     <span>{{ $t('markdownOnly') }}</span>
                     <q-toggle
                       :value='markdownOnly'
-                      color='primary'
+                      color='amber-10'
                       @input="
                         v => toggleChanged({ key: 'markdownOnly', value: v })
                       "
@@ -141,7 +141,7 @@
                     <span>{{ $t('noteListDenseMode') }}</span>
                     <q-toggle
                       :value='noteListDenseMode'
-                      color='primary'
+                      color='amber-10'
                       @input="
                         v => toggleChanged({ key: 'noteListDenseMode', value: v })
                       "
@@ -165,7 +165,7 @@
                       :step='1'
                       label
                       snap
-                      color='primary'
+                      color='amber-10'
                       markers
                       @input="value => updateStateAndStore({ quickInsertColumns: value })"
                     />
@@ -215,107 +215,169 @@
                 </div>
                 <q-separator class='q-my-xs' />
 
-                <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
-                  <div class='panel-title-bar bg-green-7' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('cloudSync') }}</span>
-                </div>
-                <q-separator class='q-my-xs' />
-
-                <!-- 未登录状态 -->
-                <div v-if='!isLoggedIn' class='text-center q-pa-lg'>
-                  <q-icon name='cloud_off' size='3rem' color='grey-5' />
-                  <div class='text-h6 q-mt-sm text-grey-7'>{{ $t('cloudSyncNotLoggedIn') }}</div>
-                  <div class='text-caption text-grey-5 q-mt-xs'>{{ $t('cloudSyncNotLoggedInHint') }}</div>
-                  <q-btn
-                    class='q-mt-md'
-                    color='primary'
-                    :label="$t('cloudSyncLogin')"
-                    icon='login'
-                    unelevated
-                    @click='openLoginDialog'
-                  />
-                </div>
-
-                <!-- 已登录状态 -->
-                <div v-else>
-                  <q-card flat bordered class='q-mb-sm ai-model-default-card' v-if='defaultAiModel'>
-                    <q-card-section class='q-pa-sm'>
-                      <div class='row items-center no-wrap'>
-                        <q-icon name='psychology' size='1.25rem' color='green-7' class='q-mr-sm' />
-                        <div class='col'>
-                          <div class='text-body2 text-weight-medium'>{{ defaultAiModel.name }}</div>
-                          <div class='text-caption text-grey-6'>
-                            {{ defaultAiModel.provider_type }} · {{ defaultAiModel.model }}
-                          </div>
-                        </div>
-                        <q-badge color='positive' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
-                      </div>
-                    </q-card-section>
-                  </q-card>
-
+                <div class='server-section'>
                   <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
                     <div class='panel-title-bar bg-green-7' />
-                    <span class='text-subtitle2 text-weight-medium'>{{ $t('aiModelSettings') }}</span>
-                    <q-space />
+                    <span class='text-subtitle2 text-weight-medium'>{{ $t('cloudSync') }}</span>
+                  </div>
+                  <q-separator class='q-my-sm server-section-separator' />
+
+                  <!-- 未登录状态 -->
+                  <div v-if='!isLoggedIn' class='text-center q-pa-lg'>
+                    <q-icon name='cloud_off' size='3rem' color='grey-5' />
+                    <div class='text-h6 q-mt-sm text-grey-7'>{{ $t('cloudSyncNotLoggedIn') }}</div>
+                    <div class='text-caption text-grey-5 q-mt-xs'>{{ $t('cloudSyncNotLoggedInHint') }}</div>
                     <q-btn
-                      dense flat no-caps
-                      color='green-7'
-                      icon='add'
-                      size='sm'
-                      :label="$t('aiModelAdd')"
-                      @click='openAiModelDialog()'
+                      class='q-mt-md'
+                      color='primary'
+                      :label="$t('cloudSyncLogin')"
+                      icon='login'
+                      unelevated
+                      @click='openLoginDialog'
                     />
                   </div>
-                  <q-separator class='q-my-xs' />
 
-                  <div v-if='aiModelsLoading' class='row items-center text-grey-6 q-py-md'>
-                    <q-spinner size='20px' class='q-mr-sm' />
-                    <span>{{ $t('loading') }}</span>
-                  </div>
+                  <!-- 已登录状态 -->
+                  <div v-else>
+                    <div class='cloud-sync-summary q-mb-md'>
+                      <div class='cloud-sync-summary__header row items-start justify-between no-wrap q-col-gutter-md'>
+                        <div class='col'>
+                          <div class='text-body2 text-weight-medium'>{{ accountInfo.displayName || accountInfo.nickname || accountInfo.username || accountInfo.email || $t('cloudSync') }}</div>
+                          <div class='text-caption text-grey-6 q-mt-xs'>{{ lastSyncTimeFormatted }}</div>
+                        </div>
+                        <q-btn
+                          flat
+                          dense
+                          no-caps
+                          color='grey-7'
+                          icon='logout'
+                          :label="$t('cloudSyncLogout')"
+                          @click='confirmLogout'
+                        />
+                      </div>
 
-                  <div v-else-if='aiModelConfigs.length === 0' class='text-center text-grey q-pa-md ai-model-empty'>
-                    <q-icon name='smart_toy' size='2rem' />
-                    <div class='q-mt-sm'>{{ $t('aiNoModelConfigured') }}</div>
-                  </div>
+                      <div class='row q-col-gutter-sm q-mt-sm'>
+                        <div class='col-4'>
+                          <div class='sync-stat-card'>
+                            <div class='text-caption text-grey-6'>{{ $t('cloudSyncPending') }}</div>
+                            <div class='text-subtitle1 text-weight-bold text-green-7'>{{ syncStats.pending || 0 }}</div>
+                          </div>
+                        </div>
+                        <div class='col-4'>
+                          <div class='sync-stat-card'>
+                            <div class='text-caption text-grey-6'>{{ $t('syncing') }}</div>
+                            <div class='text-subtitle1 text-weight-bold'>{{ syncStatusText }}</div>
+                          </div>
+                        </div>
+                        <div class='col-4'>
+                          <div class='sync-stat-card'>
+                            <div class='text-caption text-grey-6'>{{ $t('cloudSync') }}</div>
+                            <div class='text-subtitle1 text-weight-bold'>{{ syncStats.synced || 0 }}</div>
+                          </div>
+                        </div>
+                      </div>
 
-                  <div v-else class='column q-gutter-sm q-mb-md'>
-                    <q-card
-                      v-for='item in aiModelConfigs'
-                      :key='item.id'
-                      flat
-                      bordered
-                      class='ai-model-card'
-                    >
+                      <div v-if='syncError' class='text-caption text-negative q-mt-sm'>{{ syncError }}</div>
+
+                      <div class='row q-gutter-sm q-mt-md'>
+                        <q-btn
+                          unelevated
+                          color='green-7'
+                          icon='cloud_upload'
+                          :label="$t('cloudSyncSyncPushOnly')"
+                          :loading='isSyncing'
+                          @click='doPushOnly'
+                        />
+                        <q-btn
+                          outline
+                          color='green-7'
+                          icon='cloud_download'
+                          :label="$t('cloudSyncSyncPullOnly')"
+                          :loading='isSyncing'
+                          @click='doPullOnly'
+                        />
+                      </div>
+                    </div>
+
+                    <q-card flat bordered class='q-mb-sm ai-model-default-card' v-if='defaultAiModel'>
                       <q-card-section class='q-pa-sm'>
-                        <div class='row items-start no-wrap q-col-gutter-sm'>
+                        <div class='row items-center no-wrap'>
+                          <q-icon name='psychology' size='1.25rem' color='green-7' class='q-mr-sm' />
                           <div class='col'>
-                            <div class='row items-center no-wrap q-gutter-xs'>
-                              <div class='text-body2 text-weight-medium'>{{ item.name }}</div>
-                              <q-badge v-if='item.is_default' color='primary' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
-                            </div>
-                            <div class='text-caption text-grey-6 q-mt-xs'>{{ item.provider_type }}</div>
-                            <div class='text-caption text-grey-7 q-mt-xs'>{{ item.base_url }}</div>
-                            <div class='text-caption text-grey-7 q-mt-xs'>{{ item.model }}</div>
-                            <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasApiKey'>
-                              {{ item.provider_type === 'portkey' ? $t('aiPortkeyApiKey') : $t('aiApiKey') }}: {{ item.apiKeyMasked }}
-                            </div>
-                            <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasVirtualKey'>
-                              {{ $t('aiPortkeyVirtualKey') }}: {{ item.portkeyVirtualKeyMasked }}
+                            <div class='text-body2 text-weight-medium'>{{ defaultAiModel.name }}</div>
+                            <div class='text-caption text-grey-6'>
+                              {{ defaultAiModel.provider_type }} · {{ defaultAiModel.model }}
                             </div>
                           </div>
-                          <div class='column q-gutter-xs'>
-                            <q-btn dense flat no-caps color='primary' size='sm' icon='edit' :label="$t('aiModelEdit')" @click='openAiModelDialog(item.id)' />
-                            <q-btn
-                              v-if='!item.is_default'
-                              dense flat no-caps color='positive' size='sm' icon='check_circle'
-                              :label="$t('aiSetDefault')"
-                              @click='setDefaultAiModel(item)'
-                            />
-                            <q-btn dense flat no-caps color='negative' size='sm' icon='delete' :label="$t('aiModelDelete')" @click='confirmDeleteAiModel(item)' />
-                          </div>
+                          <q-badge color='positive' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
                         </div>
                       </q-card-section>
                     </q-card>
+
+                    <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
+                      <div class='panel-title-bar bg-green-7' />
+                      <span class='text-subtitle2 text-weight-medium'>{{ $t('aiModelSettings') }}</span>
+                      <q-space />
+                      <q-btn
+                        dense flat no-caps
+                        color='green-7'
+                        icon='add'
+                        size='sm'
+                        :label="$t('aiModelAdd')"
+                        @click='openAiModelDialog()'
+                      />
+                    </div>
+                    <q-separator class='q-my-sm server-section-separator' />
+
+                    <div v-if='aiModelsLoading' class='row items-center text-grey-6 q-py-md'>
+                      <q-spinner size='20px' class='q-mr-sm' />
+                      <span>{{ $t('loading') }}</span>
+                    </div>
+
+                    <div v-else-if='aiModelConfigs.length === 0' class='text-center text-grey q-pa-md ai-model-empty'>
+                      <q-icon name='smart_toy' size='2rem' />
+                      <div class='q-mt-sm'>{{ $t('aiNoModelConfigured') }}</div>
+                    </div>
+
+                    <div v-else class='column q-gutter-sm q-mb-md'>
+                      <q-card
+                        v-for='item in aiModelConfigs'
+                        :key='item.id'
+                        flat
+                        bordered
+                        class='ai-model-card'
+                      >
+                        <q-card-section class='q-pa-sm'>
+                          <div class='row items-start no-wrap q-col-gutter-sm'>
+                            <div class='col'>
+                              <div class='row items-center no-wrap q-gutter-xs'>
+                                <div class='text-body2 text-weight-medium'>{{ item.name }}</div>
+                                <q-badge v-if='item.is_default' color='primary' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
+                              </div>
+                              <div class='text-caption text-grey-6 q-mt-xs'>{{ item.provider_type }}</div>
+                              <div class='text-caption text-grey-7 q-mt-xs'>{{ item.base_url }}</div>
+                              <div class='text-caption text-grey-7 q-mt-xs'>{{ item.model }}</div>
+                              <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasApiKey'>
+                                {{ item.provider_type === 'portkey' ? $t('aiPortkeyApiKey') : $t('aiApiKey') }}: {{ item.apiKeyMasked }}
+                              </div>
+                              <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasVirtualKey'>
+                                {{ $t('aiPortkeyVirtualKey') }}: {{ item.portkeyVirtualKeyMasked }}
+                              </div>
+                            </div>
+                            <div class='column q-gutter-xs'>
+                              <q-btn dense flat no-caps color='primary' size='sm' icon='edit' :label="$t('aiModelEdit')" @click='openAiModelDialog(item.id)' />
+                              <q-btn
+                                v-if='!item.is_default'
+                                dense flat no-caps color='positive' size='sm' icon='check_circle'
+                                :label="$t('aiSetDefault')"
+                                @click='setDefaultAiModel(item)'
+                              />
+                              <q-btn dense flat no-caps color='negative' size='sm' icon='delete' :label="$t('aiModelDelete')" @click='confirmDeleteAiModel(item)' />
+                            </div>
+                          </div>
+                        </q-card-section>
+                      </q-card>
+                    </div>
                   </div>
                 </div>
                 <q-separator class='q-my-xs' />
@@ -535,9 +597,12 @@ export default {
         'none'
       ],
       noteOrderOptionsPlain: [
-        'orderByNoteTitle',
-        'orderByModifiedTime',
-        'orderByCreatedTime'
+        'orderByNoteTitleAsc',
+        'orderByNoteTitleDesc',
+        'orderByModifiedTimeAsc',
+        'orderByModifiedTimeDesc',
+        'orderByCreatedTimeAsc',
+        'orderByCreatedTimeDesc'
       ],
       version: version,
       checkingNotify: null,
@@ -592,11 +657,7 @@ export default {
       ]
     },
     noteOrderOptions: function () {
-      return [
-        this.$t('orderByNoteTitle'),
-        this.$t('orderByModifiedTime'),
-        this.$t('orderByCreatedTime')
-      ]
+      return this.noteOrderOptionsPlain.map(option => this.$t(option))
     },
     // ✅ 已移除 autoSaveGapLabel！不再需要
     // autoSaveGapLabel: function () { ... },
@@ -855,8 +916,24 @@ export default {
     },
     validateAiModelForm () {
       const form = this.aiModelForm
-      if (!form.name || !form.base_url || !form.model) {
+      const normalizedName = String(form.name || '').trim()
+      if (!normalizedName || !form.base_url || !form.model) {
         this.$q.notify({ message: this.$t('aiModelRequiredFields'), type: 'warning', position: 'top' })
+        return false
+      }
+
+      const duplicateName = this.aiModelConfigs.find(item => {
+        if (!item || !item.name) {
+          return false
+        }
+        if (form.id && Number(item.id) === Number(form.id)) {
+          return false
+        }
+        return String(item.name).trim().toLowerCase() === normalizedName.toLowerCase()
+      })
+
+      if (duplicateName) {
+        this.$q.notify({ message: this.$t('aiConfigNameExists'), type: 'warning', position: 'top' })
         return false
       }
 
@@ -917,6 +994,13 @@ export default {
         this.aiModelDialogVisible = false
         await this.loadAiModelConfigs()
         this.$q.notify({ message: this.$t('aiConfigSaved'), type: 'positive', position: 'top' })
+      } catch (error) {
+        const isDuplicateNameError = /UNIQUE constraint failed:\s*ai_model_configs\.name/i.test(String(error && error.message ? error.message : error))
+        this.$q.notify({
+          message: this.$t(isDuplicateNameError ? 'aiConfigNameExists' : 'aiConfigSaveFailed'),
+          type: 'negative',
+          position: 'top'
+        })
       } finally {
         this.aiModelSaving = false
       }
@@ -1274,6 +1358,24 @@ export default {
   flex: 1 1 auto;
   min-width: 0;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 120, 0.45) transparent;
+}
+
+.settings-dialog-panels::-webkit-scrollbar,
+.settings-dialog-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.settings-dialog-panels::-webkit-scrollbar-thumb,
+.settings-dialog-body::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.45);
+  border-radius: 999px;
+}
+
+.settings-dialog-panels::-webkit-scrollbar-track,
+.settings-dialog-body::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .settings-dialog-tabs {
@@ -1363,7 +1465,28 @@ export default {
   box-shadow: 0 4px 20px rgba(156, 39, 176, 0.4);
 }
 
+.cloud-sync-summary {
+  padding: 12px;
+  border: 1px solid rgba(76, 175, 80, 0.16);
+  border-radius: 10px;
+  background: rgba(76, 175, 80, 0.04);
+}
+
+.cloud-sync-summary__header {
+  min-width: 0;
+}
+
 /* 云同步面板 */
+.server-section {
+  margin-top: 12px;
+  padding-top: 8px;
+}
+
+.server-section-separator {
+  margin-top: 8px;
+  margin-bottom: 14px;
+}
+
 .sync-stat-card {
   background: #f5f5f5;
   border-radius: 6px;

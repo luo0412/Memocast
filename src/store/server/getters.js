@@ -40,20 +40,20 @@ export default {
         }
         return true
       })
-      if (rootState.client.noteOrderType === 'orderByNoteTitle') {
-        return filteredNotes.sort((n1, n2) => {
-          if (n1.title === n2.title) return 0
-          return n1.title > n2.title ? 1 : -1
-        })
+
+      const orderType = rootState.client.noteOrderType || 'orderByNoteTitleAsc'
+      const compareStrings = (v1 = '', v2 = '') => v1.localeCompare(v2, 'zh-Hans-CN', { sensitivity: 'base', numeric: true })
+      const compareNumbers = (v1 = 0, v2 = 0) => (v1 || 0) - (v2 || 0)
+      const comparators = {
+        orderByNoteTitleAsc: (n1, n2) => compareStrings(n1.title, n2.title),
+        orderByNoteTitleDesc: (n1, n2) => compareStrings(n2.title, n1.title),
+        orderByCreatedTimeAsc: (n1, n2) => compareNumbers(n1.dataCreated, n2.dataCreated),
+        orderByCreatedTimeDesc: (n1, n2) => compareNumbers(n2.dataCreated, n1.dataCreated),
+        orderByModifiedTimeAsc: (n1, n2) => compareNumbers(n1.dataModified, n2.dataModified),
+        orderByModifiedTimeDesc: (n1, n2) => compareNumbers(n2.dataModified, n1.dataModified)
       }
-      if (rootState.client.noteOrderType === 'orderByCreatedTime') {
-        return filteredNotes.sort((n1, n2) => {
-          const t1 = n1.dataCreated || 0
-          const t2 = n2.dataCreated || 0
-          return t2 - t1
-        })
-      }
-      return filteredNotes
+
+      return filteredNotes.sort(comparators[orderType] || comparators.orderByNoteTitleAsc)
     }
     return []
   },

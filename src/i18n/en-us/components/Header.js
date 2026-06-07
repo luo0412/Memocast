@@ -18,5 +18,6 @@ export default {
   pptPreview: 'PPT Preview',
   link: 'Link',
   imChat: 'Chat',
+  aiAssistant: 'AI Assistant',
   noteMethod: 'Note Method'
 }
