@@ -262,6 +262,14 @@
 
     <LoginDialog ref="loginDialog" />
     <SettingsDialog ref="settingsDialog" />
+    <EchoInstanceDialog
+      v-if='echoInstanceDialogVisible'
+      v-model='echoInstanceDialogVisible'
+      :instance='activeEchoInstance'
+      :echo='activeEchoDefinition'
+      @submit='handleEchoInstanceSubmit'
+      @open-definition='handleEchoDefinitionOpenFromInstance'
+    />
     <SearchDialog ref='searchDialog' />
     <TagDialog ref="tagDialog" />
     <ImDrawer ref="imDrawer" />
@@ -272,6 +280,7 @@
 <script>
 import LoginDialog from './ui/dialog/LoginDialog'
 import SettingsDialog from './ui/dialog/SettingsDialog'
+import { decodeEchoPayload } from 'components/ui/editor/echo/EchoRuntime'
 import { createNamespacedHelpers } from 'vuex'
 import helper from 'src/utils/helper'
 import debounce from 'lodash/debounce'
@@ -281,6 +290,7 @@ import events from 'src/constants/events'
 import SearchDialog from 'components/ui/dialog/SearchDialog'
 import ImDrawer from 'components/ui/ImDrawer'
 import AiDemoDrawer from 'components/ui/AiDemoDrawer'
+import EchoInstanceDialog from 'components/ui/dialog/EchoInstanceDialog.vue'
 import { ipcRenderer } from 'electron'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import CloudSyncService from 'src/services/CloudSyncService'
@@ -372,9 +382,19 @@ export default {
       if (!this.currentCategory) return ''
       const category = this.findCategoryByKey(this.categories, this.currentCategory)
       return category ? category.label : ''
+    },
+    activeEchoDefinition () {
+      const definitionId = String(this.activeEchoInstance?.definitionId || '').trim()
+      const echoName = String(this.activeEchoInstance?.echoName || '').trim()
+      return (this.$store.state.client.echoCards || []).find(item => {
+        if (!item) return false
+        if (definitionId && String(item.id || '').trim() === definitionId) return true
+        if (echoName && item.name === echoName) return true
+        return false
+      }) || null
     }
   },
-  components: { SearchDialog, TagDialog, SettingsDialog, LoginDialog, ImDrawer, AiDemoDrawer },
+  components: { SearchDialog, TagDialog, SettingsDialog, LoginDialog, ImDrawer, AiDemoDrawer, EchoInstanceDialog },
   data () {
     return {
       isMaximized: false,
@@ -394,7 +414,9 @@ export default {
           description: '收集游离态笔记碎片成体系'
         }
       ],
-      aiDrawerHighlight: false
+      aiDrawerHighlight: false,
+      echoInstanceDialogVisible: false,
+      activeEchoInstance: null
     }
   },
   methods: {
@@ -438,10 +460,11 @@ export default {
       if (!dialog) return
 
       const shouldOpenAiAdd = Boolean(options.openAiAdd)
+      const shouldOpenEchoEditor = Boolean(options.openEchoEdit)
       const toggleMode = options.toggle !== false
 
       if (!toggleMode) {
-        dialog.show()
+        dialog.show(options)
       } else {
         dialog.toggle()
       }
@@ -450,6 +473,12 @@ export default {
         this.$nextTick(() => {
           dialog.tab = 'server'
           dialog.openAiModelDialog(null, { markAsDefault: true })
+        })
+      }
+
+      if (shouldOpenEchoEditor && typeof dialog.applyOpenOptions === 'function') {
+        this.$nextTick(() => {
+          dialog.applyOpenOptions(options)
         })
       }
     },
@@ -461,6 +490,33 @@ export default {
 
     handleAiProviderConfigRequest () {
       this.handleSettingsClick({ toggle: false, openAiAdd: true })
+    },
+
+    handleOpenEchoManager (payload = {}) {
+      this.activeEchoInstance = {
+        echoId: String(payload?.echoId || '').trim(),
+        nodeId: String(payload?.nodeId || '').trim(),
+        echoName: String(payload?.echoName || '').trim(),
+        definitionId: String(payload?.definitionId || decodeEchoPayload(String(payload?.payload || ''))?.attrs?.definitionId || '').trim(),
+        payload: String(payload?.payload || '')
+      }
+      this.echoInstanceDialogVisible = true
+    },
+
+    handleEchoInstanceSubmit (payload = {}) {
+      bus.$emit(events.ECHO_EVENTS.commitInstance, payload)
+      this.echoInstanceDialogVisible = false
+    },
+
+    handleEchoDefinitionOpenFromInstance (payload = {}) {
+      this.echoInstanceDialogVisible = false
+      this.handleSettingsClick({
+        toggle: false,
+        tab: 'echo',
+        echoId: String(payload?.echoId || '').trim(),
+        echoName: String(payload?.echoName || '').trim(),
+        openEchoEdit: true
+      })
     },
 
     handleImChatClick () {
@@ -672,6 +728,8 @@ export default {
     }
     bus.$on(events.VIEW_SHORTCUT_CALL.switchView, this.switchViewHandler)
     bus.$on(events.NOTE_SHORTCUT_CALL.searchNote, () => this.$refs.searchDialog.toggle())
+    bus.$on(events.ECHO_EVENTS.openManager, this.handleOpenEchoManager)
+    bus.$on(events.ECHO_EVENTS.openInstanceEditor, this.handleOpenEchoManager)
     // 云同步面板点击"去登录" → 打开登录对话框
     bus.$on('showLoginDialog', () => this.$refs.loginDialog.toggle())
   },
@@ -686,6 +744,8 @@ export default {
     this.handlePushSyncClick.cancel()
     this.handlePullSyncClick.cancel()
     bus.$off(events.VIEW_SHORTCUT_CALL.switchView, this.switchViewHandler)
+    bus.$off(events.ECHO_EVENTS.openManager, this.handleOpenEchoManager)
+    bus.$off(events.ECHO_EVENTS.openInstanceEditor, this.handleOpenEchoManager)
     bus.$off('showLoginDialog')
   }
 }

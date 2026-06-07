@@ -185,6 +185,7 @@ export const createEchoPlaceholderPayload = (echo = {}) => {
     prompt: '',
     attrs: {
       value: '',
+      definitionId: String(echo?.id || '').trim(),
       title: echo?.name || '回响',
       desc: echo?.desc || '',
       icon: echo?.icon || DEFAULT_ECHO_ICON,
@@ -244,15 +245,28 @@ export default class EchoRuntime {
   render (token = {}, echo = null) {
     const matchedEcho = echo || this.registry?.getByName?.(token.echoName)
     const payload = decodeEchoPayload(token.payloadRaw || token.payload || '')
+    const tokenAttrs = token.attrsParsed && typeof token.attrsParsed === 'object' ? token.attrsParsed : {}
     const mergedAttrs = {
-      ...(token.attrsParsed || {}),
-      ...(payload.attrs || {})
+      ...(payload.attrs || {}),
+      ...tokenAttrs
     }
+    const payloadValue = typeof payload?.attrs?.value === 'string' ? payload.attrs.value : ''
+    const tokenAttrValue = typeof tokenAttrs.value === 'string' ? tokenAttrs.value : ''
+    const payloadPrompt = typeof payload.prompt === 'string' ? payload.prompt : payloadValue
+    const tokenPrompt = typeof token.prompt === 'string' ? token.prompt : ''
+    const resolvedValue = tokenAttrValue || payloadValue || tokenPrompt || payloadPrompt || ''
+    const resolvedPrompt = tokenPrompt || payloadPrompt || resolvedValue || ''
     const context = {
       name: token.echoName || matchedEcho?.name || '',
-      attrs: mergedAttrs,
+      id: String(token.echoId || tokenAttrs.id || payload?.attrs?.id || '').trim(),
+      attrs: {
+        ...mergedAttrs,
+        value: resolvedValue,
+        id: String(token.echoId || tokenAttrs.id || payload?.attrs?.id || '').trim()
+      },
       attrsRaw: token.attrsRaw || '',
-      prompt: typeof token.prompt === 'string' && token.prompt.length ? token.prompt : payload.prompt || '',
+      prompt: resolvedPrompt,
+      value: resolvedValue,
       raw: token.raw || '',
       echo: matchedEcho || null,
       token,
@@ -285,8 +299,9 @@ export default class EchoRuntime {
     normalized.icon = normalized.icon || matchedEcho.icon || DEFAULT_ECHO_ICON
     normalized.color = normalized.color || matchedEcho.color || DEFAULT_ECHO_COLOR
     normalized.title = normalized.title || matchedEcho.name || context.name || '回响'
-    normalized.description = normalized.description || matchedEcho.desc || ''
+    normalized.description = typeof normalized.description === 'string' ? normalized.description : matchedEcho.desc || ''
     normalized.prompt = typeof normalized.prompt === 'string' ? normalized.prompt : context.prompt || ''
+    normalized.value = typeof normalized.value === 'string' ? normalized.value : context.value
     normalized.html = typeof normalized.html === 'string' ? normalized.html : ''
     normalized.attrs = normalized.attrs && typeof normalized.attrs === 'object' ? normalized.attrs : context.attrs
     normalized.echo = matchedEcho

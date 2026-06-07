@@ -557,10 +557,6 @@ const enterCtrl = ContentState => {
       needRenderAll = true
     }
 
-    if (!needRenderAll && this.hasEchoTokenInBlock(block)) {
-      needRenderAll = true
-    }
-
     needRenderAll ? this.render() : this.partialRender()
   }
 }

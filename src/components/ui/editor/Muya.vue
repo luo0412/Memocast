@@ -12,10 +12,10 @@ import helper from 'src/utils/helper'
 import Vue from 'vue'
 import * as VueTemplateCompiler from 'vue-template-compiler'
 import Muya from 'src/libs/muya/lib'
-import bus from 'components/bus'
+import appBus from '../../bus'
 import _ from 'lodash'
 import { v4 as uuidv4 } from 'uuid'
-import events from 'src/constants/events'
+import appEvents from 'src/constants/events'
 import 'src/libs/muya/themes/default.css'
 import TablePicker from 'src/libs/muya/lib/ui/tablePicker'
 import QuickInsert from 'src/libs/muya/lib/ui/quickInsert'
@@ -141,10 +141,24 @@ const escapeEchoAttrValue = (value = '') => String(value)
   .replace(/\n/g, '\\n')
   .replace(/\t/g, '\\t')
 
-const buildEchoAnnotationText = (echoName = '回响', payload = '') => {
+const buildEchoAttrSource = ({ value = '', echoId = '', definitionId = '' } = {}) => {
+  const parts = []
+  if (echoId) {
+    parts.push(`id: '${escapeEchoAttrValue(echoId)}'`)
+  }
+  if (definitionId) {
+    parts.push(`definitionId: '${escapeEchoAttrValue(definitionId)}'`)
+  }
+  parts.push(`value: '${escapeEchoAttrValue(value)}'`)
+  return parts.join(', ')
+}
+
+const buildEchoAnnotationText = (echoName = '回响', payload = '', options = {}) => {
   const decoded = decodeEchoPayload(payload)
   const value = decoded.prompt || decoded?.attrs?.value || ''
-  return `@${echoName}{value: '${escapeEchoAttrValue(value)}'}()`
+  const echoId = String(options.echoId || decoded?.attrs?.id || '').trim() || createEchoInstanceId()
+  const definitionId = String(options.definitionId || decoded?.attrs?.definitionId || '').trim()
+  return `@${echoName}{${buildEchoAttrSource({ value, echoId, definitionId })}}()`
 }
 
 const createEchoInstanceId = () => uuidv4()
@@ -183,7 +197,10 @@ const migrateLegacyRunePlaceholders = (markdown = '', runeCards = []) => {
 const createEchoPlaceholderMarkup = (echo = {}) => {
   const echoName = String(echo?.name || '回响').trim() || '回响'
   const payload = createEchoPlaceholderPayload(echo)
-  return buildEchoAnnotationText(echoName, payload)
+  return buildEchoAnnotationText(echoName, payload, {
+    echoId: createEchoInstanceId(),
+    definitionId: String(echo?.id || '').trim()
+  })
 }
 
 const migrateLegacyEchoPlaceholders = (markdown = '', echoCards = []) => {
@@ -201,6 +218,26 @@ const migrateLegacyEchoPlaceholders = (markdown = '', echoCards = []) => {
     const echo = echoMap.get(echoName)
     if (!echo) return match
     return createEchoPlaceholderMarkup(echo)
+  }).replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, rawEchoName = '', attrsRaw = '', promptRaw = '') => {
+    const echoName = String(rawEchoName || '').trim()
+    const attrs = parseEchoAttrs(attrsRaw)
+    if (attrs.id) return match
+    const generatedEchoId = createEchoInstanceId()
+    const matchedEcho = echoMap.get(echoName)
+    const generatedDefinitionId = String(attrs.definitionId || matchedEcho?.id || '').trim()
+    const upgradedPayload = encodeEchoPayload({
+      prompt: String(promptRaw || attrs.value || ''),
+      attrs: {
+        ...attrs,
+        id: generatedEchoId,
+        definitionId: generatedDefinitionId,
+        value: String(attrs.value || promptRaw || '')
+      }
+    })
+    return buildEchoAnnotationText(echoName || '回响', upgradedPayload, {
+      echoId: generatedEchoId,
+      definitionId: generatedDefinitionId
+    })
   })
 }
 
@@ -342,8 +379,8 @@ const RunePreviewRenderer = Vue.extend({
   }
 })
 
-const EchoPlaceholderHost = Vue.extend({
-  name: 'EchoPlaceholderHost',
+const EchoPreviewRenderer = Vue.extend({
+  name: 'EchoPreviewRenderer',
   props: {
     echoId: {
       type: String,
@@ -357,133 +394,194 @@ const EchoPlaceholderHost = Vue.extend({
       type: Object,
       default: null
     },
-    payload: {
+    value: {
       type: String,
       default: ''
     },
     onCommit: {
       type: Function,
       default: null
+    },
+    placeholder: {
+      type: String,
+      default: '点击编辑实例内容...'
     }
   },
-    data () {
-    const decoded = decodeEchoPayload(this.payload)
+  data () {
     return {
-      isExpanded: false,
-      draftPrompt: decoded.prompt || decoded?.attrs?.value || ''
+      editing: false,
+      editValue: ''
     }
   },
   computed: {
-    resolvedPayload () {
-      return decodeEchoPayload(this.payload)
-    },
     renderModel () {
       return this.$root?.echoRegistry?.render?.({
         echoName: this.echo?.name || '',
-        payloadRaw: this.payload,
-        payload: this.payload
+        definitionId: this.echo?.id || '',
+        attrsParsed: {
+          definitionId: this.echo?.id || '',
+          value: this.value || ''
+        },
+        prompt: this.value || ''
       }, this.echo) || {
         title: this.echo?.name || '回响',
         description: this.echo?.desc || '',
-        prompt: this.draftPrompt || ''
+        prompt: this.value || ''
       }
     },
-    cardStyle () {
+    inlineStyle () {
       return {
         '--echo-accent': this.renderModel.color || this.echo?.color || '#26A69A'
       }
-    }
-  },
-  watch: {
-    payload: {
-      immediate: false,
-      handler (value) {
-        const decoded = decodeEchoPayload(value)
-        const nextDraftPrompt = decoded.prompt || decoded?.attrs?.value || ''
-        if (nextDraftPrompt !== this.draftPrompt) {
-          this.draftPrompt = nextDraftPrompt
-        }
-      }
+    },
+    displaySummary () {
+      const raw = this.renderModel.prompt || this.renderModel.description || this.value || ''
+      return String(raw || '').replace(/\s+/g, ' ').trim()
+    },
+    resolvedValue () {
+      return typeof this.value === 'string' ? this.value : ''
     }
   },
   methods: {
-    toggleExpanded () {
-      this.isExpanded = !this.isExpanded
+    startEdit () {
+      this.editing = true
+      this.editValue = this.resolvedValue
     },
-    commitPayload () {
-      if (typeof this.onCommit !== 'function') return
-      const nextPayload = encodeEchoPayload({
-        prompt: this.draftPrompt,
-        attrs: {
-          ...(this.resolvedPayload.attrs || {}),
-          value: this.draftPrompt
-        }
-      })
-      this.onCommit({
-        echoId: this.echoId,
-        nodeId: this.nodeId,
-        echoName: this.echo?.name || '',
-        payload: nextPayload
-      })
+    cancelEdit () {
+      this.editing = false
+      this.editValue = ''
+    },
+    commitEdit () {
+      const nextValue = typeof this.editValue === 'string' ? this.editValue : ''
+      if (typeof this.onCommit === 'function') {
+        this.onCommit({
+          echoId: this.echoId,
+          nodeId: this.nodeId,
+          echoName: this.echo?.name || '',
+          value: nextValue,
+          mode: 'update-instance'
+        })
+      }
+      this.editing = false
+      this.editValue = ''
+    },
+    handleEditKeydown (event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault()
+        this.commitEdit()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        this.cancelEdit()
+      }
+    },
+    handleEditBlur () {
+      this.commitEdit()
     }
   },
   render (h) {
-    const model = this.renderModel
+    const model = this.renderModel || {}
     const iconText = model.icon || 'graphic_eq'
-    const summaryText = model.prompt || model.description || '点击展开并编辑回响内容'
-    return h('div', {
-      staticClass: 'ag-echo-placeholder-card ag-echo-vue-card',
-      style: this.cardStyle,
+    const title = model.title || this.echo?.name || '回响'
+    const description = this.displaySummary
+
+    if (this.editing) {
+      return h('span', {
+        staticClass: 'ag-echo-inline-preview ag-echo-vue-card ag-echo-inline-editing',
+        style: this.inlineStyle,
+        attrs: {
+          contenteditable: 'false',
+          tabindex: '-1'
+        }
+      }, [
+        h('textarea', {
+          staticClass: 'ag-echo-inline-editor',
+          attrs: {
+            rows: 2,
+            placeholder: this.placeholder
+          },
+          domProps: {
+            value: this.editValue
+          },
+          on: {
+            input: event => {
+              this.editValue = event.target.value
+            },
+            keydown: this.handleEditKeydown,
+            blur: this.handleEditBlur
+          }
+        })
+      ])
+    }
+
+    return h('span', {
+      staticClass: 'ag-echo-inline-preview ag-echo-vue-card',
+      style: this.inlineStyle,
       attrs: {
-        contenteditable: 'false'
+        contenteditable: 'false',
+        tabindex: '-1'
       }
     }, [
       h('button', {
-        staticClass: 'ag-echo-placeholder-main',
+        staticClass: 'ag-echo-inline-chip',
         attrs: {
-          type: 'button'
+          type: 'button',
+          title: description || title
         },
         on: {
-          click: this.toggleExpanded
+          click: this.startEdit,
+          mousedown: event => {
+            event.preventDefault()
+          }
         }
       }, [
-        h('span', { staticClass: 'ag-echo-placeholder-icon' }, [
+        h('span', { staticClass: 'ag-echo-inline-chip__icon' }, [
           h('i', { staticClass: 'material-icons ag-echo-placeholder-icon-font' }, [iconText])
         ]),
-        h('span', { staticClass: 'ag-echo-placeholder-body' }, [
-          h('span', { staticClass: 'ag-echo-placeholder-title' }, [model.title || this.echo?.name || '回响']),
-          h('span', { staticClass: 'ag-echo-placeholder-desc' }, [summaryText])
+        h('span', { staticClass: 'ag-echo-inline-chip__body' }, [
+          h('span', { staticClass: 'ag-echo-inline-chip__title' }, [title]),
+          description ? h('span', { staticClass: 'ag-echo-inline-chip__desc' }, [description]) : null
         ])
       ]),
-      this.isExpanded
-        ? h('div', { staticClass: 'ag-echo-placeholder-editor' }, [
-            h('textarea', {
-              staticClass: 'ag-echo-placeholder-textarea',
-              domProps: {
-                value: this.draftPrompt
-              },
-              attrs: {
-                placeholder: '输入回响内容'
-              },
-              on: {
-                input: event => {
-                  this.draftPrompt = event.target.value
-                },
-                blur: this.commitPayload
-              }
-            }),
-            h('div', { staticClass: 'ag-echo-placeholder-actions' }, [
-              h('button', {
-                staticClass: 'ag-echo-placeholder-save',
-                attrs: { type: 'button' },
-                on: { click: this.commitPayload }
-              }, ['保存'])
-            ])
-          ])
-        : null
+      h('button', {
+        staticClass: 'ag-echo-inline-chip ag-echo-inline-chip--ghost',
+        attrs: {
+          type: 'button',
+          title: '编辑回响定义'
+        },
+        on: {
+          click: event => {
+            event.preventDefault()
+            event.stopPropagation()
+            if (typeof this.onCommit === 'function') {
+              this.onCommit({
+                echoId: this.echoId,
+                nodeId: this.nodeId,
+                echoName: this.echo?.name || '',
+                payload: encodeEchoPayload({
+                  prompt: this.resolvedValue,
+                  attrs: {
+                    id: this.echoId || '',
+                    value: this.resolvedValue
+                  }
+                }),
+                mode: 'open-definition'
+              })
+            }
+          },
+          mousedown: event => {
+            event.preventDefault()
+          }
+        }
+      }, [
+        h('span', { staticClass: 'ag-echo-inline-chip__icon' }, [
+          h('i', { staticClass: 'material-icons ag-echo-placeholder-icon-font' }, ['settings'])
+        ])
+      ])
     ])
   }
 })
+
+const EchoPlaceholderHost = EchoPreviewRenderer
 
 export default {
   name: 'Muya',
@@ -556,17 +654,49 @@ export default {
       this.updateNoteState('changed')
       return true
     },
-    updateEchoPlaceholderPayload ({ echoId = '', nodeId = '', echoName = '', payload = '' } = {}) {
-      if (!this.contentEditor || !payload) return false
+    updateEchoPlaceholderPayload ({ echoId = '', nodeId = '', echoName = '', payload = '', mode = '', value = '' } = {}) {
+      if (mode === 'open-definition') {
+        appBus.$emit(appEvents.ECHO_EVENTS.openManager, {
+          echoId: String(echoId || '').trim() || String(decodeEchoPayload(payload)?.attrs?.id || '').trim(),
+          nodeId: String(nodeId || '').trim(),
+          echoName: String(echoName || '').trim(),
+          payload: payload || ''
+        })
+        return true
+      }
+      if (!this.contentEditor) return false
       const markdown = this.contentEditor.getMarkdown()
       if (!markdown) return false
 
+      const resolvedValue = typeof value === 'string' ? value : (decodeEchoPayload(payload)?.prompt || decodeEchoPayload(payload)?.attrs?.value || '')
+      const normalizedEchoId = String(echoId || '').trim()
+      const decoded = decodeEchoPayload(payload)
+      const attrsFromPayload = decoded?.attrs || {}
+      const normalizedDefinitionId = String(attrsFromPayload?.definitionId || this.echoCards?.find(e => e.name === echoName)?.id || '').trim()
+
+      const nextPayload = encodeEchoPayload({
+        prompt: resolvedValue,
+        attrs: {
+          ...attrsFromPayload,
+          id: normalizedEchoId || String(attrsFromPayload?.id || '').trim() || createEchoInstanceId(),
+          definitionId: normalizedDefinitionId,
+          value: resolvedValue
+        }
+      })
+
       let updated = false
       const nextMarkdown = markdown.replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, matchedName = '', matchedAttrs = '', matchedPrompt = '') => {
-        const currentName = matchedName || echoName || '回响'
-        if (echoName && currentName !== echoName) return match
+        const currentName = String(matchedName || echoName || '回响').trim()
+        const attrs = parseEchoAttrs(matchedAttrs)
+        const matchedId = String(attrs.id || '').trim()
+        if (updated) return match
+        if (normalizedEchoId && matchedId && matchedId !== normalizedEchoId) return match
+        if (!normalizedEchoId && echoName && currentName !== echoName) return match
         updated = true
-        return buildEchoAnnotationText(currentName, payload)
+        return buildEchoAnnotationText(currentName, nextPayload, {
+          echoId: normalizedEchoId || matchedId || String(attrsFromPayload?.id || '').trim() || createEchoInstanceId(),
+          definitionId: String(attrs.definitionId || normalizedDefinitionId || '').trim()
+        })
       })
 
       if (!updated || nextMarkdown === markdown) return false
@@ -811,7 +941,7 @@ export default {
         echoRegistry: this.echoRegistry,
         echoCards: this.echoCards,
         runeRendererCtor: RunePreviewRenderer,
-        echoRendererCtor: EchoPlaceholderHost,
+        echoRendererCtor: null,
         enableRuneVueRenderer: true,
         onEchoPlaceholderCommit: this.updateEchoPlaceholderPayload,
         imagePathPicker: () => {
@@ -831,6 +961,28 @@ export default {
       attachThemeColor(this.theme)
 
       this.contentEditor.on('muya-click', _.debounce((event) => {
+        const echoTarget = event?.target?.closest?.('.ag-echo-anno-token')
+        if (echoTarget) {
+          const dataset = echoTarget.dataset || {}
+          const echoId = String(dataset.echoId || '').trim()
+          const echoName = String(dataset.echoName || '').trim()
+          const definitionId = String(dataset.echoDefinitionId || '').trim()
+          const value = String(dataset.echoValue || '')
+          this.updateEchoPlaceholderPayload({
+            echoId,
+            echoName,
+            value,
+            payload: encodeEchoPayload({
+              prompt: value,
+              attrs: {
+                id: echoId,
+                definitionId,
+                value
+              }
+            })
+          })
+          return
+        }
         if (event.target.type === 'checkbox') {
           const curData = this.contentEditor.getMarkdown()
           
@@ -854,7 +1006,7 @@ export default {
 
       this.contentEditor.on('change', () => this.updateContentsList(this.contentEditor.getTOC()))
 
-      this.contentEditor.on('change', () => bus.$emit(events.UPDATE_WORD_COUNT, this.contentEditor.getWordCount(this.contentEditor.getMarkdown())))
+      this.contentEditor.on('change', () => appBus.$emit(appEvents.UPDATE_WORD_COUNT, this.contentEditor.getWordCount(this.contentEditor.getMarkdown())))
 
       this.contentEditor.on('contextmenu', (event, selection) => {
         showEditorContextMenu(event, selection)
@@ -909,41 +1061,45 @@ export default {
         this.updateContentsList(this.contentEditor.getTOC())
       }, 300, { leading: true }))
 
-      bus.$on(events.SCROLL_TO_HEADER, this.scrollToHeaderHandler)
-      bus.$on(events.PARAGRAPH_SHORTCUT_CALL, this.paragraphHandler)
-      bus.$on(events.FORMAT_SHORTCUT_CALL, this.formatHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.undo, this.editCopyPasteHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.redo, this.editCopyPasteHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.copyAsMarkdown, this.editCopyPasteHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.copyAsHtml, this.editCopyPasteHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.pasteAsPlainText, this.editCopyPasteHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.duplicate, this.editParagraphHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.selectAll, this.selectAllHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.createParagraph, this.editParagraphHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.deleteParagraph, this.editParagraphHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.insertParagraph, this.insertParagraphHandler)
-      bus.$on(events.EDIT_SHORTCUT_CALL.formatDocumentByPangu, this.formatDocumentByPanguHandler)
-      bus.$on(events.NOTE_SHORTCUT_CALL.save, this.saveHandler)
+      appBus.$on(appEvents.SCROLL_TO_HEADER, this.scrollToHeaderHandler)
+      appBus.$on(appEvents.PARAGRAPH_SHORTCUT_CALL, this.paragraphHandler)
+      appBus.$on(appEvents.FORMAT_SHORTCUT_CALL, this.formatHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.undo, this.editCopyPasteHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.redo, this.editCopyPasteHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.copyAsMarkdown, this.editCopyPasteHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.copyAsHtml, this.editCopyPasteHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.pasteAsPlainText, this.editCopyPasteHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.duplicate, this.editParagraphHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.selectAll, this.selectAllHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.createParagraph, this.editParagraphHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.deleteParagraph, this.editParagraphHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.insertParagraph, this.insertParagraphHandler)
+      appBus.$on(appEvents.EDIT_SHORTCUT_CALL.formatDocumentByPangu, this.formatDocumentByPanguHandler)
+      appBus.$on(appEvents.NOTE_SHORTCUT_CALL.save, this.saveHandler)
+      appBus.$on(appEvents.ECHO_EVENTS.commitInstance, this.updateEchoPlaceholderPayload)
+      appBus.$on(appEvents.ECHO_EVENTS.openInstanceEditor, this.updateEchoPlaceholderPayload)
     })
   },
   beforeDestroy () {
     if (this.contentEditor && typeof this.contentEditor.destroy === 'function') {
       this.contentEditor.destroy()
     }
-    bus.$off(events.PARAGRAPH_SHORTCUT_CALL)
-    bus.$off(events.FORMAT_SHORTCUT_CALL)
-    bus.$off(events.EDIT_SHORTCUT_CALL.undo)
-    bus.$off(events.EDIT_SHORTCUT_CALL.redo)
-    bus.$off(events.EDIT_SHORTCUT_CALL.save)
-    bus.$off(events.EDIT_SHORTCUT_CALL.copyAsMarkdown)
-    bus.$off(events.EDIT_SHORTCUT_CALL.copyAsHtml)
-    bus.$off(events.EDIT_SHORTCUT_CALL.pasteAsPlainText)
-    bus.$off(events.EDIT_SHORTCUT_CALL.duplicate)
-    bus.$off(events.EDIT_SHORTCUT_CALL.selectAll)
-    bus.$off(events.EDIT_SHORTCUT_CALL.createParagraph)
-    bus.$off(events.EDIT_SHORTCUT_CALL.deleteParagraph)
-    bus.$off(events.EDIT_SHORTCUT_CALL.insertParagraph)
-    bus.$off(events.EDIT_SHORTCUT_CALL.formatDocumentByPangu)
+    appBus.$off(appEvents.PARAGRAPH_SHORTCUT_CALL)
+    appBus.$off(appEvents.FORMAT_SHORTCUT_CALL)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.undo)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.redo)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.save)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.copyAsMarkdown)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.copyAsHtml)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.pasteAsPlainText)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.duplicate)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.selectAll)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.createParagraph)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.deleteParagraph)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.insertParagraph)
+    appBus.$off(appEvents.EDIT_SHORTCUT_CALL.formatDocumentByPangu)
+    appBus.$off(appEvents.ECHO_EVENTS.commitInstance)
+    appBus.$off(appEvents.ECHO_EVENTS.openInstanceEditor)
   },
   watch: {
     currentNote: function (currentData) {
@@ -1061,10 +1217,17 @@ export default {
 </style>
 
 <style>
-.ag-rune-placeholder-host,
-.ag-echo-placeholder-host {
+.ag-rune-placeholder-host {
   display: block;
   margin: 6px 0;
+}
+
+.ag-echo-placeholder-host,
+.ag-echo-inline-host {
+  display: inline-flex;
+  vertical-align: middle;
+  margin: 0 4px;
+  max-width: min(100%, 420px);
 }
 
 .ag-rune-placeholder-card,
@@ -1092,6 +1255,39 @@ export default {
   align-items: stretch;
   border: 1px solid rgba(38, 166, 154, 0.2);
   background: linear-gradient(180deg, rgba(38, 166, 154, 0.12), rgba(38, 166, 154, 0.05));
+}
+
+.ag-echo-inline-chip--ghost {
+  opacity: 0.45;
+  padding: 0 6px !important;
+  min-width: unset !important;
+  flex-shrink: 0;
+  border: 1px solid rgba(38, 166, 154, 0.25);
+  background: rgba(38, 166, 154, 0.08);
+}
+
+.ag-echo-inline-chip--ghost:hover {
+  opacity: 1;
+  background: rgba(38, 166, 154, 0.18);
+}
+
+.ag-echo-inline-editor {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid rgba(38, 166, 154, 0.35);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  font: inherit;
+  color: inherit;
+  box-sizing: border-box;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ag-echo-inline-editing {
+  padding: 10px 12px;
 }
 
 .ag-rune-placeholder-icon {

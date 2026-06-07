@@ -1,6 +1,7 @@
 import EchoRuntime from './EchoRuntime'
 
 const normalizeEchoName = (value = '') => String(value || '').trim()
+const normalizeEchoId = (value = '') => String(value || '').trim()
 
 export default class EchoRegistry {
   constructor (echoCards = []) {
@@ -10,14 +11,21 @@ export default class EchoRegistry {
 
   refresh (echoCards = []) {
     this.echoCards = Array.isArray(echoCards) ? echoCards : []
+    this.echoIdMap = new Map()
     this.echoMap = this.echoCards.reduce((acc, echo) => {
       const name = normalizeEchoName(echo?.name)
+      const id = normalizeEchoId(echo?.id)
+      const normalizedEcho = {
+        ...echo,
+        id,
+        name,
+        anno_source: echo?.anno_source || echo?.template || ''
+      }
+      if (id) {
+        this.echoIdMap.set(id, normalizedEcho)
+      }
       if (name) {
-        acc.set(name, {
-          ...echo,
-          name,
-          anno_source: echo?.anno_source || echo?.template || ''
-        })
+        acc.set(name, normalizedEcho)
       }
       return acc
     }, new Map())
@@ -26,6 +34,10 @@ export default class EchoRegistry {
 
   getAll () {
     return Array.from(this.echoMap.values())
+  }
+
+  getById (id = '') {
+    return this.echoIdMap.get(normalizeEchoId(id)) || null
   }
 
   getByName (name = '') {
@@ -37,10 +49,14 @@ export default class EchoRegistry {
   }
 
   render (token = {}) {
-    return this.runtime.render(token, this.getByName(token.echoName))
+    const definitionId = String(token?.attrsParsed?.definitionId || token?.definitionId || '').trim()
+    const matchedEcho = definitionId ? this.getById(definitionId) : this.getByName(token.echoName)
+    return this.runtime.render(token, matchedEcho)
   }
 
   renderToHtml (token = {}) {
-    return this.runtime.renderToHtml(token, this.getByName(token.echoName))
+    const definitionId = String(token?.attrsParsed?.definitionId || token?.definitionId || '').trim()
+    const matchedEcho = definitionId ? this.getById(definitionId) : this.getByName(token.echoName)
+    return this.runtime.renderToHtml(token, matchedEcho)
   }
 }

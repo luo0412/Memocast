@@ -700,6 +700,7 @@ export default {
       echoFormVisible: false,
       echoFormKey: 0,
       editingEcho: null,
+      pendingEchoTarget: null,
       dragFromIndex: null,
       dragEntityType: null,
       cloudSyncLoginState: {
@@ -867,10 +868,32 @@ export default {
       this.refreshCloudSyncStatus()
       return this.$refs.dialog.toggle()
     },
-    show: function () {
+    show: function (options = {}) {
       this.refreshCloudSyncLoginState()
       this.refreshCloudSyncStatus()
+      if (options && typeof options === 'object') {
+        this.applyOpenOptions(options)
+      }
       return this.$refs.dialog.show()
+    },
+    applyOpenOptions: function (options = {}) {
+      const { tab = '', echoId = '', echoName = '', openEchoEdit = false } = options
+      if (tab) {
+        this.tab = tab
+      }
+      if (tab === 'echo' || openEchoEdit) {
+        const matchedEcho = (this.localEchoCards || []).find(item => {
+          if (!item) return false
+          if (echoId && item.id === echoId) return true
+          if (echoName && item.name === echoName) return true
+          return false
+        }) || null
+        this.pendingEchoTarget = matchedEcho
+        if (openEchoEdit && matchedEcho) {
+          this.editingEcho = { ...matchedEcho }
+          this.openEchoFormDialog()
+        }
+      }
     },
     languageChangeHandler: function (lan) {
       lan = i18n.availableLocales.find(l => {

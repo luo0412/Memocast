@@ -73,5 +73,10 @@ export default {
   },
   RENDER_EVENTS: {
     codeStyleUpdate: 'render.events.code.style.update'
+  },
+  ECHO_EVENTS: {
+    openManager: 'echo.events.open.manager',
+    openInstanceEditor: 'echo.events.open.instance.editor',
+    commitInstance: 'echo.events.commit.instance'
   }
 }

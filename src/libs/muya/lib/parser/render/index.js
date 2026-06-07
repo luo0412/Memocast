@@ -11,9 +11,6 @@ import { i18n } from 'boot/i18n'
 const RUNE_PLACEHOLDER_SELECTOR = '[data-rune-name][data-rune-id][data-rune-node-id]'
 const RUNE_HOST_CLASS = 'ag-rune-placeholder-host'
 const RUNE_CARD_CLASS = 'ag-rune-placeholder-card'
-const ECHO_PLACEHOLDER_SELECTOR = '[data-echo-name][data-echo-id][data-echo-node-id][data-echo-payload]'
-const ECHO_HOST_CLASS = 'ag-echo-placeholder-host'
-const ECHO_CARD_CLASS = 'ag-echo-placeholder-card'
 
 class StateRender {
   constructor (muya) {
@@ -32,8 +29,6 @@ class StateRender {
     this.container = null
     this.runePlaceholderCache = new Map()
     this.runeVmMap = new Map()
-    this.echoPlaceholderCache = new Map()
-    this.echoVmMap = new Map()
   }
 
   setContainer (container) {
@@ -124,8 +119,13 @@ class StateRender {
     const echoCards = echoRegistry?.getAll?.() || this.muya?.options?.echoCards || []
     return (Array.isArray(echoCards) ? echoCards : []).reduce((acc, echo) => {
       const echoName = String((echo?.name || '').trim())
+      const echoId = String((echo?.id || '').trim())
+      const normalizedEcho = echoName ? { ...echo, name: echoName, id: echoId } : echo
       if (echoName) {
-        acc.set(echoName, echo)
+        acc.set(echoName, normalizedEcho)
+      }
+      if (echoId) {
+        acc.set(`id:${echoId}`, normalizedEcho)
       }
       return acc
     }, new Map())
@@ -144,12 +144,20 @@ class StateRender {
 
   createEchoPlaceholderMarkup (echo, dataset = {}) {
     const echoName = echo?.name || dataset.echoName || '回响'
+    const echoValue = String(dataset.echoValue || '').replace(/\s+/g, ' ').trim()
+    const echoDescription = echoValue || echo?.desc || ''
+    const color = echo?.color || '#26A69A'
+    const icon = echo?.icon || 'graphic_eq'
     return `
-      <div class="${ECHO_CARD_CLASS}" data-echo-mounted="true">
-        <div class="ag-echo-placeholder-body">
-          <div class="ag-echo-placeholder-title">${echoName}</div>
-        </div>
-      </div>
+      <span class="${ECHO_CARD_CLASS}" data-echo-mounted="true" style="--echo-accent:${color}">
+        <span class="ag-echo-placeholder-body">
+          <span class="ag-echo-placeholder-icon material-icons">${icon}</span>
+          <span class="ag-echo-placeholder-copy">
+            <span class="ag-echo-placeholder-title">${echoName}</span>
+            ${echoDescription ? `<span class="ag-echo-placeholder-desc">${echoDescription}</span>` : ''}
+          </span>
+        </span>
+      </span>
     `
   }
 
@@ -210,16 +218,20 @@ class StateRender {
       const dataset = host.dataset || {}
       const echoName = String(dataset.echoName || '').trim()
       const echoId = String(dataset.echoId || '')
+      const definitionId = String(dataset.echoDefinitionId || '')
       const nodeId = String(dataset.echoNodeId || '')
-      const payload = String(dataset.echoPayload || '')
-      const echo = echoMap.get(echoName) || null
+      const value = String(dataset.echoValue || '')
+      const echo = echoMap.get(`id:${definitionId}`) || echoMap.get(echoName) || null
       const cacheKey = JSON.stringify({
         echoName,
         echoId,
+        definitionId,
         nodeId,
-        payload,
+        value,
         desc: echo?.desc || '',
-        color: echo?.color || ''
+        color: echo?.color || '',
+        icon: echo?.icon || '',
+        annoSource: echo?.anno_source || echo?.template || ''
       })
 
       if (this.echoPlaceholderCache.get(host) === cacheKey) {
@@ -228,17 +240,10 @@ class StateRender {
 
       host.classList.add(ECHO_HOST_CLASS)
       host.setAttribute('contenteditable', 'false')
+      host.innerHTML = this.createEchoPlaceholderMarkup(echo, dataset)
       host.dataset.echoRenderKey = cacheKey
       this.echoPlaceholderCache.set(host, cacheKey)
     })
-  }
-
-  cleanupDetachedEchoPlaceholders () {
-    for (const host of Array.from(this.echoPlaceholderCache.keys())) {
-      if (!host.isConnected) {
-        this.echoPlaceholderCache.delete(host)
-      }
-    }
   }
 
   cleanupDetachedRuneVms (force = false) {
@@ -248,17 +253,6 @@ class StateRender {
           vm.$destroy()
         }
         this.runeVmMap.delete(nodeId)
-      }
-    }
-  }
-
-  cleanupDetachedEchoVms (force = false) {
-    for (const [nodeId, vm] of this.echoVmMap.entries()) {
-      if (force || !vm || !vm.$el || !vm.$el.isConnected) {
-        if (vm && typeof vm.$destroy === 'function') {
-          vm.$destroy()
-        }
-        this.echoVmMap.delete(nodeId)
       }
     }
   }
@@ -385,14 +379,18 @@ class StateRender {
       const dataset = host.dataset || {}
       const echoName = String(dataset.echoName || '').trim()
       const echoId = String(dataset.echoId || '')
+      const definitionId = String(dataset.echoDefinitionId || '')
       const nodeId = String(dataset.echoNodeId || '')
-      const payload = String(dataset.echoPayload || '')
+      const value = String(dataset.echoValue || '')
       if (!echoName || !echoId || !nodeId) {
         return
       }
 
       aliveNodeIds.add(nodeId)
-      const echo = echoMap.get(echoName) || { name: echoName }
+      const echo = echoMap.get(`id:${definitionId}`) || echoMap.get(echoName) || {
+        id: definitionId,
+        name: echoName
+      }
       const renderKey = host.dataset.echoRenderKey || ''
       const mountedVm = this.echoVmMap.get(nodeId)
 
@@ -400,7 +398,7 @@ class StateRender {
         mountedVm.echoId = echoId
         mountedVm.nodeId = nodeId
         mountedVm.echo = echo
-        mountedVm.payload = payload
+        mountedVm.value = value
         return
       }
 
@@ -416,7 +414,7 @@ class StateRender {
           echoId,
           nodeId,
           echo,
-          payload,
+          value,
           onCommit: this.muya?.options?.onEchoPlaceholderCommit || null
         }
       })
@@ -440,9 +438,7 @@ class StateRender {
 
   renderRunesWithVue () {
     this.mountRuneVueHosts()
-    this.mountEchoVueHosts()
     this.cleanupDetachedRuneVms()
-    this.cleanupDetachedEchoVms()
   }
 
   renderRunes () {
@@ -577,9 +573,6 @@ class StateRender {
 
   // Only render the blocks which you updated
   partialRender (blocks, activeBlocks, matches, startKey, endKey) {
-    if (this.hasEchoInlineTokenInBlocks(blocks) || this.hasEchoInlineTokenInBlocks(activeBlocks)) {
-      return this.render(this.muya.contentState.blocks, activeBlocks, matches)
-    }
     const cursorOutMostBlock = activeBlocks[activeBlocks.length - 1]
     // If cursor is not in render blocks, need to render cursor block independently
     const needRenderCursorBlock = blocks.indexOf(cursorOutMostBlock) === -1
