@@ -1,6 +1,6 @@
 <template>
   <el-drawer
-    title="AI 助手示例"
+    title="AI 助手"
     :visible.sync="visible"
     direction="rtl"
     size="420px"
@@ -10,46 +10,50 @@
     :with-header="true"
   >
     <div class="ai-drawer-demo">
-      <div class="ai-demo-input-section ai-demo-section">
-        <div class="ai-demo-section__title">输入框示例</div>
-        <el-x-sender
-          :value="draftMessage"
-          placeholder="输入内容体验 Sender 组件"
-          @input="draftMessage = $event"
-          @submit="handleSubmit"
-        />
-      </div>
-
-      <el-x-welcome
-        icon="el-icon-chat-dot-round"
-        title="开始你的 AI 对话"
-        description="这里先接入 Element-UI-X 的基础示例，后续可以继续扩展会话、提示词和消息流。"
-        variant="filled"
-      />
-
-      <div class="ai-demo-scroll">
-        <div class="ai-demo-section">
-          <div class="ai-demo-section__title">基础打字效果</div>
-          <el-x-typewriter
-            :content="typewriterContent"
-            :typing="visible"
-            class="ai-demo-typewriter"
-          />
-        </div>
-
-        <div class="ai-demo-section">
-          <div class="ai-demo-section__title">基础消息示例</div>
-          <div class="ai-demo-bubbles">
-            <el-x-bubble
-              placement="start"
-              content="你好，我已经把 Element-UI-X 接进来了。"
+      <div class="ai-demo-chat-shell">
+        <perfect-scrollbar ref="scrollbar" class="ai-demo-scroll" :options="scrollOptions">
+          <div class="ai-demo-scroll__inner">
+            <el-x-welcome
+              icon="el-icon-chat-dot-round"
+              :title="welcomeTitle"
+              :description="welcomeDescription"
+              variant="filled"
             />
-            <el-x-bubble
-              placement="end"
-              type="primary"
-              content="很好，接下来展示一个可扩展的 AI 侧边栏。"
-            />
+
+            <div class="ai-demo-message-list">
+              <div
+                v-for="message in messages"
+                :key="message.id"
+                class="ai-demo-message-item"
+                :class="`ai-demo-message-item--${message.role}`"
+              >
+                <div class="ai-demo-message-label">
+                  {{ message.role === 'user' ? '你' : 'AI 助手' }}
+                </div>
+                <el-x-bubble
+                  :placement="message.role === 'user' ? 'end' : 'start'"
+                  :type="message.role === 'user' ? 'primary' : 'default'"
+                  :content="message.content"
+                />
+              </div>
+
+              <div v-if="loading" class="ai-demo-message-item ai-demo-message-item--assistant">
+                <div class="ai-demo-message-label">AI 助手</div>
+                <el-x-bubble placement="start" content="正在思考中..." />
+              </div>
+            </div>
           </div>
+        </perfect-scrollbar>
+
+        <div class="ai-demo-composer">
+          <div class="ai-demo-composer__hint">{{ composerHint }}</div>
+          <el-x-sender
+            :value="draftMessage"
+            :disabled="loading || !isReady"
+            :placeholder="composerPlaceholder"
+            @input="draftMessage = $event"
+            @submit="handleSubmit"
+          />
         </div>
       </div>
     </div>
@@ -57,34 +61,136 @@
 </template>
 
 <script>
+import PerfectScrollbar from 'vue2-perfect-scrollbar'
+import PortkeyService from 'src/services/PortkeyService'
+
 export default {
   name: 'AiDemoDrawer',
+  components: {
+    PerfectScrollbar
+  },
   data () {
     return {
       visible: false,
       draftMessage: '',
-      typewriterContent: '欢迎使用 AI 抽屉示例，这里演示了 Welcome、Typewriter、Bubble 和 Sender 组件的基础组合。'
+      messageId: 2,
+      loading: false,
+      defaultConfig: null,
+      messages: [
+        {
+          id: 1,
+          role: 'assistant',
+          content: '这里会直接读取默认 Portkey 模型配置。配置好后，发送消息即可得到真实回复。'
+        }
+      ],
+      scrollOptions: {
+        suppressScrollX: true,
+        wheelPropagation: false
+      }
+    }
+  },
+  computed: {
+    isReady () {
+      return Boolean(this.defaultConfig && this.defaultConfig.provider_type === 'portkey')
+    },
+    welcomeTitle () {
+      return this.isReady ? 'Portkey AI 助手' : '尚未配置默认 Portkey 模型'
+    },
+    welcomeDescription () {
+      if (!this.isReady) {
+        return '请先到设置中添加一个 Portkey provider 的模型配置，并将其设为默认。'
+      }
+
+      return `当前默认模型：${this.defaultConfig.name} · ${this.defaultConfig.model}`
+    },
+    composerHint () {
+      if (!this.isReady) {
+        return '当前不可发送：缺少默认 Portkey 模型配置。'
+      }
+
+      return '输入内容后回车，消息会通过默认 Portkey 模型发送。'
+    },
+    composerPlaceholder () {
+      return this.isReady ? '输入一句话，开始真实 AI 对话' : '请先在设置里完成默认 Portkey 配置'
     }
   },
   methods: {
-    show () {
+    async refreshDefaultConfig () {
+      this.defaultConfig = await PortkeyService.getDefaultConfig()
+    },
+    async show () {
+      await this.refreshDefaultConfig()
       this.visible = true
+      this.scrollToBottom()
     },
     hide () {
       this.visible = false
     },
-    toggle () {
-      this.visible = !this.visible
+    async toggle () {
+      if (!this.visible) {
+        await this.show()
+        return
+      }
+
+      this.visible = false
     },
-    handleSubmit (value) {
-      const message = typeof value === 'string' ? value : this.draftMessage
-      if (!message || !message.trim()) return
-      this.$q.notify({
-        type: 'positive',
-        message: `示例消息：${message.trim()}`,
-        position: 'top'
+    pushMessage (role, content) {
+      this.messages.push({
+        id: this.messageId,
+        role,
+        content
       })
+      this.messageId += 1
+    },
+    extractAssistantContent (response) {
+      return response?.choices?.[0]?.message?.content || '模型返回了空响应。'
+    },
+    scrollToBottom () {
+      this.$nextTick(() => {
+        const root = this.$refs.scrollbar && this.$refs.scrollbar.$el
+        const scrollEl = root && root.querySelector('.ps')
+        if (scrollEl) {
+          scrollEl.scrollTop = scrollEl.scrollHeight
+        }
+      })
+    },
+    async handleSubmit (value) {
+      const message = typeof value === 'string' ? value : this.draftMessage
+      const content = message && message.trim()
+
+      if (!content || this.loading) return
+
+      if (!this.isReady) {
+        this.$q.notify({
+          type: 'warning',
+          message: '请先在设置中配置默认 Portkey 模型。',
+          position: 'top'
+        })
+        return
+      }
+
+      this.pushMessage('user', content)
       this.draftMessage = ''
+      this.loading = true
+      this.scrollToBottom()
+
+      try {
+        const response = await PortkeyService.chat([
+          ...this.messages.map(item => ({ role: item.role, content: item.content })),
+          { role: 'user', content }
+        ])
+        this.pushMessage('assistant', this.extractAssistantContent(response))
+      } catch (error) {
+        this.pushMessage('assistant', `调用失败：${error.message || '未知错误'}`)
+        this.$q.notify({
+          type: 'negative',
+          message: error.message || 'Portkey 请求失败',
+          position: 'top'
+        })
+      } finally {
+        this.loading = false
+        this.scrollToBottom()
+      }
     }
   }
 }
@@ -94,48 +200,75 @@ export default {
 .ai-drawer-demo {
   display: flex;
   flex-direction: column;
-  gap: 16px;
   height: 100%;
+  min-height: 0;
   padding: 16px;
   box-sizing: border-box;
   overflow: hidden;
 }
 
+.ai-demo-chat-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid var(--floatBorderColor, #ebeef5);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 48%, #ffffff 100%);
+  overflow: hidden;
+}
+
 .ai-demo-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 16px 0;
+}
+
+.ai-demo-scroll__inner {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 2px;
+  min-height: 100%;
 }
 
-.ai-demo-input-section {
-  flex-shrink: 0;
+.ai-demo-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 12px;
 }
 
-.ai-demo-section {
-  padding: 16px;
-  border: 1px solid var(--floatBorderColor, #ebeef5);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.78);
+.ai-demo-message-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.ai-demo-section__title {
-  margin-bottom: 12px;
-  font-size: 13px;
+.ai-demo-message-item--user {
+  align-items: flex-end;
+}
+
+.ai-demo-message-item--assistant {
+  align-items: flex-start;
+}
+
+.ai-demo-message-label {
+  font-size: 12px;
   font-weight: 600;
   color: #909399;
 }
 
-.ai-demo-typewriter {
-  min-height: 72px;
+.ai-demo-composer {
+  flex-shrink: 0;
+  padding: 12px 16px 16px;
+  border-top: 1px solid rgba(235, 238, 245, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -8px 24px rgba(31, 35, 41, 0.05);
 }
 
-.ai-demo-bubbles {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.ai-demo-composer__hint {
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #909399;
 }
 </style>

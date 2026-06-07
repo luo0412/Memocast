@@ -15,6 +15,7 @@ export default {
   calendarView: 'Calendar',
   skin: 'Skin',
   ppt: 'PPT',
+  pptPreview: 'PPT Preview',
   link: 'Link',
   imChat: 'Chat',
   noteMethod: 'Note Method'

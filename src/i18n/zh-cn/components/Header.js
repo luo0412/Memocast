@@ -15,6 +15,7 @@ export default {
   calendarView: '日历',
   skin: '换肤',
   ppt: 'PPT',
+  pptPreview: 'PPT 预览',
   link: '链接',
   imChat: '聊天',
   noteMethod: '笔记方法'

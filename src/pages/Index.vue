@@ -199,7 +199,7 @@
                 v-ripple
               />
               <q-btn
-                icon='share'
+                icon='slideshow'
                 class='fab-icon cursor-pointer material-icons-round'
                 dense
                 flat
@@ -208,7 +208,8 @@
                 color='#26A69A'
                 v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
                 v-ripple
-                :title="$t('ppt')"
+                :title="$t('pptPreview')"
+                @click='openPptPreview'
               />
               <q-btn
                 icon='link'
@@ -218,9 +219,10 @@
                 round
                 size='md'
                 color='#26A69A'
-                v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
+                v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && canCopyNoteLink'
                 v-ripple
-                :title="$t('link')"
+                :title="$t('copyNoteLink')"
+                @click='copyNoteLink'
               />
               <ImportDialog ref='importDialog' />
             </div>
@@ -229,6 +231,7 @@
         <NoteOutlineDrawer ref='outlineDrawer' :change='outlineDrawerChangeHandler' />
         <Loading :visible='isCurrentNoteLoading' />
         <MarkMapDialog ref="markMapDialog" />
+        <PptPreviewDialog ref='pptPreviewDialog' />
       </template>
     </q-splitter>
   </q-page>
@@ -248,6 +251,7 @@ import Loading from 'components/ui/Loading.vue'
 import Monaco from 'components/ui/editor/Monaco.vue'
 import Muya from 'components/ui/editor/Muya.vue'
 import MarkMapDialog from '../components/ui/dialog/MarkMapDialog.vue'
+import PptPreviewDialog from '../components/ui/dialog/PptPreviewDialog.vue'
 import Illustration from 'src/components/ui/Illustration.vue'
 import ImportDialog from 'components/ui/dialog/ImportDialog.vue'
 
@@ -263,6 +267,7 @@ export default {
   mixins: [initLoadingPageMixins],
   components: {
     MarkMapDialog,
+    PptPreviewDialog,
     Muya,
     Monaco,
     Loading,
@@ -307,6 +312,9 @@ export default {
     },
     showEditorNoteFab: function () {
       return (this.isLogin || !this.isLogin) && !this.noteFabIsTagCategory
+    },
+    canCopyNoteLink: function () {
+      return !!this.currentNoteInfo?.docGuid && !!this.currentNoteInfo?.kbGuid
     },
     ...mapServerGetters(['currentNote', 'currentNoteInfo']),
     ...mapServerState([
@@ -372,6 +380,27 @@ export default {
     generateMindmapHandler: function () {
       const markdown = this.getTempValue()
       this.$refs.markMapDialog.toggle(markdown)
+    },
+    openPptPreview: function () {
+      const markdown = this.getTempValue()
+      this.$refs.pptPreviewDialog.show(markdown)
+    },
+    copyNoteLink: function () {
+      const { docGuid, kbGuid } = this.currentNoteInfo || {}
+      if (!docGuid || !kbGuid) return
+      const baseUrl = window.location.origin || ''
+      const noteViewUrl = `${baseUrl}/ks/note/view/${kbGuid}/${docGuid}/`
+      const clipboard = window.__electronClipboard
+      if (clipboard?.writeText) {
+        clipboard.writeText(noteViewUrl)
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(noteViewUrl)
+      }
+      this.$q.notify({
+        color: 'primary',
+        icon: 'link',
+        message: this.$t('noteLinkCopied')
+      })
     },
     wordCountUpdateHandler: function (wordCount) {
       this.wordCount = Object.assign({

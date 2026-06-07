@@ -25,16 +25,16 @@
                 class='text-amber-10'
               />
               <q-tab
-                name='server'
-                icon='storage'
-                :label="$t('server')"
-                class='text-red-7'
-              />
-              <q-tab
                 name='rune'
                 icon='star'
                 :label="$t('rune')"
                 class='text-purple-5'
+              />
+              <q-tab
+                name='server'
+                icon='storage'
+                :label="$t('server')"
+                class='text-green-7'
               />
             </q-tabs>
           </div>
@@ -196,7 +196,7 @@
 
               <q-tab-panel name='server' class='q-pa-sm'>
                 <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-primary' />
+                  <div class='panel-title-bar bg-green-7' />
                   <span class='text-subtitle2 text-weight-medium'>{{ $t('server') }}</span>
                 </div>
                 <q-separator class='q-my-xs' />
@@ -216,7 +216,7 @@
                 <q-separator class='q-my-xs' />
 
                 <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
-                  <div class='panel-title-bar bg-blue-7' />
+                  <div class='panel-title-bar bg-green-7' />
                   <span class='text-subtitle2 text-weight-medium'>{{ $t('cloudSync') }}</span>
                 </div>
                 <q-separator class='q-my-xs' />
@@ -238,95 +238,85 @@
 
                 <!-- 已登录状态 -->
                 <div v-else>
-                  <!-- 账号信息卡片 -->
-                  <q-card flat bordered class='q-mb-sm'>
+                  <q-card flat bordered class='q-mb-sm ai-model-default-card' v-if='defaultAiModel'>
                     <q-card-section class='q-pa-sm'>
                       <div class='row items-center no-wrap'>
-                        <q-icon name='account_circle' size='1.5rem' color='blue-7' class='q-mr-sm' />
-                        <div>
-                          <div class='text-body2 text-weight-medium'>{{ accountInfo.displayName || accountInfo.email || '-' }}</div>
+                        <q-icon name='psychology' size='1.25rem' color='green-7' class='q-mr-sm' />
+                        <div class='col'>
+                          <div class='text-body2 text-weight-medium'>{{ defaultAiModel.name }}</div>
                           <div class='text-caption text-grey-6'>
-                            <span class='text-grey-5'>{{ $t('cloudSyncKbGuid') }}:</span>
-                            {{ accountInfo.kbGuid ? accountInfo.kbGuid.substring(0, 8) + '...' : '-' }}
+                            {{ defaultAiModel.provider_type }} · {{ defaultAiModel.model }}
                           </div>
                         </div>
-                        <q-space />
-                        <q-btn
-                          flat dense round
-                          color='negative'
-                          icon='logout'
-                          size='sm'
-                          :label="$t('cloudSyncLogout')"
-                          @click='confirmLogout'
-                        />
+                        <q-badge color='positive' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
                       </div>
                     </q-card-section>
                   </q-card>
 
-                  <!-- 同步状态 -->
-                  <div class='row q-col-gutter-xs q-mb-sm'>
-                    <div class='col-4'>
-                      <div class='sync-stat-card'>
-                        <div class='text-caption text-grey-6'>{{ $t('cloudSyncTotal') }}</div>
-                        <div class='text-h6 text-primary'>{{ syncStats.total }}</div>
-                      </div>
-                    </div>
-                    <div class='col-4'>
-                      <div class='sync-stat-card'>
-                        <div class='text-caption text-grey-6'>{{ $t('cloudSyncSynced') }}</div>
-                        <div class='text-h6 text-positive'>{{ syncStats.synced }}</div>
-                      </div>
-                    </div>
-                    <div class='col-4'>
-                      <div class='sync-stat-card'>
-                        <div class='text-caption text-grey-6'>{{ $t('cloudSyncPending') }}</div>
-                        <div class='text-h6' :class="syncStats.pending > 0 ? 'text-orange' : 'text-grey'">{{ syncStats.pending }}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 上次同步时间 -->
-                  <div class='text-caption text-grey-6 q-mb-md'>
-                    <q-icon name='schedule' size='xs' class='q-mr-xs' />
-                    {{ $t('cloudSyncLastSync') }}:
-                    {{ lastSyncTimeDisplay || $t('never') }}
-                  </div>
-
-                  <!-- 同步按钮 -->
-                  <div class='row q-gutter-sm'>
+                  <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
+                    <div class='panel-title-bar bg-green-7' />
+                    <span class='text-subtitle2 text-weight-medium'>{{ $t('aiModelSettings') }}</span>
+                    <q-space />
                     <q-btn
-                      class='col'
-                      color='primary'
-                      :label="$t('cloudSyncSyncPushOnly')"
-                      icon='cloud_upload'
-                      unelevated
-                      :loading='isSyncing'
-                      :disable='isSyncing'
-                      @click='doPushOnly'
+                      dense flat no-caps
+                      color='green-7'
+                      icon='add'
+                      size='sm'
+                      :label="$t('aiModelAdd')"
+                      @click='openAiModelDialog()'
                     />
-                    <q-btn
+                  </div>
+                  <q-separator class='q-my-xs' />
+
+                  <div v-if='aiModelsLoading' class='row items-center text-grey-6 q-py-md'>
+                    <q-spinner size='20px' class='q-mr-sm' />
+                    <span>{{ $t('loading') }}</span>
+                  </div>
+
+                  <div v-else-if='aiModelConfigs.length === 0' class='text-center text-grey q-pa-md ai-model-empty'>
+                    <q-icon name='smart_toy' size='2rem' />
+                    <div class='q-mt-sm'>{{ $t('aiNoModelConfigured') }}</div>
+                  </div>
+
+                  <div v-else class='column q-gutter-sm q-mb-md'>
+                    <q-card
+                      v-for='item in aiModelConfigs'
+                      :key='item.id'
                       flat
-                      class='col'
-                      color='blue'
-                      :label="$t('cloudSyncSyncPullOnly')"
-                      icon='cloud_download'
-                      :loading='isSyncing'
-                      :disable='isSyncing'
-                      @click='doPullOnly'
-                    />
+                      bordered
+                      class='ai-model-card'
+                    >
+                      <q-card-section class='q-pa-sm'>
+                        <div class='row items-start no-wrap q-col-gutter-sm'>
+                          <div class='col'>
+                            <div class='row items-center no-wrap q-gutter-xs'>
+                              <div class='text-body2 text-weight-medium'>{{ item.name }}</div>
+                              <q-badge v-if='item.is_default' color='primary' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
+                            </div>
+                            <div class='text-caption text-grey-6 q-mt-xs'>{{ item.provider_type }}</div>
+                            <div class='text-caption text-grey-7 q-mt-xs'>{{ item.base_url }}</div>
+                            <div class='text-caption text-grey-7 q-mt-xs'>{{ item.model }}</div>
+                            <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasApiKey'>
+                              {{ item.provider_type === 'portkey' ? $t('aiPortkeyApiKey') : $t('aiApiKey') }}: {{ item.apiKeyMasked }}
+                            </div>
+                            <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasVirtualKey'>
+                              {{ $t('aiPortkeyVirtualKey') }}: {{ item.portkeyVirtualKeyMasked }}
+                            </div>
+                          </div>
+                          <div class='column q-gutter-xs'>
+                            <q-btn dense flat no-caps color='primary' size='sm' icon='edit' :label="$t('aiModelEdit')" @click='openAiModelDialog(item.id)' />
+                            <q-btn
+                              v-if='!item.is_default'
+                              dense flat no-caps color='positive' size='sm' icon='check_circle'
+                              :label="$t('aiSetDefault')"
+                              @click='setDefaultAiModel(item)'
+                            />
+                            <q-btn dense flat no-caps color='negative' size='sm' icon='delete' :label="$t('aiModelDelete')" @click='confirmDeleteAiModel(item)' />
+                          </div>
+                        </div>
+                      </q-card-section>
+                    </q-card>
                   </div>
-
-                  <!-- 错误提示 -->
-                  <q-banner
-                    v-if='syncError'
-                    class='q-mt-sm'
-                    rounded
-                    type='negative'
-                    dense
-                    icon='error'
-                  >
-                    {{ syncError }}
-                  </q-banner>
                 </div>
                 <q-separator class='q-my-xs' />
                 <div>
@@ -407,6 +397,96 @@
       @input='onRuneFormVisibleChange'
       @submit='onRuneSubmit'
     />
+
+    <q-dialog v-model='aiModelDialogVisible' persistent>
+      <q-card class='ai-model-form-card'>
+        <q-card-section class='row items-center no-wrap q-pb-sm'>
+          <div class='text-subtitle1 text-weight-medium'>{{ aiModelForm.id ? $t('aiModelEdit') : $t('aiModelAdd') }}</div>
+          <q-space />
+          <q-btn flat round dense icon='close' v-close-popup />
+        </q-card-section>
+
+        <q-card-section class='q-pt-none'>
+          <q-input
+            v-model.trim='aiModelForm.name'
+            dense
+            outlined
+            class='q-mb-sm'
+            :label="$t('aiModelConfigName')"
+          />
+          <q-select
+            v-model='aiModelForm.provider_type'
+            dense
+            outlined
+            emit-value
+            map-options
+            class='q-mb-sm'
+            :label="$t('aiProviderType')"
+            :options='aiProviderOptions'
+          />
+          <q-input
+            v-model.trim='aiModelForm.base_url'
+            dense
+            outlined
+            class='q-mb-sm'
+            :label="$t('aiBaseUrl')"
+          />
+          <q-input
+            v-model.trim='aiModelForm.model'
+            dense
+            outlined
+            class='q-mb-sm'
+            :label="$t('aiModelName')"
+          />
+          <q-input
+            v-model.trim='aiModelForm.api_key'
+            dense
+            outlined
+            class='q-mb-sm'
+            :type='showAiApiKey ? "text" : "password"'
+            :label='isPortkeyProvider ? $t("aiPortkeyApiKey") : $t("aiApiKey")'
+            :hint='aiModelApiKeyHint'
+          >
+            <template v-slot:append>
+              <q-btn flat round dense :icon='showAiApiKey ? "visibility_off" : "visibility"' @click='showAiApiKey = !showAiApiKey' />
+            </template>
+          </q-input>
+          <q-input
+            v-if='isPortkeyProvider'
+            v-model.trim='aiModelForm.virtual_key'
+            dense
+            outlined
+            class='q-mb-sm'
+            :type='showAiApiKey ? "text" : "password"'
+            :label="$t('aiPortkeyVirtualKey')"
+            :hint='aiVirtualKeyHint'
+          />
+          <q-toggle
+            v-model='aiModelForm.clear_api_key'
+            color='negative'
+            :label='isPortkeyProvider ? $t("aiClearPortkeyApiKey") : $t("aiClearApiKey")'
+            class='q-mb-sm'
+          />
+          <q-toggle
+            v-if='isPortkeyProvider'
+            v-model='aiModelForm.clear_virtual_key'
+            color='negative'
+            :label="$t('aiClearVirtualKey')"
+            class='q-mb-sm'
+          />
+          <q-toggle
+            v-model='aiModelForm.is_default'
+            color='primary'
+            :label="$t('aiSetDefault')"
+          />
+        </q-card-section>
+
+        <q-card-actions align='right'>
+          <q-btn flat :label="$t('cancel')" v-close-popup />
+          <q-btn color='primary' unelevated :label="$t('save')" :loading='aiModelSaving' @click='submitAiModelForm' />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-dialog>
 </template>
 
@@ -473,7 +553,28 @@ export default {
       syncStats: { total: 0, synced: 0, pending: 0 },
       lastSyncTimeDisplay: null,
       isSyncing: false,
-      syncError: null
+      syncError: null,
+      aiModelsLoading: false,
+      aiModelSaving: false,
+      aiModelDialogVisible: false,
+      aiModelConfigs: [],
+      showAiApiKey: false,
+      aiProviderOptions: [
+        { label: 'OpenAI-compatible', value: 'openai-compatible' },
+        { label: 'Portkey', value: 'portkey' }
+      ],
+      aiModelForm: {
+        id: null,
+        name: '',
+        provider_type: 'portkey',
+        base_url: '',
+        model: '',
+        api_key: '',
+        virtual_key: '',
+        is_default: false,
+        clear_api_key: false,
+        clear_virtual_key: false
+      }
     }
   },
   computed: {
@@ -523,6 +624,38 @@ export default {
     },
     accountInfo () {
       return this.cloudSyncLoginState.accountInfo || {}
+    },
+    defaultAiModel () {
+      return this.aiModelConfigs.find(item => item.is_default) || null
+    },
+    aiModelApiKeyHint () {
+      if (!this.aiModelForm.id) {
+        return ''
+      }
+
+      if (this.aiModelForm.clear_api_key) {
+        return this.$t('aiApiKeyWillBeCleared')
+      }
+
+      return this.aiModelForm.apiKeyMasked
+        ? this.$t('aiApiKeySavedMasked', { masked: this.aiModelForm.apiKeyMasked })
+        : this.$t('aiApiKeyOptionalOnEdit')
+    },
+    aiVirtualKeyHint () {
+      if (!this.aiModelForm.id) {
+        return ''
+      }
+
+      if (this.aiModelForm.clear_virtual_key) {
+        return this.$t('aiVirtualKeyWillBeCleared')
+      }
+
+      return this.aiModelForm.virtualKeyMasked
+        ? this.$t('aiVirtualKeySavedMasked', { masked: this.aiModelForm.virtualKeyMasked })
+        : this.$t('aiVirtualKeyOptionalOnEdit')
+    },
+    isPortkeyProvider () {
+      return this.aiModelForm.provider_type === 'portkey'
     },
     ...mapClientState([
       'language',
@@ -662,6 +795,158 @@ export default {
     },
     openLogFilesHandler: function () {
       openLogFiles()
+    },
+    createEmptyAiModelForm () {
+      return {
+        id: null,
+        name: '',
+        provider_type: 'portkey',
+        base_url: '',
+        model: '',
+        api_key: '',
+        virtual_key: '',
+        is_default: false,
+        clear_api_key: false,
+        clear_virtual_key: false,
+        apiKeyMasked: '',
+        virtualKeyMasked: ''
+      }
+    },
+    async loadAiModelConfigs () {
+      this.aiModelsLoading = true
+      try {
+        this.aiModelConfigs = await DatabaseClient.aiModels.getAll()
+      } finally {
+        this.aiModelsLoading = false
+      }
+    },
+    async openAiModelDialog (id = null) {
+      this.showAiApiKey = false
+      this.aiModelForm = this.createEmptyAiModelForm()
+
+      if (id) {
+        const config = await DatabaseClient.aiModels.getById(id)
+        if (!config) {
+          this.$q.notify({
+            message: this.$t('aiConfigLoadFailed'),
+            type: 'negative',
+            position: 'top'
+          })
+          return
+        }
+
+        this.aiModelForm = {
+          id: config.id,
+          name: config.name || '',
+          provider_type: config.provider_type || 'openai-compatible',
+          base_url: config.base_url || '',
+          model: config.model || '',
+          api_key: config.api_key || '',
+          virtual_key: config.virtual_key || '',
+          is_default: Boolean(config.is_default),
+          clear_api_key: false,
+          clear_virtual_key: false,
+          apiKeyMasked: config.apiKeyMasked || '',
+          virtualKeyMasked: config.portkeyVirtualKeyMasked || ''
+        }
+      }
+
+      this.aiModelDialogVisible = true
+    },
+    validateAiModelForm () {
+      const form = this.aiModelForm
+      if (!form.name || !form.base_url || !form.model) {
+        this.$q.notify({ message: this.$t('aiModelRequiredFields'), type: 'warning', position: 'top' })
+        return false
+      }
+
+      try {
+        const parsed = new URL(form.base_url)
+        if (!/^https?:$/.test(parsed.protocol)) {
+          throw new Error('invalid protocol')
+        }
+      } catch (error) {
+        this.$q.notify({ message: this.$t('aiBaseUrlInvalid'), type: 'warning', position: 'top' })
+        return false
+      }
+
+      if (!form.id && !form.api_key && !this.isPortkeyProvider) {
+        this.$q.notify({ message: this.$t('aiApiKeyRequired'), type: 'warning', position: 'top' })
+        return false
+      }
+
+      if (this.isPortkeyProvider) {
+        if (!form.api_key && !form.id) {
+          this.$q.notify({ message: this.$t('aiPortkeyApiKeyRequired'), type: 'warning', position: 'top' })
+          return false
+        }
+
+        if (!form.virtual_key && !form.id) {
+          this.$q.notify({ message: this.$t('aiVirtualKeyRequired'), type: 'warning', position: 'top' })
+          return false
+        }
+      }
+
+      return true
+    },
+    async submitAiModelForm () {
+      if (!this.validateAiModelForm()) {
+        return
+      }
+
+      this.aiModelSaving = true
+      try {
+        const payload = {
+          id: this.aiModelForm.id,
+          name: this.aiModelForm.name,
+          provider_type: this.aiModelForm.provider_type,
+          base_url: this.aiModelForm.base_url,
+          model: this.aiModelForm.model,
+          api_key: this.aiModelForm.clear_api_key ? '' : this.aiModelForm.api_key,
+          virtual_key: this.aiModelForm.clear_virtual_key ? '' : this.aiModelForm.virtual_key,
+          is_default: this.aiModelForm.is_default,
+          clear_api_key: this.aiModelForm.clear_api_key,
+          clear_virtual_key: this.aiModelForm.clear_virtual_key
+        }
+        const saved = await DatabaseClient.aiModels.save(payload)
+        if (!saved) {
+          this.$q.notify({ message: this.$t('aiConfigSaveFailed'), type: 'negative', position: 'top' })
+          return
+        }
+
+        this.aiModelDialogVisible = false
+        await this.loadAiModelConfigs()
+        this.$q.notify({ message: this.$t('aiConfigSaved'), type: 'positive', position: 'top' })
+      } finally {
+        this.aiModelSaving = false
+      }
+    },
+    async setDefaultAiModel (item) {
+      const success = await DatabaseClient.aiModels.setDefault(item.id)
+      if (!success) {
+        this.$q.notify({ message: this.$t('aiConfigSaveFailed'), type: 'negative', position: 'top' })
+        return
+      }
+
+      await this.loadAiModelConfigs()
+      this.$q.notify({ message: this.$t('aiDefaultModelUpdated'), type: 'positive', position: 'top' })
+    },
+    confirmDeleteAiModel (item) {
+      this.$q.dialog({
+        title: this.$t('aiModelDelete'),
+        message: this.$t('aiModelDeleteConfirm', { name: item.name }),
+        cancel: { label: this.$t('cancel') },
+        ok: { label: this.$t('aiModelDelete'), color: 'negative' }
+      }).onOk(async () => {
+        const success = await DatabaseClient.aiModels.remove(item.id)
+        if (!success) {
+          this.$q.notify({ message: this.$t('aiConfigDeleteFailed'), type: 'negative', position: 'top' })
+          return
+        }
+
+        await this.loadAiModelConfigs()
+        this.$q.notify({ message: this.$t('aiConfigDeleted'), type: 'positive', position: 'top' })
+      })
     },
     resetSqliteHandler: async function () {
       this.$q.dialog({
@@ -934,6 +1219,7 @@ export default {
     bus.$on(events.UPDATE_EVENTS.updateNotAvailable, this.updateUnavailableHandler)
     bus.$on(events.UPDATE_EVENTS.updateError, this.updateErrorHandler)
     this.loadRunes()
+    this.loadAiModelConfigs()
     // 初始化云同步状态
     CloudSyncService.addListener(this.onCloudSyncStatusChange)
     this.refreshCloudSyncStatus()
@@ -1083,6 +1369,21 @@ export default {
   border-radius: 6px;
   padding: 8px 12px;
   text-align: center;
+}
+
+.ai-model-default-card,
+.ai-model-card {
+  border-radius: 8px;
+}
+
+.ai-model-form-card {
+  width: 520px;
+  max-width: 92vw;
+}
+
+.ai-model-empty {
+  border: 1px dashed rgba(127, 127, 127, 0.35);
+  border-radius: 8px;
 }
 
 .body--dark .sync-stat-card {

@@ -56,7 +56,7 @@ module.exports = function (/* ctx */) {
       // Add dependencies for transpiling with Babel (Array of string/regex)
       // (from node_modules, which are by default not transpiled).
       // Applies only if "transpile" is set to true.
-      transpileDependencies: [/vega.*/, /@quasar.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/, 'sql.js'],
+      transpileDependencies: [/vega.*/, /@quasar.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/, 'sql.js', /reveal\.js.*/, /portkey-ai/, /openai/],
 
       // rtl: false, // https://quasar.dev/options/rtl-support
       // preloadChunks: true,
@@ -69,12 +69,31 @@ module.exports = function (/* ctx */) {
 
       // https://quasar.dev/quasar-cli/handling-webpack
       extendWebpack (cfg) {
+        const transpileNodeModules = /node_modules[\\/](openai|portkey-ai)[\\/]/
+        const babelOptions = {
+          presets: [['@babel/preset-env', { targets: { chrome: '70' } }]],
+          plugins: [
+            '@babel/plugin-transform-optional-chaining',
+            '@babel/plugin-transform-nullish-coalescing-operator'
+          ]
+        }
+
         // ESLint is run separately via `npm run lint`.
         // eslint-loader v4 is incompatible with eslint v8 (removed getFormatter API),
         // so it has been removed from the webpack build pipeline.
         cfg.externals = {
           electron: 'commonjs electron'
         }
+
+        cfg.module.rules.push({
+          test: /\.m?js$/,
+          include: transpileNodeModules,
+          type: 'javascript/auto',
+          use: {
+            loader: 'babel-loader',
+            options: babelOptions
+          }
+        })
 
         // Add babel loader for vega modules
         // cfg.module.rules.push({

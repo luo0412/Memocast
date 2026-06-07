@@ -14,11 +14,72 @@ import ThemeManager from './utlis/theme-manager'
 import Store from 'electron-store'
 import i18n from './i18n'
 import log from 'electron-log'
+import CryptoJS from 'crypto-js'
 const { DEFAULT_ROOT_CATEGORY } = require('./constants')
 
 // sql.js 数据库
 let db = null
 let dbPath = null
+
+const AI_MODEL_PROVIDER_OPENAI_COMPATIBLE = 'openai-compatible'
+const AI_MODEL_PROVIDER_PORTKEY = 'portkey'
+
+function getAiConfigEncryptionSecret() {
+  const secretSeed = [
+    packageJSON.name,
+    packageJSON.version,
+    app.getPath('userData'),
+    process.platform,
+    process.arch,
+    require('os').hostname()
+  ].join('|')
+
+  return CryptoJS.SHA256(secretSeed).toString()
+}
+
+function encryptAiConfigApiKey(apiKey) {
+  if (!apiKey) return ''
+  return CryptoJS.AES.encrypt(apiKey, getAiConfigEncryptionSecret()).toString()
+}
+
+function decryptAiConfigApiKey(encryptedValue) {
+  if (!encryptedValue) return ''
+
+  try {
+    const bytes = CryptoJS.AES.decrypt(encryptedValue, getAiConfigEncryptionSecret())
+    return bytes.toString(CryptoJS.enc.Utf8) || ''
+  } catch (error) {
+    log.error('[DB] decryptAiConfigApiKey error:', error)
+    return ''
+  }
+}
+
+function maskAiConfigApiKey(apiKey) {
+  if (!apiKey) return ''
+  if (apiKey.length <= 8) return `${apiKey.slice(0, 2)}***`
+  return `${apiKey.slice(0, 4)}***${apiKey.slice(-4)}`
+}
+
+function normalizeAiModelConfigRow(row, { includeApiKey = false } = {}) {
+  if (!row) return null
+
+  const decryptedApiKey = decryptAiConfigApiKey(row.api_key_encrypted)
+  const decryptedVirtualKey = decryptAiConfigApiKey(row.virtual_key_encrypted || '')
+
+  return {
+    ...row,
+    is_default: Number(row.is_default) === 1,
+    enabled: Number(row.enabled) === 1,
+    hasApiKey: Boolean(decryptedApiKey),
+    apiKeyMasked: maskAiConfigApiKey(decryptedApiKey),
+    headers_json: row.headers_json || '{}',
+    extra_config_json: row.extra_config_json || '{}',
+    virtual_key: includeApiKey ? decryptedVirtualKey : '',
+    api_key: includeApiKey ? decryptedApiKey : '',
+    portkeyVirtualKeyMasked: maskAiConfigApiKey(decryptedVirtualKey),
+    hasVirtualKey: Boolean(decryptedVirtualKey)
+  }
+}
 
 /**
  * sql.js 查询辅助函数：将 exec 结果转为对象数组
@@ -393,6 +454,55 @@ export default {
       updated_at INTEGER
     )
   `)
+
+  // AI 模型配置表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ai_model_configs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      provider_type TEXT NOT NULL DEFAULT 'openai-compatible',
+      base_url TEXT NOT NULL DEFAULT '',
+      api_key_encrypted TEXT NOT NULL DEFAULT '',
+      virtual_key_encrypted TEXT NOT NULL DEFAULT '',
+      model TEXT NOT NULL DEFAULT '',
+      is_default INTEGER DEFAULT 0,
+      enabled INTEGER DEFAULT 1,
+      headers_json TEXT DEFAULT '{}',
+      extra_config_json TEXT DEFAULT '{}',
+      created_at INTEGER,
+      updated_at INTEGER
+    )
+  `)
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_model_configs_name ON ai_model_configs(name)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ai_model_configs_default ON ai_model_configs(is_default)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ai_model_configs_provider ON ai_model_configs(provider_type)`)
+
+  try {
+    const aiModelColumnsResult = db.exec("PRAGMA table_info(ai_model_configs)")
+    const aiModelColumns = aiModelColumnsResult.length > 0 ? aiModelColumnsResult[0].values.map(row => row[1]) : []
+
+    if (!aiModelColumns.includes('virtual_key_encrypted')) {
+      db.run("ALTER TABLE ai_model_configs ADD COLUMN virtual_key_encrypted TEXT NOT NULL DEFAULT ''")
+      saveDatabase()
+    }
+
+    if (!aiModelColumns.includes('headers_json')) {
+      db.run("ALTER TABLE ai_model_configs ADD COLUMN headers_json TEXT DEFAULT '{}'")
+      saveDatabase()
+    }
+
+    if (!aiModelColumns.includes('extra_config_json')) {
+      db.run("ALTER TABLE ai_model_configs ADD COLUMN extra_config_json TEXT DEFAULT '{}'")
+      saveDatabase()
+    }
+
+    if (!aiModelColumns.includes('enabled')) {
+      db.run('ALTER TABLE ai_model_configs ADD COLUMN enabled INTEGER DEFAULT 1')
+      saveDatabase()
+    }
+  } catch (error) {
+    console.warn('[DB] AI model config migration check failed:', error.message)
+  }
 
   // 初始化默认符文数据（仅当表为空时）
   const count = execOne('SELECT COUNT(*) as count FROM runes')
@@ -1085,6 +1195,130 @@ function registerDatabaseHandlers() {
     }
   })
 
+  ipcMain.handle('db:getAiModelConfigs', async () => {
+    try {
+      const rows = execToObjects('SELECT * FROM ai_model_configs ORDER BY is_default DESC, updated_at DESC, id DESC')
+      return rows.map(row => normalizeAiModelConfigRow(row))
+    } catch (error) {
+      log.error('[DB] getAiModelConfigs error:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle('db:getAiModelConfig', async (event, id) => {
+    try {
+      if (!id) return null
+      const row = execOne('SELECT * FROM ai_model_configs WHERE id = ?', [id])
+      return normalizeAiModelConfigRow(row, { includeApiKey: true })
+    } catch (error) {
+      log.error('[DB] getAiModelConfig error:', error)
+      return null
+    }
+  })
+
+  ipcMain.handle('db:saveAiModelConfig', async (event, payload = {}) => {
+    try {
+      const now = Date.now()
+      const id = payload.id ? Number(payload.id) : null
+      const name = String(payload.name || '').trim()
+      const providerType = String(payload.provider_type || AI_MODEL_PROVIDER_OPENAI_COMPATIBLE).trim() || AI_MODEL_PROVIDER_OPENAI_COMPATIBLE
+      const baseUrl = String(payload.base_url || '').trim()
+      const model = String(payload.model || '').trim()
+      const headersJson = typeof payload.headers_json === 'string' ? payload.headers_json : JSON.stringify(payload.headers_json || {})
+      const extraConfigJson = typeof payload.extra_config_json === 'string' ? payload.extra_config_json : JSON.stringify(payload.extra_config_json || {})
+      const enabled = payload.enabled === false ? 0 : 1
+      const isDefault = payload.is_default ? 1 : 0
+      const clearApiKey = Boolean(payload.clear_api_key)
+      const clearVirtualKey = Boolean(payload.clear_virtual_key)
+      const incomingApiKey = typeof payload.api_key === 'string' ? payload.api_key.trim() : ''
+      const incomingVirtualKey = typeof payload.virtual_key === 'string' ? payload.virtual_key.trim() : ''
+
+      if (!name || !baseUrl || !model) {
+        return null
+      }
+
+      const existing = id ? execOne('SELECT * FROM ai_model_configs WHERE id = ?', [id]) : null
+      if (id && !existing) return null
+
+      let encryptedApiKey = existing?.api_key_encrypted || ''
+      if (clearApiKey) {
+        encryptedApiKey = ''
+      } else if (incomingApiKey) {
+        encryptedApiKey = encryptAiConfigApiKey(incomingApiKey)
+      }
+
+      let encryptedVirtualKey = existing?.virtual_key_encrypted || ''
+      if (clearVirtualKey) {
+        encryptedVirtualKey = ''
+      } else if (incomingVirtualKey) {
+        encryptedVirtualKey = encryptAiConfigApiKey(incomingVirtualKey)
+      }
+
+      const requiresVirtualKey = providerType === AI_MODEL_PROVIDER_PORTKEY
+      const hasRequiredSecret = requiresVirtualKey ? encryptedVirtualKey : encryptedApiKey
+
+      if (!existing && !hasRequiredSecret) {
+        return null
+      }
+
+      if (isDefault) {
+        if (id) {
+          await db.run('UPDATE ai_model_configs SET is_default = 0, updated_at = ? WHERE id != ?', [now, id])
+        } else {
+          await db.run('UPDATE ai_model_configs SET is_default = 0, updated_at = ?', [now])
+        }
+      }
+
+      if (existing) {
+        await db.run(
+          `UPDATE ai_model_configs
+           SET name = ?, provider_type = ?, base_url = ?, api_key_encrypted = ?, virtual_key_encrypted = ?, model = ?, is_default = ?, enabled = ?, headers_json = ?, extra_config_json = ?, updated_at = ?
+           WHERE id = ?`,
+          [name, providerType, baseUrl, encryptedApiKey, encryptedVirtualKey, model, isDefault, enabled, headersJson, extraConfigJson, now, id]
+        )
+        saveDatabase()
+        return normalizeAiModelConfigRow(execOne('SELECT * FROM ai_model_configs WHERE id = ?', [id]), { includeApiKey: true })
+      }
+
+      await db.run(
+        `INSERT INTO ai_model_configs (name, provider_type, base_url, api_key_encrypted, virtual_key_encrypted, model, is_default, enabled, headers_json, extra_config_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [name, providerType, baseUrl, encryptedApiKey, encryptedVirtualKey, model, isDefault, enabled, headersJson, extraConfigJson, now, now]
+      )
+      saveDatabase()
+      return normalizeAiModelConfigRow(execOne('SELECT * FROM ai_model_configs WHERE id = ?', [getLastInsertRowid()]), { includeApiKey: true })
+    } catch (error) {
+      log.error('[DB] saveAiModelConfig error:', error)
+      return null
+    }
+  })
+
+  ipcMain.handle('db:deleteAiModelConfig', async (event, id) => {
+    try {
+      if (!id) return false
+      await db.run('DELETE FROM ai_model_configs WHERE id = ?', [id])
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] deleteAiModelConfig error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('db:setDefaultAiModelConfig', async (event, id) => {
+    try {
+      if (!id) return false
+      const now = Date.now()
+      await db.run('UPDATE ai_model_configs SET is_default = 0, updated_at = ?', [now])
+      await db.run('UPDATE ai_model_configs SET is_default = 1, updated_at = ? WHERE id = ?', [now, id])
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] setDefaultAiModelConfig error:', error)
+      return false
+    }
+  })
+
   ipcMain.handle('db:setAppState', async (event, { key, value }) => {
     try {
       if (!key) return false
@@ -1729,7 +1963,7 @@ function createWindow () {
   registerMemocastProtocol()
 
   if (!process.env.PROD) {
-    mainWindow.webContents.openDevTools()
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
   }
   const menu = Menu.buildFromTemplate(configureMenu(new KeyBindings(), mainWindow))
   Menu.setApplicationMenu(menu)

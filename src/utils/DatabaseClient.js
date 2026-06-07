@@ -270,6 +270,28 @@ const appState = {
   }
 }
 
+const aiModels = {
+  async getAll() {
+    return await invoke('db:getAiModelConfigs')
+  },
+
+  async getById(id) {
+    return await invoke('db:getAiModelConfig', id)
+  },
+
+  async save(config) {
+    return await invoke('db:saveAiModelConfig', config)
+  },
+
+  async remove(id) {
+    return await invoke('db:deleteAiModelConfig', id)
+  },
+
+  async setDefault(id) {
+    return await invoke('db:setDefaultAiModelConfig', id)
+  }
+}
+
 const runes = {
   async getAll() {
     return await invoke('db:getRunes')
@@ -294,6 +316,7 @@ const DatabaseClient = {
   sync,
   categories,
   appState,
+  aiModels,
   runes
 }
 

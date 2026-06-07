@@ -222,7 +222,6 @@
         title="AI 助手"
         @click="handleAiDrawerClick"
       >
-        <i class="el-icon-magic-stick icon-custom" />
         <span class="header-ai-btn__label">AI</span>
       </div>
 

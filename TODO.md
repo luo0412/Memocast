@@ -2,7 +2,8 @@
 
 # 2026-07
 
-- 数学代码交互动画
+
+- [] 数学代码交互动画
 
 # 2026-06
 
@@ -13,11 +14,12 @@ reveal.js
 Marp
 ```
 
-- [] 快速创建 挖空模板
+
+- []新建文档模板prompt和挖空模板
 
 # 2026-05
 
-- [] 设计符文插件机制
+- [x] 设计符文插件机制
 
 ```
 https://github.com/hinesboy/mavonEditor
@@ -27,7 +29,11 @@ https://github.com/hinesboy/mavonEditor
 
 # 2026-04
 
-- 可配置 AI Provider
+- [] 可配置 AI Provider
+
+```
+https://github.com/Portkey-AI/portkey-node-sdk
+```
 
 - [x] 加入对话
 
@@ -38,7 +44,7 @@ https://github.com/mattmezza/vue-beautiful-chat
 https://github.com/advanced-chat/vue-advanced-chat/tree/legacy
 ```
 
-- [] 支持离线 和 同步在线功能
+- [x] 支持离线 和 同步在线功能
 
 ```
 yarn add -D @electron/rebuild
@@ -46,7 +52,8 @@ npx electron-rebuild -f -w
 ```
 
 - [] 切换皮肤, 哪吒红 + 白羊等12星座 + MBTI, 会有不同动画特效和背景图
-- [] 优化打包体积
+
+- [x] 优化打包体积
 - [x] 引入jsxgraph
 
 ```

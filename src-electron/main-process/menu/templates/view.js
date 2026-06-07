@@ -33,7 +33,7 @@ export default function (keybindings) {
       label: i18n.t('openDevtool'),
       accelerator: keybindings.getAccelerator('view.devtool'),
       click (menuItem, browserWindow) {
-        browserWindow.webContents.openDevTools()
+        browserWindow.webContents.openDevTools({ mode: 'detach' })
       }
     }]
   }
