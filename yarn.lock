@@ -4336,6 +4336,11 @@ charenc@0.0.2:
   resolved "https://mirrors.cloud.tencent.com/npm/charenc/-/charenc-0.0.2.tgz"
   integrity sha512-yrLQ/yVUFXkzg7EDQsPieE/53+0RlaWTs+wBrvW36cyilJ2SaDWfl4Yj7MtLTXleV9uEKefbAGUPv2/iWSooRA==
 
+chatarea@^6.0.3:
+  version "6.0.7"
+  resolved "https://mirrors.cloud.tencent.com/npm/chatarea/-/chatarea-6.0.7.tgz#d9023d73cb4e51dd3e3288b1cbbd4c85b901922c"
+  integrity sha512-D3YKElVEv1OkraHgbzP/w4ITjQHgfPuH9sapjYyZ6mG6GFHpaP1h+lMWb9OFNpss/ILv2c/3Yg8FuUiE5+1fdw==
+
 cheerio-select@^2.1.0:
   version "2.1.0"
   resolved "https://mirrors.cloud.tencent.com/npm/cheerio-select/-/cheerio-select-2.1.0.tgz"
@@ -6684,6 +6689,13 @@ dompurify@2.3.5:
   version "2.3.5"
   resolved "https://mirrors.cloud.tencent.com/npm/dompurify/-/dompurify-2.3.5.tgz"
   integrity sha512-kD+f8qEaa42+mjdOpKeztu9Mfx5bv9gVLO6K9jRx4uGvh6Wv06Srn4jr1wPNY2OOUGGSKHNFN+A8MA3v0E0QAQ==
+
+dompurify@^3.2.5:
+  version "3.4.8"
+  resolved "https://mirrors.cloud.tencent.com/npm/dompurify/-/dompurify-3.4.8.tgz#6c54f8c207160e7f83fcb7f4fd05a82ac36b1cdc"
+  integrity sha512-yb1cEmaOum7wFvOCSQxyfgVlv5D47Rc30iZWoMpbDIWTnJ6grDDQyu2KFJzB2k7u0pMuJcQ1zphH//fFnw2tjQ==
+  optionalDependencies:
+    "@types/trusted-types" "^2.0.7"
 
 dompurify@^3.3.3:
   version "3.3.3"
@@ -13379,7 +13391,7 @@ pretty-time@^1.1.0:
   resolved "https://mirrors.cloud.tencent.com/npm/pretty-time/-/pretty-time-1.1.0.tgz#ffb7429afabb8535c346a34e41873adf3d74dd0e"
   integrity sha512-28iF6xPQrP8Oa6uxE6a1biz+lWeTOAPKggvjB8HAs6nVMKZwf5bG++632Dx614hIWgUPkgivRfG+a8uAXGTIbA==
 
-prismjs@^1.13.0, prismjs@^1.21.0:
+prismjs@^1.13.0, prismjs@^1.21.0, prismjs@^1.30.0:
   version "1.30.0"
   resolved "https://mirrors.cloud.tencent.com/npm/prismjs/-/prismjs-1.30.0.tgz"
   integrity sha512-DEvV2ZF2r2/63V+tK8hQvrR2ZGn10srHbXviTlcv7Kpzw8jWiNTqbVgjO3IY8RxrrOUF8VPMQQFysYYYv0YZxw==
@@ -16728,6 +16740,17 @@ vm-browserify@^1.0.1:
   version "1.1.2"
   resolved "https://mirrors.cloud.tencent.com/npm/vm-browserify/-/vm-browserify-1.1.2.tgz#78641c488b8e6ca91a75f511e7a3b32a86e5dda0"
   integrity sha512-2ham8XPWTONajOR0ohOKOHXkm3+gaBmGut3SRuu75xLd/RRaY6vqgh8NBYYk7+RW3u5AtzPQZG8F10LHkl0lAQ==
+
+vue-element-ui-x@^1.2.1:
+  version "1.2.1"
+  resolved "https://mirrors.cloud.tencent.com/npm/vue-element-ui-x/-/vue-element-ui-x-1.2.1.tgz#c89ac78513fd5dadba5d3770252fc86778f8091c"
+  integrity sha512-lnZnRg2qLaMDoNl2vJYWwkPSbq+M96kwm0QeZFSQCjd7ZkgVuxBq0Iu6qt3MhNhUeHaEahmHDwvujtP3P5ouKQ==
+  dependencies:
+    chatarea "^6.0.3"
+    dompurify "^3.2.5"
+    lodash "^4.17.21"
+    markdown-it "^12.3.2"
+    prismjs "^1.30.0"
 
 vue-eslint-parser@^9.4.3:
   version "9.4.3"

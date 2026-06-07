@@ -215,6 +215,17 @@
         </el-dropdown-menu>
       </el-dropdown>
 
+      <!-- AI 按钮 -->
+      <div
+        class="header-icon-btn q-electron-drag--exception header-ai-btn"
+        :class="{ 'is-highlight': aiDrawerHighlight }"
+        title="AI 助手"
+        @click="handleAiDrawerClick"
+      >
+        <i class="el-icon-magic-stick icon-custom" />
+        <span class="header-ai-btn__label">AI</span>
+      </div>
+
       <!-- 聊天图标 -->
       <div
         class="header-icon-btn q-electron-drag--exception"
@@ -247,6 +258,7 @@
     <SearchDialog ref='searchDialog' />
     <TagDialog ref="tagDialog" />
     <ImDrawer ref="imDrawer" />
+    <AiDemoDrawer ref="aiDemoDrawer" />
   </q-bar>
 </template>
 
@@ -261,6 +273,7 @@ import bus from 'components/bus'
 import events from 'src/constants/events'
 import SearchDialog from 'components/ui/dialog/SearchDialog'
 import ImDrawer from 'components/ui/ImDrawer'
+import AiDemoDrawer from 'components/ui/AiDemoDrawer'
 import { ipcRenderer } from 'electron'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import CloudSyncService from 'src/services/CloudSyncService'
@@ -354,7 +367,7 @@ export default {
       return category ? category.label : ''
     }
   },
-  components: { SearchDialog, TagDialog, SettingsDialog, LoginDialog, ImDrawer },
+  components: { SearchDialog, TagDialog, SettingsDialog, LoginDialog, ImDrawer, AiDemoDrawer },
   data () {
     return {
       isMaximized: false,
@@ -373,7 +386,8 @@ export default {
           value: 'threeLayerFunnel',
           description: '收集游离态笔记碎片成体系'
         }
-      ]
+      ],
+      aiDrawerHighlight: false
     }
   },
   methods: {
@@ -414,6 +428,11 @@ export default {
     handleSettingsClick () {
       this.handleHighlight('settingsHighlight')
       this.$refs.settingsDialog.toggle()
+    },
+
+    handleAiDrawerClick () {
+      this.handleHighlight('aiDrawerHighlight')
+      this.$refs.aiDemoDrawer.toggle()
     },
 
     handleImChatClick () {
@@ -664,8 +683,17 @@ export default {
   text-overflow: ellipsis;
 }
 
-.close-button:hover {
-  background-color: rgba(255, 0, 0, .6);
+.header-ai-btn {
+  gap: 4px;
+  padding: 0 10px;
+  width: auto;
+  min-width: 48px;
+}
+
+.header-ai-btn__label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .header-left-icons {
