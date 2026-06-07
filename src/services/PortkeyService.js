@@ -1,8 +1,11 @@
 import Portkey from 'portkey-ai'
+import { fetchEventSource } from '@microsoft/fetch-event-source'
 import DatabaseClient from 'src/utils/DatabaseClient'
 
 const AI_MODEL_PROVIDER_OPENAI_COMPATIBLE = 'openai-compatible'
 const AI_MODEL_PROVIDER_PORTKEY = 'portkey'
+
+const DEFAULT_COMPLETION_MAX_TOKENS = 4096
 
 function parseJsonField(value, fallback = {}) {
   if (!value) return fallback
@@ -36,25 +39,44 @@ function toPortkeyClientConfig(modelConfig) {
   }
 }
 
-function toOpenAiCompatibleRequest(modelConfig, messages, overrides = {}) {
+function resolveEffectiveMaxTokens(modelConfig, overrides) {
   const extraConfig = parseJsonField(modelConfig.extra_config_json)
-  const headers = parseJsonField(modelConfig.headers_json)
-  const requestBody = {
+  return (
+    overrides.max_tokens ||
+    overrides.max_completion_tokens ||
+    extraConfig.max_tokens ||
+    extraConfig.max_completion_tokens ||
+    (modelConfig.max_tokens ? parseInt(modelConfig.max_tokens, 10) : null) ||
+    null
+  )
+}
+
+function buildRequestBody(modelConfig, messages, overrides = {}) {
+  const extraConfig = parseJsonField(modelConfig.extra_config_json)
+  const body = {
     messages,
     model: overrides.model || modelConfig.model,
     ...extraConfig,
     ...overrides
   }
 
-  delete requestBody.baseURL
-  delete requestBody.defaultHeaders
-  delete requestBody.apiKey
-  delete requestBody.virtualKey
-  delete requestBody.headers
+  delete body.baseURL
+  delete body.defaultHeaders
+  delete body.apiKey
+  delete body.virtualKey
+  delete body.headers
+
+  return body
+}
+
+function toOpenAiCompatibleRequest(modelConfig, messages, overrides = {}) {
+  const extraConfig = parseJsonField(modelConfig.extra_config_json)
+  const headers = parseJsonField(modelConfig.headers_json)
+  const body = buildRequestBody(modelConfig, messages, overrides)
 
   return {
     url: `${String(modelConfig.base_url || '').replace(/\/$/, '')}/chat/completions`,
-    body: requestBody,
+    body,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${modelConfig.api_key || ''}`,
@@ -86,6 +108,111 @@ async function runOpenAiCompatibleChat(modelConfig, messages, overrides = {}) {
   }
 
   return await response.json()
+}
+
+function extractFinishReason(response) {
+  return response?.choices?.[0]?.finish_reason || null
+}
+
+function isTruncatedByTokenLimit(finishReason) {
+  return finishReason === 'length'
+}
+
+function extractUsage(response) {
+  const usage = response?.usage
+  if (!usage) return null
+  return {
+    promptTokens: usage.prompt_tokens,
+    completionTokens: usage.completion_tokens,
+    totalTokens: usage.total_tokens
+  }
+}
+
+function extractDeltaFromSSEData(data) {
+  if (!data || !data.choices || !data.choices.length) return null
+  const delta = data.choices[0]?.delta
+  return delta?.content || null
+}
+
+async function runOpenAiCompatibleStream(modelConfig, messages, handlers, overrides = {}) {
+  if (!modelConfig || modelConfig.provider_type !== AI_MODEL_PROVIDER_OPENAI_COMPATIBLE) {
+    if (handlers.onError) {
+      handlers.onError(new Error('Unsupported provider type for streaming'))
+    }
+    return
+  }
+
+  if (!modelConfig.api_key || !modelConfig.base_url) {
+    if (handlers.onError) {
+      handlers.onError(new Error('Incomplete OpenAI-compatible model config'))
+    }
+    return
+  }
+
+  const { url, body, headers } = toOpenAiCompatibleRequest(modelConfig, messages, {
+    ...overrides,
+    stream: true
+  })
+
+  let finishReason = null
+  let truncated = false
+
+  try {
+    await fetchEventSource(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: handlers.signal || overrides.signal,
+      openWhenHidden: true,
+      async onopen(response) {
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(errorText || `Stream request failed with status ${response.status}`)
+        }
+      },
+      onmessage(event) {
+        if (!event || !event.data) return
+        if (event.data === '[DONE]') return
+
+        let parsed
+        try {
+          parsed = JSON.parse(event.data)
+        } catch {
+          return
+        }
+
+        if (!finishReason && parsed?.choices?.length) {
+          finishReason = parsed.choices[0]?.finish_reason || null
+          if (isTruncatedByTokenLimit(finishReason)) {
+            truncated = true
+          }
+        }
+
+        const delta = extractDeltaFromSSEData(parsed)
+        if (delta && handlers.onToken) {
+          handlers.onToken(delta)
+        }
+      },
+      onclose() {
+        if (handlers.onComplete) {
+          handlers.onComplete({ finishReason, truncated })
+        }
+      },
+      onerror(error) {
+        if (handlers.onError) {
+          handlers.onError(error)
+          return
+        }
+        throw error
+      }
+    })
+  } catch (err) {
+    if (handlers.onError) {
+      handlers.onError(err)
+    } else {
+      throw err
+    }
+  }
 }
 
 const PortkeyService = {
@@ -151,6 +278,8 @@ const PortkeyService = {
 
   getProviderLabel,
 
+  resolveEffectiveMaxTokens,
+
   async chat (messages, overrides = {}) {
     const modelConfig = await this.getDefaultConfig()
 
@@ -184,7 +313,38 @@ const PortkeyService = {
     }
 
     throw new Error(`Unsupported AI provider type: ${modelConfig.provider_type}`)
-  }
+  },
+
+  async chatStream (messages, handlers = {}, overrides = {}) {
+    const modelConfig = await this.getDefaultConfig()
+
+    if (!modelConfig) {
+      if (handlers.onError) {
+        handlers.onError(new Error('Default AI model config is unavailable'))
+      }
+      return
+    }
+
+    if (modelConfig.provider_type === AI_MODEL_PROVIDER_PORTKEY) {
+      if (handlers.onError) {
+        handlers.onError(new Error('Streaming is not yet supported for Portkey provider. Please use an OpenAI-compatible provider.'))
+      }
+      return
+    }
+
+    if (modelConfig.provider_type === AI_MODEL_PROVIDER_OPENAI_COMPATIBLE) {
+      await runOpenAiCompatibleStream(modelConfig, messages, handlers, overrides)
+      return
+    }
+
+    if (handlers.onError) {
+      handlers.onError(new Error(`Unsupported AI provider type: ${modelConfig.provider_type}`))
+    }
+  },
+
+  extractFinishReason,
+  isTruncatedByTokenLimit,
+  extractUsage
 }
 
 export default PortkeyService

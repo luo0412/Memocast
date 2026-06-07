@@ -44,5 +44,16 @@ export default {
   aiDrawerNotifyNoDefaultConfig: '请先在设置中配置默认 AI 模型。',
   aiDrawerRequestFailedMessage: '调用失败：{message}',
   aiDrawerRequestFailedNotify: 'AI 请求失败',
+  aiDrawerStreamingStatus: '正在流式生成',
+  aiDrawerStoppedStatus: '已停止生成',
+  aiDrawerTruncatedStatus: '回答因 token 上限提前结束',
+  aiDrawerErrorStatus: '生成失败',
+  aiDrawerStopGenerating: '停止生成',
+  aiDrawerStoppedNotify: '已停止当前回答',
+  aiDrawerStoppedEmptyMessage: '本次回答已被手动停止。',
+  aiDrawerTruncatedNotify: '本次回答因 token 上限提前结束，可继续追问或提高输出上限。',
+  aiDrawerMetaWithFinishReason: 'finish_reason: {finishReason} · max_tokens: {maxTokens}',
+  aiDrawerMetaFinishReasonOnly: 'finish_reason: {finishReason}',
+  aiDrawerMetaMaxTokensOnly: 'max_tokens: {maxTokens}',
   noteMethod: '笔记方法'
 }

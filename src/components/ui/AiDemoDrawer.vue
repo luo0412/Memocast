@@ -25,7 +25,10 @@
                 v-for="message in messages"
                 :key="message.id"
                 class="ai-demo-message-item"
-                :class="`ai-demo-message-item--${message.role}`"
+                :class="[
+                  `ai-demo-message-item--${message.role}`,
+                  message.status ? `ai-demo-message-item--${message.status}` : ''
+                ]"
               >
                 <div class="ai-demo-message-label">
                   {{ message.role === 'user' ? $t('aiDrawerUserLabel') : $t('aiAssistant') }}
@@ -33,13 +36,14 @@
                 <el-x-bubble
                   :placement="message.role === 'user' ? 'end' : 'start'"
                   :type="message.role === 'user' ? 'primary' : 'default'"
-                  :content="message.content"
+                  :content="message.content || (message.status === 'streaming' ? $t('aiDrawerThinking') : '')"
                 />
-              </div>
-
-              <div v-if="loading" class="ai-demo-message-item ai-demo-message-item--assistant">
-                <div class="ai-demo-message-label">{{ $t('aiAssistant') }}</div>
-                <el-x-bubble placement="start" :content="$t('aiDrawerThinking')" />
+                <div
+                  v-if="message.role === 'assistant' && message.status && message.status !== 'done'"
+                  class="ai-demo-message-status"
+                >
+                  {{ getMessageStatusText(message) }}
+                </div>
               </div>
             </div>
           </div>
@@ -47,6 +51,14 @@
 
         <div class="ai-demo-composer">
           <div class="ai-demo-composer__hint">{{ composerHint }}</div>
+          <div v-if="activeResponseMeta" class="ai-demo-composer__meta">
+            {{ activeResponseMeta }}
+          </div>
+          <div v-if="loading" class="ai-demo-composer__actions">
+            <el-button size="mini" type="warning" plain @click="stopStreaming">
+              {{ $t('aiDrawerStopGenerating') }}
+            </el-button>
+          </div>
           <el-x-sender
             :value="draftMessage"
             :disabled="loading || !isReady"
@@ -64,6 +76,16 @@
 import { i18n } from 'boot/i18n'
 import PortkeyService from 'src/services/PortkeyService'
 
+function createMessage(id, role, content, status = 'done', meta = null) {
+  return {
+    id,
+    role,
+    content,
+    status,
+    meta
+  }
+}
+
 export default {
   name: 'AiDemoDrawer',
   data () {
@@ -73,12 +95,10 @@ export default {
       messageId: 2,
       loading: false,
       defaultConfig: null,
+      streamAbortController: null,
+      activeResponseMeta: '',
       messages: [
-        {
-          id: 1,
-          role: 'assistant',
-          content: i18n.t('aiDrawerIntroMessage')
-        }
+        createMessage(1, 'assistant', i18n.t('aiDrawerIntroMessage'))
       ]
     }
   },
@@ -170,6 +190,7 @@ export default {
       this.scrollToBottom()
     },
     hide () {
+      this.stopStreaming({ silent: true })
       this.visible = false
     },
     async toggle () {
@@ -178,18 +199,68 @@ export default {
         return
       }
 
-      this.visible = false
+      this.hide()
     },
-    pushMessage (role, content) {
-      this.messages.push({
-        id: this.messageId,
-        role,
-        content
-      })
+    nextMessageId () {
+      const id = this.messageId
       this.messageId += 1
+      return id
+    },
+    pushMessage (role, content, status = 'done', meta = null) {
+      const message = createMessage(this.nextMessageId(), role, content, status, meta)
+      this.messages.push(message)
+      return message
+    },
+    updateMessageById (id, updater) {
+      const message = this.messages.find(item => item.id === id)
+      if (!message) return null
+      updater(message)
+      return message
     },
     extractAssistantContent (response) {
       return response?.choices?.[0]?.message?.content || this.$t('aiDrawerEmptyResponse')
+    },
+    buildHistoryMessages () {
+      return this.messages
+        .filter(item => item.role === 'user' || item.role === 'assistant')
+        .filter(item => item.status !== 'error')
+        .map(item => ({
+          role: item.role,
+          content: item.content
+        }))
+    },
+    updateActiveResponseMeta (meta = {}) {
+      const maxTokens = meta.effectiveMaxTokens || meta.maxTokens
+      if (meta.finishReason && maxTokens) {
+        this.activeResponseMeta = this.$t('aiDrawerMetaWithFinishReason', {
+          finishReason: meta.finishReason,
+          maxTokens
+        })
+        return
+      }
+
+      if (meta.finishReason) {
+        this.activeResponseMeta = this.$t('aiDrawerMetaFinishReasonOnly', {
+          finishReason: meta.finishReason
+        })
+        return
+      }
+
+      if (maxTokens) {
+        this.activeResponseMeta = this.$t('aiDrawerMetaMaxTokensOnly', {
+          maxTokens
+        })
+        return
+      }
+
+      this.activeResponseMeta = ''
+    },
+    getMessageStatusText (message) {
+      if (message.status === 'streaming') return this.$t('aiDrawerStreamingStatus')
+      if (message.status === 'stopped') return this.$t('aiDrawerStoppedStatus')
+      if (message.status === 'truncated') return this.$t('aiDrawerTruncatedStatus')
+      if (message.status === 'error') return this.$t('aiDrawerErrorStatus')
+      return ''
     },
     scrollToBottom () {
       this.$nextTick(() => {
@@ -198,6 +269,32 @@ export default {
           scrollEl.scrollTop = scrollEl.scrollHeight
         }
       })
+    },
+    stopStreaming ({ silent = false } = {}) {
+      if (this.streamAbortController) {
+        this.streamAbortController.abort()
+        this.streamAbortController = null
+      }
+
+      const streamingMessage = [...this.messages].reverse().find(item => item.role === 'assistant' && item.status === 'streaming')
+      if (streamingMessage) {
+        this.updateMessageById(streamingMessage.id, item => {
+          item.status = 'stopped'
+          if (!item.content) {
+            item.content = this.$t('aiDrawerStoppedEmptyMessage')
+          }
+        })
+      }
+
+      this.loading = false
+
+      if (!silent) {
+        this.$q.notify({
+          type: 'warning',
+          message: this.$t('aiDrawerStoppedNotify'),
+          position: 'top'
+        })
+      }
     },
     async handleSubmit (value) {
       const message = typeof value === 'string' ? value : this.draftMessage
@@ -218,26 +315,94 @@ export default {
         return
       }
 
+      this.stopStreaming({ silent: true })
+      this.activeResponseMeta = ''
+
       this.pushMessage('user', content)
       this.draftMessage = ''
       this.loading = true
+
+      const assistantMessage = this.pushMessage('assistant', '', 'streaming', {
+        finishReason: null,
+        truncated: false,
+        effectiveMaxTokens: PortkeyService.resolveEffectiveMaxTokens(this.defaultConfig, {})
+      })
+      const historyMessages = this.buildHistoryMessages()
+
+      this.streamAbortController = new AbortController()
       this.scrollToBottom()
 
       try {
-        const response = await PortkeyService.chat([
-          ...this.messages.map(item => ({ role: item.role, content: item.content })),
-          { role: 'user', content }
-        ])
-        this.pushMessage('assistant', this.extractAssistantContent(response))
-      } catch (error) {
-        this.pushMessage('assistant', this.$t('aiDrawerRequestFailedMessage', { message: error.message || this.$t('loading') }))
-        this.$q.notify({
-          type: 'negative',
-          message: error.message || this.$t('aiDrawerRequestFailedNotify'),
-          position: 'top'
+        await PortkeyService.chatStream(historyMessages, {
+          signal: this.streamAbortController.signal,
+          onToken: (token) => {
+            this.updateMessageById(assistantMessage.id, item => {
+              item.content += token
+            })
+            this.scrollToBottom()
+          },
+          onComplete: ({ finishReason, truncated }) => {
+            this.updateMessageById(assistantMessage.id, item => {
+              item.status = truncated ? 'truncated' : 'done'
+              item.meta = {
+                ...(item.meta || {}),
+                finishReason,
+                truncated
+              }
+              if (!item.content) {
+                item.content = this.$t('aiDrawerEmptyResponse')
+              }
+            })
+            this.updateActiveResponseMeta({
+              finishReason,
+              truncated,
+              effectiveMaxTokens: PortkeyService.resolveEffectiveMaxTokens(this.defaultConfig, {})
+            })
+            if (truncated) {
+              this.$q.notify({
+                type: 'warning',
+                message: this.$t('aiDrawerTruncatedNotify'),
+                position: 'top'
+              })
+            }
+          },
+          onError: (error) => {
+            if (error && error.name === 'AbortError') {
+              return
+            }
+
+            this.updateMessageById(assistantMessage.id, item => {
+              item.status = 'error'
+              item.content = item.content || this.$t('aiDrawerRequestFailedMessage', {
+                message: error.message || this.$t('loading')
+              })
+            })
+            this.$q.notify({
+              type: 'negative',
+              message: error.message || this.$t('aiDrawerRequestFailedNotify'),
+              position: 'top'
+            })
+          }
+        }, {
+          signal: this.streamAbortController.signal
         })
+      } catch (error) {
+        if (!error || error.name !== 'AbortError') {
+          this.updateMessageById(assistantMessage.id, item => {
+            item.status = 'error'
+            item.content = item.content || this.$t('aiDrawerRequestFailedMessage', {
+              message: error.message || this.$t('loading')
+            })
+          })
+          this.$q.notify({
+            type: 'negative',
+            message: error.message || this.$t('aiDrawerRequestFailedNotify'),
+            position: 'top'
+          })
+        }
       } finally {
         this.loading = false
+        this.streamAbortController = null
         this.scrollToBottom()
       }
     }
@@ -303,6 +468,11 @@ export default {
   color: #909399;
 }
 
+.ai-demo-message-status {
+  font-size: 12px;
+  color: #c0c4cc;
+}
+
 .ai-demo-composer {
   border-top: 1px solid rgba(0, 0, 0, 0.05);
   padding: 12px 16px 16px;
@@ -312,8 +482,14 @@ export default {
   background: rgba(255, 255, 255, 0.92);
 }
 
-.ai-demo-composer__hint {
+.ai-demo-composer__hint,
+.ai-demo-composer__meta {
   font-size: 12px;
   color: #909399;
+}
+
+.ai-demo-composer__actions {
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

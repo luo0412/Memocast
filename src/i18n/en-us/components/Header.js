@@ -44,5 +44,16 @@ export default {
   aiDrawerNotifyNoDefaultConfig: 'Please configure a default AI model in settings first.',
   aiDrawerRequestFailedMessage: 'Request failed: {message}',
   aiDrawerRequestFailedNotify: 'AI request failed',
+  aiDrawerStreamingStatus: 'Streaming response',
+  aiDrawerStoppedStatus: 'Generation stopped',
+  aiDrawerTruncatedStatus: 'Response ended early due to token limit',
+  aiDrawerErrorStatus: 'Generation failed',
+  aiDrawerStopGenerating: 'Stop generating',
+  aiDrawerStoppedNotify: 'Stopped the current response',
+  aiDrawerStoppedEmptyMessage: 'This response was stopped manually.',
+  aiDrawerTruncatedNotify: 'This response ended early due to the token limit. Continue the conversation or raise the output limit.',
+  aiDrawerMetaWithFinishReason: 'finish_reason: {finishReason} · max_tokens: {maxTokens}',
+  aiDrawerMetaFinishReasonOnly: 'finish_reason: {finishReason}',
+  aiDrawerMetaMaxTokensOnly: 'max_tokens: {maxTokens}',
   noteMethod: 'Note Method'
 }
