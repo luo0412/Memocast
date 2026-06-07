@@ -319,10 +319,9 @@ class QuickInsert extends BaseScrollFloat {
     this.oldVnode = vnode
   }
 
-  listen() {
+  listen () {
     super.listen()
     const { eventCenter } = this.muya
-
     eventCenter.subscribe('muya-quick-insert', (reference, block, status) => {
       if (status) {
         this.block = block
@@ -525,8 +524,9 @@ class QuickInsert extends BaseScrollFloat {
     const { key } = activeBlock
 
     activeBlock.text = insertContent
-    const cursorOffset = insertContent.indexOf("''") + 1
-    const offset = cursorOffset > 0 ? cursorOffset : insertContent.length
+    const markerIndex = insertContent.indexOf("''")
+    const desiredOffset = markerIndex > -1 ? markerIndex + 1 : insertContent.length
+    const offset = Math.min(desiredOffset, activeBlock.text.length)
     contentState.cursor = {
       start: {
         key,

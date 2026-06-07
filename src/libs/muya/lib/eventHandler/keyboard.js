@@ -144,6 +144,7 @@ class Keyboard {
         )
       ) {
         let needPreventDefault = false
+        let activeQuickInsert = null
 
         for (const tool of this.shownFloat) {
           if (
@@ -156,13 +157,22 @@ class Keyboard {
             tool.name === 'ag-image-selector'
           ) {
             needPreventDefault = true
-            break
+          }
+          if (tool.name === 'ag-quick-insert') {
+            activeQuickInsert = tool
           }
         }
+
+        if (activeQuickInsert && event.key === EVENT_KEYS.Enter) {
+          event.preventDefault()
+          event.stopPropagation()
+          activeQuickInsert.selectItem(activeQuickInsert.activeItem)
+          return
+        }
+
         if (needPreventDefault) {
           event.preventDefault()
         }
-        // event.stopPropagation()
         return
       }
       switch (event.key) {

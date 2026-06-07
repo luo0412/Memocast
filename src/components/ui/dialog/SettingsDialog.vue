@@ -191,8 +191,10 @@
                     <q-select
                       dense
                       options-dense
-                      :value='$t(noteOrderType)'
+                      :value='noteOrderType'
                       :options='noteOrderOptions'
+                      emit-value
+                      map-options
                       @input='noteOrderChangeHandler'
                     />
                   </div>
@@ -750,7 +752,10 @@ export default {
       ]
     },
     noteOrderOptions: function () {
-      return NOTE_ORDER_TYPES.map(option => this.$t(option))
+      return NOTE_ORDER_TYPES.map(value => ({
+        label: this.$t(value),
+        value
+      }))
     },
     // ✅ 已移除 autoSaveGapLabel！不再需要
     // autoSaveGapLabel: function () { ... },
@@ -922,10 +927,8 @@ export default {
       this.updateStateAndStore({ imageUploadService: servicePlain })
     },
     noteOrderChangeHandler: function (type) {
-      const typePlain = NOTE_ORDER_TYPES.find(
-        i => this.$t(i) === type
-      )
-      this.updateStateAndStore({ noteOrderType: typePlain })
+      if (!NOTE_ORDER_TYPES.includes(type)) return
+      this.updateStateAndStore({ noteOrderType: type })
     },
     // ✅ 已移除 autoSaveGapChangeHandler！不再需要
     // autoSaveGapChangeHandler: function (value) { ... },
@@ -1148,9 +1151,13 @@ export default {
           clear_api_key: this.aiModelForm.clear_api_key,
           clear_virtual_key: this.aiModelForm.clear_virtual_key
         }
-        const saved = await DatabaseClient.aiModels.save(payload)
-        if (!saved) {
-          this.$q.notify({ message: this.$t('aiConfigSaveFailed'), type: 'negative', position: 'top' })
+        const result = await DatabaseClient.aiModels.save(payload)
+        if (!result || result.success === false) {
+          const errorCode = result && result.code
+          const messageKey = errorCode === 'AI_MODEL_DUPLICATE_NAME'
+            ? 'aiConfigNameExists'
+            : 'aiConfigSaveFailed'
+          this.$q.notify({ message: this.$t(messageKey), type: errorCode === 'AI_MODEL_DUPLICATE_NAME' ? 'warning' : 'negative', position: 'top' })
           return
         }
 
@@ -1161,7 +1168,7 @@ export default {
         const isDuplicateNameError = /UNIQUE constraint failed:\s*ai_model_configs\.name/i.test(String(error && error.message ? error.message : error))
         this.$q.notify({
           message: this.$t(isDuplicateNameError ? 'aiConfigNameExists' : 'aiConfigSaveFailed'),
-          type: 'negative',
+          type: isDuplicateNameError ? 'warning' : 'negative',
           position: 'top'
         })
       } finally {

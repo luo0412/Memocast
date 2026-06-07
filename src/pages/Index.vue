@@ -587,14 +587,14 @@ export default {
       this.splitterWidthValue = 0
     } else {
       this.splitterLimits = [300, Infinity]
-      this.splitterWidthValue = this.splitterWidth || 580
+      this.splitterWidthValue = Number.isFinite(this.splitterWidth) ? this.splitterWidth : 580
     }
     if (!this.categoryTreeVisible) {
       this.leftInnerSplitterLimits = [0, Infinity]
       this.leftInnerSplitterValue = 0
     } else {
       this.leftInnerSplitterLimits = [120, Infinity]
-      this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 240
+      this.leftInnerSplitterValue = Number.isFinite(this.leftInnerSplitterRatio) ? this.leftInnerSplitterRatio : 240
     }
   },
   beforeDestroy () {
@@ -658,10 +658,10 @@ export default {
         this.splitterWidthValue = 0
       } else {
         this.splitterLimits = [300, Infinity]
-        this.splitterWidthValue = this.splitterWidth || 580
+        this.splitterWidthValue = Number.isFinite(this.splitterWidth) ? this.splitterWidth : 580
         if (this.categoryTreeVisible) {
           this.leftInnerSplitterLimits = [120, Infinity]
-          this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 240
+          this.leftInnerSplitterValue = Number.isFinite(this.leftInnerSplitterRatio) ? this.leftInnerSplitterRatio : 240
         } else {
           this.leftInnerSplitterLimits = [0, Infinity]
           this.leftInnerSplitterValue = 0
@@ -674,7 +674,7 @@ export default {
         this.leftInnerSplitterValue = 0
       } else {
         this.leftInnerSplitterLimits = [120, Infinity]
-        this.leftInnerSplitterValue = this.leftInnerSplitterRatio || 240
+        this.leftInnerSplitterValue = Number.isFinite(this.leftInnerSplitterRatio) ? this.leftInnerSplitterRatio : 240
       }
     },
     showEditorNoteFab: function (val) {

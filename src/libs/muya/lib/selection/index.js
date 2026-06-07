@@ -416,6 +416,13 @@ class Selection {
     if (!anchorParagraph || !focusParagraph) {
       return
     }
+    const clampOffsetForNode = (node, offset) => {
+      if (!node) return 0
+      if (node.nodeType === 3) {
+        return Math.max(0, Math.min(offset, node.textContent.length))
+      }
+      return Math.max(0, Math.min(offset, node.childNodes.length))
+    }
     const getNodeAndOffset = (node, offset) => {
       if (node.nodeType === 3) {
         return {
@@ -480,16 +487,17 @@ class Selection {
           count += textLength
         }
       }
-      return { node, offset }
+      return {
+        node,
+        offset: clampOffsetForNode(node, offset)
+      }
     }
 
     let { node: anchorNode, offset: anchorOffset } = getNodeAndOffset(anchorParagraph, anchor.offset)
     let { node: focusNode, offset: focusOffset } = getNodeAndOffset(focusParagraph, focus.offset)
 
-    if (anchorNode.nodeType === 3 || anchorNode.nodeType === 1 && !anchorNode.classList.contains('ag-image-container')) {
-      anchorOffset = Math.min(anchorOffset, anchorNode.textContent.length)
-      focusOffset = Math.min(focusOffset, focusNode.textContent.length)
-    }
+    anchorOffset = clampOffsetForNode(anchorNode, anchorOffset)
+    focusOffset = clampOffsetForNode(focusNode, focusOffset)
 
     // First set the anchor node and anchor offset, make it collapsed
     this.select(anchorNode, anchorOffset)

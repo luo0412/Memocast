@@ -1323,11 +1323,21 @@ function registerDatabaseHandlers() {
       const incomingVirtualKey = typeof payload.virtual_key === 'string' ? payload.virtual_key.trim() : ''
 
       if (!name || !baseUrl || !model) {
-        return null
+        return { success: false, code: 'AI_MODEL_REQUIRED_FIELDS' }
       }
 
       const existing = id ? execOne('SELECT * FROM ai_model_configs WHERE id = ?', [id]) : null
-      if (id && !existing) return null
+      if (id && !existing) {
+        return { success: false, code: 'AI_MODEL_NOT_FOUND' }
+      }
+
+      const duplicateNameRow = execOne(
+        'SELECT id FROM ai_model_configs WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND (? IS NULL OR id != ?)',
+        [name, id, id]
+      )
+      if (duplicateNameRow) {
+        return { success: false, code: 'AI_MODEL_DUPLICATE_NAME' }
+      }
 
       let encryptedApiKey = existing?.api_key_encrypted || ''
       if (clearApiKey) {
@@ -1347,7 +1357,7 @@ function registerDatabaseHandlers() {
       const hasRequiredSecret = requiresVirtualKey ? encryptedVirtualKey : encryptedApiKey
 
       if (!existing && !hasRequiredSecret) {
-        return null
+        return { success: false, code: 'AI_MODEL_SECRET_REQUIRED' }
       }
 
       if (isDefault) {
@@ -1366,7 +1376,7 @@ function registerDatabaseHandlers() {
           [name, providerType, baseUrl, encryptedApiKey, encryptedVirtualKey, model, isDefault, enabled, headersJson, extraConfigJson, now, id]
         )
         saveDatabase()
-        return normalizeAiModelConfigRow(execOne('SELECT * FROM ai_model_configs WHERE id = ?', [id]), { includeApiKey: true })
+        return { success: true, data: normalizeAiModelConfigRow(execOne('SELECT * FROM ai_model_configs WHERE id = ?', [id]), { includeApiKey: true }) }
       }
 
       await db.run(
@@ -1375,10 +1385,17 @@ function registerDatabaseHandlers() {
         [name, providerType, baseUrl, encryptedApiKey, encryptedVirtualKey, model, isDefault, enabled, headersJson, extraConfigJson, now, now]
       )
       saveDatabase()
-      return normalizeAiModelConfigRow(execOne('SELECT * FROM ai_model_configs WHERE id = ?', [getLastInsertRowid()]), { includeApiKey: true })
+      return { success: true, data: normalizeAiModelConfigRow(execOne('SELECT * FROM ai_model_configs WHERE id = ?', [getLastInsertRowid()]), { includeApiKey: true }) }
     } catch (error) {
       log.error('[DB] saveAiModelConfig error:', error)
-      return null
+      if (/UNIQUE constraint failed:\s*ai_model_configs\.name/i.test(String(error && error.message ? error.message : error))) {
+        return { success: false, code: 'AI_MODEL_DUPLICATE_NAME' }
+      }
+      return {
+        success: false,
+        code: 'AI_MODEL_SAVE_FAILED',
+        message: error && error.message ? error.message : String(error)
+      }
     }
   })
 

@@ -33,7 +33,7 @@ import debugLogger from 'src/utils/debugLogger'
 import { attachThemeColor } from 'src/utils/theme'
 import { showContextMenu as showEditorContextMenu } from 'src/contextMenu/muya'
 import EchoRegistry from './echo/EchoRegistry'
-import { decodeEchoPayload, encodeEchoPayload, createEchoPlaceholderPayload } from './echo/EchoRuntime'
+import { decodeEchoPayload, encodeEchoPayload, createEchoPlaceholderPayload, parseEchoAttrs } from './echo/EchoRuntime'
 
 const {
   mapGetters: mapServerGetters,
@@ -327,7 +327,7 @@ const createRuneRendererCtor = (rune = {}) => {
       if (vnode && typeof vnode === 'object') {
         const existingChildren = Array.isArray(vnode.children) ? vnode.children : []
         if (!existingChildren.length) {
-          vnode.children = [this.$createTextVNode(this.value == null ? '' : String(this.value))]
+          vnode.children = [String(this.value == null ? '' : this.value)]
         }
       }
       return vnode
@@ -735,7 +735,7 @@ export default {
       const markdown = this.contentEditor.getMarkdown()
       const currentNote = this.$store.state.server.currentNote
       
-      if (!currentNote?.info || !markdown) return null
+      if (!currentNote?.info || typeof markdown !== 'string') return null
       
       const captureData = {
         markdown,
@@ -805,7 +805,8 @@ export default {
     },
     saveHandler: function () {
       if (this.active && this.enablePreviewEditor && this.contentEditor) {
-        this.updateNote(this.contentEditor.getMarkdown())
+        const markdown = this.pendingSaveData?.markdown || this.contentEditor.getMarkdown()
+        this.updateNote(markdown)
       }
     },
 
@@ -1141,12 +1142,19 @@ export default {
       try {
         this.contentEditor.focus()
         console.log(`[Muya watcher] 📝 Loading into editor: len=${markdownContent.length}`)
-          const runeMigratedMarkdown = migrateLegacyRunePlaceholders(markdownContent, this.runeCards)
-          const migratedMarkdown = migrateLegacyEchoPlaceholders(runeMigratedMarkdown, this.echoCards)
+        const runeMigratedMarkdown = migrateLegacyRunePlaceholders(markdownContent, this.runeCards)
+        const migratedMarkdown = migrateLegacyEchoPlaceholders(runeMigratedMarkdown, this.echoCards)
 
-          // ✅ 强制设置内容（空字符串也是有效内容，会清空编辑器）
-          this.contentEditor.setMarkdown(migratedMarkdown)
+        // ✅ 强制设置内容（空字符串也是有效内容，会清空编辑器）
+        this.contentEditor.setMarkdown(migratedMarkdown)
         if (migratedMarkdown !== markdownContent) {
+          this.pendingSaveData = {
+            markdown: migratedMarkdown,
+            docGuid: docGuid || currentData?.info?.docGuid || this.$store.state.server.currentNote?.info?.docGuid,
+            title: currentData?.info?.title || this.$store.state.server.currentNote?.info?.title,
+            resources: currentData?.resources || this.$store.state.server.currentNote?.resources || [],
+            timestamp: Date.now()
+          }
           this.updateNoteState('changed')
         }
         

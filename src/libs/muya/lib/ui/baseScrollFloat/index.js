@@ -56,10 +56,10 @@ class BaseScrollFloat extends BaseFloat {
           event.stopPropagation()
           break
         case EVENT_KEYS.Enter:
-          this.selectItem(this.activeItem)
           event.preventDefault()
           event.stopPropagation()
-          break
+          this.selectItem(this.activeItem)
+          return false
         default:
           break
       }
