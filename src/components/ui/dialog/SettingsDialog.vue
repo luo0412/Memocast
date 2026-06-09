@@ -1080,10 +1080,29 @@ export default {
 
       this.aiModelDialogVisible = true
     },
+    normalizeAiModelFormFields () {
+      const form = this.aiModelForm || {}
+      const normalized = {
+        name: String(form.name || '').trim(),
+        provider_type: String(form.provider_type || 'openai-compatible').trim() || 'openai-compatible',
+        base_url: String(form.base_url || '').trim(),
+        model: String(form.model || '').trim(),
+        api_key: String(form.api_key || '').trim(),
+        virtual_key: String(form.virtual_key || '').trim()
+      }
+
+      this.aiModelForm = {
+        ...form,
+        ...normalized
+      }
+
+      return normalized
+    },
     validateAiModelForm () {
       const form = this.aiModelForm
-      const normalizedName = String(form.name || '').trim()
-      if (!normalizedName || !form.base_url || !form.model) {
+      const normalized = this.normalizeAiModelFormFields()
+      const normalizedName = normalized.name
+      if (!normalizedName || !normalized.base_url || !normalized.model) {
         this.$q.notify({ message: this.$t('aiModelRequiredFields'), type: 'warning', position: 'top' })
         return false
       }
@@ -1104,7 +1123,7 @@ export default {
       }
 
       try {
-        const parsed = new URL(form.base_url)
+        const parsed = new URL(normalized.base_url)
         if (!/^https?:$/.test(parsed.protocol)) {
           throw new Error('invalid protocol')
         }
@@ -1113,18 +1132,18 @@ export default {
         return false
       }
 
-      if (!form.id && !form.api_key && !this.isPortkeyProvider) {
+      if (!form.id && !normalized.api_key && normalized.provider_type !== 'portkey') {
         this.$q.notify({ message: this.$t('aiApiKeyRequired'), type: 'warning', position: 'top' })
         return false
       }
 
-      if (this.isPortkeyProvider) {
-        if (!form.api_key && !form.id) {
+      if (normalized.provider_type === 'portkey') {
+        if (!normalized.api_key && !form.id) {
           this.$q.notify({ message: this.$t('aiPortkeyApiKeyRequired'), type: 'warning', position: 'top' })
           return false
         }
 
-        if (!form.virtual_key && !form.id) {
+        if (!normalized.virtual_key && !form.id) {
           this.$q.notify({ message: this.$t('aiVirtualKeyRequired'), type: 'warning', position: 'top' })
           return false
         }
@@ -1154,10 +1173,16 @@ export default {
         const result = await DatabaseClient.aiModels.save(payload)
         if (!result || result.success === false) {
           const errorCode = result && result.code
-          const messageKey = errorCode === 'AI_MODEL_DUPLICATE_NAME'
-            ? 'aiConfigNameExists'
-            : 'aiConfigSaveFailed'
-          this.$q.notify({ message: this.$t(messageKey), type: errorCode === 'AI_MODEL_DUPLICATE_NAME' ? 'warning' : 'negative', position: 'top' })
+          const messageKeyMap = {
+            AI_MODEL_DUPLICATE_NAME: 'aiConfigNameExists',
+            AI_MODEL_REQUIRED_FIELDS: 'aiModelRequiredFields',
+            AI_MODEL_SECRET_REQUIRED: this.aiModelForm.provider_type === 'portkey' ? 'aiVirtualKeyRequired' : 'aiApiKeyRequired'
+          }
+          const messageKey = messageKeyMap[errorCode] || 'aiConfigSaveFailed'
+          const notifyType = errorCode === 'AI_MODEL_DUPLICATE_NAME' || errorCode === 'AI_MODEL_REQUIRED_FIELDS' || errorCode === 'AI_MODEL_SECRET_REQUIRED'
+            ? 'warning'
+            : 'negative'
+          this.$q.notify({ message: this.$t(messageKey), type: notifyType, position: 'top' })
           return
         }
 

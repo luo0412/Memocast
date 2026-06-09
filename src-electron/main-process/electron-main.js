@@ -1354,7 +1354,9 @@ function registerDatabaseHandlers() {
       }
 
       const requiresVirtualKey = providerType === AI_MODEL_PROVIDER_PORTKEY
-      const hasRequiredSecret = requiresVirtualKey ? encryptedVirtualKey : encryptedApiKey
+      const hasRequiredSecret = requiresVirtualKey
+        ? encryptedApiKey && encryptedVirtualKey
+        : encryptedApiKey
 
       if (!existing && !hasRequiredSecret) {
         return { success: false, code: 'AI_MODEL_SECRET_REQUIRED' }
