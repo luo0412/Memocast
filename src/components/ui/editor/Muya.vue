@@ -412,6 +412,34 @@ const EchoPreviewRenderer = Vue.extend({
       editValue: ''
     }
   },
+  mounted () {
+    console.log('[EchoPreviewRenderer] mounted', {
+      nodeId: this.nodeId,
+      echoId: this.echoId,
+      echoName: this.echo?.name || '',
+      value: this.value,
+      connected: !!this.$el?.isConnected,
+      outerHtmlPreview: String(this.$el?.outerHTML || '').substring(0, 200)
+    })
+  },
+  updated () {
+    console.log('[EchoPreviewRenderer] updated', {
+      nodeId: this.nodeId,
+      echoId: this.echoId,
+      echoName: this.echo?.name || '',
+      value: this.value,
+      editValue: this.editValue,
+      connected: !!this.$el?.isConnected
+    })
+  },
+  beforeDestroy () {
+    console.log('[EchoPreviewRenderer] beforeDestroy', {
+      nodeId: this.nodeId,
+      echoId: this.echoId,
+      echoName: this.echo?.name || '',
+      connected: !!this.$el?.isConnected
+    })
+  },
   computed: {
     renderModel () {
       return this.$root?.echoRegistry?.render?.({
@@ -1245,6 +1273,12 @@ export default {
   max-width: min(100%, 420px);
 }
 
+.ag-echo-inline-preview {
+  display: inline-flex;
+  vertical-align: middle;
+  max-width: min(100%, 420px);
+}
+
 .ag-rune-placeholder-card,
 .ag-rune-vue-card,
 .ag-echo-placeholder-card,
@@ -1270,6 +1304,32 @@ export default {
   align-items: stretch;
   border: 1px solid rgba(38, 166, 154, 0.2);
   background: linear-gradient(180deg, rgba(38, 166, 154, 0.12), rgba(38, 166, 154, 0.05));
+}
+
+.ag-echo-inline-preview.ag-echo-vue-card {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 0;
+  max-width: min(100%, 420px);
+  padding: 6px 8px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.ag-echo-inline-preview .ag-echo-inline-chip--static {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ag-echo-inline-preview .ag-echo-inline-chip__body {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .ag-echo-inline-chip--ghost {
@@ -1307,6 +1367,23 @@ export default {
   color: inherit;
   box-sizing: border-box;
   font-size: 13px;
+  line-height: 1.5;
+}
+
+.ag-echo-inline-editor--always {
+  display: inline-flex;
+  width: min(280px, 100%);
+  min-width: 160px;
+  vertical-align: top;
+}
+
+.ag-echo-inline-preview .el-textarea,
+.ag-echo-inline-preview .el-textarea__inner {
+  width: 100%;
+}
+
+.ag-echo-inline-preview .el-textarea__inner {
+  min-height: 56px !important;
   line-height: 1.5;
 }
 

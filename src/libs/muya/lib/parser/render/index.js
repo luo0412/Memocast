@@ -212,6 +212,14 @@ class StateRender {
     }
   }
 
+  cleanupDetachedEchoPlaceholders () {
+    for (const host of Array.from(this.echoPlaceholderCache.keys())) {
+      if (!host.isConnected) {
+        this.echoPlaceholderCache.delete(host)
+      }
+    }
+  }
+
   renderEchoPlaceholderNodes () {
     const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
     if (!root) return
@@ -258,6 +266,17 @@ class StateRender {
           vm.$destroy()
         }
         this.runeVmMap.delete(nodeId)
+      }
+    }
+  }
+
+  cleanupDetachedEchoVms (force = false) {
+    for (const [nodeId, vm] of this.echoVmMap.entries()) {
+      if (force || !vm || !vm.$el || !vm.$el.isConnected) {
+        if (vm && typeof vm.$destroy === 'function') {
+          vm.$destroy()
+        }
+        this.echoVmMap.delete(nodeId)
       }
     }
   }
@@ -379,6 +398,11 @@ class StateRender {
     const echoMap = this.getEchoMap()
     const hosts = root.querySelectorAll(ECHO_PLACEHOLDER_SELECTOR)
     const aliveNodeIds = new Set()
+    console.log('[Muya.StateRender.mountEchoVueHosts] scanning hosts', {
+      hostCount: hosts.length,
+      echoMapSize: echoMap.size,
+      existingVmCount: this.echoVmMap.size
+    })
 
     hosts.forEach(host => {
       const dataset = host.dataset || {}
@@ -388,6 +412,12 @@ class StateRender {
       const nodeId = String(dataset.echoNodeId || '')
       const value = String(dataset.echoValue || '')
       if (!echoName || !echoId || !nodeId) {
+        console.log('[Muya.StateRender.mountEchoVueHosts] skip host due to missing dataset', {
+          echoName,
+          echoId,
+          nodeId,
+          dataset
+        })
         return
       }
 
@@ -404,10 +434,26 @@ class StateRender {
         mountedVm.nodeId = nodeId
         mountedVm.echo = echo
         mountedVm.value = value
+        console.log('[Muya.StateRender.mountEchoVueHosts] reuse vm', {
+          nodeId,
+          echoId,
+          echoName,
+          renderKey,
+          hostConnected: host.isConnected,
+          vmConnected: !!mountedVm.$el?.isConnected
+        })
         return
       }
 
       if (mountedVm && typeof mountedVm.$destroy === 'function') {
+        console.log('[Muya.StateRender.mountEchoVueHosts] destroy stale vm', {
+          nodeId,
+          echoId,
+          echoName,
+          renderKey,
+          hasEl: !!mountedVm.$el,
+          vmConnected: !!mountedVm.$el?.isConnected
+        })
         mountedVm.$destroy()
       }
 
@@ -429,10 +475,25 @@ class StateRender {
       vm.$mount()
       host.appendChild(vm.$el)
       this.echoVmMap.set(nodeId, vm)
+      console.log('[Muya.StateRender.mountEchoVueHosts] mounted vm', {
+        nodeId,
+        echoId,
+        echoName,
+        renderKey,
+        hostConnected: host.isConnected,
+        vmConnected: !!vm.$el?.isConnected,
+        hostChildCount: host.childNodes.length,
+        outerHtmlPreview: String(vm.$el?.outerHTML || '').substring(0, 200)
+      })
     })
 
     for (const [savedNodeId, vm] of this.echoVmMap.entries()) {
       if (!aliveNodeIds.has(savedNodeId)) {
+        console.log('[Muya.StateRender.mountEchoVueHosts] cleanup detached vm', {
+          savedNodeId,
+          hasEl: !!vm?.$el,
+          vmConnected: !!vm?.$el?.isConnected
+        })
         if (vm && typeof vm.$destroy === 'function') {
           vm.$destroy()
         }
@@ -445,15 +506,19 @@ class StateRender {
     this.mountRuneVueHosts()
     this.mountEchoVueHosts()
     this.cleanupDetachedRuneVms()
+    this.cleanupDetachedEchoVms()
   }
 
   renderRunes () {
     this.renderRunePlaceholderNodes()
+    this.renderEchoPlaceholderNodes()
     this.cleanupDetachedRunePlaceholders()
+    this.cleanupDetachedEchoPlaceholders()
     if (this.muya?.options?.enableRuneVueRenderer) {
       this.renderRunesWithVue()
     } else {
       this.cleanupDetachedRuneVms(true)
+      this.cleanupDetachedEchoVms(true)
     }
   }
 
@@ -600,7 +665,11 @@ class StateRender {
 
     firstOldDom.insertAdjacentHTML('beforebegin', html)
 
-    Array.from(needToRemoved).forEach(dom => dom.remove())
+    Array.from(needToRemoved).forEach(dom => {
+      if (dom && dom.parentNode) {
+        dom.parentNode.removeChild(dom)
+      }
+    })
 
     // Render cursor block independently
     if (needRenderCursorBlock) {
