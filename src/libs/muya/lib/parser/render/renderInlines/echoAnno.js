@@ -1,5 +1,12 @@
 import { CLASS_OR_ID } from '../../../config'
 
+const createEchoNodeId = (token, echoId, definitionId, echoName) => {
+  const start = token?.range?.start ?? ''
+  const end = token?.range?.end ?? ''
+  const raw = String(token?.raw || '')
+  return `echo-${echoId || definitionId || echoName}-${start}-${end}-${raw.length}`
+}
+
 export default function echoAnno (h, cursor, block, token, outerClass) {
   const className = this.getClassName(outerClass, block, token, cursor)
   const echoName = String(token.echoName || '').trim() || '回响'
@@ -12,9 +19,10 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
   const definitionId = String(token.definitionId || token?.attrsParsed?.definitionId || '').trim()
   const summary = String(value || '').replace(/\s+/g, ' ').trim()
   const title = summary ? `${echoName}: ${summary}` : echoName
+  const echoNodeId = createEchoNodeId(token, echoId, definitionId, echoName)
 
   return [
-    h(`span.${CLASS_OR_ID.AG_INLINE_RULE}.ag-echo-anno-token`, {
+    h(`span.${className}.ag-echo-anno-token.${CLASS_OR_ID.AG_INLINE_RULE}`, {
       dataset: {
         start: token.range.start,
         end: token.range.end,
@@ -22,20 +30,14 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
         echoName,
         echoId,
         echoDefinitionId: definitionId,
+        echoNodeId,
         echoValue: value
       },
       attrs: {
         spellcheck: 'false',
-        title
+        title,
+        contenteditable: 'false'
       }
-    }, [
-      h('span.ag-echo-inline-chip__icon', [
-        h('i.material-icons.ag-echo-placeholder-icon-font', ['graphic_eq'])
-      ]),
-      h('span.ag-echo-inline-chip__body', [
-        h('span.ag-echo-inline-chip__title', [echoName]),
-        summary ? h('span.ag-echo-inline-chip__desc', [summary]) : null
-      ])
-    ])
+    })
   ]
 }

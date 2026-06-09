@@ -409,7 +409,6 @@ const EchoPreviewRenderer = Vue.extend({
   },
   data () {
     return {
-      editing: false,
       editValue: ''
     }
   },
@@ -440,98 +439,88 @@ const EchoPreviewRenderer = Vue.extend({
     },
     resolvedValue () {
       return typeof this.value === 'string' ? this.value : ''
+    },
+    displayTitle () {
+      return this.renderModel.title || this.echo?.name || '回响'
+    }
+  },
+  watch: {
+    value: {
+      immediate: true,
+      handler (nextValue) {
+        this.editValue = typeof nextValue === 'string' ? nextValue : ''
+      }
     }
   },
   methods: {
-    startEdit () {
-      this.editing = true
-      this.editValue = this.resolvedValue
-    },
-    cancelEdit () {
-      this.editing = false
-      this.editValue = ''
-    },
     commitEdit () {
       const nextValue = typeof this.editValue === 'string' ? this.editValue : ''
+      if (nextValue === this.resolvedValue) return
       if (typeof this.onCommit === 'function') {
         this.onCommit({
           echoId: this.echoId,
           nodeId: this.nodeId,
           echoName: this.echo?.name || '',
           value: nextValue,
+          payload: encodeEchoPayload({
+            prompt: nextValue,
+            attrs: {
+              id: this.echoId || '',
+              definitionId: this.echo?.id || '',
+              value: nextValue
+            }
+          }),
           mode: 'update-instance'
         })
       }
-      this.editing = false
-      this.editValue = ''
     },
     handleEditKeydown (event) {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
         this.commitEdit()
-      } else if (event.key === 'Escape') {
-        event.preventDefault()
-        this.cancelEdit()
       }
     },
     handleEditBlur () {
       this.commitEdit()
+    },
+    openDefinitionEditor (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (typeof this.onCommit === 'function') {
+        this.onCommit({
+          echoId: this.echoId,
+          nodeId: this.nodeId,
+          echoName: this.echo?.name || '',
+          payload: encodeEchoPayload({
+            prompt: this.editValue,
+            attrs: {
+              id: this.echoId || '',
+              definitionId: this.echo?.id || '',
+              value: this.editValue
+            }
+          }),
+          mode: 'open-definition'
+        })
+      }
     }
   },
   render (h) {
     const model = this.renderModel || {}
     const iconText = model.icon || 'graphic_eq'
-    const title = model.title || this.echo?.name || '回响'
-    const description = this.displaySummary
-
-    if (this.editing) {
-      return h('span', {
-        staticClass: 'ag-echo-inline-preview ag-echo-vue-card ag-echo-inline-editing',
-        style: this.inlineStyle,
-        attrs: {
-          contenteditable: 'false',
-          tabindex: '-1'
-        }
-      }, [
-        h('textarea', {
-          staticClass: 'ag-echo-inline-editor',
-          attrs: {
-            rows: 2,
-            placeholder: this.placeholder
-          },
-          domProps: {
-            value: this.editValue
-          },
-          on: {
-            input: event => {
-              this.editValue = event.target.value
-            },
-            keydown: this.handleEditKeydown,
-            blur: this.handleEditBlur
-          }
-        })
-      ])
-    }
+    const title = this.displayTitle
 
     return h('span', {
-      staticClass: 'ag-echo-inline-preview ag-echo-vue-card',
+      staticClass: 'ag-echo-inline-preview ag-echo-vue-card ag-echo-inline-always',
       style: this.inlineStyle,
       attrs: {
         contenteditable: 'false',
         tabindex: '-1'
       }
     }, [
-      h('button', {
-        staticClass: 'ag-echo-inline-chip',
+      h('span', {
+        staticClass: 'ag-echo-inline-chip ag-echo-inline-chip--static',
         attrs: {
-          type: 'button',
-          title: description || title
-        },
-        on: {
-          click: this.startEdit,
-          mousedown: event => {
-            event.preventDefault()
-          }
+          title
         }
       }, [
         h('span', { staticClass: 'ag-echo-inline-chip__icon' }, [
@@ -539,7 +528,32 @@ const EchoPreviewRenderer = Vue.extend({
         ]),
         h('span', { staticClass: 'ag-echo-inline-chip__body' }, [
           h('span', { staticClass: 'ag-echo-inline-chip__title' }, [title]),
-          description ? h('span', { staticClass: 'ag-echo-inline-chip__desc' }, [description]) : null
+          h('el-input', {
+            staticClass: 'ag-echo-inline-editor ag-echo-inline-editor--always',
+            props: {
+              type: 'textarea',
+              rows: 2,
+              autosize: { minRows: 2, maxRows: 6 },
+              value: this.editValue,
+              placeholder: this.placeholder,
+              size: 'mini'
+            },
+            on: {
+              input: value => {
+                this.editValue = value
+              },
+              keydown: this.handleEditKeydown,
+              blur: this.handleEditBlur
+            },
+            nativeOn: {
+              keydown: this.handleEditKeydown,
+              blur: this.handleEditBlur,
+              mousedown: event => {
+                event.stopPropagation()
+              }
+            },
+            ref: 'echoInput'
+          })
         ])
       ]),
       h('button', {
@@ -549,25 +563,7 @@ const EchoPreviewRenderer = Vue.extend({
           title: '编辑回响定义'
         },
         on: {
-          click: event => {
-            event.preventDefault()
-            event.stopPropagation()
-            if (typeof this.onCommit === 'function') {
-              this.onCommit({
-                echoId: this.echoId,
-                nodeId: this.nodeId,
-                echoName: this.echo?.name || '',
-                payload: encodeEchoPayload({
-                  prompt: this.resolvedValue,
-                  attrs: {
-                    id: this.echoId || '',
-                    value: this.resolvedValue
-                  }
-                }),
-                mode: 'open-definition'
-              })
-            }
-          },
+          click: this.openDefinitionEditor,
           mousedown: event => {
             event.preventDefault()
           }
@@ -580,6 +576,17 @@ const EchoPreviewRenderer = Vue.extend({
     ])
   }
 })
+
+const clearEditorHistory = (editor) => {
+  if (!editor) return
+  if (typeof editor.clearHistory === 'function') {
+    editor.clearHistory()
+    return
+  }
+  if (editor.contentState?.history && typeof editor.contentState.history.clearHistory === 'function') {
+    editor.contentState.history.clearHistory()
+  }
+}
 
 const EchoPlaceholderHost = EchoPreviewRenderer
 
@@ -942,7 +949,7 @@ export default {
         echoRegistry: this.echoRegistry,
         echoCards: this.echoCards,
         runeRendererCtor: RunePreviewRenderer,
-        echoRendererCtor: null,
+        echoRendererCtor: EchoPlaceholderHost,
         enableRuneVueRenderer: true,
         onEchoPlaceholderCommit: this.updateEchoPlaceholderPayload,
         imagePathPicker: () => {
@@ -1138,7 +1145,7 @@ export default {
       console.log(`[Muya watcher] Preview: ${JSON.stringify((markdownContent || '').substring(0, 120))}`)
       
       // ✅ 核心逻辑：加载内容到编辑器（即使是空字符串也要更新！）
-      this.contentEditor.clearHistory()
+      clearEditorHistory(this.contentEditor)
       try {
         this.contentEditor.focus()
         console.log(`[Muya watcher] 📝 Loading into editor: len=${markdownContent.length}`)
@@ -1187,7 +1194,7 @@ export default {
       document.querySelector('.ag-show-quick-insert-hint').setAttribute('contenteditable', val)
     },
     data: function ({ markdown }) {
-      this.contentEditor.clearHistory()
+      clearEditorHistory(this.contentEditor)
       this.contentEditor.setMarkdown(markdown)
       this.updateContentsList(this.contentEditor.getTOC())
     },
@@ -1277,6 +1284,15 @@ export default {
 .ag-echo-inline-chip--ghost:hover {
   opacity: 1;
   background: rgba(38, 166, 154, 0.18);
+}
+
+.ag-echo-inline-chip--empty {
+  border-style: dashed;
+}
+
+.ag-echo-inline-chip__desc--placeholder {
+  opacity: 0.62;
+  font-style: italic;
 }
 
 .ag-echo-inline-editor {

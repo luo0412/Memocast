@@ -9,8 +9,11 @@ import { tokenizer } from '../index'
 import { i18n } from 'boot/i18n'
 
 const RUNE_PLACEHOLDER_SELECTOR = '[data-rune-name][data-rune-id][data-rune-node-id]'
+const ECHO_PLACEHOLDER_SELECTOR = '[data-echo-name][data-echo-id][data-echo-node-id]'
 const RUNE_HOST_CLASS = 'ag-rune-placeholder-host'
 const RUNE_CARD_CLASS = 'ag-rune-placeholder-card'
+const ECHO_HOST_CLASS = 'ag-echo-placeholder-host'
+const ECHO_CARD_CLASS = 'ag-echo-placeholder-card'
 
 class StateRender {
   constructor (muya) {
@@ -28,7 +31,9 @@ class StateRender {
     this.renderingRowContainer = null
     this.container = null
     this.runePlaceholderCache = new Map()
+    this.echoPlaceholderCache = new Map()
     this.runeVmMap = new Map()
+    this.echoVmMap = new Map()
   }
 
   setContainer (container) {
@@ -438,6 +443,7 @@ class StateRender {
 
   renderRunesWithVue () {
     this.mountRuneVueHosts()
+    this.mountEchoVueHosts()
     this.cleanupDetachedRuneVms()
   }
 
