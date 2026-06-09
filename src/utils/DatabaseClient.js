@@ -289,6 +289,10 @@ const aiModels = {
 
   async setDefault(id) {
     return await invoke('db:setDefaultAiModelConfig', id)
+  },
+
+  async testConnection(id) {
+    return await invoke('db:testAiModelConfig', id)
   }
 }
 

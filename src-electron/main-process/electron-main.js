@@ -15,6 +15,7 @@ import Store from 'electron-store'
 import i18n from './i18n'
 import log from 'electron-log'
 import CryptoJS from 'crypto-js'
+import Portkey from 'portkey-ai'
 const { DEFAULT_ROOT_CATEGORY } = require('./constants')
 
 // sql.js 数据库
@@ -79,6 +80,115 @@ function normalizeAiModelConfigRow(row, { includeApiKey = false } = {}) {
     portkeyVirtualKeyMasked: maskAiConfigApiKey(decryptedVirtualKey),
     hasVirtualKey: Boolean(decryptedVirtualKey)
   }
+}
+
+function parseAiModelJsonField(value, fallback = {}) {
+  if (!value) return fallback
+  if (typeof value === 'object') return value
+
+  try {
+    return JSON.parse(value)
+  } catch (error) {
+    return fallback
+  }
+}
+
+function getAiModelMissingFields(modelConfig) {
+  if (!modelConfig) {
+    return ['provider_type', 'base_url', 'model', 'api_key']
+  }
+
+  const missingFields = []
+  const providerType = String(modelConfig.provider_type || '').trim()
+  const hasApiKey = Boolean(modelConfig.api_key || modelConfig.hasApiKey)
+  const hasVirtualKey = Boolean(modelConfig.virtual_key || modelConfig.hasVirtualKey)
+
+  if (!providerType) {
+    missingFields.push('provider_type')
+    return missingFields
+  }
+
+  if (!modelConfig.base_url) {
+    missingFields.push('base_url')
+  }
+
+  if (!modelConfig.model) {
+    missingFields.push('model')
+  }
+
+  if (!hasApiKey) {
+    missingFields.push('api_key')
+  }
+
+  if (providerType === AI_MODEL_PROVIDER_PORTKEY && !hasVirtualKey) {
+    missingFields.push('virtual_key')
+  }
+
+  return missingFields
+}
+
+function buildAiModelTestMessages() {
+  return [
+    {
+      role: 'user',
+      content: 'Reply with exactly: ok'
+    }
+  ]
+}
+
+function normalizeAiModelTestError(error) {
+  const message = String(error && error.message ? error.message : error || '')
+  if (!message) return 'Connection test failed'
+  return message.length > 300 ? `${message.slice(0, 300)}...` : message
+}
+
+async function testOpenAiCompatibleModelConfig(modelConfig) {
+  const headers = parseAiModelJsonField(modelConfig.headers_json)
+  const extraConfig = parseAiModelJsonField(modelConfig.extra_config_json)
+  const url = `${String(modelConfig.base_url || '').replace(/\/$/, '')}/chat/completions`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${modelConfig.api_key || ''}`,
+      ...headers
+    },
+    body: JSON.stringify({
+      messages: buildAiModelTestMessages(),
+      model: modelConfig.model,
+      temperature: 0,
+      max_tokens: 8,
+      ...extraConfig,
+      stream: false
+    })
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(errorText || `Request failed with status ${response.status}`)
+  }
+
+  await response.json()
+  return true
+}
+
+async function testPortkeyModelConfig(modelConfig) {
+  const client = new Portkey({
+    apiKey: modelConfig.api_key || '',
+    virtualKey: modelConfig.virtual_key || undefined,
+    baseURL: modelConfig.base_url || undefined,
+    defaultHeaders: parseAiModelJsonField(modelConfig.headers_json)
+  })
+
+  await client.chat.completions.create({
+    messages: buildAiModelTestMessages(),
+    model: modelConfig.model,
+    temperature: 0,
+    max_tokens: 8,
+    ...parseAiModelJsonField(modelConfig.extra_config_json)
+  })
+
+  return true
 }
 
 /**
@@ -1424,6 +1534,42 @@ function registerDatabaseHandlers() {
     } catch (error) {
       log.error('[DB] setDefaultAiModelConfig error:', error)
       return false
+    }
+  })
+
+  ipcMain.handle('db:testAiModelConfig', async (event, id) => {
+    try {
+      if (!id) {
+        return { success: false, code: 'AI_MODEL_NOT_FOUND' }
+      }
+
+      const row = execOne('SELECT * FROM ai_model_configs WHERE id = ?', [id])
+      const modelConfig = normalizeAiModelConfigRow(row, { includeApiKey: true })
+      if (!modelConfig) {
+        return { success: false, code: 'AI_MODEL_NOT_FOUND' }
+      }
+
+      const missingFields = getAiModelMissingFields(modelConfig)
+      if (missingFields.length > 0) {
+        return { success: false, code: 'AI_MODEL_INCOMPLETE', missingFields }
+      }
+
+      if (modelConfig.provider_type === AI_MODEL_PROVIDER_PORTKEY) {
+        await testPortkeyModelConfig(modelConfig)
+      } else if (modelConfig.provider_type === AI_MODEL_PROVIDER_OPENAI_COMPATIBLE) {
+        await testOpenAiCompatibleModelConfig(modelConfig)
+      } else {
+        return { success: false, code: 'AI_MODEL_UNSUPPORTED_PROVIDER' }
+      }
+
+      return { success: true }
+    } catch (error) {
+      log.error('[DB] testAiModelConfig error:', error)
+      return {
+        success: false,
+        code: 'AI_MODEL_TEST_FAILED',
+        message: normalizeAiModelTestError(error)
+      }
     }
   })
 
