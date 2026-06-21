@@ -69,15 +69,6 @@ module.exports = function (/* ctx */) {
 
       // https://quasar.dev/quasar-cli/handling-webpack
       extendWebpack (cfg) {
-        const transpileNodeModules = /node_modules[\\/](openai|portkey-ai)[\\/]/
-        const babelOptions = {
-          presets: [['@babel/preset-env', { targets: { chrome: '70' } }]],
-          plugins: [
-            '@babel/plugin-transform-optional-chaining',
-            '@babel/plugin-transform-nullish-coalescing-operator'
-          ]
-        }
-
         // ESLint is run separately via `npm run lint`.
         // eslint-loader v4 is incompatible with eslint v8 (removed getFormatter API),
         // so it has been removed from the webpack build pipeline.
@@ -85,31 +76,26 @@ module.exports = function (/* ctx */) {
           electron: 'commonjs electron'
         }
 
+        // 使用 babel-loader 转译 openai 和 portkey-ai
         cfg.module.rules.push({
           test: /\.m?js$/,
-          include: transpileNodeModules,
+          include: [
+            /node_modules[/\\]openai/,
+            /node_modules[/\\]portkey-ai/
+          ],
           type: 'javascript/auto',
           use: {
-            loader: 'babel-loader',
-            options: babelOptions
+            loader: require.resolve('babel-loader'),
+            options: {
+              presets: [['@babel/preset-env', { targets: { chrome: '70' } }]],
+              plugins: [
+                '@babel/plugin-transform-optional-chaining',
+                '@babel/plugin-transform-nullish-coalescing-operator'
+              ],
+              cacheDirectory: false
+            }
           }
         })
-
-        // Add babel loader for vega modules
-        // cfg.module.rules.push({
-        //   test: /\.js$/,
-        //   include: /node_modules\/vega/,
-        //   use: {
-        //     loader: 'babel-loader',
-        //     options: {
-        //       presets: [['@babel/preset-env', { targets: 'Chrome 70' }]],
-        //       plugins: [
-        //         '@babel/plugin-transform-optional-chaining',
-        //         '@babel/plugin-transform-nullish-coalescing-operator'
-        //       ]
-        //     }
-        //   }
-        // })
 
         // Monaco editor: use monaco-editor-webpack-plugin to bundle workers
         const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin')
@@ -509,12 +495,34 @@ module.exports = function (/* ctx */) {
           'sql.js': 'commonjs sql.js'
         }
 
-        // 使用 babel-loader 转译 sql.js 的 wasm 文件
+        // 使用 babel-loader 转译 openai 和 portkey-ai
+        const openaiRule = {
+          test: /\.m?js$/,
+          include: [
+            /node_modules[/\\]openai/,
+            /node_modules[/\\]portkey-ai/
+          ],
+          type: 'javascript/auto',
+          use: {
+            loader: require.resolve('babel-loader'),
+            options: {
+              presets: [['@babel/preset-env', { targets: { node: 'current' } }]],
+              plugins: [
+                '@babel/plugin-transform-optional-chaining',
+                '@babel/plugin-transform-nullish-coalescing-operator'
+              ],
+              cacheDirectory: false
+            }
+          }
+        }
+        cfg.module.rules.push(openaiRule)
+
+        // 使用 babel-loader 转译 sql.js
         cfg.module.rules.push({
           test: /\.js$/,
-          include: /node_modules\/sql\.js/,
+          include: /node_modules[/\\]sql\.js/,
           use: {
-            loader: 'babel-loader',
+            loader: require.resolve('babel-loader'),
             options: {
               presets: [['@babel/preset-env', { targets: { node: 'current' } }]]
             }

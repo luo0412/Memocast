@@ -127,7 +127,8 @@ const createRuneMigrationMap = (runeCards = []) => {
 const createRuneInstanceId = () => uuidv4()
 const createRuneNodeId = () => `rune-${uuidv4()}`
 const LEGACY_ECHO_INSERT_RE = /@([^\s{}()@]+)\{\}\(\)/g
-const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]+)\{([\s\S]*?)\}\(([^)]*)\)/g
+// Support both named (@name{...}(...)) and anonymous (@{...}(...)) echo annotations
+const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]*)\{([\s\S]*?)\}\(([^)]*)\)/g
 const escapeHtmlAttribute = (value = '') => String(value)
   .replace(/&/g, '&amp;')
   .replace(/"/g, '&quot;')
@@ -721,15 +722,18 @@ export default {
 
       let updated = false
       const nextMarkdown = markdown.replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, matchedName = '', matchedAttrs = '', matchedPrompt = '') => {
-        const currentName = String(matchedName || echoName || '回响').trim()
+        const currentName = String(matchedName || echoName || '').trim()
         const attrs = parseEchoAttrs(matchedAttrs)
         const matchedId = String(attrs.id || '').trim()
         if (updated) return match
+        // For anonymous echo (@{}), match by echoId only
+        const isAnonymous = !matchedName
         if (normalizedEchoId && matchedId && matchedId !== normalizedEchoId) return match
-        if (!normalizedEchoId && echoName && currentName !== echoName) return match
+        if (!isAnonymous && !normalizedEchoId && echoName && currentName !== echoName) return match
         updated = true
-        return buildEchoAnnotationText(currentName, nextPayload, {
-          echoId: normalizedEchoId || matchedId || String(attrsFromPayload?.id || '').trim() || createEchoInstanceId(),
+        const resolvedEchoId = normalizedEchoId || matchedId || String(attrsFromPayload?.id || '').trim() || createEchoInstanceId()
+        return buildEchoAnnotationText(currentName || '回响', nextPayload, {
+          echoId: resolvedEchoId,
           definitionId: String(attrs.definitionId || normalizedDefinitionId || '').trim()
         })
       })
@@ -1273,6 +1277,52 @@ export default {
   max-width: min(100%, 420px);
 }
 
+.ag-echo-anno-token {
+  display: inline-flex;
+  vertical-align: middle;
+  margin: 0 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(38, 166, 154, 0.15), rgba(38, 166, 154, 0.08));
+  border: 1px solid rgba(38, 166, 154, 0.25);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.ag-echo-anno-token:hover {
+  background: linear-gradient(135deg, rgba(38, 166, 154, 0.25), rgba(38, 166, 154, 0.15));
+  border-color: rgba(38, 166, 154, 0.45);
+  box-shadow: 0 1px 4px rgba(38, 166, 154, 0.2);
+}
+
+.ag-echo-placeholder-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ag-echo-anno-icon {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.ag-echo-anno-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(38, 166, 154, 0.95);
+  white-space: nowrap;
+}
+
+.ag-echo-anno-value {
+  font-size: 12px;
+  color: rgba(38, 166, 154, 0.7);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ag-echo-inline-preview {
   display: inline-flex;
   vertical-align: middle;
@@ -1466,6 +1516,20 @@ export default {
   line-height: 1.4;
   opacity: 0.78;
   word-break: break-word;
+}
+
+.ag-echo-placeholder-value-marker {
+  display: inline-block;
+  min-width: 4px;
+  min-height: 14px;
+  outline: none;
+  caret-color: rgba(38, 166, 154, 0.9);
+}
+
+.ag-echo-placeholder-host .ag-echo-placeholder-card,
+.ag-echo-placeholder-card {
+  min-width: 50px;
+  min-height: 20px;
 }
 
 .ag-echo-placeholder-editor {

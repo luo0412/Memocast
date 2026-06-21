@@ -187,16 +187,16 @@ const tokenizerFac = (src, beginRules, inlineRules, pos = 0, top, labels, option
             backlash: to[3]
           })
         } else if (rule === 'echo_anno') {
-          const attrsParsed = parseEchoAttrs(to[2])
+          const attrsParsed = parseEchoAttrs(to[2] || '')
           tokens.push({
             type: 'echo_anno',
             raw: to[0],
             range,
             marker,
             parent: tokens,
-            echoName: to[1],
+            echoName: to[1] || '',
             echoId: typeof attrsParsed.id === 'string' ? attrsParsed.id : '',
-            attrsRaw: to[2],
+            attrsRaw: to[2] || '',
             attrsParsed,
             prompt: to[3]
           })

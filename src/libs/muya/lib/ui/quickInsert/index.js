@@ -524,23 +524,33 @@ class QuickInsert extends BaseScrollFloat {
     const { key } = activeBlock
 
     activeBlock.text = insertContent
-    const markerIndex = insertContent.indexOf("''")
-    const desiredOffset = markerIndex > -1 ? markerIndex + 1 : insertContent.length
-    const offset = Math.min(desiredOffset, activeBlock.text.length)
+    // Position cursor at the end of the block text.
+    const offset = activeBlock.text.length
     contentState.cursor = {
-      start: {
-        key,
-        offset
-      },
-      end: {
-        key,
-        offset
-      }
+      start: { key, offset },
+      end: { key, offset }
     }
 
     contentState.partialRender()
     this.muya.dispatchSelectionChange()
     this.muya.dispatchChange()
+
+    // If no value was provided, focus the editable value marker so user can type.
+    if (!echoValue) {
+      this.muya.eventCenter.once('muya-selection-change', () => {
+        const valueMarker = this.scrollElement.querySelector('.ag-echo-placeholder-value-marker')
+        if (valueMarker) {
+          const range = document.createRange()
+          const sel = window.getSelection()
+          range.selectNodeContents(valueMarker)
+          range.collapse(false)
+          sel.removeAllRanges()
+          sel.addRange(range)
+          valueMarker.focus()
+        }
+      })
+    }
+
     return true
   }
 

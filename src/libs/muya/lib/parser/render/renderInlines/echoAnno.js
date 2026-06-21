@@ -9,18 +9,41 @@ const createEchoNodeId = (token, echoId, definitionId, echoName) => {
 
 export default function echoAnno (h, cursor, block, token, outerClass) {
   const className = this.getClassName(outerClass, block, token, cursor)
+  // Support both named (@name{...}(...)) and anonymous (@{...}(...)) formats
   const echoName = String(token.echoName || '').trim() || '回响'
+  // For anonymous echo, use attrs as the source of truth
   const value = String(
     typeof token?.attrsParsed?.value === 'string'
       ? token.attrsParsed.value
       : token.prompt || ''
   )
-  const echoId = String(token.echoId || token?.attrsParsed?.id || '').trim() || echoName
-  const definitionId = String(token.definitionId || token?.attrsParsed?.definitionId || '').trim()
+  // Generate or use existing echoId from attrsParsed
+  const echoId = String(
+    token.echoId ||
+    token?.attrsParsed?.id ||
+    (token.echoName ? echoName : '')
+  ).trim()
+  const definitionId = String(
+    token.definitionId ||
+    token?.attrsParsed?.definitionId ||
+    ''
+  ).trim()
+  const width = String(
+    token?.attrsParsed?.width ||
+    token?.attrsParsed?.W ||
+    '50px'
+  ).trim()
+  const height = String(
+    token?.attrsParsed?.height ||
+    token?.attrsParsed?.H ||
+    '20px'
+  ).trim()
   const summary = String(value || '').replace(/\s+/g, ' ').trim()
   const title = summary ? `${echoName}: ${summary}` : echoName
   const echoNodeId = createEchoNodeId(token, echoId, definitionId, echoName)
 
+  // Generate a placeholder marker that will be replaced by renderEchoPlaceholderNodes
+  // The host div will be styled and populated with the echo card
   return [
     h(`span.${className}.ag-echo-anno-token.${CLASS_OR_ID.AG_INLINE_RULE}`, {
       dataset: {
@@ -28,16 +51,40 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
         end: token.range.end,
         raw: token.raw,
         echoName,
-        echoId,
+        echoId: echoId || '',
         echoDefinitionId: definitionId,
         echoNodeId,
-        echoValue: value
+        echoValue: value,
+        echoWidth: width,
+        echoHeight: height
       },
       attrs: {
         spellcheck: 'false',
         title,
         contenteditable: 'false'
       }
-    })
+    }, [
+      h('span.ag-echo-placeholder-marker', {
+        attrs: {
+          contenteditable: 'false'
+        }
+      }, [
+        h('span.ag-echo-anno-icon', {
+          attrs: {
+            contenteditable: 'false'
+          }
+        }, '🔊'),
+        h('span.ag-echo-anno-name', {
+          attrs: {
+            contenteditable: 'false'
+          }
+        }, echoName),
+        summary ? h('span.ag-echo-anno-value', {
+          attrs: {
+            contenteditable: 'false'
+          }
+        }, `: ${summary}`) : null
+      ].filter(Boolean))
+    ])
   ]
 }

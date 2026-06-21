@@ -198,6 +198,7 @@ const enterCtrl = ContentState => {
     if (!start || !end) {
       return event.preventDefault()
     }
+
     let block = this.getBlock(start.key)
     const { text } = block
     const endBlock = this.getBlock(end.key)
@@ -477,6 +478,36 @@ const enterCtrl = ContentState => {
           }
           newBlock.isLooseListItem = block.isLooseListItem
         } else {
+          // Check if this paragraph contains only an echo annotation.
+          // If so, extract the echo value as plain text and create new paragraph.
+          if (left !== 0 && right === 0 && this.hasEchoTokenInBlock(block)) {
+            const text = block.text || ''
+            const tokens = tokenizer(text, {
+              hasBeginRules: false,
+              options: this.muya.options
+            })
+            const echoTokens = tokens.filter(t => t.type === 'echo_anno')
+            if (echoTokens.length === 1 && tokens.length === 1) {
+              // Single echo token in paragraph — extract value as plain text, then create new paragraph
+              const echoToken = echoTokens[0]
+              const echoValue = String(
+                echoToken.prompt ||
+                echoToken?.attrsParsed?.value ||
+                ''
+              ).trim()
+              block.text = echoValue
+              const { key } = block
+              const offset = block.text.length
+              // Create new empty paragraph after current one
+              newBlock = this.createBlockP()
+              this.insertAfter(newBlock, block)
+              this.cursor = {
+                start: { key: newBlock.children[0].key, offset: 0 },
+                end: { key: newBlock.children[0].key, offset: 0 }
+              }
+              return this.partialRender()
+            }
+          }
           newBlock = this.createBlockP()
         }
 

@@ -29,7 +29,11 @@ class ExportMarkdown {
   }
 
   generate () {
-    return this.translateBlocks2Markdown(this.blocks)
+    const markdown = this.translateBlocks2Markdown(this.blocks)
+    if (markdown && !markdown.endsWith('\n')) {
+      return markdown + '\n'
+    }
+    return markdown
   }
 
   translateBlocks2Markdown (blocks, indent = '', listIndent = '') {

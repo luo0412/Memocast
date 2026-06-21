@@ -4,6 +4,19 @@ import { tokenizer, generator } from '../parser/'
 import { getImageInfo } from '../utils/getImageInfo'
 
 const backspaceCtrl = ContentState => {
+  ContentState.prototype.hasOnlyEchoAnnotation = function (block) {
+    if (!block || !/paragraphContent|cellContent|atxLine/.test(block.functionType || '')) {
+      return false
+    }
+    const text = String(block.text || '')
+    if (!text || text.indexOf('@') === -1) return false
+    const tokens = tokenizer(text, {
+      hasBeginRules: false,
+      options: this.muya.options
+    })
+    return tokens.length === 1 && tokens[0].type === 'echo_anno'
+  }
+
   ContentState.prototype.checkBackspaceCase = function () {
     const node = selection.getSelectionStart()
     const paragraph = findNearestParagraph(node)
@@ -440,6 +453,27 @@ const backspaceCtrl = ContentState => {
 
         this.partialRender()
       }
+    } else if (left === 0 && this.hasOnlyEchoAnnotation(block)) {
+      // Backspace at start of a paragraph containing only an echo annotation.
+      // Convert the echo to a plain text paragraph (extract its value).
+      event.preventDefault()
+      const text = block.text || ''
+      const tokens = tokenizer(text, {
+        hasBeginRules: false,
+        options: this.muya.options
+      })
+      const echoToken = tokens[0]
+      const echoValue = String(
+        echoToken.prompt ||
+        echoToken?.attrsParsed?.value ||
+        ''
+      ).trim()
+      block.text = echoValue
+      this.cursor = {
+        start: { key: block.key, offset: 0 },
+        end: { key: block.key, offset: 0 }
+      }
+      this.partialRender()
     } else if (inlineDegrade) {
       event.preventDefault()
       if (block.type === 'span') {

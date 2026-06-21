@@ -33,11 +33,32 @@
                 <div class="ai-demo-message-label">
                   {{ message.role === 'user' ? $t('aiDrawerUserLabel') : $t('aiAssistant') }}
                 </div>
-                <el-x-bubble
-                  :placement="message.role === 'user' ? 'end' : 'start'"
-                  :type="message.role === 'user' ? 'primary' : 'default'"
-                  :content="message.content || (message.status === 'streaming' ? $t('aiDrawerThinking') : '')"
-                />
+                <div class="ai-demo-message-bubble">
+                  <template v-if="message.role === 'assistant'">
+                    <div
+                      v-if="message.status === 'streaming' && !message.content"
+                      class="ai-demo-thinking"
+                    >
+                      {{ $t('aiDrawerThinking') }}
+                    </div>
+                    <div
+                      v-else-if="getRenderedContent(message)"
+                      class="ai-demo-rendered-content"
+                      v-html="getRenderedContent(message)"
+                    />
+                    <div
+                      v-else
+                      class="ai-demo-plain-content"
+                    >
+                      {{ message.content || '' }}
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="ai-demo-plain-content">
+                      {{ message.content }}
+                    </div>
+                  </template>
+                </div>
                 <div
                   v-if="message.role === 'assistant' && message.status && message.status !== 'done'"
                   class="ai-demo-message-status"
@@ -75,6 +96,7 @@
 <script>
 import { i18n } from 'boot/i18n'
 import PortkeyService from 'src/services/PortkeyService'
+import MarkdownRenderer from 'src/services/MarkdownRenderer'
 
 function createMessage(id, role, content, status = 'done', meta = null) {
   return {
@@ -82,7 +104,8 @@ function createMessage(id, role, content, status = 'done', meta = null) {
     role,
     content,
     status,
-    meta
+    meta,
+    renderedContent: null
   }
 }
 
@@ -97,6 +120,7 @@ export default {
       defaultConfig: null,
       streamAbortController: null,
       activeResponseMeta: '',
+      rendererReady: false,
       messages: [
         createMessage(1, 'assistant', i18n.t('aiDrawerIntroMessage'))
       ]
@@ -161,6 +185,17 @@ export default {
           provider: this.providerLabel
         })
     }
+  },
+  async mounted () {
+    try {
+      await MarkdownRenderer.initMarkdownRenderer()
+      this.rendererReady = true
+    } catch (err) {
+      console.warn('[AiDemoDrawer] Failed to initialize MarkdownRenderer:', err)
+    }
+  },
+  beforeDestroy () {
+    MarkdownRenderer.disposeAll()
   },
   methods: {
     async refreshDefaultConfig () {
@@ -261,6 +296,19 @@ export default {
       if (message.status === 'truncated') return this.$t('aiDrawerTruncatedStatus')
       if (message.status === 'error') return this.$t('aiDrawerErrorStatus')
       return ''
+    },
+    getRenderedContent (message) {
+      if (!message.content) {
+        return message.status === 'streaming' ? this.$t('aiDrawerThinking') : ''
+      }
+      if (!this.rendererReady) {
+        return message.content
+      }
+      if (!message.renderedContent || message.rawContent !== message.content) {
+        message.rawContent = message.content
+        message.renderedContent = MarkdownRenderer.renderMarkdown(message.content)
+      }
+      return message.renderedContent
     },
     scrollToBottom () {
       this.$nextTick(() => {
@@ -471,6 +519,141 @@ export default {
 .ai-demo-message-status {
   font-size: 12px;
   color: #c0c4cc;
+}
+
+.ai-demo-message-bubble {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 10px 14px;
+  max-width: 85%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.ai-demo-message-item--user .ai-demo-message-bubble {
+  background: #409eff;
+  color: #ffffff;
+  border-color: #409eff;
+}
+
+.ai-demo-message-item--assistant .ai-demo-message-bubble {
+  background: #ffffff;
+  border-color: #ebeef5;
+}
+
+.ai-demo-plain-content {
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.ai-demo-thinking {
+  color: #909399;
+  font-style: italic;
+}
+
+.ai-demo-rendered-content {
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.ai-demo-rendered-content h1,
+.ai-demo-rendered-content h2,
+.ai-demo-rendered-content h3,
+.ai-demo-rendered-content h4,
+.ai-demo-rendered-content h5,
+.ai-demo-rendered-content h6 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.ai-demo-rendered-content h1 { font-size: 1.5em; }
+.ai-demo-rendered-content h2 { font-size: 1.25em; }
+.ai-demo-rendered-content h3 { font-size: 1.1em; }
+
+.ai-demo-rendered-content p {
+  margin: 0.5em 0;
+}
+
+.ai-demo-rendered-content ul,
+.ai-demo-rendered-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.ai-demo-rendered-content li {
+  margin: 0.25em 0;
+}
+
+.ai-demo-rendered-content code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.ai-demo-message-item--user .ai-demo-rendered-content code {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ai-demo-rendered-content pre {
+  margin: 0.75em 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ai-demo-rendered-content pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+}
+
+.ai-demo-rendered-content blockquote {
+  margin: 0.5em 0;
+  padding-left: 1em;
+  border-left: 3px solid #dcdfe6;
+  color: #909399;
+}
+
+.ai-demo-message-item--user .ai-demo-rendered-content blockquote {
+  border-left-color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ai-demo-rendered-content a {
+  color: #409eff;
+  text-decoration: none;
+}
+
+.ai-demo-message-item--user .ai-demo-rendered-content a {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.ai-demo-rendered-content table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+}
+
+.ai-demo-rendered-content th,
+.ai-demo-rendered-content td {
+  border: 1px solid #ebeef5;
+  padding: 0.5em;
+  text-align: left;
+}
+
+.ai-demo-rendered-content th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.ai-demo-rendered-content hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid #ebeef5;
 }
 
 .ai-demo-composer {

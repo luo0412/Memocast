@@ -9,7 +9,8 @@ import { tokenizer } from '../index'
 import { i18n } from 'boot/i18n'
 
 const RUNE_PLACEHOLDER_SELECTOR = '[data-rune-name][data-rune-id][data-rune-node-id]'
-const ECHO_PLACEHOLDER_SELECTOR = '[data-echo-name][data-echo-id][data-echo-node-id]'
+// Support both named (@name{...}(...)) and anonymous (@{...}(...)) echo annotations
+const ECHO_PLACEHOLDER_SELECTOR = '[data-echo-node-id]'
 const RUNE_HOST_CLASS = 'ag-rune-placeholder-host'
 const RUNE_CARD_CLASS = 'ag-rune-placeholder-card'
 const ECHO_HOST_CLASS = 'ag-echo-placeholder-host'
@@ -149,17 +150,25 @@ class StateRender {
 
   createEchoPlaceholderMarkup (echo, dataset = {}) {
     const echoName = echo?.name || dataset.echoName || '回响'
-    const echoValue = String(dataset.echoValue || '').replace(/\s+/g, ' ').trim()
+    const echoValue = String(dataset.echoValue || '').replace(/\s+/g, ' ')
     const echoDescription = echoValue || echo?.desc || ''
     const color = echo?.color || '#26A69A'
     const icon = echo?.icon || 'graphic_eq'
+    const width = dataset.width || '50px'
+    const height = dataset.height || '20px'
+    // The data-echo-value-marker element is the editable value target.
+    // Enter at end → extract value as plain text paragraph.
+    // Backspace at start → convert echo to plain text paragraph.
     return `
-      <span class="${ECHO_CARD_CLASS}" data-echo-mounted="true" style="--echo-accent:${color}">
+      <span class="${ECHO_CARD_CLASS}" data-echo-mounted="true" style="--echo-accent:${color};width:${width};height:${height}">
         <span class="ag-echo-placeholder-body">
           <span class="ag-echo-placeholder-icon material-icons">${icon}</span>
           <span class="ag-echo-placeholder-copy">
             <span class="ag-echo-placeholder-title">${echoName}</span>
-            ${echoDescription ? `<span class="ag-echo-placeholder-desc">${echoDescription}</span>` : ''}
+            ${echoDescription
+              ? `<span class="ag-echo-placeholder-desc">${echoDescription}</span>`
+              : `<span class="ag-echo-placeholder-value-marker" data-echo-value-marker="true" contenteditable="true" spellcheck="false"> </span>`
+            }
           </span>
         </span>
       </span>
@@ -229,12 +238,17 @@ class StateRender {
 
     hosts.forEach(host => {
       const dataset = host.dataset || {}
-      const echoName = String(dataset.echoName || '').trim()
-      const echoId = String(dataset.echoId || '')
-      const definitionId = String(dataset.echoDefinitionId || '')
-      const nodeId = String(dataset.echoNodeId || '')
-      const value = String(dataset.echoValue || '')
-      const echo = echoMap.get(`id:${definitionId}`) || echoMap.get(echoName) || null
+      const echoName = String(dataset.echoName || '').trim() || '回响'
+      const echoId = String(dataset.echoId || '').trim()
+      const definitionId = String(dataset.echoDefinitionId || '').trim()
+      const nodeId = String(dataset.echoNodeId || '').trim()
+      const value = String(dataset.echoValue || '').trim()
+      const width = String(dataset.echoWidth || '50px').trim()
+      const height = String(dataset.echoHeight || '20px').trim()
+      // Support anonymous echo: lookup by echoId first, then by echoName
+      // For anonymous echo with only attrs, use echoId or echoName for lookup
+      const lookupKey = echoId ? `id:${echoId}` : echoName
+      const echo = echoMap.get(lookupKey) || (echoId ? echoMap.get(echoName) : null) || null
       const cacheKey = JSON.stringify({
         echoName,
         echoId,
@@ -244,7 +258,9 @@ class StateRender {
         desc: echo?.desc || '',
         color: echo?.color || '',
         icon: echo?.icon || '',
-        annoSource: echo?.anno_source || echo?.template || ''
+        annoSource: echo?.anno_source || echo?.template || '',
+        width,
+        height
       })
 
       if (this.echoPlaceholderCache.get(host) === cacheKey) {
@@ -253,7 +269,7 @@ class StateRender {
 
       host.classList.add(ECHO_HOST_CLASS)
       host.setAttribute('contenteditable', 'false')
-      host.innerHTML = this.createEchoPlaceholderMarkup(echo, dataset)
+      host.innerHTML = this.createEchoPlaceholderMarkup(echo, { ...dataset, width, height })
       host.dataset.echoRenderKey = cacheKey
       this.echoPlaceholderCache.set(host, cacheKey)
     })
