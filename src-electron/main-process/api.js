@@ -285,5 +285,53 @@ export default {
     handleApi('get-app-path', async (e) => {
       return app.getAppPath()
     }).catch(err => throw err)
+
+    /**
+     * Blog Deploy: get config
+     */
+    handleApi('get-blog-deploy-config', async (e) => {
+      const Store = require('electron-store')
+      const store = new Store({ name: 'blog-deploy-config' })
+      return store.get('config', null)
+    }).catch(err => throw err)
+
+    /**
+     * Blog Deploy: save config
+     */
+    handleApi('save-blog-deploy-config', async (e, config) => {
+      const Store = require('electron-store')
+      const store = new Store({ name: 'blog-deploy-config' })
+      store.set('config', config)
+      return { success: true }
+    }).catch(err => throw err)
+
+    /**
+     * Blog Deploy: start build + GitHub trigger
+     */
+    handleApi('start-blog-deploy', async (e, { blogDir, githubConfig, theme }) => {
+      const { execBlogBuild } = require('./service/blog-deploy-handler')
+      return execBlogBuild(blogDir, githubConfig, e, theme)
+    }).catch(err => throw err)
+
+    /**
+     * Blog Deploy: cancel build
+     */
+    handleApi('cancel-blog-deploy', async (e) => {
+      const { cancelBlogBuild } = require('./service/blog-deploy-handler')
+      cancelBlogBuild()
+      return { success: true }
+    }).catch(err => throw err)
+
+    /**
+     * Select directory dialog
+     */
+    handleApi('select-directory', async (e, { title }) => {
+      const result = await dialog.showOpenDialog({
+        title: title || 'Select Directory',
+        properties: ['openDirectory', 'createDirectory']
+      })
+      if (result.canceled) return { canceled: true }
+      return { canceled: false, filePath: result.filePaths[0] }
+    }).catch(err => throw err)
   }
 }

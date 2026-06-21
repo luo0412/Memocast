@@ -5,6 +5,8 @@ import {
   CREATE_NOTE,
   OPEN_IMPORT,
   EXPORT,
+  EXPORT_TO_BLOG,
+  COPY_MARKDOWN,
   DELETE,
   SEPARATOR
 } from './menuItems'
@@ -63,7 +65,14 @@ export const showContextMenu = (event, isCurrentCategory, category, isLogin, opt
     ITEMS.push(OPEN_TIER_RANKING)
   }
 
-  // ✅ 第四组：删除（独立组，加分隔线）
+  // ✅ 第四组：导出到博客（独立组，加分隔线）
+  if (isLogin) {
+    ITEMS.push(SEPARATOR)
+    ITEMS.push(EXPORT_TO_BLOG)
+    ITEMS.push(COPY_MARKDOWN)
+  }
+
+  // ✅ 第五组：删除（独立组，加分隔线）
   if (!isRootCategory) {
     ITEMS.push(SEPARATOR)
     ITEMS.push(DELETE)

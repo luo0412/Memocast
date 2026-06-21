@@ -7,7 +7,7 @@
 
 # 2026-06
 
-- [] reveal.js的PPT查看模式
+- [x] reveal.js的PPT查看模式
 
 ```
 reveal.js

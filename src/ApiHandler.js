@@ -129,9 +129,25 @@ export default {
       debugLogger.Log({ eventName, eventData })
       bus.$emit(eventName, eventData)
     }).catch(err => throw err)
+
+    // Blog deploy progress events (from main process webContents.send)
+    handleApi('blog-deploy-progress', (event, data) => {
+      bus.$emit('blog-deploy-progress', data)
+    }).catch(err => throw err)
+
+    handleApi('blog-deploy-done', (event, data) => {
+      bus.$emit('blog-deploy-done', data)
+    }).catch(err => throw err)
+
+    handleApi('blog-deploy-cancelled', (event, data) => {
+      bus.$emit('blog-deploy-cancelled', data)
+    }).catch(err => throw err)
   },
   UnregisterApiHandler () {
     debugLogger.Info('[API Handler] Render Process unregisters handler successfully!')
     ipcRenderer.removeAllListeners('show-notification')
+    ipcRenderer.removeAllListeners('blog-deploy-progress')
+    ipcRenderer.removeAllListeners('blog-deploy-done')
+    ipcRenderer.removeAllListeners('blog-deploy-cancelled')
   }
 }

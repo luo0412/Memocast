@@ -225,6 +225,8 @@
                 @click='copyNoteLink'
               />
               <ImportDialog ref='importDialog' />
+              <BlogDeployDialog ref='blogDeployDialog' @deploy='onBlogDeploy' @cancel='onBlogDeployCancel' />
+              <BlogDeployProgressDialog ref='blogDeployProgressDialog' @cancel='onBlogDeployProgressCancel' />
             </div>
           </div>
         </div>
@@ -254,6 +256,8 @@ import MarkMapDialog from '../components/ui/dialog/MarkMapDialog.vue'
 import PptPreviewDialog from '../components/ui/dialog/PptPreviewDialog.vue'
 import Illustration from 'src/components/ui/Illustration.vue'
 import ImportDialog from 'components/ui/dialog/ImportDialog.vue'
+import BlogDeployDialog from 'components/ui/dialog/BlogDeployDialog.vue'
+import BlogDeployProgressDialog from 'components/ui/dialog/BlogDeployProgressDialog.vue'
 
 const {
   mapGetters: mapServerGetters,
@@ -276,7 +280,9 @@ export default {
     CategoryTreePanel,
     CalendarPanel,
     Illustration,
-    ImportDialog
+    ImportDialog,
+    BlogDeployDialog,
+    BlogDeployProgressDialog
   },
   computed: {
     thumbStyle () {
@@ -570,6 +576,39 @@ export default {
     openImportHandler: function () {
       this.$refs.importDialog.toggle()
     },
+    async exportToBlogHandler () {
+      const category = this.$store.state.client.rightClickCategoryItem
+      if (!category) return
+      this.$store.dispatch('server/blogDeploy', { category })
+    },
+    async copyMarkdownHandler () {
+      const category = this.$store.state.client.rightClickCategoryItem
+      if (!category) return
+      const kbGuid = this.$store.state.server.kbGuid
+      const notes = await this.$store.dispatch('server/getCategoryNotesForExport', { kbGuid, category })
+      if (!notes || notes.length === 0) {
+        this.$q.notify({ message: 'No notes found', type: 'warning' })
+        return
+      }
+      const text = notes.map(n => `## ${n.title}\n\n${n.content || ''}`).join('\n\n---\n\n')
+      this.$q.electron.clipboard.writeText(text)
+      this.$q.notify({ message: `Copied ${notes.length} notes`, type: 'positive', icon: 'check' })
+    },
+    async onBlogDeploy ({ config }) {
+      this.$refs.blogDeployProgressDialog.show()
+      await this.$store.dispatch('server/blogDeploy', { config })
+    },
+    onBlogDeployCancel () {
+      this.$refs.blogDeployProgressDialog.onCancel()
+      this.$store.dispatch('server/cancelBlogDeploy')
+    },
+    onBlogDeployProgressCancel () {
+      this.$refs.blogDeployProgressDialog.onCancel()
+      this.$store.dispatch('server/cancelBlogDeploy')
+    },
+    onShowBlogDeployDialog ({ category }) {
+      this.$refs.blogDeployDialog.show()
+    },
     ...mapServerActions(['createNote', 'createCategory']),
     ...mapClientActions(['toggleChanged', 'updateStateAndStore'])
   },
@@ -577,6 +616,9 @@ export default {
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.createCategory, this.addCategoryHandler)
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.createNote, this.addNoteFromEditorBar)
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.openImport, this.openImportHandler)
+    bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.exportToBlog, this.exportToBlogHandler)
+    bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.copyMarkdown, this.copyMarkdownHandler)
+    bus.$on('showBlogDeployDialog', this.onShowBlogDeployDialog)
     bus.$on(events.VIEW_SHORTCUT_CALL.lockMode, this.lockModeHandler)
     bus.$on(events.VIEW_SHORTCUT_CALL.sourceMode, this.sourceModeHandler)
     bus.$on(events.GENERATE_MINDMAP, this.generateMindmapHandler)
@@ -601,6 +643,9 @@ export default {
     bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.createCategory, this.addCategoryHandler)
     bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.createNote, this.addNoteFromEditorBar)
     bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.openImport, this.openImportHandler)
+    bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.exportToBlog, this.exportToBlogHandler)
+    bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.copyMarkdown, this.copyMarkdownHandler)
+    bus.$off('showBlogDeployDialog', this.onShowBlogDeployDialog)
     if (this.leftInnerSplitterSaveTimer) {
       clearTimeout(this.leftInnerSplitterSaveTimer)
     }

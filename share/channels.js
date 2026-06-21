@@ -18,5 +18,10 @@ export default {
   getLocalFileData: 'get-local-file-data',
   saveUploadedImage: 'save-uploaded-image',
   popContextMenu: 'pop-context-menu',
-  getAppPath: 'get-app-path'
+  getAppPath: 'get-app-path',
+  startBlogDeploy: 'start-blog-deploy',
+  cancelBlogDeploy: 'cancel-blog-deploy',
+  getBlogDeployConfig: 'get-blog-deploy-config',
+  saveBlogDeployConfig: 'save-blog-deploy-config',
+  selectDirectory: 'select-directory'
 }

@@ -107,10 +107,14 @@ import {
   exportMarkdownFiles,
   exportPng,
   saveTempImage,
-  uploadImages
+  uploadImages,
+  startBlogDeploy,
+  cancelBlogDeploy,
+  getBlogDeployConfig
 } from 'src/ApiInvoker'
 import html2canvas from 'html2canvas'
 import debugLogger from 'src/utils/debugLogger'
+import BlogDeployService from 'src/services/BlogDeployService'
 
 function getDefaultCategoryForMode (state, category = '') {
   if (state?.isLogin && state?.kbGuid) {
@@ -2471,5 +2475,92 @@ export default {
       contents,
       category: exportCategoryName
     })
+  },
+
+  async blogDeploy ({ state, dispatch }, { category, config: passedConfig } = {}) {
+    let config = passedConfig
+
+    if (!config) {
+      config = await getBlogDeployConfig()
+    }
+
+    if (!config?.blogDir) {
+      bus.$emit('showBlogDeployDialog', { category })
+      return
+    }
+
+    if (!category) {
+      category = state.currentCategory
+    }
+
+    Loading.show({
+      spinner: QSpinnerGears,
+      message: i18n.t('deployStart'),
+      delay: 200
+    })
+
+    try {
+      const kbGuid = state.kbGuid
+      const noteList = await dispatch('getCategoryNotesForExport', { kbGuid, category })
+      if (!noteList || noteList.length === 0) {
+        Loading.hide()
+        Notify.create({ message: 'No notes to deploy', type: 'warning' })
+        return
+      }
+
+      // 2. Fetch full content for each note
+      const results = []
+      for (const note of noteList) {
+        const result = await _getContent(kbGuid, note.docGuid)
+        results.push(result)
+      }
+
+      // 3. Process content (HTML → Markdown)
+      const contents = results.map(result => {
+        const isHtml = !_.endsWith(result.info.title, '.md')
+        const { html, info: { docGuid }, resources } = result
+        let content
+        if (isHtml) {
+          content = helper.convertHtml2Markdown(html, kbGuid, docGuid, resources)
+        } else {
+          content = helper.extractMarkdownFromMDNote(html, kbGuid, docGuid, resources)
+        }
+        return {
+          content,
+          title: isHtml ? result.info.title : result.info.title.replace('.md', '')
+        }
+      })
+
+      // 4. Write to blog _posts directory
+      await BlogDeployService.writeBlogPosts(config.blogDir, contents, config.theme || 'default')
+
+      // 5. Generate sidebar.json
+      await BlogDeployService.generateSidebarJson(config.blogDir, contents)
+
+      // 6. Trigger main process: vuepress build + GitHub trigger
+      Loading.hide()
+
+      const result = await startBlogDeploy({
+        blogDir: config.blogDir,
+        theme: config.theme,
+        githubConfig: config.github
+      })
+
+      if (result.error) {
+        if (result.error === 'vuepressNotFound') {
+          Notify.create({ message: i18n.t('vuepressNotFound'), type: 'negative' })
+        } else {
+          Notify.create({ message: i18n.t('deployFailed') + ': ' + result.error, type: 'negative' })
+        }
+      }
+      // Note: on success, the progress dialog handles the done notification
+    } catch (err) {
+      Loading.hide()
+      Notify.create({ message: i18n.t('deployFailed') + ': ' + err.message, type: 'negative' })
+    }
+  },
+
+  cancelBlogDeploy () {
+    cancelBlogDeploy().catch(() => {})
   }
 }

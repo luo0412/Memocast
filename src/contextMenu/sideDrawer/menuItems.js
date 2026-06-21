@@ -42,6 +42,18 @@ export const EXPORT = {
   ]
 }
 
+export const EXPORT_TO_BLOG = {
+  label: 'exportToBlog',
+  id: 'exportToBlogMenuItem',
+  click: contextMenu.exportToBlog()
+}
+
+export const COPY_MARKDOWN = {
+  label: 'copyMarkdown',
+  id: 'copyMarkdownMenuItem',
+  click: contextMenu.copyMarkdown()
+}
+
 export const DELETE = {
   label: 'delete',
   id: 'deleteFolderMenuItem',

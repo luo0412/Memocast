@@ -28,3 +28,11 @@ export const exportCategoryAsMarkdown = (menuItem, browserWindow) => {
 export const deleteCategory = (menuItem, browserWindow) => {
   return packClickFunction(events.SIDE_DRAWER_CONTEXT_MENU.delete)
 }
+
+export const exportToBlog = (menuItem, browserWindow) => {
+  return packClickFunction(events.SIDE_DRAWER_CONTEXT_MENU.exportToBlog)
+}
+
+export const copyMarkdown = (menuItem, browserWindow) => {
+  return packClickFunction(events.SIDE_DRAWER_CONTEXT_MENU.copyMarkdown)
+}

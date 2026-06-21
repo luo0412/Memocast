@@ -110,6 +110,26 @@ async function getAppPath () {
   return ipcRenderer.invoke(channels.getAppPath)
 }
 
+async function startBlogDeploy (params) {
+  return ipcRenderer.invoke(channels.startBlogDeploy, params)
+}
+
+async function cancelBlogDeploy () {
+  return ipcRenderer.invoke(channels.cancelBlogDeploy)
+}
+
+async function getBlogDeployConfig () {
+  return ipcRenderer.invoke(channels.getBlogDeployConfig)
+}
+
+async function saveBlogDeployConfig (config) {
+  return ipcRenderer.invoke(channels.saveBlogDeployConfig, config)
+}
+
+async function selectDirectory (title) {
+  return ipcRenderer.invoke(channels.selectDirectory, { title })
+}
+
 export {
   exportMarkdownFile,
   exportPng,
@@ -130,5 +150,10 @@ export {
   getLocalFileData,
   saveUploadedImage,
   popContextMenu,
-  getAppPath
+  getAppPath,
+  startBlogDeploy,
+  cancelBlogDeploy,
+  getBlogDeployConfig,
+  saveBlogDeployConfig,
+  selectDirectory
 }

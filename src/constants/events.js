@@ -62,6 +62,8 @@ export default {
     exportCategory: {
       markdown: 'side.drawer.context.menu.export.markdown'
     },
+    exportToBlog: 'side.drawer.context.menu.export.to.blog',
+    copyMarkdown: 'side.drawer.context.menu.copy.markdown',
     openTierRanking: 'side.drawer.context.menu.open.tier.ranking',
     openImport: 'side.drawer.context.menu.open.import'
   },
