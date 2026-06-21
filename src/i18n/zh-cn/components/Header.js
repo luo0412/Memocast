@@ -55,5 +55,8 @@ export default {
   aiDrawerMetaWithFinishReason: 'finish_reason: {finishReason} · max_tokens: {maxTokens}',
   aiDrawerMetaFinishReasonOnly: 'finish_reason: {finishReason}',
   aiDrawerMetaMaxTokensOnly: 'max_tokens: {maxTokens}',
-  noteMethod: '笔记方法'
+  noteMethod: '笔记方法',
+  noteMethodTooltip: '神引',
+  tagTooltip: '超脱',
+  calendarTooltip: '终极'
 }

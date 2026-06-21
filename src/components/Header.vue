@@ -48,9 +48,10 @@
 
       <!-- 文件夹图标 -->
       <div
+        v-if="isLogin"
         class="header-icon-btn q-electron-drag--exception"
         :class="{ 'is-active': sidebarTreeType === 'category' }"
-        :title="$t('noteCategory')"
+        :title="$t('noteMethodTooltip')"
         style="max-width: 150px;width: unset;padding-left: 3px;padding-right: 5px;"
         @click="toggleCategoryDrawer"
       >
@@ -69,7 +70,7 @@
         v-if="isLogin"
         class="header-icon-btn q-electron-drag--exception"
         :class="{ 'is-active': sidebarTreeType === 'tag' }"
-        :title="$t('tag')"
+        :title="$t('tagTooltip')"
         @click="toggleTagDrawer"
       >
         <i class="el-icon-price-tag icon-custom" />
@@ -80,7 +81,7 @@
         v-if="isLogin"
         class="header-icon-btn q-electron-drag--exception"
         :class="{ 'is-active': sidebarTreeType === 'calendar' }"
-        :title="$t('calendarView')"
+        :title="$t('calendarTooltip')"
         @click="toggleCalendarDrawer"
       >
         <i class="el-icon-date icon-custom" />
