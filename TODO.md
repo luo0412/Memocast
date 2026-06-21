@@ -29,7 +29,7 @@ https://github.com/hinesboy/mavonEditor
 
 # 2026-04
 
-- [] 可配置 AI Provider
+- [x] 可配置 AI Provider
 
 ```
 https://github.com/Portkey-AI/portkey-node-sdk
