@@ -1288,6 +1288,12 @@ export default {
   cursor: pointer;
   user-select: none;
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  min-width: var(--echo-width, 50px);
+  min-height: var(--echo-height, 20px);
+  width: var(--echo-width, 50px);
+  height: var(--echo-height, 20px);
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .ag-echo-anno-token:hover {
@@ -1524,12 +1530,6 @@ export default {
   min-height: 14px;
   outline: none;
   caret-color: rgba(38, 166, 154, 0.9);
-}
-
-.ag-echo-placeholder-host .ag-echo-placeholder-card,
-.ag-echo-placeholder-card {
-  min-width: 50px;
-  min-height: 20px;
 }
 
 .ag-echo-placeholder-editor {

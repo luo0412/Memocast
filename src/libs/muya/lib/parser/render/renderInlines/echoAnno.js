@@ -9,15 +9,12 @@ const createEchoNodeId = (token, echoId, definitionId, echoName) => {
 
 export default function echoAnno (h, cursor, block, token, outerClass) {
   const className = this.getClassName(outerClass, block, token, cursor)
-  // Support both named (@name{...}(...)) and anonymous (@{...}(...)) formats
   const echoName = String(token.echoName || '').trim() || '回响'
-  // For anonymous echo, use attrs as the source of truth
   const value = String(
     typeof token?.attrsParsed?.value === 'string'
       ? token.attrsParsed.value
       : token.prompt || ''
   )
-  // Generate or use existing echoId from attrsParsed
   const echoId = String(
     token.echoId ||
     token?.attrsParsed?.id ||
@@ -42,8 +39,7 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
   const title = summary ? `${echoName}: ${summary}` : echoName
   const echoNodeId = createEchoNodeId(token, echoId, definitionId, echoName)
 
-  // Generate a placeholder marker that will be replaced by renderEchoPlaceholderNodes
-  // The host div will be styled and populated with the echo card
+  // Set width/height directly on the host span (inline-flex supports them natively).
   return [
     h(`span.${className}.ag-echo-anno-token.${CLASS_OR_ID.AG_INLINE_RULE}`, {
       dataset: {
@@ -62,7 +58,8 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
         spellcheck: 'false',
         title,
         contenteditable: 'false'
-      }
+      },
+      style: { width, height }
     }, [
       h('span.ag-echo-placeholder-marker', {
         attrs: {
