@@ -29,26 +29,28 @@ function getBuiltInVuepressBin () {
   console.log('[BlogDeploy] process.resourcesPath:', process.resourcesPath)
 
   // 开发模式：app.getAppPath() 指向 .quasar/electron，vuepress 在项目根 node_modules
-  const isDev = app.getAppPath().includes('.quasar')
+  const appPath = app.getAppPath()
+  const isDev = appPath.includes('.quasar') || appPath.includes('quasar')
   const projectRoot = isDev
-    ? path.join(path.dirname(app.getAppPath()), '..', '..')
-    : path.dirname(path.dirname(app.getAppPath()))
+    ? path.join(appPath, '..', '..')
+    : path.dirname(path.dirname(appPath))
 
+  // 直接指向 vuepress 的 JS 入口，不走 .bin/.cmd 包装
   const candidates = [
-    path.join(projectRoot, 'node_modules'),          // 项目根 node_modules
-    path.join(app.getAppPath(), 'node_modules'),      // app 内置
-    path.join(process.resourcesPath, 'app', 'node_modules'),
-    path.join(process.resourcesPath, 'app.asar', 'node_modules'),
+    path.join(projectRoot, 'node_modules', 'vuepress', 'bin', 'vuepress.js'),
+    path.join(projectRoot, 'node_modules', '.bin', isWin ? 'vuepress.cmd' : 'vuepress'),
+    path.join(appPath, 'node_modules', 'vuepress', 'bin', 'vuepress.js'),
+    path.join(process.resourcesPath, 'app', 'node_modules', 'vuepress', 'bin', 'vuepress.js'),
+    path.join(process.resourcesPath, 'app.asar', 'node_modules', 'vuepress', 'bin', 'vuepress.js'),
   ]
 
-  for (const nm of candidates) {
-    const bin = path.join(nm, '.bin', binName)
-    console.log('[BlogDeploy] Checking:', bin, fs.existsSync(bin) ? '(exists)' : '(missing)')
-    if (fs.existsSync(bin)) {
-      return bin
+  for (const cli of candidates) {
+    console.log('[BlogDeploy] Checking:', cli, fs.existsSync(cli) ? '(exists)' : '(missing)')
+    if (fs.existsSync(cli)) {
+      return cli
     }
   }
-  return path.join(candidates[0], '.bin', binName)
+  return candidates[0]
 }
 
 /**
@@ -138,17 +140,12 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
 
 function runVuepressBuild (blogDir, vuepressBin, isVdoing, onProgress) {
   return new Promise((resolve) => {
-    const isWin = process.platform === 'win32'
-    const nodeBin = isWin ? 'node.cmd' : 'node'
-
     // vdoing 使用 `vuepress vdoing build`，原生使用 `vuepress build`
-    const buildArgs = isVdoing
-      ? [vuepressBin, 'vdoing', 'build', blogDir]
-      : [vuepressBin, 'build', blogDir]
+    const vuepressArgs = isVdoing ? ['vdoing', 'build', blogDir] : ['build', blogDir]
 
-    const child = spawn(nodeBin, buildArgs, {
+    // 用 node 直接执行 vuepress 模块，绕过 .cmd shell 解析问题
+    const child = spawn('node', [vuepressBin, ...vuepressArgs], {
       cwd: blogDir,
-      shell: true,
       env: { ...process.env },
       windowsHide: true
     })
