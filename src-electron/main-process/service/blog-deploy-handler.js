@@ -24,11 +24,9 @@ function sendDone (webContents, success, outputDir, url) {
  */
 function getBuiltInVuepressBin () {
   const isWin = process.platform === 'win32'
-  const binName = isWin ? 'vuepress.cmd' : 'vuepress'
   console.log('[BlogDeploy] app.getAppPath():', app.getAppPath())
   console.log('[BlogDeploy] process.resourcesPath:', process.resourcesPath)
 
-  // 开发模式：app.getAppPath() 指向 .quasar/electron，vuepress 在项目根 node_modules
   const appPath = app.getAppPath()
   const isDev = appPath.includes('.quasar') || appPath.includes('quasar')
   const projectRoot = isDev
@@ -37,20 +35,20 @@ function getBuiltInVuepressBin () {
 
   // 直接指向 vuepress 的 JS 入口，不走 .bin/.cmd 包装
   const candidates = [
-    path.join(projectRoot, 'node_modules', 'vuepress', 'bin', 'vuepress.js'),
+    path.join(projectRoot, 'node_modules', 'vuepress', 'cli.js'),
     path.join(projectRoot, 'node_modules', '.bin', isWin ? 'vuepress.cmd' : 'vuepress'),
-    path.join(appPath, 'node_modules', 'vuepress', 'bin', 'vuepress.js'),
-    path.join(process.resourcesPath, 'app', 'node_modules', 'vuepress', 'bin', 'vuepress.js'),
-    path.join(process.resourcesPath, 'app.asar', 'node_modules', 'vuepress', 'bin', 'vuepress.js'),
+    path.join(appPath, 'node_modules', 'vuepress', 'cli.js'),
+    path.join(process.resourcesPath, 'app', 'node_modules', 'vuepress', 'cli.js'),
+    path.join(process.resourcesPath, 'app.asar', 'node_modules', 'vuepress', 'cli.js'),
   ]
 
   for (const cli of candidates) {
     console.log('[BlogDeploy] Checking:', cli, fs.existsSync(cli) ? '(exists)' : '(missing)')
     if (fs.existsSync(cli)) {
-      return cli
+      return { bin: cli, projectRoot }
     }
   }
-  return candidates[0]
+  return { bin: candidates[0], projectRoot }
 }
 
 /**
@@ -86,7 +84,7 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
 
   try {
     // 1. 确定 vuepress 命令
-    const vuepressBin = getBuiltInVuepressBin()
+    const { bin: vuepressBin, projectRoot } = getBuiltInVuepressBin()
     sendProgress(webContents, 'config', 'Checking VuePress...', 5)
 
     if (!fs.existsSync(vuepressBin)) {
@@ -99,10 +97,19 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
     const isVdoing = theme === 'vdoing'
     sendProgress(webContents, 'config', `Theme: ${isVdoing ? 'vdoing' : 'VuePress default'}`, 10)
 
-    // 3. 执行 vuepress build
+    // 3. 执行 vuepress build（先清理旧的 dist，避免缓存不一致）
     sendProgress(webContents, 'build', 'Starting VuePress build...', 40)
 
-    const buildResult = await runVuepressBuild(blogDir, vuepressBin, isVdoing, (msg) => {
+    const distDir = path.join(blogDir, '.vuepress', 'dist')
+    if (fs.existsSync(distDir)) {
+      await fs.remove(distDir)
+    }
+    const cacheDir = path.join(blogDir, '.vuepress', 'cache')
+    if (fs.existsSync(cacheDir)) {
+      await fs.remove(cacheDir)
+    }
+
+    const buildResult = await runVuepressBuild(blogDir, vuepressBin, projectRoot, isVdoing, (msg) => {
       sendProgress(webContents, 'build', msg, 60)
     })
 
@@ -138,15 +145,25 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
   }
 }
 
-function runVuepressBuild (blogDir, vuepressBin, isVdoing, onProgress) {
+function runVuepressBuild (blogDir, vuepressBin, projectRoot, isVdoing, onProgress) {
   return new Promise((resolve) => {
     // vdoing 使用 `vuepress vdoing build`，原生使用 `vuepress build`
-    const vuepressArgs = isVdoing ? ['vdoing', 'build', blogDir] : ['build', blogDir]
+    // cwd 设为 blogDir，所以不需要再传 sourceDir 参数
+    const vuepressArgs = isVdoing ? ['vdoing', 'build'] : ['build']
 
     // 用 node 直接执行 vuepress 模块，绕过 .cmd shell 解析问题
+    // 通过 NODE_PATH 让 vuepress 能找到 Memocast root node_modules 中的依赖
+    const vuepressEnv = {
+      ...process.env,
+      NODE_PATH: [
+        path.join(projectRoot, 'node_modules'),
+        process.env.NODE_PATH || ''
+      ].filter(Boolean).join(path.delimiter)
+    }
+
     const child = spawn('node', [vuepressBin, ...vuepressArgs], {
       cwd: blogDir,
-      env: { ...process.env },
+      env: vuepressEnv,
       windowsHide: true
     })
 
