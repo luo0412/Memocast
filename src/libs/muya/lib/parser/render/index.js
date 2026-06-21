@@ -154,12 +154,8 @@ class StateRender {
     const echoDescription = echoValue || echo?.desc || ''
     const color = echo?.color || '#26A69A'
     const icon = echo?.icon || 'graphic_eq'
-    const width = dataset.width || '50px'
-    const height = dataset.height || '20px'
-    // The data-echo-value-marker element is the editable value target.
-    // Enter at end → extract value as plain text paragraph.
-    // Backspace at start → convert echo to plain text paragraph.
-    // Width/height is controlled by --echo-width/--echo-height CSS vars on the host token.
+    const width = dataset.echoWidth || dataset.width || '50px'
+    const height = dataset.echoHeight || dataset.height || '20px'
     return `
       <span class="${ECHO_CARD_CLASS}" data-echo-mounted="true" style="--echo-accent:${color};min-width:${width};min-height:${height};width:${width};height:${height};display:inline-flex;box-sizing:border-box;overflow:hidden;align-items:center;">
         <span class="ag-echo-placeholder-body">
