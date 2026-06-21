@@ -280,6 +280,51 @@ const PortkeyService = {
 
   resolveEffectiveMaxTokens,
 
+  async testConnection (modelConfig) {
+    if (!modelConfig) {
+      throw new Error('AI model config is unavailable')
+    }
+
+    if (!this.isConfigUsable(modelConfig)) {
+      throw new Error('AI model config is incomplete')
+    }
+
+    const messages = [
+      { role: 'user', content: 'Reply with OK.' }
+    ]
+    const overrides = {
+      max_tokens: 4,
+      temperature: 0
+    }
+
+    if (modelConfig.provider_type === AI_MODEL_PROVIDER_PORTKEY) {
+      const client = await this.createClient(modelConfig)
+
+      if (!client) {
+        throw new Error('Portkey model config is incomplete')
+      }
+
+      return await client.chat.completions.create({
+        messages,
+        model: modelConfig.model,
+        ...parseJsonField(modelConfig.extra_config_json),
+        ...overrides
+      })
+    }
+
+    if (modelConfig.provider_type === AI_MODEL_PROVIDER_OPENAI_COMPATIBLE) {
+      const response = await runOpenAiCompatibleChat(modelConfig, messages, overrides)
+
+      if (!response) {
+        throw new Error('OpenAI-compatible model config is incomplete')
+      }
+
+      return response
+    }
+
+    throw new Error(`Unsupported AI provider type: ${modelConfig.provider_type}`)
+  },
+
   async chat (messages, overrides = {}) {
     const modelConfig = await this.getDefaultConfig()
 

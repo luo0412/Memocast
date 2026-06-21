@@ -307,51 +307,6 @@
                       </div>
                     </div>
 
-                    <q-card flat bordered class='q-mb-sm ai-model-default-card' v-if='defaultAiModel'>
-                      <q-card-section class='q-pa-sm'>
-                        <div class='row items-start no-wrap'>
-                          <q-icon
-                            name='psychology'
-                            size='1.25rem'
-                            :color='defaultAiModelStatusColor'
-                            class='q-mr-sm q-mt-xs'
-                          />
-                          <div class='col'>
-                            <div class='row items-center no-wrap q-gutter-xs'>
-                              <div class='text-body2 text-weight-medium'>{{ defaultAiModel.name }}</div>
-                              <q-badge color='positive' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
-                              <q-badge :color='defaultAiModelStatusColor' outline>
-                                {{ defaultAiModelStatusLabel }}
-                              </q-badge>
-                            </div>
-                            <div class='text-caption text-grey-6 q-mt-xs'>
-                              {{ getAiProviderLabel(defaultAiModel.provider_type) }} · {{ defaultAiModel.model }}
-                            </div>
-                            <div class='text-caption text-grey-7 q-mt-xs'>{{ defaultAiModel.base_url }}</div>
-                            <div
-                              class='text-caption q-mt-xs'
-                              :class='defaultAiModelUsable ? "text-positive" : "text-warning"'
-                            >
-                              {{ defaultAiModelStatusHint }}
-                            </div>
-                            <div
-                              v-if='!defaultAiModelUsable && defaultAiModelMissingFieldLabels.length > 0'
-                              class='row items-center q-gutter-xs q-mt-sm'
-                            >
-                              <q-badge
-                                v-for='field in defaultAiModelMissingFieldLabels'
-                                :key='field'
-                                color='warning'
-                                outline
-                              >
-                                {{ field }}
-                              </q-badge>
-                            </div>
-                          </div>
-                        </div>
-                      </q-card-section>
-                    </q-card>
-
                     <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
                       <div class='panel-title-bar bg-green-7' />
                       <span class='text-subtitle2 text-weight-medium'>{{ $t('aiModelSettings') }}</span>
@@ -391,18 +346,54 @@
                               <div class='row items-center no-wrap q-gutter-xs'>
                                 <div class='text-body2 text-weight-medium'>{{ item.name }}</div>
                                 <q-badge v-if='item.is_default' color='primary' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
+                                <q-badge :color='getAiModelStatusColor(item)' outline>
+                                  {{ getAiModelStatusLabel(item) }}
+                                </q-badge>
                               </div>
                               <div class='text-caption text-grey-6 q-mt-xs'>{{ getAiProviderLabel(item.provider_type) }}</div>
                               <div class='text-caption text-grey-7 q-mt-xs'>{{ item.base_url }}</div>
                               <div class='text-caption text-grey-7 q-mt-xs'>{{ item.model }}</div>
+                              <div
+                                class='text-caption q-mt-xs'
+                                :class='isAiModelUsable(item) ? "text-positive" : "text-warning"'
+                              >
+                                {{ getAiModelStatusHint(item) }}
+                              </div>
+                              <div
+                                v-if='!isAiModelUsable(item) && getAiModelMissingFieldLabels(item).length > 0'
+                                class='row items-center q-gutter-xs q-mt-sm'
+                              >
+                                <q-badge
+                                  v-for='field in getAiModelMissingFieldLabels(item)'
+                                  :key='field'
+                                  color='warning'
+                                  outline
+                                >
+                                  {{ field }}
+                                </q-badge>
+                              </div>
                               <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasApiKey'>
                                 {{ item.provider_type === 'portkey' ? $t('aiPortkeyApiKey') : $t('aiApiKey') }}: {{ item.apiKeyMasked }}
                               </div>
                               <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasVirtualKey'>
                                 {{ $t('aiPortkeyVirtualKey') }}: {{ item.portkeyVirtualKeyMasked }}
                               </div>
+                              <div
+                                v-if='aiModelTestResults[item.id]'
+                                class='text-caption q-mt-xs'
+                                :class='aiModelTestResults[item.id].success ? "text-positive" : "text-negative"'
+                              >
+                                {{ getAiModelTestResultText(item) }}
+                              </div>
                             </div>
                             <div class='column q-gutter-xs'>
+                              <q-btn
+                                dense flat no-caps color='teal' size='sm' icon='network_check'
+                                :label="$t('aiModelTestConnection')"
+                                :loading='testingAiModelId === item.id'
+                                :disable='testingAiModelId !== null || !isAiModelUsable(item)'
+                                @click='testAiModelConnection(item)'
+                              />
                               <q-btn dense flat no-caps color='primary' size='sm' icon='edit' :label="$t('aiModelEdit')" @click='openAiModelDialog(item.id)' />
                               <q-btn
                                 v-if='!item.is_default'
@@ -718,6 +709,8 @@ export default {
       aiModelSaving: false,
       aiModelDialogVisible: false,
       aiModelConfigs: [],
+      testingAiModelId: null,
+      aiModelTestResults: {},
       showAiApiKey: false,
       aiProviderOptions: [
         { label: 'OpenAI-compatible', value: 'openai-compatible' },
@@ -791,37 +784,6 @@ export default {
     },
     accountInfo () {
       return this.cloudSyncLoginState.accountInfo || {}
-    },
-    defaultAiModel () {
-      return this.aiModelConfigs.find(item => item.is_default) || null
-    },
-    defaultAiModelUsable () {
-      return PortkeyService.isConfigUsable(this.defaultAiModel)
-    },
-    defaultAiModelMissingFields () {
-      return PortkeyService.getMissingFields(this.defaultAiModel)
-    },
-    defaultAiModelMissingFieldLabels () {
-      return this.defaultAiModelMissingFields.map(field => this.$t(`aiField_${field}`))
-    },
-    defaultAiModelStatusColor () {
-      return this.defaultAiModelUsable ? 'positive' : 'warning'
-    },
-    defaultAiModelStatusLabel () {
-      return this.defaultAiModelUsable ? this.$t('aiDefaultModelStatusReady') : this.$t('aiDefaultModelStatusIncomplete')
-    },
-    defaultAiModelStatusHint () {
-      if (!this.defaultAiModel) {
-        return ''
-      }
-
-      if (this.defaultAiModelUsable) {
-        return this.$t('aiDefaultModelStatusReadyHint')
-      }
-
-      return this.$t('aiDefaultModelStatusIncompleteHint', {
-        fields: this.defaultAiModelMissingFieldLabels.join('、')
-      })
     },
     aiModelApiKeyHint () {
       if (!this.aiModelForm.id) {
@@ -1036,6 +998,72 @@ export default {
     getAiProviderLabel (providerType) {
       return PortkeyService.getProviderLabel(providerType)
     },
+    isAiModelUsable (item) {
+      return PortkeyService.isConfigUsable(item)
+    },
+    getAiModelMissingFieldLabels (item) {
+      return PortkeyService.getMissingFields(item).map(field => this.$t(`aiField_${field}`))
+    },
+    getAiModelStatusColor (item) {
+      return this.isAiModelUsable(item) ? 'positive' : 'warning'
+    },
+    getAiModelStatusLabel (item) {
+      return this.isAiModelUsable(item) ? this.$t('aiDefaultModelStatusReady') : this.$t('aiDefaultModelStatusIncomplete')
+    },
+    getAiModelStatusHint (item) {
+      if (this.isAiModelUsable(item)) {
+        return this.$t('aiDefaultModelStatusReadyHint')
+      }
+
+      return this.$t('aiDefaultModelStatusIncompleteHint', {
+        fields: this.getAiModelMissingFieldLabels(item).join('、')
+      })
+    },
+    getAiModelTestResultText (item) {
+      const result = this.aiModelTestResults[item.id]
+      if (!result) {
+        return ''
+      }
+
+      return result.success
+        ? this.$t('aiModelTestConnectionSuccess')
+        : this.$t('aiModelTestConnectionFailed', { message: result.message || this.$t('aiConfigSaveFailed') })
+    },
+    async testAiModelConnection (item) {
+      if (!item || !item.id || this.testingAiModelId !== null) {
+        return
+      }
+
+      if (!this.isAiModelUsable(item)) {
+        this.$q.notify({ message: this.getAiModelStatusHint(item), type: 'warning', position: 'top' })
+        return
+      }
+
+      this.testingAiModelId = item.id
+      this.aiModelTestResults = {
+        ...this.aiModelTestResults,
+        [item.id]: null
+      }
+
+      try {
+        const config = await DatabaseClient.aiModels.getById(item.id)
+        await PortkeyService.testConnection(config)
+        this.aiModelTestResults = {
+          ...this.aiModelTestResults,
+          [item.id]: { success: true }
+        }
+        this.$q.notify({ message: this.$t('aiModelTestConnectionSuccess'), type: 'positive', position: 'top' })
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error)
+        this.aiModelTestResults = {
+          ...this.aiModelTestResults,
+          [item.id]: { success: false, message }
+        }
+        this.$q.notify({ message: this.$t('aiModelTestConnectionFailed', { message }), type: 'negative', position: 'top' })
+      } finally {
+        this.testingAiModelId = null
+      }
+    },
     async loadAiModelConfigs () {
       this.aiModelsLoading = true
       try {
@@ -1080,10 +1108,29 @@ export default {
 
       this.aiModelDialogVisible = true
     },
+    normalizeAiModelFormFields () {
+      const form = this.aiModelForm || {}
+      const normalized = {
+        name: String(form.name || '').trim(),
+        provider_type: String(form.provider_type || 'openai-compatible').trim() || 'openai-compatible',
+        base_url: String(form.base_url || '').trim(),
+        model: String(form.model || '').trim(),
+        api_key: String(form.api_key || '').trim(),
+        virtual_key: String(form.virtual_key || '').trim()
+      }
+
+      this.aiModelForm = {
+        ...form,
+        ...normalized
+      }
+
+      return normalized
+    },
     validateAiModelForm () {
       const form = this.aiModelForm
-      const normalizedName = String(form.name || '').trim()
-      if (!normalizedName || !form.base_url || !form.model) {
+      const normalized = this.normalizeAiModelFormFields()
+      const normalizedName = normalized.name
+      if (!normalizedName || !normalized.base_url || !normalized.model) {
         this.$q.notify({ message: this.$t('aiModelRequiredFields'), type: 'warning', position: 'top' })
         return false
       }
@@ -1104,7 +1151,7 @@ export default {
       }
 
       try {
-        const parsed = new URL(form.base_url)
+        const parsed = new URL(normalized.base_url)
         if (!/^https?:$/.test(parsed.protocol)) {
           throw new Error('invalid protocol')
         }
@@ -1113,18 +1160,18 @@ export default {
         return false
       }
 
-      if (!form.id && !form.api_key && !this.isPortkeyProvider) {
+      if (!form.id && !normalized.api_key && normalized.provider_type !== 'portkey') {
         this.$q.notify({ message: this.$t('aiApiKeyRequired'), type: 'warning', position: 'top' })
         return false
       }
 
-      if (this.isPortkeyProvider) {
-        if (!form.api_key && !form.id) {
+      if (normalized.provider_type === 'portkey') {
+        if (!normalized.api_key && !form.id) {
           this.$q.notify({ message: this.$t('aiPortkeyApiKeyRequired'), type: 'warning', position: 'top' })
           return false
         }
 
-        if (!form.virtual_key && !form.id) {
+        if (!normalized.virtual_key && !form.id) {
           this.$q.notify({ message: this.$t('aiVirtualKeyRequired'), type: 'warning', position: 'top' })
           return false
         }
@@ -1154,10 +1201,16 @@ export default {
         const result = await DatabaseClient.aiModels.save(payload)
         if (!result || result.success === false) {
           const errorCode = result && result.code
-          const messageKey = errorCode === 'AI_MODEL_DUPLICATE_NAME'
-            ? 'aiConfigNameExists'
-            : 'aiConfigSaveFailed'
-          this.$q.notify({ message: this.$t(messageKey), type: errorCode === 'AI_MODEL_DUPLICATE_NAME' ? 'warning' : 'negative', position: 'top' })
+          const messageKeyMap = {
+            AI_MODEL_DUPLICATE_NAME: 'aiConfigNameExists',
+            AI_MODEL_REQUIRED_FIELDS: 'aiModelRequiredFields',
+            AI_MODEL_SECRET_REQUIRED: this.aiModelForm.provider_type === 'portkey' ? 'aiVirtualKeyRequired' : 'aiApiKeyRequired'
+          }
+          const messageKey = messageKeyMap[errorCode] || 'aiConfigSaveFailed'
+          const notifyType = errorCode === 'AI_MODEL_DUPLICATE_NAME' || errorCode === 'AI_MODEL_REQUIRED_FIELDS' || errorCode === 'AI_MODEL_SECRET_REQUIRED'
+            ? 'warning'
+            : 'negative'
+          this.$q.notify({ message: this.$t(messageKey), type: notifyType, position: 'top' })
           return
         }
 
