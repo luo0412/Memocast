@@ -402,117 +402,22 @@ const EchoPreviewRenderer = Vue.extend({
     onCommit: {
       type: Function,
       default: null
-    },
-    placeholder: {
-      type: String,
-      default: '点击编辑实例内容...'
     }
-  },
-  data () {
-    return {
-      editValue: ''
-    }
-  },
-  mounted () {
-    console.log('[EchoPreviewRenderer] mounted', {
-      nodeId: this.nodeId,
-      echoId: this.echoId,
-      echoName: this.echo?.name || '',
-      value: this.value,
-      connected: !!this.$el?.isConnected,
-      outerHtmlPreview: String(this.$el?.outerHTML || '').substring(0, 200)
-    })
-  },
-  updated () {
-    console.log('[EchoPreviewRenderer] updated', {
-      nodeId: this.nodeId,
-      echoId: this.echoId,
-      echoName: this.echo?.name || '',
-      value: this.value,
-      editValue: this.editValue,
-      connected: !!this.$el?.isConnected
-    })
-  },
-  beforeDestroy () {
-    console.log('[EchoPreviewRenderer] beforeDestroy', {
-      nodeId: this.nodeId,
-      echoId: this.echoId,
-      echoName: this.echo?.name || '',
-      connected: !!this.$el?.isConnected
-    })
   },
   computed: {
-    renderModel () {
-      return this.$root?.echoRegistry?.render?.({
-        echoName: this.echo?.name || '',
-        definitionId: this.echo?.id || '',
-        attrsParsed: {
-          definitionId: this.echo?.id || '',
-          value: this.value || ''
-        },
-        prompt: this.value || ''
-      }, this.echo) || {
-        title: this.echo?.name || '回响',
-        description: this.echo?.desc || '',
-        prompt: this.value || ''
-      }
-    },
-    inlineStyle () {
-      return {
-        '--echo-accent': this.renderModel.color || this.echo?.color || '#26A69A'
-      }
+    displayTitle () {
+      return this.echo?.name || '回响'
     },
     displaySummary () {
-      const raw = this.renderModel.prompt || this.renderModel.description || this.value || ''
+      const raw = this.value || this.echo?.desc || ''
       return String(raw || '').replace(/\s+/g, ' ').trim()
     },
-    resolvedValue () {
-      return typeof this.value === 'string' ? this.value : ''
-    },
-    displayTitle () {
-      return this.renderModel.title || this.echo?.name || '回响'
-    }
-  },
-  watch: {
-    value: {
-      immediate: true,
-      handler (nextValue) {
-        this.editValue = typeof nextValue === 'string' ? nextValue : ''
-      }
+    accentColor () {
+      return this.echo?.color || '#26A69A'
     }
   },
   methods: {
-    commitEdit () {
-      const nextValue = typeof this.editValue === 'string' ? this.editValue : ''
-      if (nextValue === this.resolvedValue) return
-      if (typeof this.onCommit === 'function') {
-        this.onCommit({
-          echoId: this.echoId,
-          nodeId: this.nodeId,
-          echoName: this.echo?.name || '',
-          value: nextValue,
-          payload: encodeEchoPayload({
-            prompt: nextValue,
-            attrs: {
-              id: this.echoId || '',
-              definitionId: this.echo?.id || '',
-              value: nextValue
-            }
-          }),
-          mode: 'update-instance'
-        })
-      }
-    },
-    handleEditKeydown (event) {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault()
-        this.commitEdit()
-      }
-    },
-    handleEditBlur () {
-      this.commitEdit()
-    },
-    openDefinitionEditor (event) {
+    handleClick (event) {
       event.preventDefault()
       event.stopPropagation()
       if (typeof this.onCommit === 'function') {
@@ -520,87 +425,56 @@ const EchoPreviewRenderer = Vue.extend({
           echoId: this.echoId,
           nodeId: this.nodeId,
           echoName: this.echo?.name || '',
+          value: this.value,
           payload: encodeEchoPayload({
-            prompt: this.editValue,
+            prompt: this.value,
             attrs: {
               id: this.echoId || '',
               definitionId: this.echo?.id || '',
-              value: this.editValue
+              value: this.value
             }
           }),
-          mode: 'open-definition'
+          mode: 'open-instance'
         })
       }
     }
   },
   render (h) {
-    const model = this.renderModel || {}
-    const iconText = model.icon || 'graphic_eq'
-    const title = this.displayTitle
+    const title = this.displaySummary
+      ? `${this.displayTitle}: ${this.displaySummary}`
+      : this.displayTitle
 
     return h('span', {
-      staticClass: 'ag-echo-inline-preview ag-echo-vue-card ag-echo-inline-always',
-      style: this.inlineStyle,
+      staticClass: 'ag-echo-anno-token ag-echo-inline-preview',
+      style: {
+        '--echo-accent': this.accentColor
+      },
       attrs: {
-        contenteditable: 'false',
-        tabindex: '-1'
+        contenteditable: 'false'
+      },
+      on: {
+        click: this.handleClick
       }
     }, [
       h('span', {
-        staticClass: 'ag-echo-inline-chip ag-echo-inline-chip--static',
+        staticClass: 'ag-echo-placeholder-marker',
         attrs: {
-          title
+          title,
+          contenteditable: 'false'
         }
       }, [
-        h('span', { staticClass: 'ag-echo-inline-chip__icon' }, [
-          h('i', { staticClass: 'material-icons ag-echo-placeholder-icon-font' }, [iconText])
-        ]),
-        h('span', { staticClass: 'ag-echo-inline-chip__body' }, [
-          h('span', { staticClass: 'ag-echo-inline-chip__title' }, [title]),
-          h('el-input', {
-            staticClass: 'ag-echo-inline-editor ag-echo-inline-editor--always',
-            props: {
-              type: 'textarea',
-              rows: 2,
-              autosize: { minRows: 2, maxRows: 6 },
-              value: this.editValue,
-              placeholder: this.placeholder,
-              size: 'mini'
-            },
-            on: {
-              input: value => {
-                this.editValue = value
-              },
-              keydown: this.handleEditKeydown,
-              blur: this.handleEditBlur
-            },
-            nativeOn: {
-              keydown: this.handleEditKeydown,
-              blur: this.handleEditBlur,
-              mousedown: event => {
-                event.stopPropagation()
-              }
-            },
-            ref: 'echoInput'
-          })
-        ])
-      ]),
-      h('button', {
-        staticClass: 'ag-echo-inline-chip ag-echo-inline-chip--ghost',
-        attrs: {
-          type: 'button',
-          title: '编辑回响定义'
-        },
-        on: {
-          click: this.openDefinitionEditor,
-          mousedown: event => {
-            event.preventDefault()
+        h('i', {
+          staticClass: 'ag-echo-anno-icon material-icons',
+          attrs: {
+            contenteditable: 'false'
           }
-        }
-      }, [
-        h('span', { staticClass: 'ag-echo-inline-chip__icon' }, [
-          h('i', { staticClass: 'material-icons ag-echo-placeholder-icon-font' }, ['settings'])
-        ])
+        }, ['play_arrow']),
+        h('span', {
+          staticClass: 'ag-echo-anno-name',
+          attrs: {
+            contenteditable: 'false'
+          }
+        }, [this.displayTitle])
       ])
     ])
   }
@@ -691,6 +565,15 @@ export default {
       return true
     },
     updateEchoPlaceholderPayload ({ echoId = '', nodeId = '', echoName = '', payload = '', mode = '', value = '' } = {}) {
+      if (mode === 'open-instance') {
+        appBus.$emit(appEvents.ECHO_EVENTS.openInstanceEditor, {
+          echoId: String(echoId || '').trim() || String(decodeEchoPayload(payload)?.attrs?.id || '').trim(),
+          nodeId: String(nodeId || '').trim(),
+          echoName: String(echoName || '').trim(),
+          payload: payload || ''
+        })
+        return true
+      }
       if (mode === 'open-definition') {
         appBus.$emit(appEvents.ECHO_EVENTS.openManager, {
           echoId: String(echoId || '').trim() || String(decodeEchoPayload(payload)?.attrs?.id || '').trim(),
@@ -770,12 +653,12 @@ export default {
     // ✅ 新增：主动捕获当前编辑器内容（供外部调用，如切换笔记前）
     captureCurrentContent: function () {
       if (!this.contentEditor) return null
-      
+
       const markdown = this.contentEditor.getMarkdown()
       const currentNote = this.$store.state.server.currentNote
-      
+
       if (!currentNote?.info || typeof markdown !== 'string') return null
-      
+
       const captureData = {
         markdown,
         docGuid: currentNote.info.docGuid,
@@ -784,12 +667,12 @@ export default {
         timestamp: Date.now(),
         noteState: this.noteState
       }
-      
+
       // 更新待保存数据（供 watcher 使用）
       this.pendingSaveData = captureData
-      
+
       console.log(`[Muya.captureCurrentContent] Captured: docGuid=${captureData.docGuid}, len=${markdown.length}, state=${this.noteState}`)
-      
+
       return captureData
     },
     paragraphHandler: function (type) {
@@ -1025,7 +908,7 @@ export default {
         }
         if (event.target.type === 'checkbox') {
           const curData = this.contentEditor.getMarkdown()
-          
+
           // ✅ 兼容新格式：提取 currentNote 的真实内容
           let currentNoteContent = ''
           if (typeof this.currentNote === 'string') {
@@ -1033,7 +916,7 @@ export default {
           } else if (this.currentNote && typeof this.currentNote === 'object') {
             currentNoteContent = this.currentNote.__markdown || ''
           }
-          
+
           // eslint-disable-next-line eqeqeq
           if (curData != currentNoteContent) {
             this.updateNoteState('changed')
@@ -1068,7 +951,7 @@ export default {
       this.contentEditor.on('change', _.debounce(({ markdown: curData }) => {
         // ✅ 兼容新格式：currentNote 可能是字符串或对象
         let currentNoteContent = ''
-        
+
         if (typeof this.currentNote === 'string') {
           // 旧格式：直接是字符串
           currentNoteContent = this.currentNote || ''
@@ -1076,7 +959,7 @@ export default {
           // 新格式：提取 __markdown 字段
           currentNoteContent = this.currentNote.__markdown || ''
         }
-        
+
         // ✅ 使用提取后的内容进行比较
         if (curData.replace(/\s/g, '') === currentNoteContent.replace(/\s/g, '') || this.noteState === 'none' || this.firstTimeLoad) {
           this.updateNoteState('default')
@@ -1084,7 +967,7 @@ export default {
         } else {
           this.updateNoteState('changed')
           this.updateContentsList(this.contentEditor.getTOC())
-          
+
           // ✅ 关键改进：在内容变化时立即预捕获数据
           // 这样当后续切换笔记时，已经有可靠的数据可以保存
           const currentNote = this.$store.state.server.currentNote
@@ -1145,11 +1028,11 @@ export default {
     currentNote: function (currentData) {
       console.log(`\n[Muya watcher] ⚡ FIRED! type: ${typeof currentData}`)
       console.log(`[Muya watcher] Previous note: ${this.previousNoteInfo?.docGuid}, New note expected from store`)
-      
+
       // ✅ 解析新格式：支持字符串和对象两种格式
       let markdownContent = ''
       let docGuid = null
-      
+
       if (typeof currentData === 'string') {
         // 旧格式：直接是 markdown 字符串
         markdownContent = currentData || ''
@@ -1158,13 +1041,13 @@ export default {
         // 新格式：包含 __markdown 和元数据的对象
         markdownContent = currentData.__markdown || ''
         docGuid = currentData.__docGuid || null
-        
+
         console.log(`[Muya watcher] 📦 Object format:`)
         console.log(`[Muya watcher]   - markdown len=${markdownContent.length}`)
         console.log(`[Muya watcher]   - timestamp=${currentData.__timestamp}`)
         console.log(`[Muya watcher]   - docGuid=${docGuid}`)
         console.log(`[Muya watcher]   - isEmpty=${currentData.isEmpty}`)
-        
+
         if (currentData.isEmpty) {
           console.log(`[Muya watcher] ℹ️ Content is empty, will show blank editor`)
         }
@@ -1173,9 +1056,9 @@ export default {
         console.warn('[Muya watcher] ⚠️ Unexpected data type, clearing editor')
         markdownContent = ''
       }
-      
+
       console.log(`[Muya watcher] Preview: ${JSON.stringify((markdownContent || '').substring(0, 120))}`)
-      
+
       // ✅ 核心逻辑：加载内容到编辑器（即使是空字符串也要更新！）
       clearEditorHistory(this.contentEditor)
       try {
@@ -1196,21 +1079,21 @@ export default {
           }
           this.updateNoteState('changed')
         }
-        
+
         this.firstTimeLoad = true
         this.updateContentsList(this.contentEditor.getTOC())
-        
+
         // 清除旧的待保存数据（新笔记开始编辑）
         this.pendingSaveData = null
-        
+
         console.log(`[Muya watcher] ✅ Done! Editor now has content (len=${markdownContent.length})\n`)
-        
+
       } catch (e) {
         if (e.message.indexOf('Md2V') !== -1) return
         debugLogger.Error(e, e.message)
         console.error('[Muya watcher] ❌ Error loading content:', e)
       }
-      
+
       // 在下一个 tick 更新 previousNoteInfo
       this.$nextTick(() => {
         const currentNote = this.$store.state.server.currentNote
@@ -1271,68 +1154,21 @@ export default {
 
 .ag-echo-placeholder-host,
 .ag-echo-inline-host {
-  display: inline-flex;
-  vertical-align: middle;
-  margin: 0 4px;
-  max-width: min(100%, 420px);
+  display: inline;
+  vertical-align: baseline;
+  margin: 0 2px;
 }
 
 .ag-echo-anno-token {
-  display: inline-flex;
-  vertical-align: middle;
-  margin: 0 4px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(38, 166, 154, 0.15), rgba(38, 166, 154, 0.08));
-  border: 1px solid rgba(38, 166, 154, 0.25);
+  display: inline;
+  vertical-align: baseline;
   cursor: pointer;
   user-select: none;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
-  min-width: var(--echo-width, 50px);
-  min-height: var(--echo-height, 20px);
-  width: var(--echo-width, 50px);
-  height: var(--echo-height, 20px);
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.ag-echo-anno-token:hover {
-  background: linear-gradient(135deg, rgba(38, 166, 154, 0.25), rgba(38, 166, 154, 0.15));
-  border-color: rgba(38, 166, 154, 0.45);
-  box-shadow: 0 1px 4px rgba(38, 166, 154, 0.2);
-}
-
-.ag-echo-placeholder-marker {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.ag-echo-anno-icon {
-  font-size: 13px;
-  opacity: 0.75;
-}
-
-.ag-echo-anno-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(38, 166, 154, 0.95);
-  white-space: nowrap;
-}
-
-.ag-echo-anno-value {
-  font-size: 12px;
-  color: rgba(38, 166, 154, 0.7);
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .ag-echo-inline-preview {
-  display: inline-flex;
-  vertical-align: middle;
-  max-width: min(100%, 420px);
+  display: inline;
+  vertical-align: baseline;
 }
 
 .ag-rune-placeholder-card,
@@ -1363,89 +1199,14 @@ export default {
 }
 
 .ag-echo-inline-preview.ag-echo-vue-card {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 8px;
-  min-height: 0;
-  max-width: min(100%, 420px);
-  padding: 6px 8px;
-  border-radius: 10px;
-  line-height: 1.4;
+  display: inline;
+  vertical-align: baseline;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
 }
 
-.ag-echo-inline-preview .ag-echo-inline-chip--static {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-.ag-echo-inline-preview .ag-echo-inline-chip__body {
-  display: inline-flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.ag-echo-inline-chip--ghost {
-  opacity: 0.45;
-  padding: 0 6px !important;
-  min-width: unset !important;
-  flex-shrink: 0;
-  border: 1px solid rgba(38, 166, 154, 0.25);
-  background: rgba(38, 166, 154, 0.08);
-}
-
-.ag-echo-inline-chip--ghost:hover {
-  opacity: 1;
-  background: rgba(38, 166, 154, 0.18);
-}
-
-.ag-echo-inline-chip--empty {
-  border-style: dashed;
-}
-
-.ag-echo-inline-chip__desc--placeholder {
-  opacity: 0.62;
-  font-style: italic;
-}
-
-.ag-echo-inline-editor {
-  width: 100%;
-  min-height: 60px;
-  resize: vertical;
-  padding: 8px 10px;
-  border: 1px solid rgba(38, 166, 154, 0.35);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
-  font: inherit;
-  color: inherit;
-  box-sizing: border-box;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.ag-echo-inline-editor--always {
-  display: inline-flex;
-  width: min(280px, 100%);
-  min-width: 160px;
-  vertical-align: top;
-}
-
-.ag-echo-inline-preview .el-textarea,
-.ag-echo-inline-preview .el-textarea__inner {
-  width: 100%;
-}
-
-.ag-echo-inline-preview .el-textarea__inner {
-  min-height: 56px !important;
-  line-height: 1.5;
-}
-
-.ag-echo-inline-editing {
-  padding: 10px 12px;
-}
 
 .ag-rune-placeholder-icon {
   display: inline-flex;

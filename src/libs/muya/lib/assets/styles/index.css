@@ -1290,3 +1290,48 @@ i.ag-footnote-backlink {
   cursor: pointer;
   z-index: 100;
 }
+
+/* Echo annotation pill style - makes echo display as ellipse pill */
+.ag-echo-placeholder-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--echo-accent, #26A69A);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s ease;
+  vertical-align: baseline;
+}
+
+.ag-echo-placeholder-marker:hover {
+  opacity: 0.85;
+}
+
+.ag-echo-anno-icon {
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+  font-style: normal;
+  font-family: 'Material Icons';
+}
+
+.ag-echo-anno-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+.ag-echo-anno-value {
+  font-size: 12px;
+  opacity: 0.85;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

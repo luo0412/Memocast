@@ -24,38 +24,47 @@ function sendDone (webContents, success, outputDir, url) {
  */
 function getBuiltInVuepressBin () {
   const isWin = process.platform === 'win32'
+  
+  console.log('[BlogDeploy] __dirname:', __dirname)
+  console.log('[BlogDeploy] process.cwd():', process.cwd())
   console.log('[BlogDeploy] app.getAppPath():', app.getAppPath())
   console.log('[BlogDeploy] app.isPackaged:', app.isPackaged)
-  console.log('[BlogDeploy] process.resourcesPath:', process.resourcesPath)
 
-  // 使用 app.isPackaged 判断是否是打包后的应用，更可靠
-  const appPath = app.getAppPath()
-  const isDev = !app.isPackaged
-
-  // 开发模式：appPath 指向 .quasar/app 文件夹
-  // 打包模式：appPath 指向 asar 内部
-  const projectRoot = isDev
-    ? path.join(appPath, '..', '..', '..')
-    : path.dirname(path.dirname(appPath))
-
-  console.log('[BlogDeploy] isDev:', isDev, 'projectRoot:', projectRoot)
-
-  // 直接指向 vuepress 的 JS 入口，不走 .bin/.cmd 包装
-  const candidates = [
-    path.join(projectRoot, 'node_modules', 'vuepress', 'cli.js'),
-    path.join(projectRoot, 'node_modules', '.bin', isWin ? 'vuepress.cmd' : 'vuepress'),
-    path.join(appPath, 'node_modules', 'vuepress', 'cli.js'),
-    path.join(process.resourcesPath, 'app', 'node_modules', 'vuepress', 'cli.js'),
-    path.join(process.resourcesPath, 'app.asar', 'node_modules', 'vuepress', 'cli.js'),
+  // 尝试多个可能的 Memocast 根目录
+  const possibleRoots = [
+    // 1. 相对于 process.cwd() (最可靠)
+    path.resolve(process.cwd()),
+    // 2. 相对于 __dirname (开发模式: src-electron/main-process/service -> 项目根)
+    path.resolve(__dirname, '..', '..', '..'),
+    // 3. 相对于 app.getAppPath() (.quasar/electron -> 项目根)
+    path.resolve(app.getAppPath(), '..', '..', '..'),
   ]
 
-  for (const cli of candidates) {
-    console.log('[BlogDeploy] Checking:', cli, fs.existsSync(cli) ? '(exists)' : '(missing)')
-    if (fs.existsSync(cli)) {
-      return { bin: cli, projectRoot }
+  // 去重
+  const uniqueRoots = [...new Set(possibleRoots)]
+  console.log('[BlogDeploy] Trying roots:', uniqueRoots)
+
+  for (const projectRoot of uniqueRoots) {
+    const vuepressCli = path.join(projectRoot, 'node_modules', 'vuepress', 'cli.js')
+    console.log('[BlogDeploy] Checking:', vuepressCli, fs.existsSync(vuepressCli) ? '(exists)' : '(missing)')
+    
+    if (fs.existsSync(vuepressCli)) {
+      console.log('[BlogDeploy] Found vuepress at:', vuepressCli)
+      return { bin: vuepressCli, projectRoot }
     }
   }
-  return { bin: candidates[0], projectRoot }
+
+  // 最后尝试 .bin 目录
+  for (const projectRoot of uniqueRoots) {
+    const binPath = path.join(projectRoot, 'node_modules', '.bin', isWin ? 'vuepress.cmd' : 'vuepress')
+    if (fs.existsSync(binPath)) {
+      console.log('[BlogDeploy] Found vuepress at:', binPath)
+      return { bin: binPath, projectRoot }
+    }
+  }
+
+  console.error('[BlogDeploy] VuePress not found in any location!')
+  return { bin: '', projectRoot: uniqueRoots[0] }
 }
 
 /**
@@ -74,7 +83,7 @@ function validateBlogDir (blogDir) {
   // 检查必要的配置文件（至少要有 config.js 或 config.ts）
   const configDir = path.join(blogDir, '.vuepress')
   if (!fs.existsSync(configDir)) {
-    errors.push(`缺少 .vuepress 目录，请先在博客目录运行 vuepress 初始化`)
+    errors.push(`缺少 .vuepress 目录`)
   } else {
     const hasConfig = fs.existsSync(path.join(configDir, 'config.js')) ||
                       fs.existsSync(path.join(configDir, 'config.ts'))
@@ -86,7 +95,7 @@ function validateBlogDir (blogDir) {
   // 检查 _posts 目录
   const postsDir = path.join(blogDir, '_posts')
   if (!fs.existsSync(postsDir)) {
-    errors.push(`缺少 _posts 目录，请先导出笔记`)
+    errors.push(`缺少 _posts 目录`)
   } else {
     const mdFiles = fs.readdirSync(postsDir).filter(f => f.endsWith('.md'))
     if (mdFiles.length === 0) {
@@ -95,6 +104,83 @@ function validateBlogDir (blogDir) {
   }
 
   return { valid: errors.length === 0, errors }
+}
+
+/**
+ * 生成必要的博客配置文件
+ */
+async function ensureBlogConfig (blogDir) {
+  const configDir = path.join(blogDir, '.vuepress')
+  const postsDir = path.join(blogDir, '_posts')
+
+  // 创建 .vuepress 目录
+  await fs.ensureDir(configDir)
+
+  // 创建 package.json（如果不存在）
+  const pkgPath = path.join(blogDir, 'package.json')
+  if (!fs.existsSync(pkgPath)) {
+    await fs.writeFile(pkgPath, JSON.stringify({
+      name: 'memocast-blog',
+      version: '1.0.0',
+      description: 'Blog powered by Memocast'
+    }, null, 2))
+  }
+
+  // 创建 config.js（如果不存在）
+  const configPath = path.join(configDir, 'config.js')
+  if (!fs.existsSync(configPath)) {
+    // 获取 _posts 目录中的文件列表
+    let sidebar = []
+    if (fs.existsSync(postsDir)) {
+      sidebar = fs.readdirSync(postsDir)
+        .filter(f => f.endsWith('.md'))
+        .map(f => ({
+          title: f.replace(/\.md$/, ''),
+          path: '/_posts/' + f
+        }))
+    }
+
+    const configContent = `const path = require('path')
+const fs = require('fs')
+
+// 自动从 _posts 目录生成侧边栏
+function getAutoSidebar () {
+  const postsDir = path.join(__dirname, '..', '_posts')
+  if (!fs.existsSync(postsDir)) return []
+  return fs.readdirSync(postsDir)
+    .filter(f => f.endsWith('.md'))
+    .map(f => ({
+      title: f.replace(/\\.md$/, ''),
+      path: '/_posts/' + f
+    }))
+}
+
+module.exports = {
+  title: 'My Blog',
+  description: 'Blog powered by Memocast',
+
+  base: '/',
+  dest: '.vuepress/dist',
+
+  head: [
+    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+  ],
+
+  themeConfig: {
+    nav: [
+      { text: 'Home', link: '/' }
+    ],
+    sidebar: getAutoSidebar()
+  },
+
+  markdown: {
+    lineNumbers: true
+  }
+}
+`
+    await fs.writeFile(configPath, configContent)
+  }
 }
 
 /**
@@ -129,13 +215,22 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
   const webContents = win.webContents
 
   try {
-    // 0. 验证博客目录
-    sendProgress(webContents, 'config', 'Validating blog directory...', 2)
-    const validation = validateBlogDir(blogDir)
+    // 0. 验证博客目录，若缺少配置文件则自动生成
+    sendProgress(webContents, 'config', 'Checking blog directory...', 2)
+    let validation = validateBlogDir(blogDir)
+    
     if (!validation.valid) {
-      const errorMsg = validation.errors.join('; ')
-      console.error('[BlogDeploy] Validation failed:', errorMsg)
-      return { error: 'blogDirInvalid', details: validation.errors }
+      // 自动生成缺失的配置文件
+      sendProgress(webContents, 'config', 'Generating config files...', 5)
+      await ensureBlogConfig(blogDir)
+      
+      // 重新验证
+      validation = validateBlogDir(blogDir)
+      if (!validation.valid) {
+        const errorMsg = validation.errors.join('; ')
+        console.error('[BlogDeploy] Validation failed:', errorMsg)
+        return { error: 'blogDirInvalid', details: validation.errors }
+      }
     }
 
     // 1. 确定 vuepress 命令
@@ -203,21 +298,19 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
 function runVuepressBuild (blogDir, vuepressBin, projectRoot, isVdoing, onProgress) {
   return new Promise((resolve) => {
     // vdoing 使用 `vuepress vdoing build`，原生使用 `vuepress build`
-    // cwd 设为 blogDir，所以不需要再传 sourceDir 参数
     const vuepressArgs = isVdoing ? ['vdoing', 'build'] : ['build']
 
-    // 用 node 直接执行 vuepress 模块，绕过 .cmd shell 解析问题
-    // NODE_PATH 顺序很重要：博客目录在前（用户可能在那里装了 vuepress 配置相关的东西），
-    // Memocast 在后（提供 vuepress CLI 和 vdoing 主题）
+    // 设置环境变量，让 vuepress 能找到 node_modules
     const vuepressEnv = {
       ...process.env,
       NODE_PATH: [
-        path.join(blogDir, 'node_modules'),       // 博客目录的依赖（可能为空，但需在路径中）
-        path.join(projectRoot, 'node_modules'),  // Memocast 的 vuepress 和 vdoing
+        path.join(projectRoot, 'node_modules'),
+        path.join(blogDir, 'node_modules'),
         process.env.NODE_PATH || ''
       ].filter(Boolean).join(path.delimiter)
     }
 
+    // 直接用 node 执行 vuepress cli.js
     const child = spawn('node', [vuepressBin, ...vuepressArgs], {
       cwd: blogDir,
       env: vuepressEnv,

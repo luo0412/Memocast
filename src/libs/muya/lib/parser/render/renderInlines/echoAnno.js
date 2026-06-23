@@ -25,52 +25,59 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
     token?.attrsParsed?.definitionId ||
     ''
   ).trim()
+  const hasExplicitWidth = token?.attrsParsed?.width !== undefined || token?.attrsParsed?.W !== undefined
+  const hasExplicitHeight = token?.attrsParsed?.height !== undefined || token?.attrsParsed?.H !== undefined
   const width = String(
     token?.attrsParsed?.width ||
     token?.attrsParsed?.W ||
-    '50px'
+    ''
   ).trim()
   const height = String(
     token?.attrsParsed?.height ||
     token?.attrsParsed?.H ||
-    '20px'
+    ''
   ).trim()
   const summary = String(value || '').replace(/\s+/g, ' ').trim()
   const title = summary ? `${echoName}: ${summary}` : echoName
   const echoNodeId = createEchoNodeId(token, echoId, definitionId, echoName)
 
-  // Set width/height directly on the host span (inline-flex supports them natively).
+  const hostStyle = {}
+  if (hasExplicitWidth) hostStyle.width = width
+  if (hasExplicitHeight) hostStyle.height = height
+
+  const dataset = {
+    start: token.range.start,
+    end: token.range.end,
+    raw: token.raw,
+    echoName,
+    echoId: echoId || '',
+    echoDefinitionId: definitionId,
+    echoNodeId,
+    echoValue: value
+  }
+  if (hasExplicitWidth) dataset.echoWidth = width
+  if (hasExplicitHeight) dataset.echoHeight = height
+
   return [
     h(`span.${className}.ag-echo-anno-token.${CLASS_OR_ID.AG_INLINE_RULE}`, {
-      dataset: {
-        start: token.range.start,
-        end: token.range.end,
-        raw: token.raw,
-        echoName,
-        echoId: echoId || '',
-        echoDefinitionId: definitionId,
-        echoNodeId,
-        echoValue: value,
-        echoWidth: width,
-        echoHeight: height
-      },
+      dataset,
       attrs: {
         spellcheck: 'false',
         title,
         contenteditable: 'false'
       },
-      style: { width, height }
+      style: hostStyle
     }, [
       h('span.ag-echo-placeholder-marker', {
         attrs: {
           contenteditable: 'false'
         }
       }, [
-        h('span.ag-echo-anno-icon', {
+        h('i.ag-echo-anno-icon.material-icons', {
           attrs: {
             contenteditable: 'false'
           }
-        }, '🔊'),
+        }, 'play_arrow'),
         h('span.ag-echo-anno-name', {
           attrs: {
             contenteditable: 'false'

@@ -153,11 +153,18 @@ class StateRender {
     const echoValue = String(dataset.echoValue || '').replace(/\s+/g, ' ')
     const echoDescription = echoValue || echo?.desc || ''
     const color = echo?.color || '#26A69A'
-    const icon = echo?.icon || 'graphic_eq'
-    const width = dataset.echoWidth || dataset.width || '50px'
-    const height = dataset.echoHeight || dataset.height || '20px'
+    const icon = echo?.icon || 'play_arrow'
+    const hasExplicitWidth = dataset.hasExplicitWidth === true
+    const hasExplicitHeight = dataset.hasExplicitHeight === true
+    const width = dataset.width || ''
+    const height = dataset.height || ''
+
+    const baseStyle = `--echo-accent:${color};display:inline-flex;box-sizing:border-box;overflow:hidden;align-items:center;`
+    const widthStyle = hasExplicitWidth ? `width:${width};min-width:${width};` : 'width:auto;min-width:0;'
+    const heightStyle = hasExplicitHeight ? `height:${height};min-height:${height};` : 'height:auto;min-height:0;'
+
     return `
-      <span class="${ECHO_CARD_CLASS}" data-echo-mounted="true" style="--echo-accent:${color};min-width:${width};min-height:${height};width:${width};height:${height};display:inline-flex;box-sizing:border-box;overflow:hidden;align-items:center;">
+      <span class="${ECHO_CARD_CLASS}" data-echo-mounted="true" style="${baseStyle}${widthStyle}${heightStyle}">
         <span class="ag-echo-placeholder-body">
           <span class="ag-echo-placeholder-icon material-icons">${icon}</span>
           <span class="ag-echo-placeholder-copy">
@@ -240,8 +247,10 @@ class StateRender {
       const definitionId = String(dataset.echoDefinitionId || '').trim()
       const nodeId = String(dataset.echoNodeId || '').trim()
       const value = String(dataset.echoValue || '').trim()
-      const width = String(dataset.echoWidth || '50px').trim()
-      const height = String(dataset.echoHeight || '20px').trim()
+      const hasExplicitWidth = dataset.echoWidth !== undefined
+      const hasExplicitHeight = dataset.echoHeight !== undefined
+      const width = String(dataset.echoWidth || '').trim()
+      const height = String(dataset.echoHeight || '').trim()
       // Support anonymous echo: lookup by echoId first, then by echoName
       // For anonymous echo with only attrs, use echoId or echoName for lookup
       const lookupKey = echoId ? `id:${echoId}` : echoName
@@ -256,6 +265,8 @@ class StateRender {
         color: echo?.color || '',
         icon: echo?.icon || '',
         annoSource: echo?.anno_source || echo?.template || '',
+        hasExplicitWidth,
+        hasExplicitHeight,
         width,
         height
       })
@@ -266,7 +277,7 @@ class StateRender {
 
       host.classList.add(ECHO_HOST_CLASS)
       host.setAttribute('contenteditable', 'false')
-      host.innerHTML = this.createEchoPlaceholderMarkup(echo, { ...dataset, width, height })
+      host.innerHTML = this.createEchoPlaceholderMarkup(echo, { ...dataset, hasExplicitWidth, hasExplicitHeight, width, height })
       host.dataset.echoRenderKey = cacheKey
       this.echoPlaceholderCache.set(host, cacheKey)
     })
