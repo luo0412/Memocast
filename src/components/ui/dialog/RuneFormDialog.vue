@@ -192,7 +192,7 @@
 
 .rune-form-label {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(0, 0, 0, 0.55);
   margin-bottom: 4px;
   font-weight: 500;
   line-height: 1.2;
@@ -245,17 +245,36 @@
   flex: 1 1 auto;
   height: 380px;
   min-height: 380px;
-  border: 1px solid #434343;
+  border: 1px solid #c0c0c0;
   border-radius: 4px;
   overflow: hidden;
   margin-top: 4px;
 }
 
+.body--dark .rune-monaco-editor {
+  border-color: #434343;
+}
+
 .rune-form-footer {
   flex: 0 0 auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
   padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* Dark mode overrides */
+.body--dark .rune-form-label {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.body--dark .rune-form-footer {
+  border-top-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.04);
+}
+
+.body--dark .color-dot.selected {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4);
 }
 
 @media (max-width: 680px) {
@@ -548,12 +567,15 @@ export default {
       if (!this.$refs.editorContainer) return
       this.disposeMonaco()
 
+      const isDark = document.body.classList.contains('body--dark')
+      const editorBg = isDark ? '#34383e' : '#ffffff'
+
       monaco.editor.defineTheme('Memocast-Dark', {
-        base: 'vs-dark',
+        base: isDark ? 'vs-dark' : 'vs',
         inherit: true,
         rules: [],
         colors: {
-          'editor.background': '#34383e',
+          'editor.background': editorBg,
           'editorCursor.foreground': '#FFCC00'
         }
       })

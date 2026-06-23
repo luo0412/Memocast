@@ -109,7 +109,7 @@
             </div>
             <div ref='editorContainer' class='echo-monaco-editor' />
             <div class='echo-form-tip q-mt-sm'>
-              建议导出默认对象，支持 <code>render(context)</code>，其中 <code>context</code> 含 <code>attrs</code>、<code>prompt</code>、<code>echo</code>、<code>name</code>。
+              导出默认对象，支持 <code>render(node, ancestors)</code> 和 <code>afterRender(node, domElement, ancestors)</code>。可通过 <code>node.attributes</code> 访问属性，通过 <code>domElement.nextElementSibling</code> 修改相邻元素。
             </div>
           </div>
         </div>
@@ -185,7 +185,7 @@
 
 .echo-form-label {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(0, 0, 0, 0.55);
   margin-bottom: 4px;
   font-weight: 500;
   line-height: 1.2;
@@ -234,7 +234,7 @@
   border-radius: 8px;
   background: rgba(38, 166, 154, 0.12);
   border: 1px solid rgba(38, 166, 154, 0.28);
-  color: rgba(255, 255, 255, 0.88);
+  color: rgba(0, 0, 0, 0.75);
   font-size: 12px;
   line-height: 1.55;
   word-break: break-word;
@@ -243,35 +243,71 @@
 .echo-form-help code,
 .echo-form-tip code {
   font-family: Consolas, Monaco, monospace;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.08);
   padding: 1px 4px;
   border-radius: 4px;
 }
 
 .echo-form-help__desc {
   margin-top: 6px;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .echo-monaco-editor {
   flex: 1 1 auto;
   min-height: 420px;
-  border: 1px solid #434343;
+  border: 1px solid #c0c0c0;
   border-radius: 4px;
   overflow: hidden;
 }
 
+.body--dark .echo-monaco-editor {
+  border-color: #434343;
+}
+
 .echo-form-tip {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(0, 0, 0, 0.55);
   line-height: 1.5;
 }
 
 .echo-form-footer {
   flex: 0 0 auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
   padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* Dark mode overrides */
+.body--dark .echo-form-label {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.body--dark .echo-form-help {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.body--dark .echo-form-help code,
+.body--dark .echo-form-tip code {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.body--dark .echo-form-help__desc {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.body--dark .echo-form-tip {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.body--dark .echo-form-footer {
+  border-top-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.04);
+}
+
+.body--dark .color-dot.selected {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4);
 }
 
 @media (max-width: 760px) {
@@ -298,7 +334,6 @@
 <script>
 import * as monaco from 'monaco-editor'
 import { v4 as uuidv4 } from 'uuid'
-import { createDefaultRuneTemplate } from './RuneFormDialog.vue'
 
 const DEFAULT_ECHO_ICON = 'graphic_eq'
 const DEFAULT_ECHO_COLOR = '#26A69A'
@@ -306,7 +341,33 @@ const DEFAULT_RENDER_TYPE = 'anno'
 
 const createUuid = () => uuidv4()
 
-const createDefaultEchoAnnoSource = (name = '回响') => createDefaultRuneTemplate()
+const createDefaultEchoAnnoSource = (name = '回响') => {
+  const safeName = String(name || '回响').replace(/"/g, '\\"')
+  return `// 回响模块 - 影响周围元素排版或执行功能
+// context: { attrs, prompt, echo, name, node, ancestors, prevSibling, nextSibling }
+
+export default {
+  namespace: "${safeName}",
+
+  // 渲染钩子 - 返回该节点的 hast 结构
+  render: (node, ancestors) => {
+    const attrs = node.attributes || {}
+    return {
+      tag: 'span',
+      props: {
+        class: 'echo-block',
+        'data-echo-namespace': '${safeName}',
+        style: ''
+      },
+      children: []
+    }
+  },
+
+  // 后渲染钩子 - DOM 渲染完成后执行
+  afterRender: (node, domElement, ancestors) => {
+  }
+};`
+}
 
 export default {
   name: 'EchoFormDialog',
@@ -488,12 +549,15 @@ export default {
       if (!this.$refs.editorContainer) return
       this.disposeMonaco()
 
+      const isDark = document.body.classList.contains('body--dark')
+      const editorBg = isDark ? '#34383e' : '#ffffff'
+
       monaco.editor.defineTheme('Memocast-Dark', {
-        base: 'vs-dark',
+        base: isDark ? 'vs-dark' : 'vs',
         inherit: true,
         rules: [],
         colors: {
-          'editor.background': '#34383e',
+          'editor.background': editorBg,
           'editorCursor.foreground': '#26A69A'
         }
       })

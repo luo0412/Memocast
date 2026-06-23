@@ -192,39 +192,64 @@ export default {
 
 .echo-instance-summary__desc {
   margin-top: 6px;
-  color: rgba(255, 255, 255, 0.74);
+  color: rgba(0, 0, 0, 0.6);
   line-height: 1.5;
 }
 
 .echo-instance-summary__meta {
   margin-top: 8px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.68);
+  color: rgba(0, 0, 0, 0.5);
 }
 
 .echo-instance-summary__meta code,
 .echo-instance-help code {
   font-family: Consolas, Monaco, monospace;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.08);
   padding: 1px 4px;
   border-radius: 4px;
 }
 
 .echo-instance-label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(0, 0, 0, 0.55);
   margin-bottom: 6px;
 }
 
 .echo-instance-help {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(0, 0, 0, 0.6);
   line-height: 1.6;
 }
 
 .echo-instance-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
   padding: 8px 16px;
+}
+
+.body--dark .echo-instance-summary__desc {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.body--dark .echo-instance-summary__meta {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.body--dark .echo-instance-summary__meta code,
+.body--dark .echo-instance-help code {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.body--dark .echo-instance-label {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.body--dark .echo-instance-help {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.body--dark .echo-instance-footer {
+  border-top-color: rgba(255, 255, 255, 0.08);
 }
 
 @media (max-width: 760px) {

@@ -80,6 +80,12 @@ function validateBlogDir (blogDir) {
     return { valid: false, errors }
   }
 
+  // 检查 package.json（VuePress 必需）
+  const pkgPath = path.join(blogDir, 'package.json')
+  if (!fs.existsSync(pkgPath)) {
+    errors.push(`缺少 package.json`)
+  }
+
   // 检查必要的配置文件（至少要有 config.js 或 config.ts）
   const configDir = path.join(blogDir, '.vuepress')
   if (!fs.existsSync(configDir)) {
@@ -113,10 +119,11 @@ async function ensureBlogConfig (blogDir) {
   const configDir = path.join(blogDir, '.vuepress')
   const postsDir = path.join(blogDir, '_posts')
 
-  // 创建 .vuepress 目录
+  // 创建必要的目录
   await fs.ensureDir(configDir)
+  await fs.ensureDir(postsDir)
 
-  // 创建 package.json（如果不存在）
+  // 创建 package.json
   const pkgPath = path.join(blogDir, 'package.json')
   if (!fs.existsSync(pkgPath)) {
     await fs.writeFile(pkgPath, JSON.stringify({
@@ -126,60 +133,51 @@ async function ensureBlogConfig (blogDir) {
     }, null, 2))
   }
 
-  // 创建 config.js（如果不存在）
+  // 创建或修复 config.js
   const configPath = path.join(configDir, 'config.js')
-  if (!fs.existsSync(configPath)) {
-    // 获取 _posts 目录中的文件列表
-    let sidebar = []
-    if (fs.existsSync(postsDir)) {
-      sidebar = fs.readdirSync(postsDir)
-        .filter(f => f.endsWith('.md'))
-        .map(f => ({
-          title: f.replace(/\.md$/, ''),
-          path: '/_posts/' + f
-        }))
-    }
-
+  const needsNewConfig = !fs.existsSync(configPath)
+  
+  if (needsNewConfig) {
+    // 生成默认 config.js
     const configContent = `const path = require('path')
 const fs = require('fs')
-
-// 自动从 _posts 目录生成侧边栏
-function getAutoSidebar () {
-  const postsDir = path.join(__dirname, '..', '_posts')
-  if (!fs.existsSync(postsDir)) return []
-  return fs.readdirSync(postsDir)
-    .filter(f => f.endsWith('.md'))
-    .map(f => ({
-      title: f.replace(/\\.md$/, ''),
-      path: '/_posts/' + f
-    }))
-}
 
 module.exports = {
   title: 'My Blog',
   description: 'Blog powered by Memocast',
-
   base: '/',
   dest: '.vuepress/dist',
-
   head: [
     ['link', { rel: 'icon', href: '/favicon.ico' }],
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
-
   themeConfig: {
-    nav: [
-      { text: 'Home', link: '/' }
-    ],
-    sidebar: getAutoSidebar()
+    nav: [{ text: 'Home', link: '/' }],
+    sidebar: []
   },
-
-  markdown: {
-    lineNumbers: true
-  }
+  markdown: { lineNumbers: true }
 }
 `
     await fs.writeFile(configPath, configContent)
+  } else {
+    // 修复已有 config.js 中的相对路径问题
+    let content = await fs.readFile(configPath, 'utf-8')
+    console.log('[BlogDeploy] Original config.js first line:', content.split('\n')[0])
+    
+    // 修复 ./package.json -> ../package.json
+    // .vuepress/config.js 引用上级目录的 package.json
+    if (content.includes("require('./package.json')") || content.includes('require("./package.json")')) {
+      content = content.replace(/require\(['"]\.\/package\.json['"]\)/g, "require('../package.json')")
+      await fs.writeFile(configPath, content)
+      console.log('[BlogDeploy] Fixed package.json path in config.js')
+    } else if (content.includes('require')) {
+      console.log('[BlogDeploy] Config.js contains require, checking path...')
+      console.log('[BlogDeploy] Looking for package.json require pattern')
+      const match = content.match(/require\(['"](\.\/?[^'"]+)['"]\)/)
+      if (match) {
+        console.log('[BlogDeploy] Found require:', match[1])
+      }
+    }
   }
 }
 
@@ -247,19 +245,79 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
     const isVdoing = theme === 'vdoing'
     sendProgress(webContents, 'config', `Theme: ${isVdoing ? 'vdoing' : 'VuePress default'}`, 10)
 
-    // 3. 执行 vuepress build（先清理旧的 dist，避免缓存不一致）
+    // 3. 修复 config.js 中的相对路径问题（如果存在）
+    const configPath = path.join(blogDir, '.vuepress', 'config.js')
+    if (fs.existsSync(configPath)) {
+      let content = fs.readFileSync(configPath, 'utf-8')
+      if (content.includes("require('./package.json')") || content.includes('require("./package.json")')) {
+        content = content.replace(/require\(['"]\.\/package\.json['"]\)/g, "require('../package.json')")
+        fs.writeFileSync(configPath, content)
+        console.log('[BlogDeploy] Fixed package.json path in config.js')
+      }
+    }
+
+    // 4. 执行 vuepress build（清理旧缓存，确保干净构建）
     sendProgress(webContents, 'build', 'Starting VuePress build...', 40)
 
-    const distDir = path.join(blogDir, '.vuepress', 'dist')
-    if (fs.existsSync(distDir)) {
-      await fs.remove(distDir)
-    }
-    const cacheDir = path.join(blogDir, '.vuepress', 'cache')
-    if (fs.existsSync(cacheDir)) {
-      await fs.remove(cacheDir)
+    const vuepressDir = path.join(blogDir, '.vuepress')
+    
+    // 备份 config.js（如果有的话）
+    const configPath = path.join(vuepressDir, 'config.js')
+    let configBackup = null
+    if (fs.existsSync(configPath)) {
+      configBackup = fs.readFileSync(configPath, 'utf-8')
+      console.log('[BlogDeploy] Backed up config.js')
     }
 
-    const buildResult = await runVuepressBuild(blogDir, vuepressBin, projectRoot, isVdoing, (msg) => {
+    // 备份 sidebar.json（如果存在）
+    const sidebarPath = path.join(vuepressDir, 'sidebar.json')
+    let sidebarBackup = null
+    if (fs.existsSync(sidebarPath)) {
+      sidebarBackup = fs.readFileSync(sidebarPath, 'utf-8')
+    }
+
+    // 清理整个 .vuepress 目录
+    if (fs.existsSync(vuepressDir)) {
+      await fs.remove(vuepressDir)
+    }
+    await fs.ensureDir(vuepressDir)
+    console.log('[BlogDeploy] Cleaned .vuepress directory')
+
+    // 清理博客目录的 node_modules（避免版本冲突）
+    const blogNodeModules = path.join(blogDir, 'node_modules')
+    if (fs.existsSync(blogNodeModules)) {
+      await fs.remove(blogNodeModules)
+    }
+    
+    // 创建指向 Memocast node_modules 的符号链接
+    // 这样 vuepress 执行时可以正确解析模块
+    try {
+      await fs.ensureSymlink(projectRoot, blogNodeModules, 'junction')
+      console.log('[BlogDeploy] Created symlink to Memocast node_modules')
+    } catch (e) {
+      console.log('[BlogDeploy] Symlink failed, trying copy:', e.message)
+      // 如果符号链接失败，复制 vuepress 相关模块
+      const memocastModules = path.join(projectRoot, 'node_modules', 'vuepress')
+      const blogModulesDir = path.join(blogDir, 'node_modules')
+      await fs.ensureDir(blogModulesDir)
+      await fs.copy(memocastModules, path.join(blogModulesDir, 'vuepress'))
+      console.log('[BlogDeploy] Copied vuepress module')
+    }
+
+    // 恢复 config.js
+    if (configBackup) {
+      // 修复 package.json 路径
+      let fixedConfig = configBackup.replace(/require\(['"]\.\/package\.json['"]\)/g, "require('../package.json')")
+      fs.writeFileSync(configPath, fixedConfig)
+      console.log('[BlogDeploy] Restored config.js with fixed paths')
+    }
+
+    // 恢复 sidebar.json
+    if (sidebarBackup) {
+      fs.writeFileSync(sidebarPath, sidebarBackup)
+    }
+
+    const buildResult = await runVuepressBuild(blogDir, vuepressBin, isVdoing, (msg) => {
       sendProgress(webContents, 'build', msg, 60)
     })
 
@@ -295,25 +353,14 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
   }
 }
 
-function runVuepressBuild (blogDir, vuepressBin, projectRoot, isVdoing, onProgress) {
+function runVuepressBuild (blogDir, vuepressBin, isVdoing, onProgress) {
   return new Promise((resolve) => {
     // vdoing 使用 `vuepress vdoing build`，原生使用 `vuepress build`
     const vuepressArgs = isVdoing ? ['vdoing', 'build'] : ['build']
 
-    // 设置环境变量，让 vuepress 能找到 node_modules
-    const vuepressEnv = {
-      ...process.env,
-      NODE_PATH: [
-        path.join(projectRoot, 'node_modules'),
-        path.join(blogDir, 'node_modules'),
-        process.env.NODE_PATH || ''
-      ].filter(Boolean).join(path.delimiter)
-    }
-
     // 直接用 node 执行 vuepress cli.js
     const child = spawn('node', [vuepressBin, ...vuepressArgs], {
       cwd: blogDir,
-      env: vuepressEnv,
       windowsHide: true
     })
 
