@@ -2,7 +2,7 @@
  * 博客打包部署 Handler
  * 策略：使用 Memocast 内置 vuepress（node_modules），自动检测目标目录主题
  */
-const { spawn } = require('child_process')
+const { spawn, exec } = require('child_process')
 const path = require('path')
 const fs = require('fs-extra')
 const { BrowserWindow, app } = require('electron')
@@ -245,33 +245,26 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
     const isVdoing = theme === 'vdoing'
     sendProgress(webContents, 'config', `Theme: ${isVdoing ? 'vdoing' : 'VuePress default'}`, 10)
 
-    // 3. 修复 config.js 中的相对路径问题（如果存在）
-    const configPath = path.join(blogDir, '.vuepress', 'config.js')
-    if (fs.existsSync(configPath)) {
-      let content = fs.readFileSync(configPath, 'utf-8')
-      if (content.includes("require('./package.json')") || content.includes('require("./package.json")')) {
-        content = content.replace(/require\(['"]\.\/package\.json['"]\)/g, "require('../package.json')")
-        fs.writeFileSync(configPath, content)
-        console.log('[BlogDeploy] Fixed package.json path in config.js')
-      }
-    }
-
-    // 4. 执行 vuepress build（清理旧缓存，确保干净构建）
+    // 3. 执行 vuepress build（清理旧缓存，确保干净构建）
     sendProgress(webContents, 'build', 'Starting VuePress build...', 40)
 
     const vuepressDir = path.join(blogDir, '.vuepress')
     
-    // 备份 config.js（如果有的话）
+    // 备份 config.js 和 sidebar.json
     const configPath = path.join(vuepressDir, 'config.js')
-    let configBackup = null
-    if (fs.existsSync(configPath)) {
-      configBackup = fs.readFileSync(configPath, 'utf-8')
-      console.log('[BlogDeploy] Backed up config.js')
-    }
-
-    // 备份 sidebar.json（如果存在）
     const sidebarPath = path.join(vuepressDir, 'sidebar.json')
+    let configBackup = null
     let sidebarBackup = null
+    
+    if (fs.existsSync(configPath)) {
+      let content = fs.readFileSync(configPath, 'utf-8')
+      // 修复 package.json 路径
+      if (content.includes("require('./package.json')") || content.includes('require("./package.json")')) {
+        content = content.replace(/require\(['"]\.\/package\.json['"]\)/g, "require('../package.json')")
+        console.log('[BlogDeploy] Fixed package.json path in config.js')
+      }
+      configBackup = content
+    }
     if (fs.existsSync(sidebarPath)) {
       sidebarBackup = fs.readFileSync(sidebarPath, 'utf-8')
     }
@@ -283,41 +276,20 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
     await fs.ensureDir(vuepressDir)
     console.log('[BlogDeploy] Cleaned .vuepress directory')
 
-    // 清理博客目录的 node_modules（避免版本冲突）
-    const blogNodeModules = path.join(blogDir, 'node_modules')
-    if (fs.existsSync(blogNodeModules)) {
-      await fs.remove(blogNodeModules)
-    }
-    
-    // 创建指向 Memocast node_modules 的符号链接
-    // 这样 vuepress 执行时可以正确解析模块
-    try {
-      await fs.ensureSymlink(projectRoot, blogNodeModules, 'junction')
-      console.log('[BlogDeploy] Created symlink to Memocast node_modules')
-    } catch (e) {
-      console.log('[BlogDeploy] Symlink failed, trying copy:', e.message)
-      // 如果符号链接失败，复制 vuepress 相关模块
-      const memocastModules = path.join(projectRoot, 'node_modules', 'vuepress')
-      const blogModulesDir = path.join(blogDir, 'node_modules')
-      await fs.ensureDir(blogModulesDir)
-      await fs.copy(memocastModules, path.join(blogModulesDir, 'vuepress'))
-      console.log('[BlogDeploy] Copied vuepress module')
-    }
-
-    // 恢复 config.js
+    // 恢复 config.js 和 sidebar.json
     if (configBackup) {
-      // 修复 package.json 路径
-      let fixedConfig = configBackup.replace(/require\(['"]\.\/package\.json['"]\)/g, "require('../package.json')")
-      fs.writeFileSync(configPath, fixedConfig)
-      console.log('[BlogDeploy] Restored config.js with fixed paths')
+      fs.writeFileSync(configPath, configBackup)
+      console.log('[BlogDeploy] Restored config.js')
     }
-
-    // 恢复 sidebar.json
     if (sidebarBackup) {
       fs.writeFileSync(sidebarPath, sidebarBackup)
     }
 
-    const buildResult = await runVuepressBuild(blogDir, vuepressBin, isVdoing, (msg) => {
+    // 不创建 junction，直接执行构建
+    // vuepress 会使用 Memocast 的 node_modules
+    console.log('[BlogDeploy] Skipping junction creation, using Memocast node_modules directly')
+
+    const buildResult = await runVuepressBuild(blogDir, vuepressBin, (msg) => {
       sendProgress(webContents, 'build', msg, 60)
     })
 
@@ -353,14 +325,15 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
   }
 }
 
-function runVuepressBuild (blogDir, vuepressBin, isVdoing, onProgress) {
+function runVuepressBuild (blogDir, vuepressBin, onProgress) {
   return new Promise((resolve) => {
     // vdoing 使用 `vuepress vdoing build`，原生使用 `vuepress build`
-    const vuepressArgs = isVdoing ? ['vdoing', 'build'] : ['build']
+    const cmd = `set NODE_OPTIONS=--openssl-legacy-provider && node "${vuepressBin}" build`
+    console.log('[BlogDeploy] Running:', cmd)
 
-    // 直接用 node 执行 vuepress cli.js
-    const child = spawn('node', [vuepressBin, ...vuepressArgs], {
+    const child = spawn(cmd, {
       cwd: blogDir,
+      shell: true,
       windowsHide: true
     })
 
@@ -369,6 +342,7 @@ function runVuepressBuild (blogDir, vuepressBin, isVdoing, onProgress) {
 
     child.stderr.on('data', (data) => {
       stderr += data.toString()
+      console.error('[VuePress stderr]:', data.toString())
     })
 
     child.stdout.on('data', (data) => {
