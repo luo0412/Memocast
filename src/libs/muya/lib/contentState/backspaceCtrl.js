@@ -4,6 +4,44 @@ import { tokenizer, generator } from '../parser/'
 import { getImageInfo } from '../utils/getImageInfo'
 
 const backspaceCtrl = ContentState => {
+  // Check if cursor is inside an echo_anno token
+  ContentState.prototype.isCursorInsideEchoToken = function (block, offset) {
+    if (!block || !/atxLine|paragraphContent|cellContent/.test(block.functionType || '')) {
+      return { inside: false }
+    }
+    const text = String(block.text || '')
+    if (!text || text.indexOf('@') === -1) return { inside: false }
+    const tokens = tokenizer(text, {
+      hasBeginRules: false,
+      options: this.muya.options
+    })
+    for (const token of tokens) {
+      if (token.type === 'echo_anno' && offset > token.range.start && offset <= token.range.end) {
+        return { inside: true, token, index: tokens.indexOf(token) }
+      }
+    }
+    return { inside: false }
+  }
+
+  // Get the echo_anno token at cursor position (including at end boundary)
+  ContentState.prototype.getEchoTokenAtCursor = function (block, offset) {
+    if (!block || !/atxLine|paragraphContent|cellContent/.test(block.functionType || '')) {
+      return null
+    }
+    const text = String(block.text || '')
+    if (!text || text.indexOf('@') === -1) return null
+    const tokens = tokenizer(text, {
+      hasBeginRules: false,
+      options: this.muya.options
+    })
+    for (const token of tokens) {
+      if (token.type === 'echo_anno' && offset >= token.range.start && offset <= token.range.end) {
+        return token
+      }
+    }
+    return null
+  }
+
   ContentState.prototype.hasOnlyEchoAnnotation = function (block) {
     if (!block || !/paragraphContent|cellContent|atxLine/.test(block.functionType || '')) {
       return false
@@ -271,6 +309,23 @@ const backspaceCtrl = ContentState => {
     // inputCtrl to handle this case.
     if (start.key !== end.key || start.offset !== end.offset) {
       return
+    }
+
+    // Handle backspace inside echo_anno token - delete the entire token at once
+    const echoToken = this.getEchoTokenAtCursor(startBlock, start.offset)
+    if (echoToken) {
+      event.preventDefault()
+      const { start: tokenStart, end: tokenEnd } = echoToken.range
+      const { text } = startBlock
+      // Delete the entire echo_anno token
+      const newText = text.substring(0, tokenStart) + text.substring(tokenEnd)
+      startBlock.text = newText
+      const newOffset = tokenStart
+      this.cursor = {
+        start: { key: startBlock.key, offset: newOffset },
+        end: { key: startBlock.key, offset: newOffset }
+      }
+      return this.partialRender()
     }
 
     const node = selection.getSelectionStart()

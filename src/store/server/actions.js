@@ -2549,6 +2549,14 @@ export default {
       if (result.error) {
         if (result.error === 'vuepressNotFound') {
           Notify.create({ message: i18n.t('vuepressNotFound'), type: 'negative' })
+        } else if (result.error === 'blogDirInvalid') {
+          const details = result.details?.join('\n') || ''
+          Notify.create({
+            message: i18n.t('blogDirInvalid'),
+            caption: details,
+            type: 'negative',
+            timeout: 0
+          })
         } else {
           Notify.create({ message: i18n.t('deployFailed') + ': ' + result.error, type: 'negative' })
         }

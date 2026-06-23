@@ -1,6 +1,26 @@
 import selection from '../selection'
+import { tokenizer } from '../parser/'
 
 const deleteCtrl = ContentState => {
+  // Get the echo_anno token at cursor position (including at start boundary)
+  ContentState.prototype.getEchoTokenAtCursorForDelete = function (block, offset) {
+    if (!block || !/atxLine|paragraphContent|cellContent/.test(block.functionType || '')) {
+      return null
+    }
+    const text = String(block.text || '')
+    if (!text || text.indexOf('@') === -1) return null
+    const tokens = tokenizer(text, {
+      hasBeginRules: false,
+      options: this.muya.options
+    })
+    for (const token of tokens) {
+      if (token.type === 'echo_anno' && offset >= token.range.start && offset < token.range.end) {
+        return token
+      }
+    }
+    return null
+  }
+
   // Handle `delete` keydown event on document.
   ContentState.prototype.docDeleteHandler = function (event) {
     if (this.selectedTableCells) {
@@ -24,6 +44,24 @@ const deleteCtrl = ContentState => {
     if (start.key !== end.key || start.offset !== end.offset) {
       return
     }
+
+    // Handle delete key inside echo_anno token - delete the entire token at once
+    const echoToken = this.getEchoTokenAtCursorForDelete(startBlock, start.offset)
+    if (echoToken) {
+      event.preventDefault()
+      const { start: tokenStart, end: tokenEnd } = echoToken.range
+      const { text, key } = startBlock
+      // Delete the entire echo_anno token
+      const newText = text.substring(0, tokenStart) + text.substring(tokenEnd)
+      startBlock.text = newText
+      const newOffset = tokenStart
+      this.cursor = {
+        start: { key, offset: newOffset },
+        end: { key, offset: newOffset }
+      }
+      return this.partialRender()
+    }
+
     // Only handle h1~h6 span block
     const { type, text, key } = startBlock
     if (/span/.test(type) && start.offset === 0 && text[1] === '\n') {
