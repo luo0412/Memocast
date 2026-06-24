@@ -109,6 +109,130 @@
             <a href="#" @click.prevent="openGithubTokenGuide">生成 Token</a>
           </div>
         </div>
+
+        <q-separator class="q-my-md" />
+
+        <!-- SFTP 部署（可选） -->
+        <div class="config-section">
+          <div class="text-body2 text-weight-medium q-mb-xs config-label">
+            {{ $t('sftpDeployOptional') }}
+          </div>
+
+          <q-toggle
+            v-model="localConfig.sftp.enabled"
+            :label="$t('sftpEnabled')"
+            class="q-mb-sm"
+          />
+
+          <template v-if="localConfig.sftp.enabled">
+            <div class="row q-gutter-sm">
+              <q-input
+                v-model="localConfig.sftp.host"
+                dense
+                outlined
+                class="col-8"
+                :label="$t('sftpHost')"
+                placeholder="example.com"
+              />
+              <q-input
+                v-model.number="localConfig.sftp.port"
+                dense
+                outlined
+                class="col-4"
+                :label="$t('sftpPort')"
+                type="number"
+              />
+            </div>
+
+            <q-input
+              v-model="localConfig.sftp.username"
+              dense
+              outlined
+              class="q-mb-sm q-mt-sm"
+              :label="$t('sftpUsername')"
+            />
+
+            <div class="text-caption text-grey-6 q-mb-xs">{{ $t('sftpAuthType') }}</div>
+            <q-btn-toggle
+              v-model="localConfig.sftp.authType"
+              toggle-color="primary"
+              :options="[
+                { label: $t('sftpAuthPassword'), value: 'password' },
+                { label: $t('sftpAuthKey'), value: 'key' }
+              ]"
+              unelevated
+              no-caps
+              class="q-mb-sm"
+            />
+
+            <template v-if="localConfig.sftp.authType === 'password'">
+              <q-input
+                v-model="localConfig.sftp.password"
+                dense
+                outlined
+                class="q-mb-sm"
+                :label="$t('sftpPassword')"
+                :type="showSftpPassword ? 'text' : 'password'"
+              >
+                <template v-slot:append>
+                  <q-btn flat round dense :icon="showSftpPassword ? 'visibility_off' : 'visibility'" @click="showSftpPassword = !showSftpPassword" />
+                </template>
+              </q-input>
+            </template>
+
+            <template v-else>
+              <div class="row items-center no-wrap q-gutter-xs q-mb-sm">
+                <q-input
+                  v-model="localConfig.sftp.privateKeyPath"
+                  dense
+                  outlined
+                  class="col"
+                  :label="$t('sftpPrivateKeyPath')"
+                  readonly
+                />
+                <q-btn
+                  unelevated
+                  color="primary"
+                  icon="attach_file"
+                  :label="$t('sftpSelectKeyFile')"
+                  @click="selectPrivateKey"
+                />
+              </div>
+              <q-input
+                v-model="localConfig.sftp.passphrase"
+                dense
+                outlined
+                class="q-mb-sm"
+                :label="$t('sftpPassphrase')"
+                type="password"
+              />
+            </template>
+
+            <q-input
+              v-model="localConfig.sftp.remotePath"
+              dense
+              outlined
+              class="q-mb-sm"
+              :label="$t('sftpRemotePath')"
+              placeholder="/var/www/blog"
+            />
+
+            <q-toggle
+              v-model="localConfig.sftp.backupEnabled"
+              :label="$t('sftpBackupEnabled')"
+              class="q-mb-sm"
+            />
+
+            <q-btn
+              flat
+              :label="$t('sftpTestConnection')"
+              color="primary"
+              icon="wifi"
+              :loading="testingConnection"
+              @click="testSftpConnection"
+            />
+          </template>
+        </div>
       </q-card-section>
 
       <q-separator />
@@ -138,7 +262,7 @@
 </template>
 
 <script>
-import { getBlogDeployConfig, saveBlogDeployConfig, selectDirectory } from 'src/ApiInvoker'
+import { getBlogDeployConfig, saveBlogDeployConfig, selectDirectory, invokeApi } from 'src/ApiInvoker'
 
 export default {
   name: 'BlogDeployDialog',
@@ -153,11 +277,25 @@ export default {
           workflowId: '',
           branch: 'main',
           token: ''
+        },
+        sftp: {
+          enabled: false,
+          host: '',
+          port: 22,
+          username: '',
+          authType: 'password',
+          password: '',
+          privateKeyPath: '',
+          passphrase: '',
+          remotePath: '',
+          backupEnabled: true
         }
       },
       showToken: false,
+      showSftpPassword: false,
       savingConfig: false,
-      savingAndDeploying: false
+      savingAndDeploying: false,
+      testingConnection: false
     }
   },
   async mounted () {
@@ -177,6 +315,18 @@ export default {
               workflowId: config.github?.workflowId || '',
               branch: config.github?.branch || 'main',
               token: config.github?.token || ''
+            },
+            sftp: {
+              enabled: config.sftp?.enabled || false,
+              host: config.sftp?.host || '',
+              port: config.sftp?.port || 22,
+              username: config.sftp?.username || '',
+              authType: config.sftp?.authType || 'password',
+              password: config.sftp?.password || '',
+              privateKeyPath: config.sftp?.privateKeyPath || '',
+              passphrase: config.sftp?.passphrase || '',
+              remotePath: config.sftp?.remotePath || '',
+              backupEnabled: config.sftp?.backupEnabled !== false
             }
           }
         }
@@ -194,8 +344,45 @@ export default {
         console.error('Failed to select directory:', err)
       }
     },
+    async selectPrivateKey () {
+      try {
+        const result = await invokeApi('select-directory', { title: this.$t('sftpSelectKeyFile') })
+        if (!result.canceled && result.filePath) {
+          this.localConfig.sftp.privateKeyPath = result.filePath
+        }
+      } catch (err) {
+        console.error('Failed to select key file:', err)
+      }
+    },
     openGithubTokenGuide () {
       this.$q.electron.shell.openExternal('https://github.com/settings/tokens/new?scopes=workflow')
+    },
+    async testSftpConnection () {
+      this.testingConnection = true
+      try {
+        const result = await invokeApi('sftp-test-connection', this.localConfig.sftp)
+        if (result.success) {
+          this.$q.notify({
+            message: this.$t('sftpTestSuccess'),
+            type: 'positive',
+            icon: 'check'
+          })
+        } else {
+          this.$q.notify({
+            message: this.$t('sftpTestFailed') + ': ' + (result.error?.message || result.error),
+            type: 'negative',
+            icon: 'close'
+          })
+        }
+      } catch (err) {
+        this.$q.notify({
+          message: this.$t('sftpTestFailed') + ': ' + err.message,
+          type: 'negative',
+          icon: 'close'
+        })
+      } finally {
+        this.testingConnection = false
+      }
     },
     async saveConfigToBackend () {
       await saveBlogDeployConfig(this.localConfig)

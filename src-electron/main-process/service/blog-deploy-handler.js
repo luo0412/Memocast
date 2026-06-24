@@ -1,6 +1,10 @@
 /**
  * 博客打包部署 Handler
- * 策略：使用 Memocast 内置 vuepress（node_modules），自动检测目标目录主题
+ * 策略：
+ * 1. 检测 Node.js 是否安装，未安装则引导用户
+ * 2. 优先使用博客目录自己的 node_modules
+ * 3. 若博客目录无 node_modules，创建软链接指向 Memocast 内置 node_modules
+ * 4. 生产模式使用 Electron 打包后的 node_modules
  */
 const { spawn, exec } = require('child_process')
 const path = require('path')
@@ -11,105 +15,324 @@ const { dispatchWorkflow } = require('./github-api')
 let currentProcess = null
 let cancelled = false
 
-function sendProgress (webContents, stage, message, percent) {
-  webContents.send('blog-deploy-progress', { stage, message, percent })
-}
+// ==================== Node.js 检测 ====================
 
-function sendDone (webContents, success, outputDir, url) {
-  webContents.send('blog-deploy-done', { success, outputDir, url })
+/**
+ * 检测系统是否安装了 Node.js
+ * 返回: { installed: boolean, version: string, path: string }
+ */
+async function checkNodeJSInstalled () {
+  return new Promise((resolve) => {
+    exec('node --version', { windowsHide: true }, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ installed: false, version: '', path: '' })
+      } else {
+        exec('where node', { windowsHide: true }, (err, out) => {
+          const nodePath = out ? out.trim().split('\n')[0] : ''
+          resolve({
+            installed: true,
+            version: stdout.trim(),
+            path: nodePath
+          })
+        })
+      }
+    })
+  })
 }
 
 /**
- * 从 Memocast 内置 node_modules 获取 vuepress 二进制路径
+ * 引导用户安装 Node.js
+ * 返回安装指引信息
  */
-function getBuiltInVuepressBin () {
+function getNodeJSInstallGuide () {
+  const isWin = process.platform === 'win32'
+  if (isWin) {
+    return {
+      title: 'Node.js 未安装',
+      message: '博客打包需要 Node.js 环境',
+      steps: [
+        '1. 访问 https://nodejs.org/zh-cn/ 下载 LTS 版本',
+        '2. 安装时勾选 "Add to PATH"',
+        '3. 重启 Memocast 后重试'
+      ],
+      url: 'https://nodejs.org/zh-cn/download/'
+    }
+  } else {
+    return {
+      title: 'Node.js Not Installed',
+      message: 'Blog build requires Node.js runtime',
+      steps: [
+        '1. Install via: brew install node (macOS)',
+        '2. Or: sudo apt install nodejs (Ubuntu/Debian)',
+        '3. Restart Memocast and try again'
+      ],
+      url: 'https://nodejs.org/en/download/'
+    }
+  }
+}
+
+// ==================== node_modules 软链接策略 ====================
+
+/**
+ * 获取 Memocast 内置 node_modules 的路径
+ * 开发模式：项目根目录
+ * 生产模式：Electron app 目录下的 node_modules
+ */
+function getMemocastNodeModules () {
+  const isWin = process.platform === 'win32'
+  
+  // 可能的 Memocast 根目录
+  const possibleRoots = [
+    // 1. process.cwd() (最可靠)
+    path.resolve(process.cwd()),
+    // 2. __dirname (src-electron/main-process/service -> 项目根)
+    path.resolve(__dirname, '..', '..', '..'),
+    // 3. app.getAppPath() (.quasar/electron -> 项目根)
+    path.resolve(app.getAppPath(), '..', '..', '..'),
+  ]
+
+  // 生产模式下 Electron 的实际路径
+  if (app.isPackaged) {
+    // 打包后的 app.asar 路径
+    const appPath = app.getAppPath()
+    // 通常 .asar 文件在 Content Resources 目录下
+    // 尝试找到 .asar 同级的 node_modules
+    const resourcesPath = path.dirname(appPath)
+    const nodeModulesPath = path.join(resourcesPath, 'node_modules')
+    if (fs.existsSync(nodeModulesPath)) {
+      return { path: nodeModulesPath, mode: 'packaged' }
+    }
+    
+    // 备选：在 app 目录内查找 (某些打包配置会把 node_modules 放在 app 内)
+    const altPath = path.join(appPath, '..', 'app', 'node_modules')
+    if (fs.existsSync(altPath)) {
+      return { path: altPath, mode: 'packaged' }
+    }
+  }
+
+  // 开发模式：从可能的根目录找
+  const uniqueRoots = [...new Set(possibleRoots)]
+  for (const projectRoot of uniqueRoots) {
+    const nodeModulesPath = path.join(projectRoot, 'node_modules')
+    if (fs.existsSync(nodeModulesPath)) {
+      console.log('[BlogDeploy] Dev mode node_modules at:', nodeModulesPath)
+      return { path: nodeModulesPath, mode: 'development' }
+    }
+  }
+
+  return { path: '', mode: 'not_found' }
+}
+
+/**
+ * 创建软链接指向 Memocast 的 node_modules
+ * Windows 使用 junction（无需管理员权限），Unix 使用 symlink
+ */
+async function createNodeModulesSymlink (blogDir, memocastNodeModules) {
+  const isWin = process.platform === 'win32'
+  const targetLink = path.join(blogDir, 'node_modules')
+  
+  // 确保目标不存在
+  if (fs.existsSync(targetLink)) {
+    const stat = fs.lstatSync(targetLink)
+    if (stat.isSymbolicLink()) {
+      // 已是软链接，先删除
+      await fs.remove(targetLink)
+    } else if (stat.isDirectory()) {
+      // 是真实目录，保留（用户可能有自己安装的依赖）
+      console.log('[BlogDeploy] Blog already has its own node_modules, using it')
+      return false
+    }
+  }
+
+  if (!memocastNodeModules || !fs.existsSync(memocastNodeModules)) {
+    console.error('[BlogDeploy] Memocast node_modules not found:', memocastNodeModules)
+    return false
+  }
+
+  return new Promise((resolve) => {
+    if (isWin) {
+      // Windows: 使用 junction (不需要管理员权限，不会跨驱动器)
+      // junction 只能用于目录
+      exec(`mklink /J "${targetLink}" "${memocastNodeModules}"`, { windowsHide: true }, (error) => {
+        if (error) {
+          console.error('[BlogDeploy] Failed to create junction:', error.message)
+          resolve(false)
+        } else {
+          console.log('[BlogDeploy] Created junction:', targetLink, '->', memocastNodeModules)
+          resolve(true)
+        }
+      })
+    } else {
+      // macOS/Linux: 使用 symlink
+      fs.ensureSymlink(memocastNodeModules, targetLink, 'junction', (err) => {
+        if (err) {
+          console.error('[BlogDeploy] Failed to create symlink:', err.message)
+          resolve(false)
+        } else {
+          console.log('[BlogDeploy] Created symlink:', targetLink, '->', memocastNodeModules)
+          resolve(true)
+        }
+      })
+    }
+  })
+}
+
+/**
+ * 确保博客目录有可用的 node_modules
+ * 优先使用博客自己的，否则创建软链接
+ */
+async function ensureBlogNodeModules (blogDir) {
+  const blogNodeModules = path.join(blogDir, 'node_modules')
+  
+  // 检查博客目录是否有自己的 node_modules
+  if (fs.existsSync(blogNodeModules)) {
+    console.log('[BlogDeploy] Blog has its own node_modules')
+    return { source: 'blog', linked: false }
+  }
+
+  // 获取 Memocast 内置的 node_modules
+  const { path: memocastPath, mode } = getMemocastNodeModules()
+  
+  if (!memocastPath || !fs.existsSync(memocastPath)) {
+    console.error('[BlogDeploy] Memocast node_modules not available')
+    return { source: 'none', linked: false }
+  }
+
+  // 创建软链接
+  console.log(`[BlogDeploy] Creating node_modules symlink (${mode} mode)...`)
+  const linked = await createNodeModulesSymlink(blogDir, memocastPath)
+  
+  return {
+    source: linked ? 'memocast' : 'none',
+    linked
+  }
+}
+
+function sendProgress (webContents, stage, message, percent) {
+  webContents.send('blog-deploy-progress', { stage, message, percent })
+
+  // 更新任务栏进度条
+  const win = BrowserWindow.fromWebContents(webContents)
+  if (win) {
+    win.setProgressBar(percent / 100)
+  }
+}
+
+function clearProgressBar (webContents) {
+  const win = BrowserWindow.fromWebContents(webContents)
+  if (win) {
+    win.setProgressBar(-1) // -1 表示清除进度条
+  }
+}
+
+function sendDone (webContents, success, outputDir, url, guide) {
+  webContents.send('blog-deploy-done', { success, outputDir, url, guide })
+  clearProgressBar(webContents)
+}
+
+/**
+ * 从博客目录的 node_modules 获取 vuepress 二进制路径
+ * 优先使用博客自己的 vuepress
+ */
+function getBuiltInVuepressBin (blogDir) {
   const isWin = process.platform === 'win32'
   
   console.log('[BlogDeploy] __dirname:', __dirname)
   console.log('[BlogDeploy] process.cwd():', process.cwd())
   console.log('[BlogDeploy] app.getAppPath():', app.getAppPath())
   console.log('[BlogDeploy] app.isPackaged:', app.isPackaged)
+  console.log('[BlogDeploy] blogDir:', blogDir)
 
-  // 尝试多个可能的 Memocast 根目录
-  const possibleRoots = [
-    // 1. 相对于 process.cwd() (最可靠)
-    path.resolve(process.cwd()),
-    // 2. 相对于 __dirname (开发模式: src-electron/main-process/service -> 项目根)
-    path.resolve(__dirname, '..', '..', '..'),
-    // 3. 相对于 app.getAppPath() (.quasar/electron -> 项目根)
-    path.resolve(app.getAppPath(), '..', '..', '..'),
-  ]
-
-  // 去重
-  const uniqueRoots = [...new Set(possibleRoots)]
-  console.log('[BlogDeploy] Trying roots:', uniqueRoots)
-
-  for (const projectRoot of uniqueRoots) {
-    const vuepressCli = path.join(projectRoot, 'node_modules', 'vuepress', 'cli.js')
-    console.log('[BlogDeploy] Checking:', vuepressCli, fs.existsSync(vuepressCli) ? '(exists)' : '(missing)')
-    
+  // 1. 首先尝试从博客目录的 node_modules 获取
+  const blogNodeModules = path.join(blogDir, 'node_modules')
+  
+  if (fs.existsSync(blogNodeModules)) {
+    // 尝试 vuepress/cli.js
+    const vuepressCli = path.join(blogNodeModules, 'vuepress', 'cli.js')
     if (fs.existsSync(vuepressCli)) {
-      console.log('[BlogDeploy] Found vuepress at:', vuepressCli)
-      return { bin: vuepressCli, projectRoot }
+      console.log('[BlogDeploy] Found vuepress in blog node_modules:', vuepressCli)
+      return { bin: vuepressCli, source: 'blog' }
     }
-  }
-
-  // 最后尝试 .bin 目录
-  for (const projectRoot of uniqueRoots) {
-    const binPath = path.join(projectRoot, 'node_modules', '.bin', isWin ? 'vuepress.cmd' : 'vuepress')
+    
+    // 尝试 .bin/vuepress
+    const binPath = path.join(blogNodeModules, '.bin', isWin ? 'vuepress.cmd' : 'vuepress')
     if (fs.existsSync(binPath)) {
-      console.log('[BlogDeploy] Found vuepress at:', binPath)
-      return { bin: binPath, projectRoot }
+      console.log('[BlogDeploy] Found vuepress in blog .bin:', binPath)
+      return { bin: binPath, source: 'blog' }
     }
   }
 
-  console.error('[BlogDeploy] VuePress not found in any location!')
-  return { bin: '', projectRoot: uniqueRoots[0] }
+  // 2. 回退：从 Memocast 内置 node_modules 获取
+  const { path: memocastPath } = getMemocastNodeModules()
+  
+  if (memocastPath && fs.existsSync(memocastPath)) {
+    const vuepressCli = path.join(memocastPath, 'vuepress', 'cli.js')
+    if (fs.existsSync(vuepressCli)) {
+      console.log('[BlogDeploy] Found vuepress in Memocast node_modules:', vuepressCli)
+      return { bin: vuepressCli, source: 'memocast' }
+    }
+    
+    const binPath = path.join(memocastPath, '.bin', isWin ? 'vuepress.cmd' : 'vuepress')
+    if (fs.existsSync(binPath)) {
+      console.log('[BlogDeploy] Found vuepress in Memocast .bin:', binPath)
+      return { bin: binPath, source: 'memocast' }
+    }
+  }
+
+  console.error('[BlogDeploy] VuePress not found!')
+  return { bin: '', source: 'none' }
 }
 
 /**
  * 验证博客目录是否满足基本要求
- * 返回: { valid: boolean, errors: string[] }
+ * 返回: { valid: boolean, errors: string[], warnings: string[] }
  */
 function validateBlogDir (blogDir) {
   const errors = []
+  const warnings = []
 
   // 检查目录是否存在
   if (!fs.existsSync(blogDir)) {
     errors.push(`博客目录不存在: ${blogDir}`)
-    return { valid: false, errors }
+    return { valid: false, errors, warnings }
   }
 
   // 检查 package.json（VuePress 必需）
   const pkgPath = path.join(blogDir, 'package.json')
   if (!fs.existsSync(pkgPath)) {
-    errors.push(`缺少 package.json`)
+    warnings.push(`缺少 package.json，将自动生成`)
   }
 
   // 检查必要的配置文件（至少要有 config.js 或 config.ts）
   const configDir = path.join(blogDir, '.vuepress')
   if (!fs.existsSync(configDir)) {
-    errors.push(`缺少 .vuepress 目录`)
+    warnings.push(`缺少 .vuepress 目录，将自动生成`)
   } else {
     const hasConfig = fs.existsSync(path.join(configDir, 'config.js')) ||
                       fs.existsSync(path.join(configDir, 'config.ts'))
     if (!hasConfig) {
-      errors.push(`缺少 .vuepress/config.js 配置文件`)
+      warnings.push(`缺少 .vuepress/config.js 配置文件，将自动生成`)
     }
   }
 
-  // 检查 _posts 目录
+  // 检查 _posts 目录（可选，如果没有会自动创建）
   const postsDir = path.join(blogDir, '_posts')
   if (!fs.existsSync(postsDir)) {
-    errors.push(`缺少 _posts 目录`)
+    warnings.push(`缺少 _posts 目录，将自动创建`)
   } else {
     const mdFiles = fs.readdirSync(postsDir).filter(f => f.endsWith('.md'))
     if (mdFiles.length === 0) {
-      errors.push(`_posts 目录中没有 MD 文件`)
+      warnings.push(`_posts 目录中没有 MD 文件，请先导出笔记`)
     }
   }
 
-  return { valid: errors.length === 0, errors }
+  // 检查 node_modules（可选，如果没有会自动创建软链接）
+  const nodeModulesDir = path.join(blogDir, 'node_modules')
+  if (!fs.existsSync(nodeModulesDir)) {
+    warnings.push(`缺少 node_modules，将自动创建软链接`)
+  }
+
+  return { valid: errors.length === 0, errors, warnings }
 }
 
 /**
@@ -213,37 +436,62 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
   const webContents = win.webContents
 
   try {
-    // 0. 验证博客目录，若缺少配置文件则自动生成
-    sendProgress(webContents, 'config', 'Checking blog directory...', 2)
+    // 0. 检测 Node.js 是否安装
+    sendProgress(webContents, 'config', 'Checking Node.js...', 1)
+    const nodeCheck = await checkNodeJSInstalled()
+    
+    if (!nodeCheck.installed) {
+      const guide = getNodeJSInstallGuide()
+      console.error('[BlogDeploy] Node.js not found')
+      sendDone(webContents, false, '', '', guide)
+      return { error: 'nodeNotFound', guide }
+    }
+    
+    console.log('[BlogDeploy] Node.js found:', nodeCheck.version, 'at', nodeCheck.path)
+    sendProgress(webContents, 'config', `Node.js ${nodeCheck.version}`, 2)
+
+    // 0.5 验证博客目录
+    sendProgress(webContents, 'config', 'Checking blog directory...', 3)
     let validation = validateBlogDir(blogDir)
     
-    if (!validation.valid) {
-      // 自动生成缺失的配置文件
-      sendProgress(webContents, 'config', 'Generating config files...', 5)
-      await ensureBlogConfig(blogDir)
-      
-      // 重新验证
-      validation = validateBlogDir(blogDir)
-      if (!validation.valid) {
-        const errorMsg = validation.errors.join('; ')
-        console.error('[BlogDeploy] Validation failed:', errorMsg)
-        return { error: 'blogDirInvalid', details: validation.errors }
-      }
+    // 显示警告但继续
+    if (validation.warnings.length > 0) {
+      console.log('[BlogDeploy] Warnings:', validation.warnings)
+    }
+    
+    if (validation.errors.length > 0) {
+      const errorMsg = validation.errors.join('; ')
+      console.error('[BlogDeploy] Validation errors:', errorMsg)
+      return { error: 'blogDirInvalid', details: validation.errors }
     }
 
-    // 1. 确定 vuepress 命令
-    const { bin: vuepressBin, projectRoot } = getBuiltInVuepressBin()
-    sendProgress(webContents, 'config', 'Checking VuePress...', 5)
+    // 1. 确保博客目录有 node_modules（软链接策略）
+    sendProgress(webContents, 'config', 'Setting up node_modules...', 5)
+    const nodeModulesResult = await ensureBlogNodeModules(blogDir)
+    
+    if (nodeModulesResult.source === 'none') {
+      console.error('[BlogDeploy] Failed to setup node_modules')
+      return { error: 'nodeModulesSetupFailed' }
+    }
+    
+    console.log('[BlogDeploy] node_modules source:', nodeModulesResult.source)
+    sendProgress(webContents, 'config', `Using node_modules from: ${nodeModulesResult.source}`, 8)
+
+    // 2. 确定 vuepress 命令
+    const { bin: vuepressBin, source: vuepressSource } = getBuiltInVuepressBin(blogDir)
+    sendProgress(webContents, 'config', 'Checking VuePress...', 10)
 
     if (!fs.existsSync(vuepressBin)) {
       console.error('[BlogDeploy] VuePress binary not found at:', vuepressBin)
       return { error: 'vuepressNotFound' }
     }
+    
+    console.log('[BlogDeploy] VuePress source:', vuepressSource)
 
-    // 2. 确定主题：优先用配置值，其次 auto-detect
+    // 3. 确定主题：优先用配置值，其次 auto-detect
     const theme = themeOverride || detectBlogTheme(blogDir)
     const isVdoing = theme === 'vdoing'
-    sendProgress(webContents, 'config', `Theme: ${isVdoing ? 'vdoing' : 'VuePress default'}`, 10)
+    sendProgress(webContents, 'config', `Theme: ${isVdoing ? 'vdoing' : 'VuePress default'}`, 12)
 
     // 3. 执行 vuepress build（清理旧缓存，确保干净构建）
     sendProgress(webContents, 'build', 'Starting VuePress build...', 40)

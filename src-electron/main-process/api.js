@@ -333,5 +333,23 @@ export default {
       if (result.canceled) return { canceled: true }
       return { canceled: false, filePath: result.filePaths[0] }
     }).catch(err => throw err)
+
+    /**
+     * SFTP: test connection
+     */
+    handleApi('sftp-test-connection', async (e, config) => {
+      const { testConnection } = require('./service/sftp-service')
+      return await testConnection(config)
+    }).catch(err => throw err)
+
+    /**
+     * SFTP: upload directory
+     */
+    handleApi('sftp-upload', async (e, { config, localDir }) => {
+      const { uploadDirectory } = require('./service/sftp-service')
+      return await uploadDirectory(config, localDir, (filename, uploaded, total) => {
+        e.sender.send('sftp-upload-progress', { filename, uploaded, total })
+      })
+    }).catch(err => throw err)
   }
 }

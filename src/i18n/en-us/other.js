@@ -100,5 +100,28 @@ export default {
   blogTheme: 'Blog Theme',
   blogThemeDefault: 'VuePress Default',
   blogThemeVdoing: 'Vdoing Theme',
-  blogThemeAutoDetectHint: 'Auto-detects theme type, or manually switch'
+  blogThemeAutoDetectHint: 'Auto-detects theme type, or manually switch',
+
+  // SFTP Deploy
+  sftpDeployOptional: '(Optional) SFTP Upload to Server',
+  sftpEnabled: 'Enable SFTP Upload',
+  sftpHost: 'Server Address',
+  sftpPort: 'Port',
+  sftpUsername: 'Username',
+  sftpAuthType: 'Authentication',
+  sftpAuthPassword: 'Password',
+  sftpAuthKey: 'SSH Key',
+  sftpPassword: 'Password',
+  sftpPrivateKeyPath: 'Private Key Path',
+  sftpPassphrase: 'Key Passphrase (Optional)',
+  sftpRemotePath: 'Remote Directory',
+  sftpSelectKeyFile: 'Select Key File',
+  sftpBackupEnabled: 'Backup remote directory before upload',
+  sftpTestConnection: 'Test Connection',
+  sftpTestSuccess: 'Connection successful!',
+  sftpTestFailed: 'Connection failed',
+  sftpUploading: 'Uploading to server...',
+  sftpUploadSuccess: 'Upload complete!',
+  sftpUploadFailed: 'Upload failed',
+  sftpNoKeySelected: 'Please select a private key file'
 }

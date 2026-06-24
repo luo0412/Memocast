@@ -98,5 +98,28 @@ export default {
   blogTheme: '博客主题',
   blogThemeDefault: 'VuePress 原生',
   blogThemeVdoing: 'Vdoing 主题',
-  blogThemeAutoDetectHint: '自动检测目录主题类型，也可手动切换'
+  blogThemeAutoDetectHint: '自动检测目录主题类型，也可手动切换',
+
+  // SFTP 部署
+  sftpDeployOptional: '（可选）SFTP 上传到服务器',
+  sftpEnabled: '启用 SFTP 上传',
+  sftpHost: '服务器地址',
+  sftpPort: '端口',
+  sftpUsername: '用户名',
+  sftpAuthType: '认证方式',
+  sftpAuthPassword: '密码',
+  sftpAuthKey: 'SSH Key',
+  sftpPassword: '密码',
+  sftpPrivateKeyPath: '私钥文件路径',
+  sftpPassphrase: '私钥密码短语（可选）',
+  sftpRemotePath: '远程目录',
+  sftpSelectKeyFile: '选择私钥文件',
+  sftpBackupEnabled: '上传前备份远程目录',
+  sftpTestConnection: '测试连接',
+  sftpTestSuccess: '连接成功！',
+  sftpTestFailed: '连接失败',
+  sftpUploading: '正在上传到服务器...',
+  sftpUploadSuccess: '上传完成！',
+  sftpUploadFailed: '上传失败',
+  sftpNoKeySelected: '请选择私钥文件'
 }

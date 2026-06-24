@@ -23,5 +23,8 @@ export default {
   cancelBlogDeploy: 'cancel-blog-deploy',
   getBlogDeployConfig: 'get-blog-deploy-config',
   saveBlogDeployConfig: 'save-blog-deploy-config',
-  selectDirectory: 'select-directory'
+  selectDirectory: 'select-directory',
+  // SFTP 部署
+  sftpTestConnection: 'sftp-test-connection',
+  sftpUpload: 'sftp-upload'
 }
