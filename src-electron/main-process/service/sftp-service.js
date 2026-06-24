@@ -8,6 +8,15 @@ const path = require('path')
 
 let currentClient = null
 
+// 诊断 ssh2 模块是否正确加载
+function diagnoseSsh2 () {
+  const issues = []
+  if (typeof Client !== 'function') {
+    issues.push(`Client is not a function, type: ${typeof Client}`)
+  }
+  return issues
+}
+
 /**
  * 测试 SFTP 连接
  * @param {Object} config - SFTP 配置
@@ -22,8 +31,23 @@ let currentClient = null
  * @returns {Promise<{success: boolean, error?: string}>}
  */
 async function testConnection (config) {
+  // 诊断 ssh2 模块
+  const diag = diagnoseSsh2()
+  if (diag.length > 0) {
+    const errMsg = `SSH2 module error: ${diag.join('; ')}`
+    console.error('[SFTP] Diagnosis failed:', errMsg)
+    throw new Error(errMsg)
+  }
+
   return new Promise((resolve, reject) => {
-    const client = new Client()
+    let client
+    try {
+      client = new Client()
+    } catch (ctorErr) {
+      console.error('[SFTP] Failed to create Client:', ctorErr)
+      reject(new Error(`Failed to initialize SSH client: ${ctorErr.message}`))
+      return
+    }
 
     const timeout = setTimeout(() => {
       client.end()
@@ -40,7 +64,7 @@ async function testConnection (config) {
         }
 
         // 测试写入权限
-        const testFile = path.posix.join(config.remotePath, '.sftp_test')
+        const testFile = path.posix.join(config.remotePath || '/', '.sftp_test')
         sftp.writeFile(testFile, 'test', (writeErr) => {
           if (writeErr) {
             client.end()
@@ -59,6 +83,7 @@ async function testConnection (config) {
 
     client.on('error', (err) => {
       clearTimeout(timeout)
+      console.error('[SFTP] Connection error:', err.message)
       reject(err)
     })
 
@@ -84,7 +109,13 @@ async function testConnection (config) {
       }
     }
 
-    client.connect(connConfig)
+    try {
+      client.connect(connConfig)
+    } catch (connectErr) {
+      clearTimeout(timeout)
+      console.error('[SFTP] Connect call failed:', connectErr)
+      reject(new Error(`SSH connection failed: ${connectErr.message}`))
+    }
   })
 }
 
