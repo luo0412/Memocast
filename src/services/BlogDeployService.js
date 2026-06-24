@@ -2,6 +2,23 @@ import path from 'path'
 import fs from 'fs-extra'
 
 export default {
+  /**
+   * 生成 README.md（如果不存在）
+   * @param {string} blogDir - 博客根目录
+   * @param {string} categoryName - 分类名称，用于作为 README 内容
+   */
+  async ensureReadme (blogDir, categoryName) {
+    const readmePath = path.join(blogDir, 'README.md')
+    if (fs.existsSync(readmePath)) {
+      return // 已存在则跳过
+    }
+    // 提取文件夹名（分类路径的最后一部分）
+    const folderName = categoryName.split('/').filter(Boolean).pop() || categoryName
+    const content = `# ${folderName}\n\n${categoryName} 分类下的笔记。\n`
+    await fs.writeFile(readmePath, content, 'utf-8')
+    console.log('[BlogDeploy] Created README.md with title:', folderName)
+  },
+
   async generateSidebarJson (blogDir, noteFields) {
     const sidebarPath = path.join(blogDir, 'sidebar.json')
     const sidebarData = {}

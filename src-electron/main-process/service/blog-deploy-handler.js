@@ -538,6 +538,13 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     // vuepress 会使用 Memocast 的 node_modules
     console.log('[BlogDeploy] Skipping junction creation, using Memocast node_modules directly')
 
+    // 清理 .vuepress/dist 目录，避免残留文件导致构建错误
+    const distDir = path.join(blogDir, '.vuepress/dist')
+    if (fs.existsSync(distDir)) {
+      await fs.remove(distDir)
+      console.log('[BlogDeploy] Cleaned .vuepress/dist directory')
+    }
+
     const buildResult = await runVuepressBuild(blogDir, vuepressBin, (msg) => {
       sendProgress(webContents, 'build', msg, 60)
     })

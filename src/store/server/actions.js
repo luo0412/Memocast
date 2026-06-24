@@ -2537,7 +2537,10 @@ export default {
       // 5. Generate sidebar.json
       await BlogDeployService.generateSidebarJson(config.blogDir, contents)
 
-      // 6. Trigger main process: vuepress build + GitHub trigger
+      // 6. Ensure README.md exists
+      await BlogDeployService.ensureReadme(config.blogDir, category)
+
+      // 7. Trigger main process: vuepress build + GitHub trigger
       Loading.hide()
 
       const result = await startBlogDeploy({
