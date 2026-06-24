@@ -347,6 +347,24 @@ async function ensureBlogConfig (blogDir) {
   await fs.ensureDir(configDir)
   await fs.ensureDir(postsDir)
 
+  // 读取 _posts 目录生成 sidebar
+  let sidebarConfig = []
+  if (fs.existsSync(postsDir)) {
+    const mdFiles = fs.readdirSync(postsDir).filter(f => f.endsWith('.md'))
+    if (mdFiles.length > 0) {
+      sidebarConfig = [
+        {
+          title: '所有文章',
+          collapsable: false,
+          children: mdFiles.map(f => {
+            const name = f.replace(/\.md$/, '')
+            return `_posts/${name}`
+          })
+        }
+      ]
+    }
+  }
+
   // 创建 package.json
   const pkgPath = path.join(blogDir, 'package.json')
   if (!fs.existsSync(pkgPath)) {
@@ -392,14 +410,17 @@ module.exports = {
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
   themeConfig: {
-    nav: [{ text: 'Home', link: '/' }],
-    sidebar: []
+    nav: [
+      { text: '首页', link: '/' },
+      { text: '文章', link: '/_posts/' }
+    ],
+    sidebar: ${JSON.stringify(sidebarConfig, null, 8)}
   },
   markdown: { lineNumbers: true }
 }
 `
   await fs.writeFile(configPath, v1ConfigContent)
-  console.log('[BlogDeploy] Generated v1 config.js with lodash patch')
+  console.log('[BlogDeploy] Generated v1 config.js with lodash patch and sidebar')
 }
 
 /**
