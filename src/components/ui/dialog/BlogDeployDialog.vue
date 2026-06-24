@@ -57,6 +57,22 @@
           </div>
         </div>
 
+        <!-- 自定义构建命令（可选） -->
+        <div class="config-section q-mt-md">
+          <div class="text-body2 text-weight-medium q-mb-xs config-label">
+            {{ $t('customBuildCommand') }}
+          </div>
+          <q-input
+            v-model="localConfig.customBuildCommand"
+            dense
+            outlined
+            :placeholder="$t('customBuildCommandPlaceholder')"
+          />
+          <div class="text-caption text-grey-6 q-mt-xs">
+            {{ $t('customBuildCommandHint') }}
+          </div>
+        </div>
+
         <q-separator class="q-my-md" />
 
         <!-- GitHub 部署（可选） -->
@@ -271,6 +287,7 @@ export default {
       localConfig: {
         blogDir: '',
         theme: 'default',
+        customBuildCommand: 'set NODE_OPTIONS=--openssl-legacy-provider && node "node_modules/vuepress/cli.js" build',
         github: {
           owner: '',
           repo: '',
@@ -309,6 +326,7 @@ export default {
           this.localConfig = {
             blogDir: config.blogDir || '',
             theme: config.theme || 'default',
+            customBuildCommand: config.customBuildCommand || 'set NODE_OPTIONS=--openssl-legacy-provider && node "node_modules/vuepress/cli.js" build',
             github: {
               owner: config.github?.owner || '',
               repo: config.github?.repo || '',

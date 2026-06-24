@@ -101,6 +101,11 @@ export default {
   blogThemeVdoing: 'Vdoing 主题',
   blogThemeAutoDetectHint: '自动检测目录主题类型，也可手动切换',
 
+  // 自定义构建命令
+  customBuildCommand: '自定义构建命令',
+  customBuildCommandPlaceholder: 'set NODE_OPTIONS=--openssl-legacy-provider && node "node_modules/vuepress/cli.js" build',
+  customBuildCommandHint: '留空则使用默认命令，设置了则优先使用此命令构建',
+
   // SFTP 部署
   sftpDeployOptional: '（可选）SFTP 上传到服务器',
   sftpEnabled: '启用 SFTP 上传',

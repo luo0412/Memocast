@@ -430,7 +430,7 @@ function detectBlogTheme (blogDir) {
   return 'default'
 }
 
-async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpConfig) {
+async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpConfig, customBuildCommand) {
   cancelled = false
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win) return { error: 'No window' }
@@ -545,11 +545,40 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
       console.log('[BlogDeploy] Cleaned .vuepress/dist directory')
     }
 
-    const buildResult = await runVuepressBuild(blogDir, vuepressBin, (msg) => {
-      sendProgress(webContents, 'build', msg, 60)
-    })
+    let buildResult
+    if (customBuildCommand) {
+      // 使用自定义构建命令
+      console.log('[BlogDeploy] Using custom build command:', customBuildCommand)
+      sendProgress(webContents, 'build', 'Running custom build command...', 50)
+      buildResult = await runCustomBuild(blogDir, customBuildCommand, (msg) => {
+        sendProgress(webContents, 'build', msg, 60)
+      })
+    } else {
+      // 使用默认 vuepress 构建
+      buildResult = await runVuepressBuild(blogDir, vuepressBin, (msg) => {
+        sendProgress(webContents, 'build', msg, 60)
+      })
+    }
 
-    if (buildResult.error) {
+    // 如果构建失败且是 client.json 错误，尝试使用博客自己的 vuepress
+    if (buildResult.error && buildResult.error.includes('client.json')) {
+      console.log('[BlogDeploy] Build failed with client.json error, retrying with blog node_modules...')
+      sendProgress(webContents, 'build', 'Retrying with blog node_modules...', 60)
+      
+      const { bin: blogVuepressBin, source } = getBuiltInVuepressBin(blogDir)
+      if (source === 'blog' && blogVuepressBin !== vuepressBin) {
+        const retryResult = await runVuepressBuild(blogDir, blogVuepressBin, (msg) => {
+          sendProgress(webContents, 'build', msg, 60)
+        })
+        if (retryResult.success) {
+          // 重试成功，继续流程
+        } else {
+          return { error: retryResult.error }
+        }
+      } else {
+        return { error: buildResult.error }
+      }
+    } else if (buildResult.error) {
       return { error: buildResult.error }
     }
 
@@ -631,6 +660,55 @@ function runVuepressBuild (blogDir, vuepressBin, onProgress) {
     child.stderr.on('data', (data) => {
       stderr += data.toString()
       console.error('[VuePress stderr]:', data.toString())
+    })
+
+    child.stdout.on('data', (data) => {
+      const msg = data.toString().trim()
+      if (msg) {
+        onProgress(msg)
+      }
+    })
+
+    child.on('close', (code) => {
+      currentProcess = null
+      if (cancelled) {
+        resolve({ error: 'cancelled' })
+      } else if (code === 0) {
+        resolve({ success: true })
+      } else {
+        resolve({ error: stderr || `Exit code: ${code}` })
+      }
+    })
+
+    child.on('error', (err) => {
+      currentProcess = null
+      resolve({ error: err.message })
+    })
+  })
+}
+
+/**
+ * 执行自定义构建命令
+ * @param {string} blogDir - 博客目录
+ * @param {string} customCommand - 用户自定义的构建命令
+ * @param {function} onProgress - 进度回调
+ */
+function runCustomBuild (blogDir, customCommand, onProgress) {
+  return new Promise((resolve) => {
+    console.log('[BlogDeploy] Running custom command:', customCommand)
+
+    const child = spawn(customCommand, {
+      cwd: blogDir,
+      shell: true,
+      windowsHide: true
+    })
+
+    currentProcess = child
+    let stderr = ''
+
+    child.stderr.on('data', (data) => {
+      stderr += data.toString()
+      console.error('[CustomBuild stderr]:', data.toString())
     })
 
     child.stdout.on('data', (data) => {

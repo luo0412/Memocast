@@ -2480,8 +2480,10 @@ export default {
   async blogDeploy ({ state, dispatch }, { category, config: passedConfig } = {}) {
     let config = passedConfig
 
+    // 每次都弹出配置弹框让用户确认
     if (!config) {
-      config = await getBlogDeployConfig()
+      bus.$emit('showBlogDeployDialog', { category })
+      return
     }
 
     if (!config?.blogDir) {
@@ -2547,7 +2549,8 @@ export default {
         blogDir: config.blogDir,
         theme: config.theme,
         githubConfig: config.github,
-        sftpConfig: config.sftp
+        sftpConfig: config.sftp,
+        customBuildCommand: config.customBuildCommand
       })
 
       if (result.error) {
