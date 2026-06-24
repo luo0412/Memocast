@@ -1,5 +1,5 @@
 export default {
   openTierRanking: 'Tier Ranking',
-  exportToBlog: 'Export to Blog',
+  exportToBlog: 'Deploy VuePress Blog',
   copyMarkdown: 'Copy MD to Clipboard'
 }

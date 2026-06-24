@@ -95,6 +95,7 @@ export default {
   saveAndDeploy: '保存并部署',
   saveConfig: '保存配置',
   cancelDeploy: '取消',
+  rebuild: '重新打包',
   deployNow: '立即部署',
   blogTheme: '博客主题',
   blogThemeDefault: 'VuePress 原生',
@@ -103,7 +104,7 @@ export default {
 
   // 自定义构建命令
   customBuildCommand: '自定义构建命令',
-  customBuildCommandPlaceholder: 'set NODE_OPTIONS=--openssl-legacy-provider && node "node_modules/vuepress/cli.js" build',
+  customBuildCommandPlaceholder: 'node "node_modules/vuepress/cli.js" build',
   customBuildCommandHint: '留空则使用默认命令，设置了则优先使用此命令构建',
 
   // SFTP 部署

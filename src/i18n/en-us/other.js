@@ -97,6 +97,7 @@ export default {
   saveAndDeploy: 'Save & Deploy',
   saveConfig: 'Save Config',
   cancelDeploy: 'Cancel',
+  rebuild: 'Rebuild',
   deployNow: 'Deploy Now',
   blogTheme: 'Blog Theme',
   blogThemeDefault: 'VuePress Default',

@@ -226,7 +226,7 @@
               />
               <ImportDialog ref='importDialog' />
               <BlogDeployDialog ref='blogDeployDialog' @deploy='onBlogDeploy' @cancel='onBlogDeployCancel' />
-              <BlogDeployProgressDialog ref='blogDeployProgressDialog' @cancel='onBlogDeployProgressCancel' />
+              <BlogDeployProgressDialog ref='blogDeployProgressDialog' @cancel='onBlogDeployProgressCancel' @rebuild='onBlogDeployRebuild' />
             </div>
           </div>
         </div>
@@ -605,6 +605,22 @@ export default {
     onBlogDeployProgressCancel () {
       this.$refs.blogDeployProgressDialog.onCancel()
       this.$store.dispatch('server/cancelBlogDeploy')
+    },
+    async onBlogDeployRebuild () {
+      const config = await this.getBlogDeployConfig()
+      if (config) {
+        this.$refs.blogDeployProgressDialog.show()
+        await this.$store.dispatch('server/blogDeploy', { config })
+      }
+    },
+    async getBlogDeployConfig () {
+      try {
+        const { getBlogDeployConfig } = require('src/ApiInvoker')
+        return await getBlogDeployConfig()
+      } catch (err) {
+        console.warn('Failed to get blog deploy config:', err)
+        return null
+      }
     },
     onShowBlogDeployDialog ({ category }) {
       this.$refs.blogDeployDialog.show()

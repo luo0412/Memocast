@@ -56,7 +56,7 @@ module.exports = function (/* ctx */) {
       // Add dependencies for transpiling with Babel (Array of string/regex)
       // (from node_modules, which are by default not transpiled).
       // Applies only if "transpile" is set to true.
-      transpileDependencies: [/vega.*/, /@quasar.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/, 'sql.js', /reveal\.js.*/, /portkey-ai/, /openai/],
+      transpileDependencies: [/vega.*/, /@quasar.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/, 'sql.js', /reveal\.js.*/, /portkey-ai/, /openai/, 'consola'],
 
       // rtl: false, // https://quasar.dev/options/rtl-support
       // preloadChunks: true,
@@ -72,16 +72,14 @@ module.exports = function (/* ctx */) {
         // ESLint is run separately via `npm run lint`.
         // eslint-loader v4 is incompatible with eslint v8 (removed getFormatter API),
         // so it has been removed from the webpack build pipeline.
-        cfg.externals = {
-          electron: 'commonjs electron'
-        }
 
         // 使用 babel-loader 转译 openai 和 portkey-ai
         cfg.module.rules.push({
           test: /\.m?js$/,
           include: [
             /node_modules[/\\]openai/,
-            /node_modules[/\\]portkey-ai/
+            /node_modules[/\\]portkey-ai/,
+            /node_modules[/\\]consola/
           ],
           type: 'javascript/auto',
           use: {
@@ -90,7 +88,8 @@ module.exports = function (/* ctx */) {
               presets: [['@babel/preset-env', { targets: { chrome: '70' } }]],
               plugins: [
                 '@babel/plugin-transform-optional-chaining',
-                '@babel/plugin-transform-nullish-coalescing-operator'
+                '@babel/plugin-transform-nullish-coalescing-operator',
+                '@babel/plugin-transform-class-properties'
               ],
               cacheDirectory: false
             }
@@ -492,7 +491,8 @@ module.exports = function (/* ctx */) {
           'electron-unhandled': 'commonjs electron-unhandled',
           'electron-updater': 'commonjs electron-updater',
           'electron-window-state': 'commonjs electron-window-state',
-          'sql.js': 'commonjs sql.js'
+          'sql.js': 'commonjs sql.js',
+          consola: 'commonjs consola'
         }
 
         // 使用 babel-loader 转译 openai 和 portkey-ai

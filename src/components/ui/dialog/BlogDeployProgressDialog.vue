@@ -76,8 +76,8 @@
           <q-btn unelevated color="primary" :label="$t('ok')" v-close-popup />
         </template>
         <template v-else-if="status === 'error'">
-          <q-btn flat :label="$t('cancelDeploy')" v-close-popup />
-          <q-btn unelevated color="negative" :label="$t('confirm')" v-close-popup />
+          <q-btn flat :label="$t('cancelDeploy')" icon="close" v-close-popup />
+          <q-btn unelevated color="primary" :label="$t('rebuild')" @click="onRebuild" />
         </template>
       </q-card-actions>
     </q-card>
@@ -180,6 +180,11 @@ export default {
       this.$emit('cancel')
       this.status = 'cancelled'
       this.appendLog(this.$t('deployCancelled'), 'warn')
+      this.hide()
+    },
+    onRebuild () {
+      this.$emit('rebuild')
+      this.hide()
     },
     openBlog () {
       if (this.blogUrl) {

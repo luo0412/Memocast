@@ -287,7 +287,7 @@ export default {
       localConfig: {
         blogDir: '',
         theme: 'default',
-        customBuildCommand: 'set NODE_OPTIONS=--openssl-legacy-provider && node "node_modules/vuepress/cli.js" build',
+        customBuildCommand: 'npm run build',
         github: {
           owner: '',
           repo: '',
@@ -326,7 +326,7 @@ export default {
           this.localConfig = {
             blogDir: config.blogDir || '',
             theme: config.theme || 'default',
-            customBuildCommand: config.customBuildCommand || 'set NODE_OPTIONS=--openssl-legacy-provider && node "node_modules/vuepress/cli.js" build',
+            customBuildCommand: config.customBuildCommand || 'npm run build',
             github: {
               owner: config.github?.owner || '',
               repo: config.github?.repo || '',

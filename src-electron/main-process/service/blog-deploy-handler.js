@@ -353,17 +353,33 @@ async function ensureBlogConfig (blogDir) {
     await fs.writeFile(pkgPath, JSON.stringify({
       name: 'memocast-blog',
       version: '1.0.0',
-      description: 'Blog powered by Memocast'
+      description: 'Blog powered by Memocast',
+      overrides: {
+        lodash: '^4.17.21',
+        'lodash.template': '^4.5.0'
+      }
     }, null, 2))
   }
 
-  // 创建或修复 config.js
+  // 始终生成 v1 格式的 config.js（包含 lodash 兼容性补丁）
   const configPath = path.join(configDir, 'config.js')
-  const needsNewConfig = !fs.existsSync(configPath)
-  
-  if (needsNewConfig) {
-    // 生成默认 config.js
-    const configContent = `const path = require('path')
+  const v1ConfigContent = `// 修复高版本 Node.js 下 VuePress 1.x 编译时 lodash 各种未定义 (assignWith, arrayEach 等) 的 Bug
+if (typeof global !== 'undefined') {
+  const lodashInternal = ['assignWith', 'arrayEach', 'baseAssignValue', 'baseEach']
+  lodashInternal.forEach(method => {
+    if (!global[method]) {
+      try {
+        global[method] = require(\`lodash/\${method}\`);
+      } catch (e) {
+        // 兜底处理
+        if (method === 'assignWith') global[method] = Object.assign;
+        if (method === 'arrayEach') global[method] = (arr, iter) => arr?.forEach(iter);
+      }
+    }
+  });
+}
+
+const path = require('path')
 const fs = require('fs')
 
 module.exports = {
@@ -382,27 +398,8 @@ module.exports = {
   markdown: { lineNumbers: true }
 }
 `
-    await fs.writeFile(configPath, configContent)
-  } else {
-    // 修复已有 config.js 中的相对路径问题
-    let content = await fs.readFile(configPath, 'utf-8')
-    console.log('[BlogDeploy] Original config.js first line:', content.split('\n')[0])
-    
-    // 修复 ./package.json -> ../package.json
-    // .vuepress/config.js 引用上级目录的 package.json
-    if (content.includes("require('./package.json')") || content.includes('require("./package.json")')) {
-      content = content.replace(/require\(['"]\.\/package\.json['"]\)/g, "require('../package.json')")
-      await fs.writeFile(configPath, content)
-      console.log('[BlogDeploy] Fixed package.json path in config.js')
-    } else if (content.includes('require')) {
-      console.log('[BlogDeploy] Config.js contains require, checking path...')
-      console.log('[BlogDeploy] Looking for package.json require pattern')
-      const match = content.match(/require\(['"](\.\/?[^'"]+)['"]\)/)
-      if (match) {
-        console.log('[BlogDeploy] Found require:', match[1])
-      }
-    }
-  }
+  await fs.writeFile(configPath, v1ConfigContent)
+  console.log('[BlogDeploy] Generated v1 config.js with lodash patch')
 }
 
 /**
@@ -466,6 +463,11 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
       return { error: 'blogDirInvalid', details: validation.errors }
     }
 
+    // 0.6 生成必要的配置文件（package.json, config.js 等）
+    sendProgress(webContents, 'config', 'Setting up blog config...', 4)
+    await ensureBlogConfig(blogDir)
+    console.log('[BlogDeploy] Blog config ensured')
+
     // 1. 确保博客目录有 node_modules（软链接策略）
     sendProgress(webContents, 'config', 'Setting up node_modules...', 5)
     const nodeModulesResult = await ensureBlogNodeModules(blogDir)
@@ -478,107 +480,149 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     console.log('[BlogDeploy] node_modules source:', nodeModulesResult.source)
     sendProgress(webContents, 'config', `Using node_modules from: ${nodeModulesResult.source}`, 8)
 
-    // 2. 确定 vuepress 命令
-    const { bin: vuepressBin, source: vuepressSource } = getBuiltInVuepressBin(blogDir)
-    sendProgress(webContents, 'config', 'Checking VuePress...', 10)
-
-    if (!fs.existsSync(vuepressBin)) {
-      console.error('[BlogDeploy] VuePress binary not found at:', vuepressBin)
-      return { error: 'vuepressNotFound' }
-    }
-    
-    console.log('[BlogDeploy] VuePress source:', vuepressSource)
-
-    // 3. 确定主题：优先用配置值，其次 auto-detect
-    const theme = themeOverride || detectBlogTheme(blogDir)
-    const isVdoing = theme === 'vdoing'
-    sendProgress(webContents, 'config', `Theme: ${isVdoing ? 'vdoing' : 'VuePress default'}`, 12)
-
-    // 3. 执行 vuepress build（清理旧缓存，确保干净构建）
-    sendProgress(webContents, 'build', 'Starting VuePress build...', 40)
+    // 3. 执行构建前的准备工作
+    sendProgress(webContents, 'build', 'Preparing build environment...', 30)
 
     const vuepressDir = path.join(blogDir, '.vuepress')
-    
-    // 备份 config.js 和 sidebar.json
     const configPath = path.join(vuepressDir, 'config.js')
-    const sidebarPath = path.join(vuepressDir, 'sidebar.json')
-    let configBackup = null
-    let sidebarBackup = null
-    
-    if (fs.existsSync(configPath)) {
-      let content = fs.readFileSync(configPath, 'utf-8')
-      // 修复 package.json 路径
-      if (content.includes("require('./package.json')") || content.includes('require("./package.json")')) {
-        content = content.replace(/require\(['"]\.\/package\.json['"]\)/g, "require('../package.json')")
-        console.log('[BlogDeploy] Fixed package.json path in config.js')
-      }
-      configBackup = content
-    }
-    if (fs.existsSync(sidebarPath)) {
-      sidebarBackup = fs.readFileSync(sidebarPath, 'utf-8')
-    }
+    const packageJsonPath = path.join(blogDir, 'package.json')
 
-    // 清理整个 .vuepress 目录
-    if (fs.existsSync(vuepressDir)) {
-      await fs.remove(vuepressDir)
-    }
+    // 确保 .vuepress 目录存在
     await fs.ensureDir(vuepressDir)
-    console.log('[BlogDeploy] Cleaned .vuepress directory')
 
-    // 恢复 config.js 和 sidebar.json
-    if (configBackup) {
-      fs.writeFileSync(configPath, configBackup)
-      console.log('[BlogDeploy] Restored config.js')
+    // 检测并修复旧的 vuepress 版本
+    if (fs.existsSync(packageJsonPath)) {
+      try {
+        const existingPkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
+        const vuepressVersion = existingPkg.dependencies?.vuepress || ''
+        
+        // 检查是否是 v2 版本
+        if (vuepressVersion.startsWith('^2.') || vuepressVersion.startsWith('2.')) {
+          console.log('[BlogDeploy] Found old vuepress v2, need to reinstall')
+          sendProgress(webContents, 'build', '检测到旧版 vuepress，正在重新安装...', 30)
+          
+          // 删除旧的 node_modules 强制重新安装
+          const blogNodeModules = path.join(blogDir, 'node_modules')
+          if (fs.existsSync(blogNodeModules)) {
+            await fs.remove(blogNodeModules)
+            console.log('[BlogDeploy] Removed old node_modules')
+          }
+          
+          // 覆盖旧 package.json
+          const theme = detectBlogTheme(blogDir)
+          const isVdoing = theme === 'vdoing'
+      const packageJson = {
+        name: 'blog',
+        version: '1.0.0',
+        private: true,
+        scripts: {
+          'build': 'set NODE_OPTIONS=--openssl-legacy-provider && vuepress build'
+        },
+        dependencies: {
+          vuepress: '^1.9.0',
+          lodash: '^4.17.21'
+        },
+        overrides: {
+          lodash: '^4.17.21',
+          'lodash.template': '^4.5.0'
+        }
+      }
+      if (isVdoing) {
+        packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
+      }
+      fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))
+        }
+      } catch (e) {
+        console.error('[BlogDeploy] Error reading package.json:', e)
+      }
+    } else {
+      // 自动生成 package.json（如果不存在）
+      sendProgress(webContents, 'build', 'Generating package.json...', 35)
+
+      const theme = detectBlogTheme(blogDir)
+      const isVdoing = theme === 'vdoing'
+
+      const packageJson = {
+        name: 'blog',
+        version: '1.0.0',
+        private: true,
+        scripts: {
+          'build': 'set NODE_OPTIONS=--openssl-legacy-provider && vuepress build'
+        },
+        dependencies: {
+          vuepress: '^1.9.0',
+          lodash: '^4.17.21'
+        },
+        overrides: {
+          lodash: '^4.17.21',
+          'lodash.template': '^4.5.0'
+        }
+      }
+
+      if (isVdoing) {
+        packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
+      }
+
+      fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))
+      console.log('[BlogDeploy] Generated package.json with theme:', theme)
     }
-    if (sidebarBackup) {
-      fs.writeFileSync(sidebarPath, sidebarBackup)
+
+    // 清理缓存和构建产物目录
+    const cacheDir = path.join(vuepressDir, 'cache')
+    const distDir = path.join(vuepressDir, 'dist')
+
+    if (fs.existsSync(cacheDir)) {
+      await fs.remove(cacheDir)
+      console.log('[BlogDeploy] Cleaned .vuepress/cache directory')
     }
-
-    // 不创建 junction，直接执行构建
-    // vuepress 会使用 Memocast 的 node_modules
-    console.log('[BlogDeploy] Skipping junction creation, using Memocast node_modules directly')
-
-    // 清理 .vuepress/dist 目录，避免残留文件导致构建错误
-    const distDir = path.join(blogDir, '.vuepress/dist')
     if (fs.existsSync(distDir)) {
       await fs.remove(distDir)
       console.log('[BlogDeploy] Cleaned .vuepress/dist directory')
     }
 
+    // 4. 执行 npm install（如果博客目录没有 node_modules 或依赖缺失）
+    const blogNodeModules = path.join(blogDir, 'node_modules')
+    const needInstall = !fs.existsSync(blogNodeModules)
+
+    if (needInstall || customBuildCommand) {
+      sendProgress(webContents, 'build', 'Installing dependencies...', 40)
+      const installResult = await runNpmInstall(blogDir, (msg) => {
+        sendProgress(webContents, 'build', msg, 45)
+      })
+
+      if (installResult.error) {
+        console.error('[BlogDeploy] npm install failed:', installResult.error)
+        return { error: installResult.error }
+      }
+      console.log('[BlogDeploy] npm install completed')
+    }
+
+    // 5. 执行构建
+    sendProgress(webContents, 'build', 'Building...', 50)
+
     let buildResult
     if (customBuildCommand) {
       // 使用自定义构建命令
       console.log('[BlogDeploy] Using custom build command:', customBuildCommand)
-      sendProgress(webContents, 'build', 'Running custom build command...', 50)
       buildResult = await runCustomBuild(blogDir, customBuildCommand, (msg) => {
         sendProgress(webContents, 'build', msg, 60)
       })
     } else {
       // 使用默认 vuepress 构建
+      const { bin: vuepressBin } = getBuiltInVuepressBin(blogDir)
+      
+      if (!vuepressBin || !fs.existsSync(vuepressBin)) {
+        const errorMsg = '未找到 vuepress，请确保博客目录已安装 vuepress@1.x 依赖'
+        console.error('[BlogDeploy] Error:', errorMsg)
+        return { error: errorMsg }
+      }
+      
       buildResult = await runVuepressBuild(blogDir, vuepressBin, (msg) => {
         sendProgress(webContents, 'build', msg, 60)
       })
     }
 
-    // 如果构建失败且是 client.json 错误，尝试使用博客自己的 vuepress
-    if (buildResult.error && buildResult.error.includes('client.json')) {
-      console.log('[BlogDeploy] Build failed with client.json error, retrying with blog node_modules...')
-      sendProgress(webContents, 'build', 'Retrying with blog node_modules...', 60)
-      
-      const { bin: blogVuepressBin, source } = getBuiltInVuepressBin(blogDir)
-      if (source === 'blog' && blogVuepressBin !== vuepressBin) {
-        const retryResult = await runVuepressBuild(blogDir, blogVuepressBin, (msg) => {
-          sendProgress(webContents, 'build', msg, 60)
-        })
-        if (retryResult.success) {
-          // 重试成功，继续流程
-        } else {
-          return { error: retryResult.error }
-        }
-      } else {
-        return { error: buildResult.error }
-      }
-    } else if (buildResult.error) {
+    if (buildResult.error) {
       return { error: buildResult.error }
     }
 
@@ -644,14 +688,68 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
 
 function runVuepressBuild (blogDir, vuepressBin, onProgress) {
   return new Promise((resolve) => {
-    // vdoing 使用 `vuepress vdoing build`，原生使用 `vuepress build`
-    const cmd = `set NODE_OPTIONS=--openssl-legacy-provider && node "${vuepressBin}" build`
-    console.log('[BlogDeploy] Running:', cmd)
+    // 使用 npm run build 来利用 package.json 中的 NODE_OPTIONS 设置
+    const cmd = `npm run build`
+    console.log('[BlogDeploy] Running via cmd.exe:', cmd)
 
-    const child = spawn(cmd, {
+    const child = spawn('cmd.exe', ['/c', cmd], {
       cwd: blogDir,
-      shell: true,
-      windowsHide: true
+      shell: false,
+      windowsHide: true,
+      env: { ...process.env }
+    })
+
+    currentProcess = child
+    let stderr = ''
+    let stdout = ''
+
+    child.stderr.on('data', (data) => {
+      stderr += data.toString()
+      console.error('[VuePress stderr]:', data.toString())
+    })
+
+    child.stdout.on('data', (data) => {
+      const msg = data.toString().trim()
+      stdout += msg + '\n'
+      if (msg) {
+        onProgress(msg)
+      }
+    })
+
+    child.on('close', (code) => {
+      currentProcess = null
+      if (cancelled) {
+        resolve({ error: 'cancelled' })
+      } else if (code === 0) {
+        resolve({ success: true })
+      } else {
+        // 如果有 stderr 错误，优先返回 stderr
+        const errorMsg = stderr.trim() || `Exit code: ${code}`
+        resolve({ error: errorMsg })
+      }
+    })
+
+    child.on('error', (err) => {
+      currentProcess = null
+      resolve({ error: err.message })
+    })
+  })
+}
+
+/**
+ * 执行 npm install
+ * @param {string} blogDir - 博客目录
+ * @param {function} onProgress - 进度回调
+ */
+function runNpmInstall (blogDir, onProgress) {
+  return new Promise((resolve) => {
+    console.log('[BlogDeploy] Running npm install in:', blogDir)
+
+    const child = spawn('cmd.exe', ['/c', 'npm install'], {
+      cwd: blogDir,
+      shell: false,
+      windowsHide: true,
+      env: { ...process.env }
     })
 
     currentProcess = child
@@ -659,7 +757,7 @@ function runVuepressBuild (blogDir, vuepressBin, onProgress) {
 
     child.stderr.on('data', (data) => {
       stderr += data.toString()
-      console.error('[VuePress stderr]:', data.toString())
+      console.error('[NpmInstall stderr]:', data.toString())
     })
 
     child.stdout.on('data', (data) => {
@@ -676,7 +774,8 @@ function runVuepressBuild (blogDir, vuepressBin, onProgress) {
       } else if (code === 0) {
         resolve({ success: true })
       } else {
-        resolve({ error: stderr || `Exit code: ${code}` })
+        const errorMsg = stderr.trim() || `Exit code: ${code}`
+        resolve({ error: errorMsg })
       }
     })
 
@@ -695,12 +794,13 @@ function runVuepressBuild (blogDir, vuepressBin, onProgress) {
  */
 function runCustomBuild (blogDir, customCommand, onProgress) {
   return new Promise((resolve) => {
-    console.log('[BlogDeploy] Running custom command:', customCommand)
+    console.log('[BlogDeploy] Running custom command via cmd.exe:', customCommand)
 
-    const child = spawn(customCommand, {
+    const child = spawn('cmd.exe', ['/c', customCommand], {
       cwd: blogDir,
-      shell: true,
-      windowsHide: true
+      shell: false,
+      windowsHide: true,
+      env: { ...process.env }
     })
 
     currentProcess = child
@@ -725,7 +825,8 @@ function runCustomBuild (blogDir, customCommand, onProgress) {
       } else if (code === 0) {
         resolve({ success: true })
       } else {
-        resolve({ error: stderr || `Exit code: ${code}` })
+        const errorMsg = stderr.trim() || `Exit code: ${code}`
+        resolve({ error: errorMsg })
       }
     })
 
