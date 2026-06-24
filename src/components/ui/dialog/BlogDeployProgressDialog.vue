@@ -104,7 +104,8 @@ export default {
         { key: 'export', label: this.$t('stepExport') },
         { key: 'config', label: this.$t('stepBuild') },
         { key: 'build', label: this.$t('stepBuild') },
-        { key: 'trigger', label: this.$t('stepTrigger') }
+        { key: 'trigger', label: this.$t('stepTrigger') },
+        { key: 'sftp', label: this.$t('stepSftp') }
       ]
     },
     currentStepLabel () {
@@ -113,16 +114,17 @@ export default {
     },
     stepProgressMap () {
       return {
-        export: { start: 0, end: 25 },
-        config: { start: 25, end: 40 },
-        build: { start: 40, end: 90 },
-        trigger: { start: 90, end: 100 }
+        export: { start: 0, end: 20 },
+        config: { start: 20, end: 35 },
+        build: { start: 35, end: 70 },
+        trigger: { start: 70, end: 85 },
+        sftp: { start: 85, end: 100 }
       }
     }
   },
   methods: {
     getStepIcon (key) {
-      const stepOrder = ['export', 'config', 'build', 'trigger']
+      const stepOrder = ['export', 'config', 'build', 'trigger', 'sftp']
       const idx = stepOrder.indexOf(key)
       const currentIdx = stepOrder.indexOf(this.currentStep)
       if (idx < currentIdx || this.status === 'done') return 'check_circle'
@@ -130,7 +132,7 @@ export default {
       return 'radio_button_unchecked'
     },
     isStepDone (key) {
-      const stepOrder = ['export', 'config', 'build', 'trigger']
+      const stepOrder = ['export', 'config', 'build', 'trigger', 'sftp']
       const idx = stepOrder.indexOf(key)
       const currentIdx = stepOrder.indexOf(this.currentStep)
       return idx < currentIdx || this.status === 'done'

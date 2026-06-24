@@ -2543,7 +2543,8 @@ export default {
       const result = await startBlogDeploy({
         blogDir: config.blogDir,
         theme: config.theme,
-        githubConfig: config.github
+        githubConfig: config.github,
+        sftpConfig: config.sftp
       })
 
       if (result.error) {

@@ -308,9 +308,9 @@ export default {
     /**
      * Blog Deploy: start build + GitHub trigger
      */
-    handleApi('start-blog-deploy', async (e, { blogDir, githubConfig, theme }) => {
+    handleApi('start-blog-deploy', async (e, { blogDir, githubConfig, theme, sftpConfig }) => {
       const { execBlogBuild } = require('./service/blog-deploy-handler')
-      return execBlogBuild(blogDir, githubConfig, e, theme)
+      return execBlogBuild(blogDir, githubConfig, e, theme, sftpConfig)
     }).catch(err => throw err)
 
     /**

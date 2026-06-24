@@ -11,6 +11,7 @@ const path = require('path')
 const fs = require('fs-extra')
 const { BrowserWindow, app } = require('electron')
 const { dispatchWorkflow } = require('./github-api')
+const { uploadDirectory: sftpUpload, backupRemoteDir, testConnection: sftpTestConnection } = require('./sftp-service')
 
 let currentProcess = null
 let cancelled = false
@@ -429,7 +430,7 @@ function detectBlogTheme (blogDir) {
   return 'default'
 }
 
-async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
+async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpConfig) {
   cancelled = false
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win) return { error: 'No window' }
@@ -547,7 +548,7 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
 
     // 4. 触发 GitHub Actions（若配置了）
     if (githubConfig?.token && githubConfig?.owner && githubConfig?.workflowId) {
-      sendProgress(webContents, 'trigger', 'Triggering GitHub Actions...', 90)
+      sendProgress(webContents, 'trigger', 'Triggering GitHub Actions...', 85)
 
       const ghResult = await dispatchWorkflow({
         owner: githubConfig.owner,
@@ -561,6 +562,38 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride) {
       if (!ghResult.success) {
         console.warn('GitHub API trigger failed:', ghResult.error)
       }
+    }
+
+    // 5. SFTP 上传（若配置了）
+    if (sftpConfig?.enabled) {
+      const outputDir = path.join(blogDir, '.vuepress/dist')
+      
+      sendProgress(webContents, 'sftp', 'Preparing SFTP upload...', 92)
+
+      // 备份远程目录（可选）
+      if (sftpConfig.backupEnabled) {
+        try {
+          sendProgress(webContents, 'sftp', 'Backing up remote directory...', 94)
+          await backupRemoteDir(sftpConfig)
+        } catch (backupErr) {
+          console.warn('[BlogDeploy] Backup failed, continuing anyway:', backupErr.message)
+        }
+      }
+
+      // 上传文件
+      sendProgress(webContents, 'sftp', 'Uploading to server...', 96)
+      const sftpResult = await sftpUpload(sftpConfig, outputDir, (filename, uploaded, total) => {
+        const percent = 96 + Math.round((uploaded / total) * 4)
+        sendProgress(webContents, 'sftp', `Uploading: ${filename} (${uploaded}/${total})`, percent)
+      })
+
+      if (!sftpResult.success) {
+        console.error('[BlogDeploy] SFTP upload failed:', sftpResult.error)
+        sendDone(webContents, false, outputDir, '', { message: `SFTP upload failed: ${sftpResult.error}` })
+        return { error: 'sftpUploadFailed', details: sftpResult.error }
+      }
+      
+      console.log('[BlogDeploy] SFTP upload complete, uploaded', sftpResult.uploaded, 'files')
     }
 
     sendProgress(webContents, 'done', 'Deploy triggered!', 100)

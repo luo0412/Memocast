@@ -85,6 +85,7 @@ export default {
   stepExport: '正在导出笔记...',
   stepBuild: '正在打包博客...',
   stepTrigger: '正在触发 GitHub Actions...',
+  stepSftp: '正在上传到服务器...',
   openInBrowser: '在浏览器中打开',
   deployCancelled: '部署已取消',
   blogDeployConfigSaved: '博客部署配置已保存',

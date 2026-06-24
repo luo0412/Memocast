@@ -87,6 +87,7 @@ export default {
   stepExport: 'Exporting notes...',
   stepBuild: 'Building blog...',
   stepTrigger: 'Triggering GitHub Actions...',
+  stepSftp: 'Uploading to server...',
   openInBrowser: 'Open in Browser',
   deployCancelled: 'Deploy cancelled',
   blogDeployConfigSaved: 'Blog deploy config saved',
