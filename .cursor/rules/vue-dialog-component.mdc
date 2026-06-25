@@ -1,0 +1,12 @@
+---
+description: Vue dialog/popup 必须拆分为独立组件
+alwaysApply: true
+---
+
+# Dialog / Popup 组件拆分规则
+
+- 任何 `el-dialog`、`el-popover`、`el-tooltip`、`el-dropdown`、`el-select`、`el-cascader`、`el-date-picker` 等弹层相关组件，都必须抽成独立 `.vue` 组件。
+- 禁止在业务页面/容器组件里直接写弹层逻辑、表单内容和关闭/确认事件处理。
+- 弹层独立组件应接收 `visible`、`value`、`data`、`onOk`、`onCancel` 等必要 props，内部只负责展示和局部交互。
+- 命名使用 `XxxDialog.vue`、`XxxPopup.vue`、`XxxPicker.vue` 等清晰后缀。
+- 业务页面只负责控制显示状态并渲染独立组件。

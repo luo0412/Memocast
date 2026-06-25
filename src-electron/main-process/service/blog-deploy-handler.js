@@ -339,7 +339,7 @@ function validateBlogDir (blogDir) {
 /**
  * 生成必要的博客配置文件
  */
-async function ensureBlogConfig (blogDir) {
+async function ensureBlogConfig (blogDir, theme = 'default') {
   const configDir = path.join(blogDir, '.vuepress')
   const postsDir = path.join(blogDir, '_posts')
 
@@ -347,41 +347,38 @@ async function ensureBlogConfig (blogDir) {
   await fs.ensureDir(configDir)
   await fs.ensureDir(postsDir)
 
-  // 读取 _posts 目录生成 sidebar
-  let sidebarConfig = []
-  if (fs.existsSync(postsDir)) {
-    const mdFiles = fs.readdirSync(postsDir).filter(f => f.endsWith('.md'))
-    if (mdFiles.length > 0) {
-      sidebarConfig = [
-        {
-          title: '所有文章',
-          collapsable: false,
-          children: mdFiles.map(f => {
-            const name = f.replace(/\.md$/, '')
-            return `_posts/${name}`
-          })
-        }
-      ]
-    }
-  }
-
   // 创建 package.json
   const pkgPath = path.join(blogDir, 'package.json')
   if (!fs.existsSync(pkgPath)) {
-    await fs.writeFile(pkgPath, JSON.stringify({
-      name: 'memocast-blog',
-      version: '1.0.0',
-      description: 'Blog powered by Memocast',
-      overrides: {
-        lodash: '^4.17.21',
-        'lodash.template': '^4.5.0'
-      }
-    }, null, 2))
+    await fs.writeFile(pkgPath, JSON.stringify(buildBlogPackageJson(theme), null, 2))
   }
 
-  // 始终生成 v1 格式的 config.js（包含 lodash 兼容性补丁）
+  // 生成 vdoing 主题配置
+  if (theme === 'vdoing') {
+    const configPath = path.join(configDir, 'config.js')
+    const vdoingConfigContent = `// vdoing 主题配置
+const { defineUserConfig } = require('vuepress')
+const { vdoingTheme } = require('vuepress-theme-vdoing')
+
+module.exports = defineUserConfig({
+  base: '/',
+  dest: '.vuepress/dist',
+  head: [
+    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+  ],
+  theme: vdoingTheme({}),
+  markdown: { lineNumbers: true }
+})
+`
+    await fs.writeFile(configPath, vdoingConfigContent)
+    console.log('[BlogDeploy] Generated vdoing theme config.js')
+    return
+  }
+
+  // 默认主题配置
   const configPath = path.join(configDir, 'config.js')
-  const v1ConfigContent = `// 修复高版本 Node.js 下 VuePress 1.x 编译时 lodash 各种未定义 (assignWith, arrayEach 等) 的 Bug
+  const defaultConfigContent = `// 修复高版本 Node.js 下 VuePress 1.x 编译时 lodash 各种未定义 (assignWith, arrayEach 等) 的 Bug
 if (typeof global !== 'undefined') {
   const lodashInternal = ['assignWith', 'arrayEach', 'baseAssignValue', 'baseEach']
   lodashInternal.forEach(method => {
@@ -414,13 +411,45 @@ module.exports = {
       { text: '首页', link: '/' },
       { text: '文章', link: '/_posts/' }
     ],
-    sidebar: ${JSON.stringify(sidebarConfig, null, 8)}
+    sidebar: []
   },
   markdown: { lineNumbers: true }
 }
 `
-  await fs.writeFile(configPath, v1ConfigContent)
-  console.log('[BlogDeploy] Generated v1 config.js with lodash patch and sidebar')
+  await fs.writeFile(configPath, defaultConfigContent)
+  console.log('[BlogDeploy] Generated default config.js with lodash patch')
+}
+
+/**
+ * 生成博客 package.json
+ * @param {string} theme - 主题类型 'default' | 'vdoing'
+ * @returns {object} package.json 内容
+ */
+function buildBlogPackageJson (theme = 'default') {
+  const isVdoing = theme === 'vdoing'
+
+  const packageJson = {
+    name: 'blog',
+    version: '1.0.0',
+    private: true,
+    scripts: {
+      'build': 'set NODE_OPTIONS=--openssl-legacy-provider && vuepress build'
+    },
+    dependencies: {
+      vuepress: '^1.9.0',
+      lodash: '^4.17.21'
+    },
+    overrides: {
+      lodash: '^4.17.21',
+      'lodash.template': '^4.5.0'
+    }
+  }
+
+  if (isVdoing) {
+    packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
+  }
+
+  return packageJson
 }
 
 /**
@@ -484,9 +513,14 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
       return { error: 'blogDirInvalid', details: validation.errors }
     }
 
+    // 决定主题：优先使用前端传来的 themeOverride，否则自动检测
+    const theme = themeOverride && ['default', 'vdoing'].includes(themeOverride)
+      ? themeOverride
+      : detectBlogTheme(blogDir)
+
     // 0.6 生成必要的配置文件（package.json, config.js 等）
     sendProgress(webContents, 'config', 'Setting up blog config...', 4)
-    await ensureBlogConfig(blogDir)
+    await ensureBlogConfig(blogDir, theme)
     console.log('[BlogDeploy] Blog config ensured')
 
     // 1. 确保博客目录有 node_modules（软链接策略）
@@ -501,8 +535,8 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     console.log('[BlogDeploy] node_modules source:', nodeModulesResult.source)
     sendProgress(webContents, 'config', `Using node_modules from: ${nodeModulesResult.source}`, 8)
 
-    // 3. 执行构建前的准备工作
-    sendProgress(webContents, 'build', 'Preparing build environment...', 30)
+    // 2. 处理 package.json（修复旧版本 / 自动生成）
+    sendProgress(webContents, 'build', 'Checking package.json...', 15)
 
     const vuepressDir = path.join(blogDir, '.vuepress')
     const configPath = path.join(vuepressDir, 'config.js')
@@ -511,27 +545,28 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     // 确保 .vuepress 目录存在
     await fs.ensureDir(vuepressDir)
 
-    // 检测并修复旧的 vuepress 版本
+    const isVdoing = theme === 'vdoing'
+
+    // 读取现有 package.json
+    let existingPkg = null
     if (fs.existsSync(packageJsonPath)) {
       try {
-        const existingPkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
-        const vuepressVersion = existingPkg.dependencies?.vuepress || ''
-        
-        // 检查是否是 v2 版本
-        if (vuepressVersion.startsWith('^2.') || vuepressVersion.startsWith('2.')) {
-          console.log('[BlogDeploy] Found old vuepress v2, need to reinstall')
-          sendProgress(webContents, 'build', '检测到旧版 vuepress，正在重新安装...', 30)
-          
-          // 删除旧的 node_modules 强制重新安装
-          const blogNodeModules = path.join(blogDir, 'node_modules')
-          if (fs.existsSync(blogNodeModules)) {
-            await fs.remove(blogNodeModules)
-            console.log('[BlogDeploy] Removed old node_modules')
-          }
-          
-          // 覆盖旧 package.json
-          const theme = detectBlogTheme(blogDir)
-          const isVdoing = theme === 'vdoing'
+        existingPkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
+      } catch (e) {
+        console.error('[BlogDeploy] Error reading package.json:', e)
+      }
+    }
+
+    // 检测是否需要重建（旧版 vuepress v2 或主题变化）
+    const vuepressVersion = existingPkg?.dependencies?.vuepress || ''
+    const hasOldV2 = vuepressVersion.startsWith('^2.') || vuepressVersion.startsWith('2.')
+    const hasVdoingDep = existingPkg?.dependencies?.['vuepress-theme-vdoing']
+    const needRebuild = hasOldV2 || (isVdoing && !hasVdoingDep) || (!isVdoing && hasVdoingDep)
+
+    if (needRebuild) {
+      console.log('[BlogDeploy] Rebuilding package.json, theme:', theme, 'reason:', hasOldV2 ? 'old v2' : 'theme mismatch')
+      sendProgress(webContents, 'build', 'Updating package.json...', 20)
+      
       const packageJson = {
         name: 'blog',
         version: '1.0.0',
@@ -552,16 +587,9 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
         packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
       }
       fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))
-        }
-      } catch (e) {
-        console.error('[BlogDeploy] Error reading package.json:', e)
-      }
-    } else {
-      // 自动生成 package.json（如果不存在）
-      sendProgress(webContents, 'build', 'Generating package.json...', 35)
-
-      const theme = detectBlogTheme(blogDir)
-      const isVdoing = theme === 'vdoing'
+    } else if (!existingPkg) {
+      // 自动生成 package.json（不存在时）
+      sendProgress(webContents, 'build', 'Generating package.json...', 20)
 
       const packageJson = {
         name: 'blog',
@@ -579,7 +607,6 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
           'lodash.template': '^4.5.0'
         }
       }
-
       if (isVdoing) {
         packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
       }

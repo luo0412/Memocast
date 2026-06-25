@@ -334,40 +334,13 @@
 <script>
 import * as monaco from 'monaco-editor'
 import { v4 as uuidv4 } from 'uuid'
+import { createDefaultEchoAnnoSource } from 'components/ui/editor/echo/EchoRuntime'
 
 const DEFAULT_ECHO_ICON = 'graphic_eq'
 const DEFAULT_ECHO_COLOR = '#26A69A'
 const DEFAULT_RENDER_TYPE = 'anno'
 
 const createUuid = () => uuidv4()
-
-const createDefaultEchoAnnoSource = (name = '回响') => {
-  const safeName = String(name || '回响').replace(/"/g, '\\"')
-  return `// 回响模块 - 影响周围元素排版或执行功能
-// context: { attrs, prompt, echo, name, node, ancestors, prevSibling, nextSibling }
-
-export default {
-  namespace: "${safeName}",
-
-  // 渲染钩子 - 返回该节点的 hast 结构
-  render: (node, ancestors) => {
-    const attrs = node.attributes || {}
-    return {
-      tag: 'span',
-      props: {
-        class: 'echo-block',
-        'data-echo-namespace': '${safeName}',
-        style: ''
-      },
-      children: []
-    }
-  },
-
-  // 后渲染钩子 - DOM 渲染完成后执行
-  afterRender: (node, domElement, ancestors) => {
-  }
-};`
-}
 
 export default {
   name: 'EchoFormDialog',
@@ -579,7 +552,7 @@ export default {
       })
     },
     resetTemplate () {
-      const nextSource = createDefaultEchoAnnoSource(this.form.name)
+      const nextSource = createDefaultEchoAnnoSource(this.form.name || '回响')
       this.form.anno_source = nextSource
       if (this.monacoEditor && this.monacoReady) {
         this.monacoEditor.setValue(nextSource)

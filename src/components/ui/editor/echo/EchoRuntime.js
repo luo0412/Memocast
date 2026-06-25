@@ -1,6 +1,8 @@
 const DEFAULT_ECHO_COLOR = '#26A69A'
 const DEFAULT_ECHO_ICON = 'graphic_eq'
 const ECHO_PAYLOAD_VERSION = 1
+const LEGACY_ECHO_INSERT_RE = /@([^\s{}()@]+)\{\}\(\)/g
+const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]*)\{([\s\S]*?)\}\(([^)]*)\)/g
 
 const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
@@ -191,6 +193,61 @@ export const createEchoPlaceholderPayload = (echo = {}) => {
       icon: echo?.icon || DEFAULT_ECHO_ICON,
       color: echo?.color || DEFAULT_ECHO_COLOR
     }
+  })
+}
+
+export const buildUpdatedEchoAnnotationText = ({ raw, echo, keepInstanceId = false } = {}) => {
+  const source = String(raw || '').trim()
+  if (!source) return source
+
+  const nameMatch = source.match(/^@([^\s{}()@]*)\{/)
+  const echoName = nameMatch ? nameMatch[1] : '回响'
+
+  const legacy = source.match(/^@([^\s{}()@]+)\{\}\(\)$/)
+  if (!legacy) {
+    return source
+  }
+
+  const placeholderPayload = createEchoPlaceholderPayload(echo)
+  const payload = decodeEchoPayload(placeholderPayload)
+  const value = payload.prompt || payload?.attrs?.value || ''
+  const instanceId = keepInstanceId ? `id: '${escapeEchoAttrValue(echo.id || '')}'` : ''
+
+  return `@${echoName}{${[instanceId, `value: '${escapeEchoAttrValue(value)}'`].filter(Boolean).join(', ')}()`
+}
+
+export const backfillEchoAnnotationsInMarkdown = ({ markdown = '', echoCards = [] } = {}) => {
+  const source = String(markdown || '')
+  if (!source || source.indexOf('@') === -1) return source
+
+  const echoMap = (Array.isArray(echoCards) ? echoCards : []).reduce((acc, echo) => {
+    const name = String(echo?.name || '').trim()
+    if (name) acc.set(name, echo)
+    return acc
+  }, new Map())
+  if (!echoMap.size) return source
+
+  return source.replace(LEGACY_ECHO_INSERT_RE, (match, rawEchoName = '') => {
+    const echoName = String(rawEchoName || '').trim()
+    const echo = echoMap.get(echoName)
+    if (!echo) return match
+    return buildUpdatedEchoAnnotationText({ raw: match, echo, keepInstanceId: false })
+  }).replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, rawEchoName = '', attrsRaw = '', promptRaw = '') => {
+    const echoName = String(rawEchoName || '').trim() || '回响'
+    const echo = echoMap.get(echoName)
+    if (!echo) return match
+
+    const parsed = parseEchoAttrs(attrsRaw)
+    const instanceId = String(parsed.id || echo.id || '').trim()
+    const placeholderPayload = createEchoPlaceholderPayload({
+      ...echo,
+      ...(parsed.definitionId ? { id: parsed.definitionId } : {})
+    })
+    const payload = decodeEchoPayload(placeholderPayload)
+    const value = payload.prompt || payload?.attrs?.value || ''
+    const nextAttrs = `id: '${escapeEchoAttrValue(instanceId)}', value: '${escapeEchoAttrValue(value)}'`
+
+    return `@${echoName || '回响'}{${nextAttrs}}(${escapeEchoAttrValue(promptRaw)})`
   })
 }
 
