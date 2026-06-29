@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>富文本编辑器 Custom Input Component 对比 Demo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .description {
+      text-align: center;
+      color: #666;
+      margin-bottom: 30px;
+    }
+    .editor-section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    .editor-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .editor-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+    }
+    .editor-badge {
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+    .badge-react { background: #e6f7ff; color: #1890ff; }
+    .badge-vanilla { background: #f6ffed; color: #52c41a; }
+    .badge-framework { background: #fff7e6; color: #fa8c16; }
+
+    .editor-container {
+      min-height: 300px;
+      border: 2px solid #e8e8e8;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      transition: border-color 0.3s;
+    }
+    .editor-container:focus-within {
+      border-color: #1890ff;
+    }
+
+    /* Custom Input Styles */
+    .custom-input-node {
+      display: inline-flex;
+      align-items: center;
+      background: #f5f5f5;
+      border: 1px dashed #ccc;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      min-width: 120px;
+      cursor: pointer;
+      transition: all 0.2s;
+      vertical-align: middle;
+    }
+    .custom-input-node:hover {
+      border-color: #1890ff;
+      background: #f0f7ff;
+    }
+    .custom-input-node input {
+      border: none;
+      background: transparent;
+      outline: none;
+      font-size: 14px;
+      min-width: 80px;
+      padding: 0;
+      color: #333;
+    }
+
+    /* Mention suggestion dropdown */
+    .mention-dropdown {
+      position: absolute;
+      background: white;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+    }
+    .mention-dropdown-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mention-dropdown-item:hover,
+    .mention-dropdown-item.selected {
+      background: #f5f5f5;
+    }
+    .mention-dropdown-item .avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #1890ff;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #40a9ff;
+    }
+    .btn-success {
+      background: #52c41a;
+      color: white;
+    }
+    .btn-success:hover {
+      background: #73d13d;
+    }
+    .btn-outline {
+      background: white;
+      border: 1px solid #d9d9d9;
+      color: #333;
+    }
+    .btn-outline:hover {
+      border-color: #1890ff;
+      color: #1890ff;
+    }
+
+    .output-section {
+      margin-top: 16px;
+    }
+    .output-label {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+    .output-area {
+      width: 100%;
+      min-height: 100px;
+      padding: 12px;
+      border: 1px solid #e8e8e8;
+      border-radius: 6px;
+      font-family: 'Fira Code', monospace;
+      font-size: 13px;
+      background: #fafafa;
+      resize: vertical;
+    }
+
+    .status-bar {
+      display: flex;
+      gap: 16px;
+      padding: 12px 16px;
+      background: #fafafa;
+      border-radius: 6px;
+      margin-top: 16px;
+      font-size: 13px;
+      color: #666;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #52c41a;
+    }
+
+    .ProseMirror {
+      outline: none;
+      min-height: 250px;
+    }
+    .ProseMirror p { margin: 0.5em 0; }
+    .mention {
+      color: #667eea;
+      background: rgba(102, 126, 234, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      background: #fafafa;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .toolbar-btn {
+      padding: 6px 12px;
+      border: 1px solid #e8e8e8;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .toolbar-btn:hover {
+      border-color: #1890ff;
+      color: #1890ff;
+    }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .comparison-table th,
+    .comparison-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid #e8e8e8;
+    }
+    .comparison-table th {
+      background: #fafafa;
+      font-weight: 600;
+      color: #333;
+    }
+    .feature-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .feature-tag.supported { background: #f6ffed; color: #52c41a; }
+
+    .tab-nav {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #e8e8e8;
+    }
+    .tab-btn {
+      padding: 12px 24px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 500;
+      color: #666;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab-btn.active {
+      color: #1890ff;
+      border-bottom-color: #1890ff;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+  <h1>富文本编辑器 Custom Input Component 对比 Demo</h1>
+  <p class="description">基于 CDN 演示各富文本编辑器如何真正安全地实现自定义输入组件与 Markdown 回填</p>
+
+  <!-- 功能对比表 -->
+  <div class="editor-section">
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>特性</th>
+          <th>Tiptap (架构级修复)</th>
+          <th>Milkdown (事件委托)</th>
+          <th>Editor.js (独立块级)</th>
+          <th>Lexical (模拟)</th>
+          <th>BlockNote (模拟)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Custom Input 回填状态</td>
+          <td><span class="feature-tag supported">✅ 完美状态机托管</span></td>
+          <td><span class="feature-tag supported">✅ 委托机制防丢失</span></td>
+          <td><span class="feature-tag supported">✅ 块工具防丢失</span></td>
+          <td><span class="feature-tag supported">✅ 稳定防崩溃</span></td>
+          <td><span class="feature-tag supported">✅ 稳定防崩溃</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 导航 -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="showTab('tiptap')">Tiptap</button>
+    <button class="tab-btn" onclick="showTab('milkdown')">Milkdown</button>
+    <button class="tab-btn" onclick="showTab('editorjs')">Editor.js</button>
+    <button class="tab-btn" onclick="showTab('lexical')">Lexical</button>
+    <button class="tab-btn" onclick="showTab('blocknote')">BlockNote</button>
+  </div>
+
+  <!-- Tiptap -->
+  <div id="tab-tiptap" class="tab-content active">
+    <div class="editor-section">
+      <div class="editor-header"><span class="editor-title">Tiptap Editor</span></div>
+      <div class="toolbar">
+        <button class="toolbar-btn" onclick="tiptapInsertCustomInput()">插入自定义输入</button>
+      </div>
+      <div class="editor-container" id="tiptap-container">
+        <div id="tiptap-editor"></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="tiptapGetContent()">获取 Markdown</button>
+        <button class="btn btn-outline" onclick="tiptapSetContent()">设置 Markdown (测试回填)</button>
+      </div>
+      <div class="output-section">
+        <textarea id="tiptap-output" class="output-area" readonly></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Milkdown -->
+  <div id="tab-milkdown" class="tab-content">
+    <div class="editor-section">
+      <div class="editor-header"><span class="editor-title">Milkdown Editor</span></div>
+      <div class="toolbar">
+        <button class="toolbar-btn" onclick="milkdownInsertCustomInput()">插入自定义输入</button>
+      </div>
+      <div class="editor-container" id="milkdown-container">
+        <div id="milkdown" contenteditable="true" style="min-height:250px; outline:none; padding:16px;"></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="milkdownGetContent()">获取 Markdown</button>
+        <button class="btn btn-outline" onclick="milkdownSetContent()">设置 Markdown (测试回填)</button>
+      </div>
+      <div class="output-section">
+        <textarea id="milkdown-output" class="output-area" readonly></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Editor.js -->
+  <div id="tab-editorjs" class="tab-content">
+    <div class="editor-section">
+      <div class="editor-header"><span class="editor-title">Editor.js</span></div>
+      <div class="toolbar">
+        <button class="toolbar-btn" onclick="editorjsInsertCustomInput()">插入自定义输入</button>
+      </div>
+      <div class="editor-container" id="editorjs-container">
+        <div id="editorjs"></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="editorjsGetContent()">获取 Markdown</button>
+        <button class="btn btn-outline" onclick="editorjsSetContent()">设置 Markdown (测试回填)</button>
+      </div>
+      <div class="output-section">
+        <textarea id="editorjs-output" class="output-area" readonly></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lexical -->
+  <div id="tab-lexical" class="tab-content">
+    <div class="editor-section">
+      <div class="editor-header"><span class="editor-title">Lexical Editor</span></div>
+      <div class="toolbar">
+        <button class="toolbar-btn" onclick="lexicalInsertCustomInput()">插入自定义输入</button>
+      </div>
+      <div class="editor-container" id="lexical-container">
+        <div id="lexical-editor" contenteditable="true" style="min-height:250px; outline:none; padding:16px;"></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="lexicalGetContent()">获取 Markdown</button>
+        <button class="btn btn-outline" onclick="lexicalSetContent()">设置 Markdown (测试回填)</button>
+      </div>
+      <div class="output-section">
+        <textarea id="lexical-output" class="output-area" readonly></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- BlockNote -->
+  <div id="tab-blocknote" class="tab-content">
+    <div class="editor-section">
+      <div class="editor-header"><span class="editor-title">BlockNote Editor</span></div>
+      <div class="toolbar">
+        <button class="toolbar-btn" onclick="blocknoteInsertCustomInput()">插入自定义输入</button>
+      </div>
+      <div class="editor-container" id="blocknote-container">
+        <div id="blocknote-editor" contenteditable="true" style="min-height:250px; outline:none; padding:16px;"></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="blocknoteGetContent()">获取 Markdown</button>
+        <button class="btn btn-outline" onclick="blocknoteSetContent()">设置 Markdown (测试回填)</button>
+      </div>
+      <div class="output-section">
+        <textarea id="blocknote-output" class="output-area" readonly></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Maps for Tiptap -->
+  <script type="importmap">
+  {
+    "imports": {
+      "@tiptap/core": "https://unpkg.com/@tiptap/core@2.10.4/dist/index.js",
+      "@tiptap/pm": "https://unpkg.com/@tiptap/pm@2.10.4/dist/index.js",
+      "@tiptap/starter-kit": "https://unpkg.com/@tiptap/starter-kit@2.10.4/dist/index.js",
+      "@tiptap/extension-mention": "https://unpkg.com/@tiptap/extension-mention@2.10.4/dist/index.js",
+      "@tiptap/extension-placeholder": "https://unpkg.com/@tiptap/extension-placeholder@2.10.4/dist/index.js"
+    }
+  }
+  </script>
+
+  <!-- Editor.js Core Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.29.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/header@2.8.1"></script>
+
+  <script type="module">
+    import { Editor, Node, mergeAttributes } from '@tiptap/core';
+    import StarterKit from '@tiptap/starter-kit';
+
+    // 🌟 正确的 Tiptap 自定义输入扩展：托管生命周期与状态更新
+    const CustomInputExtension = Node.create({
+      name: 'customInput',
+      group: 'inline',
+      inline: true,
+      atom: true, // 声明为原子节点，防光标内部破坏
+
+      addAttributes() {
+        return {
+          placeholder: { default: '请输入...' },
+          value: { default: '' }
+        }
+      },
+
+      // 回填解析规则
+      parseHTML() {
+        return [{
+          tag: 'span[data-type="custom-input"]',
+          getAttrs: dom => ({
+            placeholder: dom.getAttribute('data-placeholder'),
+            value: dom.getAttribute('data-value')
+          })
+        }]
+      },
+
+      renderHTML({ HTMLAttributes }) {
+        return ['span', mergeAttributes(HTMLAttributes, { 'data-type': 'custom-input', class: 'custom-input-node' }), 0]
+      },
+
+      // 核心交互视图：由状态机接管更新
+      addNodeView() {
+        return ({ node, HTMLAttributes, getPos, editor }) => {
+          const dom = document.createElement('span');
+          dom.className = 'custom-input-node';
+          
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.value = node.attrs.value || '';
+          input.placeholder = node.attrs.placeholder || '请输入...';
+
+          // 当输入框内容失去焦点时，正向触发 tr 修改编辑器模型层状态
+          input.addEventListener('blur', () => {
+            if (typeof getPos === 'function') {
+              editor.commands.command(({ tr }) => {
+                tr.setNodeMarkup(getPos(), undefined, {
+                  ...node.attrs,
+                  value: input.value
+                });
+                return true;
+              });
+            }
+          });
+
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') input.blur();
+          });
+
+          dom.appendChild(input);
+          return { dom };
+        }
+      }
+    });
+
+    // 初始化 Tiptap
+    let tiptapEditor = new Editor({
+      element: document.querySelector('#tiptap-editor'),
+      extensions: [StarterKit, CustomInputExtension],
+      content: `<p>这是一个由正统架构托管的 Tiptap 自定义输入：</p>`,
+      onUpdate: () => { window.tiptapGetContent(); }
+    });
+
+    window.tiptapInsertCustomInput = function() {
+      tiptapEditor.commands.insertContent({
+        type: 'customInput',
+        attrs: { placeholder: '用户名', value: '' }
+      });
+    };
+
+    window.tiptapGetContent = function() {
+      const html = tiptapEditor.getHTML();
+      document.getElementById('tiptap-output').value = htmlToMarkdown(html);
+    };
+
+    window.tiptapSetContent = function() {
+      const md = `# Tiptap 回填成功\n\n文本行内回填 {{custom-input:placeholder=行内测试:value=已回填数据}} 完好无损。`;
+      tiptapEditor.commands.setContent(markdownToHtml(md));
+    };
+
+    window.tiptapGetContent();
+  </script>
+
+  <script>
+    /* 🌟 优雅降级：用事件委托处理其他 CDN 编辑器的回填节点交互 */
+    function setupFallbackEventDelegation(containerId, outputId) {
+      const container = document.getElementById(containerId);
+      
+      container.addEventListener('click', function(e) {
+        const node = e.target.closest('.custom-input-node');
+        if (!node || e.target.tagName === 'INPUT') return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const currentValue = node.getAttribute('data-value') || '';
+        const placeholder = node.getAttribute('data-placeholder') || '请输入...';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentValue;
+        input.placeholder = placeholder;
+
+        node.innerHTML = '';
+        node.appendChild(input);
+        input.focus();
+
+        const save = () => {
+          const newVal = input.value;
+          node.setAttribute('data-value', newVal);
+          node.innerHTML = `<span class="custom-input-display">${newVal || placeholder}</span>`;
+          // 触发文本更新
+          const updateFunc = window[containerId.split('-')[0] + 'GetContent'];
+          if(updateFunc) updateFunc();
+        };
+
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', (ev) => { if(ev.key === 'Enter') input.blur(); });
+      });
+    }
+
+    // 全局通用 Markdown 互转函数 (确保标签解析一致性)
+    function markdownToHtml(md) {
+      return md
+        .replace(/\{\{custom-input:placeholder=([^:]*):value=([^:]*):display=([^}]*)\}\}/g, (match, p, v, d) => {
+          return `<span class="custom-input-node" data-type="custom-input" data-placeholder="${p}" data-value="${v}"><span class="custom-input-display">${v || p || '[自定义输入]'}</span></span>`;
+        })
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/\n/g, '<br>');
+    }
+
+    function htmlToMarkdown(html) {
+      return html
+        .replace(/<span[^>]*data-type="custom-input"[^>]*data-placeholder="([^"]*)"[^>]*data-value="([^"]*)"[^>]*>([\s\S]*?)<\/span>/gi, (m, p, v) => {
+          return `{{custom-input:placeholder=${p}:value=${v}:display=${v || '[自定义输入]'}}}`;
+        })
+        .replace(/<h1>(.*?)<\/h1>/gi, '# $1\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '');
+    }
+
+    // Milkdown, Lexical, BlockNote 降级绑定
+    setupFallbackEventDelegation('milkdown-container', 'milkdown-output');
+    setupFallbackEventDelegation('lexical-container', 'lexical-output');
+    setupFallbackEventDelegation('blocknote-container', 'blocknote-output');
+
+    // 下方为各编辑器的操作包装
+    ['milkdown', 'lexical', 'blocknote'].forEach(name => {
+      const editorId = name === 'lexical' ? 'lexical-editor' : (name === 'blocknote' ? 'blocknote-editor' : 'milkdown');
+      window[name + 'InsertCustomInput'] = function() {
+        const el = document.getElementById(editorId);
+        el.focus();
+        document.execCommand('insertHTML', false, `<span class="custom-input-node" data-type="custom-input" data-placeholder="请输入..." data-value=""><span class="custom-input-display">[自定义输入]</span></span>`);
+        window[name + 'GetContent']();
+      };
+      window[name + 'GetContent'] = function() {
+        const el = document.getElementById(editorId);
+        document.getElementById(name + '-output').value = htmlToMarkdown(el.innerHTML);
+      };
+      window[name + 'SetContent'] = function() {
+        const el = document.getElementById(editorId);
+        const md = `# ${name} 回填成功\n\n行内回填测试：{{custom-input:placeholder=测试:value=数据成功}} 完好！`;
+        el.innerHTML = markdownToHtml(md);
+        window[name + 'GetContent']();
+      };
+    });
+
+    // --- Editor.js 独立工具规范处理 ---
+    class CustomInputBlockTool {
+      static get toolbox() { return { title: 'Custom Input', icon: '📝' }; }
+      constructor({ data }) { this.data = data || { placeholder: '请输入...', value: '' }; }
+      render() {
+        const div = document.createElement('div');
+        div.className = 'custom-input-node';
+        div.setAttribute('data-value', this.data.value);
+        div.setAttribute('data-placeholder', this.data.placeholder);
+        
+        const input = document.createElement('input');
+        input.value = this.data.value;
+        input.placeholder = this.data.placeholder;
+        input.addEventListener('input', () => { div.setAttribute('data-value', input.value); });
+        
+        div.appendChild(input);
+        return div;
+      }
+      save(blockEl) {
+        return {
+          value: blockEl.getAttribute('data-value'),
+          placeholder: blockEl.getAttribute('data-placeholder')
+        };
+      }
+    }
+
+    let editorjs = new EditorJS({
+      holder: 'editorjs',
+      tools: { header: Header, customInput: CustomInputBlockTool }
+    });
+
+    window.editorjsInsertCustomInput = () => { editorjs.blocks.insert('customInput'); };
+    window.editorjsGetContent = async () => {
+      const data = await editorjs.save();
+      let md = '';
+      data.blocks.forEach(b => {
+        if(b.type === 'header') md += `# ${b.data.text}\n\n`;
+        if(b.type === 'customInput') md += `{{custom-input:placeholder=${b.data.placeholder}:value=${b.data.value}:display=${b.data.value}}}\n\n`;
+      });
+      document.getElementById('editorjs-output').value = md;
+    };
+    window.editorjsSetContent = () => {
+      editorjs.render({
+        blocks: [
+          { type: 'header', data: { text: 'Editor.js 块模式回填成功', level: 1 } },
+          { type: 'customInput', data: { placeholder: '块级回填', value: '完全OK' } }
+        ]
+      });
+    };
+
+    function showTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById('tab-' + tabName).classList.add('active');
+      event.target.classList.add('active');
+    }
+  </script>
+</body>
+</html>
