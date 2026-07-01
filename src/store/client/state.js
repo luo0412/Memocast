@@ -39,6 +39,10 @@ export default function () {
     leftInnerSplitterRatio: 280,
     runeCards: [],
     echoCards: BUILTIN_ECHO_CARDS.map(echo => ({ ...echo })),
+    // 右上角 AI 助手入口使用的实现：
+    //   'builtin' -> 内置 AI 抽屉（读取 ai_model_configs 默认项）
+    //   'doubao'  -> 豆包 WebApp（wujie 微前端）
+    aiAssistantProvider: 'builtin',
     syncStatus: {
       isSyncing: false,
       lastSyncTime: null,

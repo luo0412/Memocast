@@ -25,7 +25,8 @@
       <!-- Wujie micro-frontend container -->
       <div class="ai-wujie-wrapper">
         <WujieVue
-          v-if="visible"
+          v-if="wujieKey"
+          :key="wujieKey"
           name="doubao-chat"
           class="ai-wujie-frame"
           :url="wujieUrl"
@@ -55,10 +56,16 @@ export default {
   data () {
     return {
       visible: false,
-      appBasePath: ''
+      appBasePath: '',
+      // 每次打开抽屉都自增，强制 WujieVue 重新挂载、重新拉起子应用，
+      // 避免上一次会话的对话状态影响新一次打开。
+      wujieMountKey: 0
     }
   },
   computed: {
+    wujieKey () {
+      return this.visible ? this.wujieMountKey : 0
+    },
     wujieUrl () {
       // 开发环境使用本地开发服务器
       if (process.env.DEV) {
@@ -95,6 +102,7 @@ export default {
       this.$emit('message', data)
     },
     show () {
+      this.wujieMountKey += 1
       this.visible = true
       this.$nextTick(() => {
         if (this.$refs.drawer) {

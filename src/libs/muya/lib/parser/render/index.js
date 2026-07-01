@@ -359,12 +359,24 @@ class StateRender {
       const runeValue = String(dataset.runeValue || '').trim()
       const renderKey = host.dataset.runeRenderKey || ''
       const mountedVm = this.runeVmMap.get(nodeId)
+      // Memocast 扩展：把 Muya 实例的回写方法作为 onValueChange 注入，
+      // 这样内层 SFC emit('input', value) 时就能写回 Markdown 的 data-rune-value。
+      const muyaInstance = this.muya?.options?.__memocastMuya || null
+      const onValueChange = (payload) => {
+        if (!muyaInstance || typeof muyaInstance.updateRunePlaceholderValue !== 'function') return
+        muyaInstance.updateRunePlaceholderValue({
+          runeId: payload?.runeId || runeId,
+          nodeId: payload?.nodeId || nodeId,
+          value: payload?.value
+        })
+      }
 
       if (mountedVm && mountedVm.$el && mountedVm.$el.parentNode === host && mountedVm.__runeRenderKey === renderKey) {
         mountedVm.runeId = runeId
         mountedVm.nodeId = nodeId
         mountedVm.rune = rune
         mountedVm.value = runeValue
+        mountedVm.onValueChange = onValueChange
         console.log('[Muya.StateRender.mountRuneVueHosts] reuse vm', {
           nodeId,
           runeId,
@@ -385,7 +397,8 @@ class StateRender {
           runeId,
           nodeId,
           rune,
-          value: runeValue
+          value: runeValue,
+          onValueChange
         }
       })
       vm.__runeRenderKey = renderKey

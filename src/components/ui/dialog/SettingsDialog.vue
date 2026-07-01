@@ -309,6 +309,26 @@
 
                     <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
                       <div class='panel-title-bar bg-green-7' />
+                      <span class='text-subtitle2 text-weight-medium'>{{ $t('aiAssistantEntry') }}</span>
+                    </div>
+                    <q-separator class='q-my-sm server-section-separator' />
+
+                    <div class='text-caption text-grey-6 q-mb-sm'>
+                      {{ $t('aiAssistantEntryHint') }}
+                    </div>
+                    <div class='q-mb-md'>
+                      <q-option-group
+                        :value='aiAssistantProvider'
+                        :options='aiAssistantProviderOptionsResolved'
+                        color='green-7'
+                        type='radio'
+                        inline
+                        @input='v => handleAiAssistantProviderChange(v)'
+                      />
+                    </div>
+
+                    <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
+                      <div class='panel-title-bar bg-green-7' />
                       <span class='text-subtitle2 text-weight-medium'>{{ $t('aiModelSettings') }}</span>
                       <q-space />
                       <q-btn
@@ -806,6 +826,10 @@ export default {
         { label: 'OpenAI-compatible', value: 'openai-compatible' },
         { label: 'Portkey', value: 'portkey' }
       ],
+      aiAssistantProviderOptions: [
+        { labelKey: 'aiAssistantProviderBuiltin', label: '', value: 'builtin' },
+        { labelKey: 'aiAssistantProviderDoubao', label: '', value: 'doubao' }
+      ],
       aiModelForm: {
         id: null,
         name: '',
@@ -838,6 +862,12 @@ export default {
       return NOTE_ORDER_TYPES.map(value => ({
         label: this.$t(value),
         value
+      }))
+    },
+    aiAssistantProviderOptionsResolved: function () {
+      return this.aiAssistantProviderOptions.map(opt => ({
+        ...opt,
+        label: this.$t(opt.labelKey)
       }))
     },
     // ✅ 已移除 autoSaveGapLabel！不再需要
@@ -968,6 +998,7 @@ export default {
       'themes',
       'runeCards',
       'echoCards',
+      'aiAssistantProvider',
       'syncStatus'
     ])
   },
@@ -1033,6 +1064,17 @@ export default {
     noteOrderChangeHandler: function (type) {
       if (!NOTE_ORDER_TYPES.includes(type)) return
       this.updateStateAndStore({ noteOrderType: type })
+    },
+    handleAiAssistantProviderChange (value) {
+      if (value !== 'builtin' && value !== 'doubao') return
+      if (value === this.aiAssistantProvider) return
+      this.updateStateAndStore({ aiAssistantProvider: value })
+      this.$q.notify({
+        message: this.$t('aiAssistantProviderChanged', { name: this.$t(value === 'doubao' ? 'aiAssistantProviderDoubao' : 'aiAssistantProviderBuiltin') }),
+        color: 'primary',
+        icon: 'check',
+        position: 'top'
+      })
     },
     // ✅ 已移除 autoSaveGapChangeHandler！不再需要
     // autoSaveGapChangeHandler: function (value) { ... },

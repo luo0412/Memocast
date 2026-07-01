@@ -216,14 +216,15 @@
         </el-dropdown-menu>
       </el-dropdown>
 
-      <!-- AI 助手按钮 (豆包风格) -->
+      <!-- AI 助手按钮（按 aiAssistantProvider 自动选择入口：内置 / 豆包） -->
       <div
-        class="header-icon-btn q-electron-drag--exception"
-        :class="{ 'is-highlight': doubaoHighlight }"
-        @click="handleDoubaoChatClick"
-        title="AI 助手"
+        class="header-icon-btn q-electron-drag--exception ai-entry-btn"
+        :class="{ 'is-highlight': aiEntryHighlight, 'is-doubao': aiAssistantProvider === 'doubao' }"
+        @click="handleAiAssistantClick"
+        :title="$t('aiAssistant')"
       >
-        <i class="el-icon-microphone icon-custom" />
+        <i :class="aiAssistantIconClass" />
+        <span v-if="aiAssistantProvider === 'doubao'" class="ai-entry-badge">{{ $t('aiAssistantProviderDoubao') }}</span>
         <q-tooltip
           transition-show="fade"
           transition-hide="fade"
@@ -231,25 +232,7 @@
           self="top middle"
           :offset="[0, 8]"
         >
-          AI 助手
-        </q-tooltip>
-      </div>
-
-      <!-- AI 按钮 -->
-      <div
-        class="header-icon-btn q-electron-drag--exception"
-        :class="{ 'is-highlight': aiDrawerHighlight }"
-        @click="handleAiDrawerClick"
-      >
-        <i class="el-icon-magic-stick icon-custom" />
-        <q-tooltip
-          transition-show="fade"
-          transition-hide="fade"
-          anchor="bottom middle"
-          self="top middle"
-          :offset="[0, 8]"
-        >
-          {{ $t('aiAssistant') }}
+          {{ aiAssistantTooltip }}
         </q-tooltip>
       </div>
 
@@ -347,7 +330,8 @@ export default {
       'enablePreviewEditor',
       'sidebarTreeType',
       'syncStatus',
-      'noteMethod'
+      'noteMethod',
+      'aiAssistantProvider'
     ]),
 
     pendingCount() {
@@ -414,6 +398,16 @@ export default {
         if (echoName && item.name === echoName) return true
         return false
       }) || null
+    },
+    aiAssistantIconClass () {
+      return this.aiAssistantProvider === 'doubao'
+        ? 'el-icon-microphone icon-custom'
+        : 'el-icon-magic-stick icon-custom'
+    },
+    aiAssistantTooltip () {
+      return this.aiAssistantProvider === 'doubao'
+        ? this.$t('aiAssistantEntryDoubaoTooltip')
+        : this.$t('aiAssistant')
     }
   },
   components: { SearchDialog, TagDialog, SettingsDialog, LoginDialog, ImDrawer, DoubaoChatDrawer, AiDemoDrawer, EchoInstanceDialog },
@@ -436,8 +430,7 @@ export default {
           description: '收集游离态笔记碎片成体系'
         }
       ],
-      aiDrawerHighlight: false,
-      doubaoHighlight: false,
+      aiEntryHighlight: false,
       echoInstanceDialogVisible: false,
       activeEchoInstance: null
     }
@@ -506,14 +499,13 @@ export default {
       }
     },
 
-    handleAiDrawerClick () {
-      this.handleHighlight('aiDrawerHighlight')
-      this.$refs.aiDemoDrawer.toggle()
-    },
-
-    handleDoubaoChatClick () {
-      this.handleHighlight('doubaoHighlight')
-      this.$refs.doubaoChatDrawer.toggle()
+    handleAiAssistantClick () {
+      this.handleHighlight('aiEntryHighlight')
+      if (this.aiAssistantProvider === 'doubao') {
+        this.$refs.doubaoChatDrawer.toggle()
+      } else {
+        this.$refs.aiDemoDrawer.toggle()
+      }
     },
 
     handleAiProviderConfigRequest () {
@@ -942,6 +934,26 @@ export default {
   0% { opacity: 1; }
   90% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+.ai-entry-btn.is-doubao .icon-custom {
+  color: var(--themeColor);
+}
+
+.ai-entry-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  padding: 0 4px;
+  height: 14px;
+  line-height: 14px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #1e6fff 0%, #4f8bff 100%);
+  border-radius: 7px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 1px 2px rgba(30, 111, 255, 0.35);
 }
 
 .header-avatar-wrapper {

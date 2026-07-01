@@ -47,6 +47,56 @@ const {
 } = createNamespacedHelpers('client')
 
 const EMPTY_RUNE_TEMPLATE = '<div></div>'
+// 匹配 <div ...>...</div>，用于按 nodeId 精准定位符文占位符并替换 value/innerText
+// group 1 = 整段属性（不含 <div），group 2 = 占位符内的 innerText
+const RUNE_PLACEHOLDER_FULL_TAG_RE = /<div(\s+[^>]*?)>([\s\S]*?)<\/div>/gi
+// 把字符串里的不安全字符转成可在 HTML 属性 / 文本中安全出现的形式（与 quickInsert 侧的 escapeHtmlAttribute 对齐）
+const escapeRuneAttrValue = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/"/g, '&quot;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+
+const escapeRuneInnerText = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+
+// 从 <div data-rune-name="X" ...> 整段属性里抽取指定 data-* 属性（顺序无关）
+const readRuneDataAttr = (attrsSource = '', attrName = '') => {
+  const needle = String(attrName || '').trim()
+  if (!needle) return ''
+  const re = new RegExp(`${needle}\\s*=\\s*"([^"]*)"`, 'i')
+  const match = re.exec(String(attrsSource || ''))
+  return match ? match[1] : ''
+}
+
+// 按 nodeId 找到对应的 <div ...>...</div> 并返回新的 markdown
+// 如果传入 value，则同步更新 data-rune-value 与 innerText（保持与 quickInsert 插入时一致）
+const rewriteRunePlaceholderByNodeId = (markdown = '', nodeId = '', nextValue = null) => {
+  const source = String(markdown || '')
+  const targetNodeId = String(nodeId || '').trim()
+  if (!source || !targetNodeId) return source
+
+  let rewritten = false
+  let nextMarkdown = source
+  RUNE_PLACEHOLDER_FULL_TAG_RE.lastIndex = 0
+  nextMarkdown = source.replace(RUNE_PLACEHOLDER_FULL_TAG_RE, (match, attrsSource = '', _innerText = '') => {
+    if (rewritten) return match
+    if (readRuneDataAttr(attrsSource, 'data-rune-node-id') !== targetNodeId) return match
+    const runeName = readRuneDataAttr(attrsSource, 'data-rune-name') || 'Rune'
+    const runeId = readRuneDataAttr(attrsSource, 'data-rune-id') || ''
+    const normalizedValue = nextValue == null ? '' : String(nextValue).trim()
+    const escapedName = escapeRuneAttrValue(runeName)
+    const escapedId = escapeRuneAttrValue(runeId)
+    const escapedValue = escapeRuneAttrValue(normalizedValue)
+    const escapedInner = escapeRuneInnerText(normalizedValue || runeName)
+    rewritten = true
+    return `<div data-rune-name="${escapedName}" data-rune-id="${escapedId}" data-rune-node-id="${escapeRuneAttrValue(targetNodeId)}" data-rune-value="${escapedValue}">${escapedInner}</div>`
+  })
+
+  return rewritten ? nextMarkdown : source
+}
 const vueSfcCompiler = VueTemplateCompiler && typeof VueTemplateCompiler.parseComponent === 'function'
   ? VueTemplateCompiler
   : VueTemplateCompiler?.default && typeof VueTemplateCompiler.default.parseComponent === 'function'
@@ -315,6 +365,10 @@ const createRuneRendererCtor = (rune = {}) => {
       value: {
         type: String,
         default: ''
+      },
+      onValueChange: {
+        type: Function,
+        default: null
       }
     },
     data () {
@@ -323,12 +377,44 @@ const createRuneRendererCtor = (rune = {}) => {
         runeMeta: this.rune || rune
       }
     },
+    methods: {
+      forwardRuneInput (nextValue) {
+        const onValueChange = this.onValueChange
+        if (typeof onValueChange !== 'function') return
+        onValueChange({
+          runeId: String(this.runeId || ''),
+          nodeId: String(this.nodeId || ''),
+          value: nextValue == null ? '' : String(nextValue)
+        })
+      }
+    },
     render (h) {
       const vnode = compiled.render.call(this, h)
       if (vnode && typeof vnode === 'object') {
         const existingChildren = Array.isArray(vnode.children) ? vnode.children : []
         if (!existingChildren.length) {
           vnode.children = [String(this.value == null ? '' : this.value)]
+        }
+      }
+      // 把内层 SFC 触发的 input 事件转发为 onValueChange，
+      // 供 RunePreviewRenderer → Muya.updateRunePlaceholderValue 链路同步 Markdown。
+      if (vnode && typeof vnode === 'object') {
+        vnode.on = vnode.on || {}
+        const existingInput = vnode.on.input
+        const self = this
+        vnode.on.input = function (...args) {
+          if (typeof existingInput === 'function') {
+            try { existingInput.apply(this, args) } catch (error) { console.warn('[Rune] inner input handler error:', error) }
+          }
+          // 取原生 input 事件中的字符串值，避免破坏用户自定义 handler
+          const raw = args[0]
+          let nextValue
+          if (raw && typeof raw === 'object' && 'target' in raw && raw.target) {
+            nextValue = raw.target.value
+          } else {
+            nextValue = raw
+          }
+          self.forwardRuneInput(nextValue)
         }
       }
       return vnode
@@ -356,6 +442,10 @@ const RunePreviewRenderer = Vue.extend({
     value: {
       type: String,
       default: ''
+    },
+    onValueChange: {
+      type: Function,
+      default: null
     }
   },
   computed: {
@@ -374,7 +464,8 @@ const RunePreviewRenderer = Vue.extend({
         runeId: this.runeId,
         nodeId: this.nodeId,
         rune: this.rune,
-        value: this.value
+        value: this.value,
+        onValueChange: this.onValueChange
       }
     })
   }
@@ -646,6 +737,49 @@ export default {
           this.contentEditor.contentState.render(false, true)
         }
       }
+    },
+    /**
+     * 把符文占位符里的 value 写回 Markdown 源（同步 data-rune-value 与 innerText）。
+     * 取自 TODO「多符文渲染引擎机制」中 RuneValue { runeId, nodeId, value }，
+     * 通过 nodeId 精准定位，只动当前实例的占位符，不影响其他符文或外部段落。
+     */
+    updateRunePlaceholderValue ({ runeId = '', nodeId = '', value = '' } = {}) {
+      if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return false
+      const markdown = this.contentEditor.getMarkdown()
+      if (!markdown) return false
+      const targetNodeId = String(nodeId || '').trim() || this.findRunePlaceholderNodeIdByRuneInstance(markdown, runeId)
+      if (!targetNodeId) return false
+      const nextMarkdown = rewriteRunePlaceholderByNodeId(markdown, targetNodeId, value)
+      if (nextMarkdown === markdown) return false
+      const cursor = typeof this.contentEditor.getCursor === 'function' ? this.contentEditor.getCursor() : null
+      this.contentEditor.setMarkdown(nextMarkdown, cursor, false)
+      this.updateContentsList(this.contentEditor.getTOC())
+      this.updateNoteState('changed')
+      // 显式触发 input 事件以让 noteState watcher / 词数统计等下游感知到
+      this.contentEditor.dispatchEvent && this.contentEditor.dispatchEvent('change')
+      if (typeof this.contentEditor.dispatchChange === 'function') {
+        this.contentEditor.dispatchChange()
+      }
+      return true
+    },
+    /**
+     * 仅供 updateRunePlaceholderValue 兜底用：根据 runeId 找一个未指定 nodeId 的占位符。
+     * 一般调用方都会带 nodeId，这里仅作防御。
+     */
+    findRunePlaceholderNodeIdByRuneInstance (markdown = '', runeId = '') {
+      const targetRuneId = String(runeId || '').trim()
+      if (!targetRuneId) return ''
+      const re = new RegExp('<div(\\s+[^>]*?)>([\\s\\S]*?)</div>', 'gi')
+      let found = ''
+      re.lastIndex = 0
+      String(markdown || '').replace(re, (_match, attrsSource = '') => {
+        if (found) return _match
+        if (readRuneDataAttr(attrsSource, 'data-rune-id') === targetRuneId) {
+          found = readRuneDataAttr(attrsSource, 'data-rune-node-id')
+        }
+        return _match
+      })
+      return found
     },
     getValue: function () {
       if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') {
