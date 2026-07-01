@@ -144,7 +144,7 @@ class Keyboard {
         )
       ) {
         let needPreventDefault = false
-        let activeQuickInsert = null
+        let activeScrollFloat = null
 
         for (const tool of this.shownFloat) {
           if (
@@ -158,20 +158,25 @@ class Keyboard {
           ) {
             needPreventDefault = true
           }
-          if (tool.name === 'ag-quick-insert') {
-            activeQuickInsert = tool
+          if (
+            tool.name === 'ag-quick-insert' ||
+            tool.name === 'ag-emoji-picker' ||
+            tool.name === 'ag-list-picker'
+          ) {
+            activeScrollFloat = tool
           }
         }
 
-        if (activeQuickInsert && event.key === EVENT_KEYS.Enter) {
+        if (activeScrollFloat && event.key === EVENT_KEYS.Enter) {
           event.preventDefault()
           event.stopPropagation()
-          activeQuickInsert.selectItem(activeQuickInsert.activeItem)
+          activeScrollFloat.selectItem(activeScrollFloat.activeItem)
           return
         }
 
         if (needPreventDefault) {
           event.preventDefault()
+          event.stopPropagation()
         }
         return
       }

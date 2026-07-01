@@ -1,5 +1,9 @@
 <template>
-  <div class='rune-card' :style='cardStyle'>
+  <div class='rune-card' :class='cardClasses' :style='cardStyle' :draggable='draggable'>
+    <div v-if='isBuiltin' class='rune-card-builtin-badge'>
+      <q-icon name='verified' size='12px' />
+      <span>{{ resolvedBuiltinBadgeLabel }}</span>
+    </div>
     <div class='rune-card-header' :style='headerStyle'>
       <div class='rune-card-icon' :style='iconBadgeStyle'>
         <q-icon v-if='hasIcon' :name='rune.icon' class='rune-card-icon-glyph' />
@@ -16,7 +20,14 @@
     </div>
     <div class='rune-card-footer'>
       <q-btn flat dense size='sm' :label="resolvedEditLabel" color='white' @click='$emit("edit", rune)' />
-      <q-btn flat dense size='sm' :label="resolvedDeleteLabel" color='red-3' @click='$emit("delete", rune)' />
+      <q-btn
+        v-if='!disableDelete'
+        flat dense size='sm'
+        :label="resolvedDeleteLabel"
+        color='red-3'
+        @click='$emit("delete", rune)'
+      />
+      <span v-else class='rune-card-footer-spacer' />
     </div>
   </div>
 </template>
@@ -61,6 +72,22 @@ export default {
     deleteLabel: {
       type: String,
       default: ''
+    },
+    disableDelete: {
+      type: Boolean,
+      default: false
+    },
+    disableDrag: {
+      type: Boolean,
+      default: false
+    },
+    isBuiltin: {
+      type: Boolean,
+      default: false
+    },
+    builtinBadgeLabel: {
+      type: String,
+      default: ''
     }
   },
   computed: {
@@ -81,6 +108,15 @@ export default {
         borderColor: this.rune.color + '66'
       }
     },
+    cardClasses () {
+      return {
+        'rune-card--readonly': this.disableDrag,
+        'rune-card--builtin': this.isBuiltin
+      }
+    },
+    draggable () {
+      return !this.disableDrag
+    },
     headerStyle () {
       return {
         background: `linear-gradient(135deg, ${this.rune.color}dd 0%, ${this.rune.color}88 100%)`
@@ -94,6 +130,9 @@ export default {
     },
     resolvedDeleteLabel () {
       return this.deleteLabel || this.$t('runeCardDelete')
+    },
+    resolvedBuiltinBadgeLabel () {
+      return this.builtinBadgeLabel || this.$t('echoBuiltinBadge') || 'Built-in'
     }
   }
 }
@@ -105,10 +144,10 @@ export default {
   flex-direction: column;
   width: 100%;
   min-width: 0;
-  min-height: 160px;
+  min-height: 120px;
   height: 100%;
-  border-radius: 12px;
-  border: 2px solid;
+  border-radius: 8px;
+  border: 1.5px solid;
   overflow: hidden;
   background: #1a1a2e;
   color: #e0e0e0;
@@ -116,11 +155,48 @@ export default {
   transition: transform 0.2s, box-shadow 0.2s;
   user-select: none;
   position: relative;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.rune-card--readonly {
+  cursor: default;
+}
+
+.rune-card--readonly:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.rune-card--builtin {
+  border-style: solid;
+}
+
+.rune-card-builtin-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 5px;
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  z-index: 2;
+  text-transform: uppercase;
+}
+
+.rune-card-footer-spacer {
+  width: 1px;
 }
 
 .rune-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
   z-index: 1;
 }
 
@@ -132,33 +208,33 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 10px 6px;
-  height: 60px;
+  padding: 6px 8px 4px;
+  height: 46px;
   box-sizing: border-box;
 }
 
 .rune-card-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #fff;
   border: 1px solid transparent;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(6px);
   flex-shrink: 0;
 }
 
 .rune-card-icon-glyph {
-  font-size: 1.15rem;
+  font-size: 0.95rem;
   color: #fff;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.35));
 }
 
 .rune-card-icon-text {
-  font-size: 1rem;
+  font-size: 0.78rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -169,19 +245,20 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
-  padding: 3px 7px;
+  background: rgba(0, 0, 0, 0.32);
+  border-radius: 6px;
+  padding: 2px 5px;
+  flex-shrink: 0;
 }
 
 .power-label {
-  font-size: 0.55rem;
+  font-size: 0.5rem;
   color: rgba(255, 255, 255, 0.8);
   line-height: 1;
 }
 
 .power-value {
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: bold;
   color: #fff;
   line-height: 1.2;
@@ -189,26 +266,27 @@ export default {
 
 .rune-card-body {
   flex: 1;
-  padding: 6px 10px 2px;
+  padding: 4px 8px 2px;
   min-height: 0;
   box-sizing: border-box;
   overflow: hidden;
 }
 
 .rune-card-name {
-  font-size: 0.85rem;
+  font-size: 0.74rem;
   font-weight: 600;
   color: #fff;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.01em;
 }
 
 .rune-card-desc {
-  font-size: 0.68rem;
+  font-size: 0.6rem;
   color: rgba(255, 255, 255, 0.75);
-  line-height: 1.35;
+  line-height: 1.3;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -218,16 +296,18 @@ export default {
 .rune-card-footer {
   display: flex;
   justify-content: space-between;
-  padding: 2px 6px 6px;
-  background: rgba(0, 0, 0, 0.2);
-  height: 32px;
+  align-items: center;
+  padding: 2px 4px 4px;
+  background: rgba(0, 0, 0, 0.28);
+  height: 26px;
   box-sizing: border-box;
 }
 
 .rune-card-footer .q-btn {
-  font-size: 0.62rem;
-  min-height: 20px;
+  font-size: 0.55rem;
+  min-height: 18px;
   padding: 0 2px;
   color: rgba(255, 255, 255, 0.85);
+  line-height: 1.1;
 }
 </style>

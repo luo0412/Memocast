@@ -216,6 +216,25 @@
         </el-dropdown-menu>
       </el-dropdown>
 
+      <!-- AI 助手按钮 (豆包风格) -->
+      <div
+        class="header-icon-btn q-electron-drag--exception"
+        :class="{ 'is-highlight': doubaoHighlight }"
+        @click="handleDoubaoChatClick"
+        title="AI 助手"
+      >
+        <i class="el-icon-microphone icon-custom" />
+        <q-tooltip
+          transition-show="fade"
+          transition-hide="fade"
+          anchor="bottom middle"
+          self="top middle"
+          :offset="[0, 8]"
+        >
+          AI 助手
+        </q-tooltip>
+      </div>
+
       <!-- AI 按钮 -->
       <div
         class="header-icon-btn q-electron-drag--exception"
@@ -274,6 +293,7 @@
     <SearchDialog ref='searchDialog' />
     <TagDialog ref="tagDialog" />
     <ImDrawer ref="imDrawer" />
+    <DoubaoChatDrawer ref="doubaoChatDrawer" />
     <AiDemoDrawer ref="aiDemoDrawer" @request-ai-provider-config="handleAiProviderConfigRequest" />
   </q-bar>
 </template>
@@ -290,6 +310,7 @@ import bus from 'components/bus'
 import events from 'src/constants/events'
 import SearchDialog from 'components/ui/dialog/SearchDialog'
 import ImDrawer from 'components/ui/ImDrawer'
+import DoubaoChatDrawer from 'components/ui/DoubaoChatDrawer'
 import AiDemoDrawer from 'components/ui/AiDemoDrawer'
 import EchoInstanceDialog from 'components/ui/dialog/EchoInstanceDialog.vue'
 import { ipcRenderer } from 'electron'
@@ -395,7 +416,7 @@ export default {
       }) || null
     }
   },
-  components: { SearchDialog, TagDialog, SettingsDialog, LoginDialog, ImDrawer, AiDemoDrawer, EchoInstanceDialog },
+  components: { SearchDialog, TagDialog, SettingsDialog, LoginDialog, ImDrawer, DoubaoChatDrawer, AiDemoDrawer, EchoInstanceDialog },
   data () {
     return {
       isMaximized: false,
@@ -416,6 +437,7 @@ export default {
         }
       ],
       aiDrawerHighlight: false,
+      doubaoHighlight: false,
       echoInstanceDialogVisible: false,
       activeEchoInstance: null
     }
@@ -487,6 +509,11 @@ export default {
     handleAiDrawerClick () {
       this.handleHighlight('aiDrawerHighlight')
       this.$refs.aiDemoDrawer.toggle()
+    },
+
+    handleDoubaoChatClick () {
+      this.handleHighlight('doubaoHighlight')
+      this.$refs.doubaoChatDrawer.toggle()
     },
 
     handleAiProviderConfigRequest () {

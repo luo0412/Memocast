@@ -430,93 +430,170 @@
               </q-tab-panel>
 
               <q-tab-panel name='rune' class='q-pa-sm'>
-                <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-purple-5' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('runeManagement') }}</span>
-                  <q-space />
-                  <q-btn
-                    dense flat no-caps
-                    :label="$t('runeCardAdd')"
-                    color='purple-5'
-                    icon='add'
-                    size='sm'
-                    @click='openAddRune'
-                  />
-                </div>
-                <div class='text-caption text-grey-6 q-mb-sm'>
-                  <q-icon name='drag_indicator' size='xs' /> {{ $t('runeDragTip') }}
-                </div>
-                <q-separator class='q-my-xs' />
-                <div class='rune-grid'>
-                  <div
-                    v-for='(rune, index) in localRuneCards'
-                    :key='rune.id'
-                    draggable='true'
-                    class='rune-card-wrapper'
-                    @dragstart='onDragStart($event, index, "rune")'
-                    @dragover.prevent='onDragOver($event, index, "rune")'
-                    @drop='onDrop($event, index, "rune")'
-                    @dragend='onDragEnd($event, "rune")'
-                  >
-                    <RuneCard
-                      class='rune-card-item'
-                      :rune='rune'
-                      @edit='openEditRune'
-                      @delete='confirmDeleteRune'
-                    />
+                <div class='rune-or-echo-category-layout'>
+                  <div class='rune-or-echo-category-nav'>
+                    <q-tabs
+                      v-model='runeCategory'
+                      vertical
+                      dense
+                      class='text-purple-5 no-border rune-or-echo-category-tabs'
+                    >
+                      <q-tab
+                        v-for='opt in runeCategoryOptions'
+                        :key='opt.value'
+                        :name='opt.value'
+                        no-caps
+                        class='rune-or-echo-category-tab'
+                      >
+                        <span class='rune-or-echo-category-tab-label'>{{ opt.label }}</span>
+                        <q-badge
+                          v-if='opt.count > 0'
+                          color='purple-5'
+                          align='middle'
+                          class='q-ml-xs'
+                        >
+                          {{ opt.count }}
+                        </q-badge>
+                      </q-tab>
+                    </q-tabs>
                   </div>
-                </div>
-                <div v-if='!localRuneCards || localRuneCards.length === 0' class='text-center text-grey q-pa-xl'>
-                  <q-icon name='star' size='3rem' />
-                  <div class='q-mt-sm'>{{ $t('runeCardAdd') }}</div>
+                  <q-separator vertical class='rune-or-echo-category-sep' />
+                  <div class='rune-or-echo-category-panel'>
+                    <div class='row items-center no-wrap q-mb-xs panel-title'>
+                      <div class='panel-title-bar bg-purple-5' />
+                      <span class='text-subtitle2 text-weight-medium'>
+                        {{ currentRuneCategoryLabel }}
+                      </span>
+                      <q-space />
+                      <q-btn
+                        dense flat no-caps
+                        :label="$t('runeCardAdd')"
+                        color='purple-5'
+                        icon='add'
+                        size='sm'
+                        @click='openAddRune'
+                      />
+                    </div>
+                    <div class='text-caption text-grey-6 q-mb-sm'>
+                      <q-icon name='drag_indicator' size='xs' /> {{ $t('runeDragTip') }}
+                    </div>
+                    <q-separator class='q-my-xs' />
+                    <div class='rune-grid'>
+                      <div
+                        v-for='(rune, index) in localRuneCardsInCategory'
+                        :key='rune.id'
+                        draggable='true'
+                        class='rune-card-wrapper'
+                        @dragstart='onDragStart($event, index, "rune")'
+                        @dragover.prevent='onDragOver($event, index, "rune")'
+                        @drop='onDrop($event, index, "rune")'
+                        @dragend='onDragEnd($event, "rune")'
+                      >
+                        <RuneCard
+                          class='rune-card-item'
+                          :rune='rune'
+                          @edit='openEditRune'
+                          @delete='confirmDeleteRune'
+                        />
+                      </div>
+                    </div>
+                    <div
+                      v-if='!localRuneCardsInCategory || localRuneCardsInCategory.length === 0'
+                      class='text-center text-grey q-pa-xl'
+                    >
+                      <q-icon name='star' size='3rem' />
+                      <div class='q-mt-sm'>{{ $t('runeCardAdd') }}</div>
+                    </div>
+                  </div>
                 </div>
               </q-tab-panel>
 
               <q-tab-panel name='echo' class='q-pa-sm'>
-                <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-teal-5' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('echoManagement') }}</span>
-                  <q-space />
-                  <q-btn
-                    dense flat no-caps
-                    :label="$t('echoCardAdd')"
-                    color='teal-5'
-                    icon='add'
-                    size='sm'
-                    @click='openAddEcho'
-                  />
-                </div>
-                <div class='text-caption text-grey-6 q-mb-sm'>
-                  <q-icon name='drag_indicator' size='xs' /> {{ $t('echoDragTip') }}
-                </div>
-                <q-separator class='q-my-xs' />
-                <div class='rune-grid'>
-                  <div
-                    v-for='(echo, index) in localEchoCards'
-                    :key='echo.id'
-                    draggable='true'
-                    class='rune-card-wrapper echo-card-wrapper'
-                    @dragstart='onDragStart($event, index, "echo")'
-                    @dragover.prevent='onDragOver($event, index, "echo")'
-                    @drop='onDrop($event, index, "echo")'
-                    @dragend='onDragEnd($event, "echo")'
-                  >
-                    <RuneCard
-                      class='rune-card-item'
-                      :rune='echo'
-                      :name-label="$t('echoCardName')"
-                      :desc-label="$t('echoCardDesc')"
-                      :power-label="$t('echoCardPower')"
-                      :edit-label="$t('echoCardEdit')"
-                      :delete-label="$t('echoCardDelete')"
-                      @edit='openEditEcho'
-                      @delete='confirmDeleteEcho'
-                    />
+                <div class='rune-or-echo-category-layout'>
+                  <div class='rune-or-echo-category-nav'>
+                    <q-tabs
+                      v-model='echoCategory'
+                      vertical
+                      dense
+                      class='text-teal-5 no-border rune-or-echo-category-tabs'
+                    >
+                      <q-tab
+                        v-for='opt in echoCategoryOptions'
+                        :key='opt.value'
+                        :name='opt.value'
+                        no-caps
+                        class='rune-or-echo-category-tab'
+                      >
+                        <span class='rune-or-echo-category-tab-label'>{{ opt.label }}</span>
+                        <q-badge
+                          v-if='opt.count > 0'
+                          color='teal-5'
+                          align='middle'
+                          class='q-ml-xs'
+                        >
+                          {{ opt.count }}
+                        </q-badge>
+                      </q-tab>
+                    </q-tabs>
                   </div>
-                </div>
-                <div v-if='!localEchoCards || localEchoCards.length === 0' class='text-center text-grey q-pa-xl'>
-                  <q-icon name='graphic_eq' size='3rem' />
-                  <div class='q-mt-sm'>{{ $t('echoCardAdd') }}</div>
+                  <q-separator vertical class='rune-or-echo-category-sep' />
+                  <div class='rune-or-echo-category-panel'>
+                    <div class='row items-center no-wrap q-mb-xs panel-title'>
+                      <div class='panel-title-bar bg-teal-5' />
+                      <span class='text-subtitle2 text-weight-medium'>
+                        {{ currentEchoCategoryLabel }}
+                      </span>
+                      <q-space />
+                      <q-btn
+                        v-if='!isCurrentEchoCategoryBuiltin'
+                        dense flat no-caps
+                        :label='$t("echoCardAdd")'
+                        color='teal-5'
+                        icon='add'
+                        size='sm'
+                        @click='openAddEcho'
+                      />
+                    </div>
+                    <div v-if='!isCurrentEchoCategoryBuiltin' class='text-caption text-grey-6 q-mb-sm'>
+                      <q-icon name='drag_indicator' size='xs' /> {{ $t('echoDragTip') }}
+                    </div>
+                    <q-separator class='q-my-xs' />
+                    <div v-if='isCurrentEchoCategoryBuiltin' class='text-caption text-grey-6 q-mb-sm'>
+                      <q-icon name='info' size='xs' /> {{ $t('echoBuiltinCategoryHint') }}
+                    </div>
+                    <div class='rune-grid'>
+                      <div
+                        v-for='(echo, index) in sortedEchoCards'
+                        :key='echo.id'
+                        :draggable='!echo.isBuiltin'
+                        class='rune-card-wrapper echo-card-wrapper'
+                        :class='{"echo-card-wrapper--builtin": echo.isBuiltin}'
+                        @dragstart='onDragStart($event, index, "echo")'
+                        @dragover.prevent='onDragOver($event, index, "echo")'
+                        @drop='onDrop($event, index, "echo")'
+                        @dragend='onDragEnd($event, "echo")'
+                      >
+                        <RuneCard
+                          class='rune-card-item'
+                          :rune='echo'
+                          :name-label='$t("echoCardName")'
+                          :desc-label='$t("echoCardDesc")'
+                          :power-label='$t("echoCardPower")'
+                          :edit-label='$t("echoCardEdit")'
+                          :delete-label='$t("echoCardDelete")'
+                          :disable-delete='echo.isBuiltin'
+                          :disable-drag='echo.isBuiltin'
+                          :is-builtin='echo.isBuiltin'
+                          @edit='openEditEcho'
+                          @delete='confirmDeleteEcho'
+                        />
+                      </div>
+                    </div>
+                    <div v-if='!sortedEchoCards || sortedEchoCards.length === 0' class='text-center text-grey q-pa-xl'>
+                      <q-icon name='graphic_eq' size='3rem' />
+                      <div class='q-mt-sm'>{{ $t('echoCardAdd') }}</div>
+                    </div>
+                  </div>
                 </div>
               </q-tab-panel>
 
@@ -533,6 +610,7 @@
       :key='runeFormKey'
       v-model='runeFormVisible'
       :rune='editingRune'
+      :default-category='runeCategory'
       @input='onRuneFormVisibleChange'
       @submit='onRuneSubmit'
     />
@@ -541,6 +619,7 @@
       :key='echoFormKey'
       v-model='echoFormVisible'
       :echo='editingEcho'
+      :default-category='echoCategory'
       @input='onEchoFormVisibleChange'
       @submit='onEchoSubmit'
     />
@@ -656,6 +735,14 @@ import CloudSyncService from 'src/services/CloudSyncService'
 import SessionStorageService from 'src/services/SessionStorageService'
 import PortkeyService from 'src/services/PortkeyService'
 import { NOTE_ORDER_TYPES } from 'src/constants/noteOrderTypes'
+import {
+  RUNE_CATEGORIES,
+  ECHO_CATEGORIES,
+  DEFAULT_RUNE_CATEGORY,
+  DEFAULT_ECHO_CATEGORY,
+  getRuneCategoryValue,
+  getEchoCategoryValue
+} from 'src/constants/runeEchoCategories'
 
 const SYNC_REASON_MESSAGES = {
   not_logged_in: 'offlineMode',
@@ -681,6 +768,8 @@ export default {
   data () {
     return {
       tab: 'general',
+      runeCategory: DEFAULT_RUNE_CATEGORY,
+      echoCategory: DEFAULT_ECHO_CATEGORY,
       imageUploadServiceOptionsPlain: [
         'wizOfficialImageUploadService',
         'picgoServer',
@@ -762,6 +851,17 @@ export default {
         this.updateStateAndStore({ runeCards: val })
       }
     },
+    runeCategoryOptions () {
+      return RUNE_CATEGORIES.map(c => ({
+        value: c.value,
+        label: this.$t(c.i18nKey),
+        count: (this.localRuneCards || []).filter(r => getRuneCategoryValue(r && r.category) === c.value).length
+      }))
+    },
+    localRuneCardsInCategory () {
+      const target = this.runeCategory
+      return (this.localRuneCards || []).filter(r => getRuneCategoryValue(r && r.category) === target)
+    },
     localEchoCards: {
       get () {
         return this.echoCards
@@ -769,6 +869,47 @@ export default {
       set (val) {
         this.updateStateAndStore({ echoCards: val })
       }
+    },
+    localEchoDeletableCards () {
+      return (this.echoCards || []).filter(echo => !echo.isBuiltin)
+    },
+    echoCategoryOptions () {
+      return ECHO_CATEGORIES.map(c => ({
+        value: c.value,
+        label: this.$t(c.i18nKey),
+        count: (this.localEchoCards || []).filter(e => {
+          const cat = getEchoCategoryValue(e && e.category, Boolean(e && e.isBuiltin))
+          return cat === c.value
+        }).length
+      }))
+    },
+    localEchoCardsInCategory () {
+      const target = this.echoCategory
+      return (this.localEchoCards || []).filter(e => {
+        const cat = getEchoCategoryValue(e && e.category, Boolean(e && e.isBuiltin))
+        return cat === target
+      })
+    },
+    sortedEchoCards () {
+      // builtin 分类内置永远排在前,其余按当前 store 顺序
+      if (this.echoCategory === 'builtin') {
+        return [...this.localEchoCardsInCategory].sort((a, b) => {
+          if (Boolean(a.isBuiltin) === Boolean(b.isBuiltin)) return 0
+          return a.isBuiltin ? -1 : 1
+        })
+      }
+      return this.localEchoCardsInCategory
+    },
+    currentRuneCategoryLabel () {
+      const item = RUNE_CATEGORIES.find(c => c.value === this.runeCategory)
+      return item ? this.$t(item.i18nKey) : this.$t('runeCategoryGeneral')
+    },
+    currentEchoCategoryLabel () {
+      const item = ECHO_CATEGORIES.find(c => c.value === this.echoCategory)
+      return item ? this.$t(item.i18nKey) : this.$t('echoCategoryMarker')
+    },
+    isCurrentEchoCategoryBuiltin () {
+      return this.echoCategory === 'builtin'
     },
     lastSyncTimeFormatted () {
       if (!this.syncStatus?.lastSyncTime) return this.$t('never')
@@ -1312,18 +1453,83 @@ export default {
       if (this.dragEntityType !== entityType) return
       const fromIndex = this.dragFromIndex
       if (fromIndex === null || fromIndex === toIndex) return
-      const cards = [...(entityType === 'echo' ? this.localEchoCards : this.localRuneCards)]
-      const [moved] = cards.splice(fromIndex, 1)
-      cards.splice(toIndex, 0, moved)
+      // 现在拖拽仅作用于"当前可见分类"的子列表,需要把分类内的 index 映射回全局 cards 列表
       if (entityType === 'echo') {
-        this.updateStateAndStore({ echoCards: cards })
-        this.saveEchoes(cards)
+        const visible = this.sortedEchoCards || []
+        const moved = visible[fromIndex]
+        if (!moved || moved.isBuiltin) return
+        if (moved === visible[toIndex]) return
+        const allCards = [...this.localEchoCards]
+        const oldGlobalIdx = allCards.findIndex(item => item.id === moved.id)
+        if (oldGlobalIdx < 0) return
+        allCards.splice(oldGlobalIdx, 1)
+        // 重新计算全局插入位置:toIndex 对应的可见项的"前一个"位置之后
+        let insertAt = allCards.length
+        if (toIndex > 0) {
+          const prevVisible = visible[toIndex - 1]
+          if (prevVisible && prevVisible.id !== moved.id) {
+            const prevGlobalIdx = allCards.findIndex(item => item.id === prevVisible.id)
+            if (prevGlobalIdx >= 0) insertAt = prevGlobalIdx + 1
+          }
+        } else {
+          // 拖到本分类开头,插到该分类第一项之前
+          const nextVisible = visible[toIndex]
+          if (nextVisible && nextVisible.id !== moved.id) {
+            const nextGlobalIdx = allCards.findIndex(item => item.id === nextVisible.id)
+            if (nextGlobalIdx >= 0) insertAt = nextGlobalIdx
+          }
+        }
+        allCards.splice(insertAt, 0, moved)
+        this.updateStateAndStore({ echoCards: allCards })
+        this.saveEchoes(allCards).then(result => {
+          if (result && result.success === false) {
+            const code = result.code
+            const message = code === 'ECHO_DUPLICATE_NAME'
+              ? this.$t('echoNameExists')
+              : (this.$t('echoSaveFailed') + (result.message ? `: ${result.message}` : ''))
+            this.$q.notify({ message, type: 'warning', position: 'top' })
+            // 回滚到 DB 中的最新顺序
+            this.loadEchoes()
+          }
+        })
         this.$nextTick(() => {
           bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
         })
       } else {
-        this.updateStateAndStore({ runeCards: cards })
-        this.saveRunes(cards)
+        const visible = this.localRuneCardsInCategory || []
+        const moved = visible[fromIndex]
+        if (!moved) return
+        if (moved === visible[toIndex]) return
+        const allCards = [...this.localRuneCards]
+        const oldGlobalIdx = allCards.findIndex(item => item.id === moved.id)
+        if (oldGlobalIdx < 0) return
+        allCards.splice(oldGlobalIdx, 1)
+        let insertAt = allCards.length
+        if (toIndex > 0) {
+          const prevVisible = visible[toIndex - 1]
+          if (prevVisible && prevVisible.id !== moved.id) {
+            const prevGlobalIdx = allCards.findIndex(item => item.id === prevVisible.id)
+            if (prevGlobalIdx >= 0) insertAt = prevGlobalIdx + 1
+          }
+        } else {
+          const nextVisible = visible[toIndex]
+          if (nextVisible && nextVisible.id !== moved.id) {
+            const nextGlobalIdx = allCards.findIndex(item => item.id === nextVisible.id)
+            if (nextGlobalIdx >= 0) insertAt = nextGlobalIdx
+          }
+        }
+        allCards.splice(insertAt, 0, moved)
+        this.updateStateAndStore({ runeCards: allCards })
+        this.saveRunes(allCards).then(result => {
+          if (result && result.success === false) {
+            const code = result.code
+            const message = code === 'RUNE_DUPLICATE_NAME'
+              ? this.$t('runeNameExists')
+              : (this.$t('runeSaveFailed') + (result.message ? `: ${result.message}` : ''))
+            this.$q.notify({ message, type: 'warning', position: 'top' })
+            this.loadRunes()
+          }
+        })
       }
     },
     onDragEnd: function (e, entityType = 'rune') {
@@ -1400,6 +1606,14 @@ export default {
       })
     },
     confirmDeleteEcho: async function (echo) {
+      if (echo && echo.isBuiltin) {
+        this.$q.notify({
+          message: this.$t('echoBuiltinCannotDelete') || '内置回响无法删除',
+          type: 'warning',
+          position: 'top'
+        })
+        return
+      }
       this.$q.dialog({
         title: this.$t('echoCardDelete'),
         message: this.$t('echoCardDeleteConfirm'),
@@ -1415,32 +1629,98 @@ export default {
       })
     },
     onRuneSubmit: async function (data) {
-      const saved = await this.saveRune(data)
-      if (saved) {
+      const name = String(data && data.name || '').trim()
+      const dupNameKey = name.toLowerCase()
+      // 集合内去重：避免业务自身拖拽 / 双击造成重名
+      const storeConflict = (this.localRuneCards || []).find(item => {
+        if (!item || !item.name || item.id === data.id) return false
+        return String(item.name).trim().toLowerCase() === dupNameKey
+      })
+      if (storeConflict) {
+        this.$q.notify({
+          message: this.$t('runeNameExists'),
+          type: 'warning',
+          position: 'top'
+        })
+        return
+      }
+      const result = await this.saveRune(data)
+      if (result && result.success && result.data) {
         const cards = [...this.localRuneCards]
         const idx = cards.findIndex(r => r.id === data.id)
         if (idx >= 0) {
-          cards.splice(idx, 1, saved)
+          cards.splice(idx, 1, result.data)
         } else {
-          cards.push(saved)
+          cards.push(result.data)
         }
         this.updateStateAndStore({ runeCards: cards })
         this.$nextTick(() => {
           bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
         })
+        this.destroyRuneFormDialog()
+        return
       }
-      this.destroyRuneFormDialog()
+      const code = result && result.code
+      let message = this.$t('runeSaveFailed')
+      if (code === 'RUNE_DUPLICATE_NAME') {
+        message = this.$t('runeNameExists')
+      } else if (code === 'RUNE_NAME_REQUIRED') {
+        message = this.$t('runeNameRequired')
+      } else if (result && result.message) {
+        message = `${message}: ${result.message}`
+      }
+      this.$q.notify({ message, type: 'warning', position: 'top' })
     },
     onEchoSubmit: async function (data) {
+      const builtinMatch = this.localEchoCards.find(echo => echo.isBuiltin && echo.id === data.id)
+      const isBuiltin = Boolean(builtinMatch || data.isBuiltin)
       const payload = {
         ...data,
         anno_source: data.anno_source || data.template || '',
-        render_type: data.render_type || 'anno'
+        render_type: data.render_type || 'anno',
+        isBuiltin
       }
-      const saved = await this.saveEcho(payload)
+      const cards = [...this.localEchoCards]
+      const idx = cards.findIndex(item => item.id === data.id)
+      let saved = null
+      if (isBuiltin) {
+        // ✅ 内置回响不入库；保留 store 中的原始定义（防止用户编辑后污染代码内置数据）
+        saved = builtinMatch ? { ...builtinMatch, ...payload } : { ...payload }
+      } else {
+        // 集合内去重：非内置回响之间不能重名
+        const dupNameKey = String(payload.name || '').trim().toLowerCase()
+        if (dupNameKey) {
+          const storeConflict = (this.localEchoCards || []).find(item => {
+            if (!item || item.id === payload.id) return false
+            return String(item.name || '').trim().toLowerCase() === dupNameKey
+          })
+          if (storeConflict) {
+            this.$q.notify({
+              message: this.$t('echoNameExists'),
+              type: 'warning',
+              position: 'top'
+            })
+            return
+          }
+        }
+        const result = await this.saveEcho(payload)
+        if (result && result.success && result.data) {
+          saved = result.data
+        } else {
+          const code = result && result.code
+          let message = this.$t('echoSaveFailed')
+          if (code === 'ECHO_DUPLICATE_NAME') {
+            message = this.$t('echoNameExists')
+          } else if (code === 'ECHO_NAME_REQUIRED') {
+            message = this.$t('echoNameRequired')
+          } else if (result && result.message) {
+            message = `${message}: ${result.message}`
+          }
+          this.$q.notify({ message, type: 'warning', position: 'top' })
+          return
+        }
+      }
       if (saved) {
-        const cards = [...this.localEchoCards]
-        const idx = cards.findIndex(item => item.id === data.id)
         if (idx >= 0) {
           cards.splice(idx, 1, saved)
         } else {
@@ -1731,18 +2011,112 @@ export default {
   flex-shrink: 0;
 }
 
+/* 符文/回响二级分类布局:左侧垂直 tab,右侧网格 */
+.rune-or-echo-category-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+  height: calc(70vh - 90px);
+}
+
+.rune-or-echo-category-nav {
+  flex: 0 0 auto;
+  width: 6.25rem;
+  min-width: 6.25rem;
+  max-width: 6.25rem;
+  padding: 2px 0 4px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.rune-or-echo-category-sep {
+  flex-shrink: 0;
+}
+
+.rune-or-echo-category-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  padding: 0 6px 4px 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 120, 0.45) transparent;
+}
+
+.rune-or-echo-category-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rune-or-echo-category-panel::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.45);
+  border-radius: 999px;
+}
+
+.rune-or-echo-category-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rune-or-echo-category-tabs {
+  width: 100%;
+}
+
+.rune-or-echo-category-tabs ::v-deep(.q-tabs__content) {
+  padding: 0;
+}
+
+.rune-or-echo-category-tabs ::v-deep(.q-tab) {
+  min-height: 30px;
+  padding: 2px 6px;
+  justify-content: flex-start;
+}
+
+.rune-or-echo-category-tab {
+  width: 100%;
+  justify-content: flex-start;
+  border-radius: 6px;
+}
+
+.rune-or-echo-category-tab-label {
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+@media (max-width: 760px) {
+  .rune-or-echo-category-layout {
+    flex-direction: column;
+    height: auto;
+  }
+  .rune-or-echo-category-nav {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .rune-or-echo-category-tabs ::v-deep(.q-tabs__content) {
+    flex-direction: row;
+  }
+}
+
 .rune-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  padding: 4px;
+  grid-template-columns: repeat(auto-fill, 132px);
+  justify-content: start;
+  gap: 8px;
+  padding: 4px 2px;
   min-height: 80px;
   align-items: stretch;
 }
 
 .rune-card-wrapper {
   display: flex;
-  min-width: 0;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+}
+
+.rune-card-wrapper--readonly {
+  cursor: default;
 }
 
 .rune-card-item {

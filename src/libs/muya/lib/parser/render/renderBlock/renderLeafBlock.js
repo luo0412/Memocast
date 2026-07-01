@@ -6,7 +6,6 @@ import { snakeToCamel, sanitize, escapeHtml, getLongUniqueId, getImageInfo } fro
 import { h, htmlToVNode } from '../snabbdom'
 import { i18n } from 'boot/i18n'
 
-// todo@jocs any better solutions?
 const MARKER_HASK = {
   '<': `%${getLongUniqueId()}%`,
   '>': `%${getLongUniqueId()}%`,
@@ -68,12 +67,13 @@ const hasReferenceToken = tokens => {
   return result
 }
 
-export default function renderLeafBlock (parent, block, activeBlocks, matches, useCache = false) {
+export default function renderLeafBlock (parent, block, activeBlocks, matches, useCache = false, echoBlockHighlights = []) {
   const { loadMathMap } = this
   const { cursor } = this.muya.contentState
   let selector = this.getSelector(block, activeBlocks)
-  // highlight search key in block
   const highlights = matches.filter(m => m.key === block.key)
+  const echoHighlights = this.getEchoHighlightsForBlock(block, echoBlockHighlights)
+  const hasEchoBlockHighlight = echoHighlights.some(item => item.scope !== 'token')
   const {
     text,
     type,
@@ -95,7 +95,17 @@ export default function renderLeafBlock (parent, block, activeBlocks, matches, u
 
   if (text) {
     let tokens = []
-    if (highlights.length === 0 && this.tokenCache.has(text)) {
+    const effectiveHighlights = highlights.slice()
+    if (hasEchoBlockHighlight) {
+      effectiveHighlights.push({
+        start: 0,
+        end: text.length,
+        active: true,
+        className: 'ag-echo-highlight'
+      })
+    }
+
+    if (effectiveHighlights.length === 0 && this.tokenCache.has(text)) {
       tokens = this.tokenCache.get(text)
     } else if (
       HAS_TEXT_BLOCK_REG.test(type) &&
@@ -105,13 +115,13 @@ export default function renderLeafBlock (parent, block, activeBlocks, matches, u
       const hasBeginRules = /paragraphContent|atxLine/.test(functionType)
 
       tokens = tokenizer(text, {
-        highlights,
+        highlights: effectiveHighlights,
         hasBeginRules,
         labels: this.labels,
         options: this.muya.options
       })
       const hasReferenceTokens = hasReferenceToken(tokens)
-      if (highlights.length === 0 && useCache && DEVICE_MEMORY >= 4 && !hasReferenceTokens) {
+      if (effectiveHighlights.length === 0 && useCache && DEVICE_MEMORY >= 4 && !hasReferenceTokens) {
         this.tokenCache.set(text, tokens)
       }
     }
@@ -124,6 +134,16 @@ export default function renderLeafBlock (parent, block, activeBlocks, matches, u
       spellcheck: 'false',
       contenteditable: 'false'
     })
+  }
+
+  if (hasEchoBlockHighlight) {
+    const echoHighlightClassNames = echoHighlights
+      .filter(item => item.scope !== 'token')
+      .map(item => String(item.className || 'ag-echo-highlight').trim())
+      .filter(Boolean)
+    if (echoHighlightClassNames.length) {
+      selector += `.${echoHighlightClassNames.join('.')}`
+    }
   }
 
   if (type === 'div') {

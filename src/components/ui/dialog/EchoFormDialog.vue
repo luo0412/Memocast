@@ -46,6 +46,33 @@
             </div>
 
             <div class='echo-form-field echo-form-field--tight'>
+              <div class='echo-form-label'>分类</div>
+              <q-select
+                v-model='form.category'
+                dense
+                outlined
+                :options='echoCategoryOptions'
+                option-label='label'
+                option-value='value'
+                emit-value
+                map-options
+                :disable='isBuiltin'
+                class='echo-form-input echo-form-input--compact'
+              >
+                <template v-slot:selected-item='scope'>
+                  <span>{{ scope.opt.label }}</span>
+                </template>
+                <template v-slot:option='scope'>
+                  <q-item v-bind='scope.itemProps' v-on='scope.itemEvents'>
+                    <q-item-section>
+                      <q-item-label>{{ scope.opt.label }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
+            </div>
+
+            <div class='echo-form-field echo-form-field--tight'>
               <div class='echo-form-label'>图标</div>
               <q-select
                 v-model='form.icon'
@@ -335,6 +362,7 @@
 import * as monaco from 'monaco-editor'
 import { v4 as uuidv4 } from 'uuid'
 import { createDefaultEchoAnnoSource } from 'components/ui/editor/echo/EchoRuntime'
+import { ECHO_CATEGORIES, DEFAULT_ECHO_CATEGORY, getEchoCategoryValue } from 'src/constants/runeEchoCategories'
 
 const DEFAULT_ECHO_ICON = 'graphic_eq'
 const DEFAULT_ECHO_COLOR = '#26A69A'
@@ -356,6 +384,10 @@ export default {
     echo: {
       type: Object,
       default: null
+    },
+    defaultCategory: {
+      type: String,
+      default: ''
     }
   },
   data () {
@@ -372,7 +404,8 @@ export default {
         color: DEFAULT_ECHO_COLOR,
         icon: DEFAULT_ECHO_ICON,
         anno_source: createDefaultEchoAnnoSource(),
-        render_type: DEFAULT_RENDER_TYPE
+        render_type: DEFAULT_RENDER_TYPE,
+        category: DEFAULT_ECHO_CATEGORY
       },
       iconOptions: [
         { label: '回响', value: 'graphic_eq' },
@@ -384,6 +417,7 @@ export default {
         { label: '书签', value: 'bookmark' },
         { label: '标注', value: 'edit_note' }
       ],
+      echoCategoryOptions: ECHO_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) })),
       colorOptions: [
         { value: '#26A69A' },
         { value: '#5C6BC0' },
@@ -399,6 +433,9 @@ export default {
   computed: {
     isEditing () {
       return !!this.echo
+    },
+    isBuiltin () {
+      return Boolean(this.echo && this.echo.isBuiltin)
     }
   },
   watch: {
@@ -429,6 +466,8 @@ export default {
       handler (val) {
         if (val) {
           const annoSource = val.anno_source || val.template || createDefaultEchoAnnoSource(val.name)
+          // 内置回响永远归属 builtin 分类，不允许通过 UI 改
+          const category = val.isBuiltin ? 'builtin' : getEchoCategoryValue(val.category)
           this.form = {
             id: val.id,
             name: val.name || '',
@@ -437,6 +476,8 @@ export default {
             icon: val.icon || DEFAULT_ECHO_ICON,
             anno_source: annoSource,
             render_type: val.render_type || DEFAULT_RENDER_TYPE,
+            category,
+            isBuiltin: Boolean(val.isBuiltin),
             created_at: val.created_at,
             updated_at: val.updated_at
           }
@@ -451,7 +492,9 @@ export default {
             color: DEFAULT_ECHO_COLOR,
             icon: DEFAULT_ECHO_ICON,
             anno_source: createDefaultEchoAnnoSource(),
-            render_type: DEFAULT_RENDER_TYPE
+            render_type: DEFAULT_RENDER_TYPE,
+            category: this.defaultCategory || DEFAULT_ECHO_CATEGORY,
+            isBuiltin: false
           }
           if (this.monacoEditor && this.monacoReady) {
             this.monacoEditor.setValue(this.form.anno_source)
@@ -559,14 +602,22 @@ export default {
       }
     },
     submit () {
+      const name = String(this.form.name || '').trim()
+      if (!name) {
+        this.$q.notify({ message: this.$t('echoNameRequired'), type: 'warning', position: 'top' })
+        return
+      }
+      const annoSource = String(this.monacoEditor ? this.monacoEditor.getValue() : this.form.anno_source || '').trim()
+      if (!annoSource) return
+      const category = this.form.isBuiltin ? 'builtin' : getEchoCategoryValue(this.form.category)
       const payload = {
         ...this.form,
-        name: String(this.form.name || '').trim(),
+        name,
         desc: String(this.form.desc || '').trim(),
-        anno_source: String(this.monacoEditor ? this.monacoEditor.getValue() : this.form.anno_source || '').trim(),
-        render_type: DEFAULT_RENDER_TYPE
+        anno_source: annoSource,
+        render_type: DEFAULT_RENDER_TYPE,
+        category
       }
-      if (!payload.name || !payload.anno_source) return
       this.$emit('submit', payload)
     }
   }

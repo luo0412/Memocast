@@ -552,6 +552,23 @@ export default {
     db.run('ALTER TABLE sync_log ADD COLUMN kb_guid TEXT')
   } catch (error) {}
 
+  // runes / echoes 兼容:为已有行补 category / sort_order 默认值
+  try {
+    db.run("UPDATE runes SET category = 'general' WHERE category IS NULL OR trim(category) = ''")
+  } catch (error) {}
+  try {
+    db.run('UPDATE runes SET sort_order = 0 WHERE sort_order IS NULL')
+  } catch (error) {}
+  try {
+    db.run("UPDATE echoes SET category = 'builtin' WHERE (id LIKE '\\_\\_builtin\\_%' ESCAPE '\\') AND (category IS NULL OR trim(category) = '')")
+  } catch (error) {}
+  try {
+    db.run("UPDATE echoes SET category = 'marker' WHERE (id NOT LIKE '\\_\\_builtin\\_%' ESCAPE '\\') AND (category IS NULL OR trim(category) = '')")
+  } catch (error) {}
+  try {
+    db.run('UPDATE echoes SET sort_order = 0 WHERE sort_order IS NULL')
+  } catch (error) {}
+
   // GUID 映射表
   db.run(`
     CREATE TABLE IF NOT EXISTS guid_mapping (
@@ -584,10 +601,23 @@ export default {
       color TEXT DEFAULT '#7E57C2',
       icon TEXT DEFAULT 'auto_awesome',
       template TEXT,
+      category TEXT DEFAULT 'general',
+      sort_order INTEGER DEFAULT 0,
       created_at INTEGER,
       updated_at INTEGER
     )
   `)
+
+  // 兼容旧库:为已存在的 runes 表补充 category / sort_order 列
+  try {
+    db.run('ALTER TABLE runes ADD COLUMN category TEXT DEFAULT \'general\'')
+  } catch (error) {}
+  try {
+    db.run('ALTER TABLE runes ADD COLUMN sort_order INTEGER DEFAULT 0')
+  } catch (error) {}
+
+  // 符文名称全局唯一（不区分大小写，去除首尾空白）
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_runes_name_unique ON runes(LOWER(TRIM(name)))`)
 
   // 回响卡片表
   db.run(`
@@ -599,10 +629,23 @@ export default {
       icon TEXT DEFAULT 'graphic_eq',
       anno_source TEXT,
       render_type TEXT DEFAULT 'anno',
+      category TEXT DEFAULT 'marker',
+      sort_order INTEGER DEFAULT 0,
       created_at INTEGER,
       updated_at INTEGER
     )
   `)
+
+  // 兼容旧库:为已存在的 echoes 表补充 category / sort_order 列
+  try {
+    db.run('ALTER TABLE echoes ADD COLUMN category TEXT DEFAULT \'marker\'')
+  } catch (error) {}
+  try {
+    db.run('ALTER TABLE echoes ADD COLUMN sort_order INTEGER DEFAULT 0')
+  } catch (error) {}
+
+  // 回响名称全局唯一（不区分大小写，去除首尾空白）
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_echoes_name_unique ON echoes(LOWER(TRIM(name)))`)
 
   // AI 模型配置表
   db.run(`
@@ -666,8 +709,8 @@ export default {
       { id: 'rune-6', name: '圣光庇护', desc: '免疫一次负面效果并治疗', power: 88, color: '#FFD54F', icon: 'wb_sunny' }
     ]
     for (const r of defaultRunes) {
-      db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, template, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [r.id, r.name, r.desc, r.power, r.color, r.icon, createDefaultRuneTemplate(r.name), now, now])
+      db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, template, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [r.id, r.name, r.desc, r.power, r.color, r.icon, createDefaultRuneTemplate(r.name), 'general', now, now])
     }
     saveDatabase()
     log.info('[DB] Default runes seeded')
@@ -700,8 +743,8 @@ export default {
       { id: 'echo-3', name: '边界低语', desc: '适合提示风险、注意事项与旁白信息', color: '#EC407A', icon: 'campaign', anno_source: createDefaultEchoAnnoSource('边界低语') }
     ]
     for (const echo of defaultEchoes) {
-      db.run(`INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [echo.id, echo.name, echo.desc, echo.color, echo.icon, echo.anno_source, 'anno', now, now])
+      db.run(`INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [echo.id, echo.name, echo.desc, echo.color, echo.icon, echo.anno_source, 'anno', 'marker', now, now])
     }
     saveDatabase()
     log.info('[DB] Default echoes seeded')
@@ -2047,7 +2090,7 @@ function registerDatabaseHandlers() {
   // 获取所有符文
   ipcMain.handle('db:getRunes', async () => {
     try {
-      return execToObjects('SELECT * FROM runes ORDER BY created_at ASC')
+      return execToObjects('SELECT * FROM runes ORDER BY COALESCE(sort_order, 0) ASC, created_at ASC')
     } catch (error) {
       log.error('[DB] getRunes error:', error)
       return []
@@ -2057,22 +2100,49 @@ function registerDatabaseHandlers() {
   // 创建或更新符文
   ipcMain.handle('db:saveRune', async (event, rune) => {
     try {
+      if (!rune || !rune.id) {
+        return { success: false, code: 'RUNE_INVALID', message: 'rune.id is required' }
+      }
+      const name = typeof rune.name === 'string' ? rune.name.trim() : ''
+      if (!name) {
+        return { success: false, code: 'RUNE_NAME_REQUIRED', message: 'rune.name is required' }
+      }
+
+      // 同名校验:不区分大小写、去首尾空白,且允许 id 自身(更新时)
+      const dup = execOne(
+        'SELECT id FROM runes WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND id != ?',
+        [name, rune.id]
+      )
+      if (dup) {
+        return { success: false, code: 'RUNE_DUPLICATE_NAME' }
+      }
+
       const now = Date.now()
       const existing = execOne('SELECT id FROM runes WHERE id = ?', [rune.id])
       const template = rune.template || (existing ? '' : createDefaultRuneTemplate())
+      const category = typeof rune.category === 'string' && rune.category.trim() ? rune.category.trim() : 'general'
+      const sortOrder = Number.isFinite(Number(rune.sort_order)) ? Number(rune.sort_order) : 0
       if (existing) {
-        await db.run(`UPDATE runes SET name = ?, "desc" = ?, power = ?, color = ?, icon = ?, template = ?, updated_at = ? WHERE id = ?`, [
-          rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, now, rune.id
+        await db.run(`UPDATE runes SET name = ?, "desc" = ?, power = ?, color = ?, icon = ?, template = ?, category = ?, sort_order = ?, updated_at = ? WHERE id = ?`, [
+          name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, category, sortOrder, now, rune.id
         ])
       } else {
-        await db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, template, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [rune.id, rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, now, now])
+        await db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, template, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [rune.id, name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, category, sortOrder, now, now])
       }
       saveDatabase()
-      return execOne('SELECT * FROM runes WHERE id = ?', [rune.id])
+      return { success: true, data: execOne('SELECT * FROM runes WHERE id = ?', [rune.id]) }
     } catch (error) {
       log.error('[DB] saveRune error:', error)
-      return null
+      if (/UNIQUE constraint failed:\s*index\s*"?idx_runes_name_unique"?/i.test(String(error && error.message ? error.message : error))
+        || /UNIQUE constraint failed:\s*runes\.name/i.test(String(error && error.message ? error.message : error))) {
+        return { success: false, code: 'RUNE_DUPLICATE_NAME' }
+      }
+      return {
+        success: false,
+        code: 'RUNE_SAVE_FAILED',
+        message: error && error.message ? error.message : String(error)
+      }
     }
   })
 
@@ -2091,23 +2161,45 @@ function registerDatabaseHandlers() {
   // 批量保存符文（用于排序更新）
   ipcMain.handle('db:saveRunes', async (event, runes) => {
     try {
+      const list = Array.isArray(runes) ? runes : []
+      // 批量前先做一次集合内的同名检测，避免依赖数据库 UNIQUE 中断
+      const seen = new Map()
+      for (const item of list) {
+        if (!item || !item.id) continue
+        const key = String(item.name || '').trim().toLowerCase()
+        if (!key) continue
+        if (seen.has(key) && seen.get(key) !== item.id) {
+          return { success: false, code: 'RUNE_DUPLICATE_NAME' }
+        }
+        seen.set(key, item.id)
+      }
       const now = Date.now()
-      for (const rune of runes) {
-        await db.run(`INSERT OR REPLACE INTO runes (id, name, "desc", power, color, icon, template, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [rune.id, rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', rune.template || '', rune.created_at || now, now])
+      for (const rune of list) {
+        const category = typeof rune.category === 'string' && rune.category.trim() ? rune.category.trim() : 'general'
+        const sortOrder = Number.isFinite(Number(rune.sort_order)) ? Number(rune.sort_order) : 0
+        await db.run(`INSERT OR REPLACE INTO runes (id, name, "desc", power, color, icon, template, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [rune.id, rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', rune.template || '', category, sortOrder, rune.created_at || now, now])
       }
       saveDatabase()
-      return true
+      return { success: true }
     } catch (error) {
       log.error('[DB] saveRunes error:', error)
-      return false
+      if (/UNIQUE constraint failed:\s*index\s*"?idx_runes_name_unique"?/i.test(String(error && error.message ? error.message : error))
+        || /UNIQUE constraint failed:\s*runes\.name/i.test(String(error && error.message ? error.message : error))) {
+        return { success: false, code: 'RUNE_DUPLICATE_NAME' }
+      }
+      return {
+        success: false,
+        code: 'RUNE_SAVE_FAILED',
+        message: error && error.message ? error.message : String(error)
+      }
     }
   })
 
   // 获取所有回响
   ipcMain.handle('db:getEchoes', async () => {
     try {
-      return execToObjects('SELECT * FROM echoes ORDER BY created_at ASC')
+      return execToObjects('SELECT * FROM echoes ORDER BY COALESCE(sort_order, 0) ASC, created_at ASC')
     } catch (error) {
       log.error('[DB] getEchoes error:', error)
       return []
@@ -2117,23 +2209,55 @@ function registerDatabaseHandlers() {
   // 创建或更新回响
   ipcMain.handle('db:saveEcho', async (event, echo) => {
     try {
+      if (!echo || !echo.id) {
+        return { success: false, code: 'ECHO_INVALID', message: 'echo.id is required' }
+      }
+      const name = typeof echo.name === 'string' ? echo.name.trim() : ''
+      if (!name) {
+        return { success: false, code: 'ECHO_NAME_REQUIRED', message: 'echo.name is required' }
+      }
+
+      // 内置回响 id 以 __builtin_ 开头，强制归类到 builtin；其它回响默认 marker
+      const isBuiltin = typeof echo.id === 'string' && echo.id.startsWith('__builtin_')
+
+      // 同名校验：不区分大小写、去首尾空白，且允许 id 自身（更新时）
+      const dup = execOne(
+        'SELECT id FROM echoes WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND id != ?',
+        [name, echo.id]
+      )
+      if (dup) {
+        return { success: false, code: 'ECHO_DUPLICATE_NAME' }
+      }
+
       const now = Date.now()
       const existing = execOne('SELECT id, created_at FROM echoes WHERE id = ?', [echo.id])
-      const annoSource = echo.anno_source || echo.template || createDefaultEchoAnnoSource(echo.name)
+      const annoSource = echo.anno_source || echo.template || createDefaultEchoAnnoSource(name)
       const renderType = echo.render_type || 'anno'
+      const category = isBuiltin
+        ? 'builtin'
+        : (typeof echo.category === 'string' && echo.category.trim() ? echo.category.trim() : 'marker')
+      const sortOrder = Number.isFinite(Number(echo.sort_order)) ? Number(echo.sort_order) : 0
       if (existing) {
-        await db.run(`UPDATE echoes SET name = ?, "desc" = ?, color = ?, icon = ?, anno_source = ?, render_type = ?, updated_at = ? WHERE id = ?`, [
-          echo.name, echo.desc || '', echo.color || '#26A69A', echo.icon || 'graphic_eq', annoSource, renderType, now, echo.id
+        await db.run(`UPDATE echoes SET name = ?, "desc" = ?, color = ?, icon = ?, anno_source = ?, render_type = ?, category = ?, sort_order = ?, updated_at = ? WHERE id = ?`, [
+          name, echo.desc || '', echo.color || '#26A69A', echo.icon || 'graphic_eq', annoSource, renderType, category, sortOrder, now, echo.id
         ])
       } else {
-        await db.run(`INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [echo.id, echo.name, echo.desc || '', echo.color || '#26A69A', echo.icon || 'graphic_eq', annoSource, renderType, existing?.created_at || now, now])
+        await db.run(`INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [echo.id, name, echo.desc || '', echo.color || '#26A69A', echo.icon || 'graphic_eq', annoSource, renderType, category, sortOrder, existing?.created_at || now, now])
       }
       saveDatabase()
-      return execOne('SELECT * FROM echoes WHERE id = ?', [echo.id])
+      return { success: true, data: execOne('SELECT * FROM echoes WHERE id = ?', [echo.id]) }
     } catch (error) {
       log.error('[DB] saveEcho error:', error)
-      return null
+      if (/UNIQUE constraint failed:\s*index\s*"?idx_echoes_name_unique"?/i.test(String(error && error.message ? error.message : error))
+        || /UNIQUE constraint failed:\s*echoes\.name/i.test(String(error && error.message ? error.message : error))) {
+        return { success: false, code: 'ECHO_DUPLICATE_NAME' }
+      }
+      return {
+        success: false,
+        code: 'ECHO_SAVE_FAILED',
+        message: error && error.message ? error.message : String(error)
+      }
     }
   })
 
@@ -2152,17 +2276,42 @@ function registerDatabaseHandlers() {
   // 批量保存回响（用于排序更新）
   ipcMain.handle('db:saveEchoes', async (event, echoes) => {
     try {
+      const list = Array.isArray(echoes) ? echoes : []
+      // 批量前先做一次集合内的同名检测
+      const seen = new Map()
+      for (const item of list) {
+        if (!item || !item.id) continue
+        const key = String(item.name || '').trim().toLowerCase()
+        if (!key) continue
+        if (seen.has(key) && seen.get(key) !== item.id) {
+          return { success: false, code: 'ECHO_DUPLICATE_NAME' }
+        }
+        seen.set(key, item.id)
+      }
       const now = Date.now()
-      for (const echo of echoes) {
+      for (const echo of list) {
         const annoSource = echo.anno_source || echo.template || createDefaultEchoAnnoSource(echo.name)
-        await db.run(`INSERT OR REPLACE INTO echoes (id, name, "desc", color, icon, anno_source, render_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [echo.id, echo.name, echo.desc || '', echo.color || '#26A69A', echo.icon || 'graphic_eq', annoSource, echo.render_type || 'anno', echo.created_at || now, now])
+        const isBuiltin = typeof echo.id === 'string' && echo.id.startsWith('__builtin_')
+        const category = isBuiltin
+          ? 'builtin'
+          : (typeof echo.category === 'string' && echo.category.trim() ? echo.category.trim() : 'marker')
+        const sortOrder = Number.isFinite(Number(echo.sort_order)) ? Number(echo.sort_order) : 0
+        await db.run(`INSERT OR REPLACE INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [echo.id, echo.name, echo.desc || '', echo.color || '#26A69A', echo.icon || 'graphic_eq', annoSource, echo.render_type || 'anno', category, sortOrder, echo.created_at || now, now])
       }
       saveDatabase()
-      return true
+      return { success: true }
     } catch (error) {
       log.error('[DB] saveEchoes error:', error)
-      return false
+      if (/UNIQUE constraint failed:\s*index\s*"?idx_echoes_name_unique"?/i.test(String(error && error.message ? error.message : error))
+        || /UNIQUE constraint failed:\s*echoes\.name/i.test(String(error && error.message ? error.message : error))) {
+        return { success: false, code: 'ECHO_DUPLICATE_NAME' }
+      }
+      return {
+        success: false,
+        code: 'ECHO_SAVE_FAILED',
+        message: error && error.message ? error.message : String(error)
+      }
     }
   })
 

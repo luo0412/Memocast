@@ -648,11 +648,14 @@ export default {
       }
     },
     getValue: function () {
-      return this.contentEditor?.getMarkdown()
+      if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') {
+        return null
+      }
+      return this.contentEditor.getMarkdown()
     },
     // ✅ 新增：主动捕获当前编辑器内容（供外部调用，如切换笔记前）
     captureCurrentContent: function () {
-      if (!this.contentEditor) return null
+      if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return null
 
       const markdown = this.contentEditor.getMarkdown()
       const currentNote = this.$store.state.server.currentNote
@@ -1026,6 +1029,11 @@ export default {
   },
   watch: {
     currentNote: function (currentData) {
+      if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') {
+        console.warn('[Muya watcher] ⚠️ contentEditor not ready, skipping')
+        return
+      }
+
       console.log(`\n[Muya watcher] ⚡ FIRED! type: ${typeof currentData}`)
       console.log(`[Muya watcher] Previous note: ${this.previousNoteInfo?.docGuid}, New note expected from store`)
 
@@ -1340,5 +1348,38 @@ export default {
   line-height: 1.4;
   opacity: 0.72;
   word-break: break-word;
+}
+
+/* Echo block highlight styles - propagate highlight from echo tokens to parent blocks */
+.ag-echo-highlight {
+  background-color: rgba(38, 166, 154, 0.12);
+  border-left: 3px solid rgba(38, 166, 154, 0.5);
+  padding-left: 8px;
+  margin-left: -8px;
+  border-radius: 0 4px 4px 0;
+  transition: background-color 0.2s ease;
+}
+
+.ag-echo-highlight.ag-paragraph,
+.ag-echo-highlight.ag-li,
+.ag-echo-highlight.ag-p,
+.ag-echo-highlight.ag-span {
+  background-color: rgba(38, 166, 154, 0.1);
+}
+
+.ag-echo-highlight.ag-h1,
+.ag-echo-highlight.ag-h2,
+.ag-echo-highlight.ag-h3,
+.ag-echo-highlight.ag-h4,
+.ag-echo-highlight.ag-h5,
+.ag-echo-highlight.ag-h6 {
+  background-color: rgba(38, 166, 154, 0.08);
+}
+
+/* Also highlight the echo token itself within highlighted blocks */
+.ag-echo-highlight .ag-echo-anno-token,
+.ag-echo-highlight.ag-echo-anno-token {
+  background-color: rgba(38, 166, 154, 0.2);
+  border-radius: 4px;
 }
 </style>

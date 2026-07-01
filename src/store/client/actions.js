@@ -7,6 +7,7 @@ import { i18n } from 'boot/i18n'
 import _ from 'lodash'
 import { importImage, uploadImages } from 'src/ApiInvoker'
 import DatabaseClient from 'src/utils/DatabaseClient'
+import { BUILTIN_ECHO_CARDS, isBuiltinEcho } from 'components/ui/editor/echo/builtinEchoes'
 
 const applyQuickInsertColumns = (value) => {
   if (typeof document === 'undefined') return
@@ -116,12 +117,26 @@ export default {
       console.error('[Runes] loadRunes error:', err)
     }
   },
-  async loadEchoes ({ commit }) {
+  async loadEchoes ({ commit, state }) {
     try {
-      const echoes = await DatabaseClient.echoes.getAll()
-      if (Array.isArray(echoes)) {
-        commit(types.TOGGLE_CHANGED, { key: 'echoCards', value: echoes })
-      }
+      const storedFromDb = await DatabaseClient.echoes.getAll()
+      const dbCards = Array.isArray(storedFromDb) ? storedFromDb : []
+
+      // ✅ 内置回响始终在场：从 store 当前 echoCards（可能包含用户编辑过的内置拷贝）
+      // 中按 id 合并，避免被 DB 数据覆盖丢失
+      const builtinIds = new Set(BUILTIN_ECHO_CARDS.map(echo => echo.id))
+      const existingBuiltins = (state.echoCards || []).filter(echo => isBuiltinEcho(echo))
+      const missingBuiltins = BUILTIN_ECHO_CARDS.filter(template => {
+        return !existingBuiltins.some(echo => echo.id === template.id)
+      })
+
+      const mergedEchoes = [
+        ...existingBuiltins,
+        ...missingBuiltins,
+        ...dbCards.filter(echo => !builtinIds.has(echo.id))
+      ]
+
+      commit(types.TOGGLE_CHANGED, { key: 'echoCards', value: mergedEchoes })
     } catch (err) {
       console.error('[Echoes] loadEchoes error:', err)
     }
@@ -142,7 +157,10 @@ export default {
     return await DatabaseClient.runes.saveMany(runes)
   },
   async saveEchoes (_, echoes) {
-    return await DatabaseClient.echoes.saveMany(echoes)
+    // 内置回响不入库，避免被持久化为普通卡片导致下次丢失 isBuiltin 标记
+    const persistable = (Array.isArray(echoes) ? echoes : []).filter(echo => !isBuiltinEcho(echo))
+    if (persistable.length === 0) return persistable
+    return await DatabaseClient.echoes.saveMany(persistable)
   },
   /**
    * 执行同步（调用 SyncService）

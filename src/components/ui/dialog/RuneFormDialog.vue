@@ -59,6 +59,32 @@
             </div>
 
             <div class='rune-form-field rune-form-field--tight'>
+              <div class='rune-form-label'>分类</div>
+              <q-select
+                v-model='form.category'
+                dense
+                outlined
+                :options='runeCategoryOptions'
+                option-label='label'
+                option-value='value'
+                emit-value
+                map-options
+                class='rune-form-input rune-form-input--compact'
+              >
+                <template v-slot:selected-item='scope'>
+                  <span>{{ scope.opt.label }}</span>
+                </template>
+                <template v-slot:option='scope'>
+                  <q-item v-bind='scope.itemProps' v-on='scope.itemEvents'>
+                    <q-item-section>
+                      <q-item-label>{{ scope.opt.label }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
+            </div>
+
+            <div class='rune-form-field rune-form-field--tight'>
               <div class='rune-form-label'>图标</div>
               <q-select
                 v-model='form.icon'
@@ -299,6 +325,7 @@
 
 <script>
 import * as monaco from 'monaco-editor'
+import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY, getRuneCategoryValue } from 'src/constants/runeEchoCategories'
 
 const createUuid = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -372,6 +399,10 @@ export default {
     mode: {
       type: String,
       default: 'rune'
+    },
+    defaultCategory: {
+      type: String,
+      default: ''
     }
   },
   data () {
@@ -388,9 +419,11 @@ export default {
         power: 50,
         color: '#7E57C2',
         icon: 'whatshot',
-        template: createDefaultRuneTemplate()
+        template: createDefaultRuneTemplate(),
+        category: DEFAULT_RUNE_CATEGORY
       },
       monacoEditor: null,
+      runeCategoryOptions: RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) })),
       iconOptions: [
         { label: '火焰', value: 'whatshot' },
         { label: '冰霜', value: 'ac_unit' },
@@ -460,7 +493,7 @@ export default {
         if (val) {
           this._prevRuneId = val.id
           const template = val.template || createDefaultRuneTemplate()
-          this.form = { ...val }
+          this.form = { ...val, category: getRuneCategoryValue(val.category) }
           console.log('\n[RuneFormDialog.rune watcher] Loaded editing rune:', {
             id: this.form.id,
             name: this.form.name,
@@ -481,7 +514,8 @@ export default {
             power: 50,
             color: '#7E57C2',
             icon: 'whatshot',
-            template: createDefaultRuneTemplate()
+            template: createDefaultRuneTemplate(),
+            category: this.defaultCategory || DEFAULT_RUNE_CATEGORY
           }
           console.log('\n[RuneFormDialog.rune watcher] Initialized new rune form:', {
             id: this.form.id,
@@ -622,7 +656,10 @@ export default {
       }
     },
     submit () {
-      if (!this.form.name.trim()) return
+      if (!String(this.form.name || '').trim()) {
+        this.$q.notify({ message: this.$t('runeNameRequired'), type: 'warning', position: 'top' })
+        return
+      }
       if (!this.monacoReady) {
         this.initMonacoWithGuards()
         return
@@ -637,8 +674,8 @@ export default {
         templateLen: (this.form.template || '').length,
         templatePreview: String(this.form.template || '').substring(0, 160)
       })
+      // 关闭交给父组件 onRuneSubmit 根据保存结果决定（重名等错误需保留 dialog 让用户改名）
       this.$emit('submit', { ...this.form })
-      this.dialog && this.dialog.hide()
     }
   }
 }
