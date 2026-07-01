@@ -340,7 +340,20 @@ const createUuid = () => {
 
 export const createDefaultRuneTemplate = () => {
   return `<template>
-  <span class="rune-text">{{ text }}</span>
+  <div class="rune-echo-demo">
+    <div class="rune-echo-demo__label">符文 · 回声演示</div>
+    <div class="rune-echo-demo__display">{{ text || '点击下方输入框试试，value 会回填到 Markdown' }}</div>
+    <input
+      class="rune-echo-demo__input"
+      :value="text"
+      placeholder="输入内容，触发 input 事件把 value 写回 MD"
+      @input="handleInput"
+    />
+    <div class="rune-echo-demo__meta">
+      <span>nodeId: <code>{{ nodeId || '-' }}</code></span>
+      <span>runeId: <code>{{ runeId || '-' }}</code></span>
+    </div>
+  </div>
 </temp` + `late>
 
 <script>
@@ -349,18 +362,98 @@ export default {
     value: {
       type: [String, Number],
       default: null
+    },
+    runeId: {
+      type: String,
+      default: ''
+    },
+    nodeId: {
+      type: String,
+      default: ''
+    },
+    rune: {
+      type: Object,
+      default: null
     }
   },
   data() {
     return {
-      text: this.value
+      text: this.value == null ? '' : String(this.value)
+    }
+  },
+  watch: {
+    value (next) {
+      const normalized = next == null ? '' : String(next)
+      if (normalized !== this.text) {
+        this.text = normalized
+      }
+    }
+  },
+  methods: {
+    handleInput (event) {
+      const next = event && event.target ? String(event.target.value || '') : ''
+      this.text = next
+      // 与 TODO 中 RuneValue { runeId, nodeId, value } 的字段对齐；
+      // 外层 RunePreviewRenderer 会捕获 input 事件并通过 onValueChange 回写到 MD。
+      this.$emit('input', next)
     }
   }
 }
 </sc` + `ript>
 
 <style lang="less" scoped>
-.rune-text { color: purple; }
+.rune-echo-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(126, 87, 194, 0.08);
+  border: 1px dashed rgba(126, 87, 194, 0.42);
+  font-family: inherit;
+  color: inherit;
+}
+.rune-echo-demo__label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: rgba(126, 87, 194, 0.85);
+}
+.rune-echo-demo__display {
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-word;
+  min-height: 20px;
+  color: rgba(0, 0, 0, 0.78);
+}
+.rune-echo-demo__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(126, 87, 194, 0.4);
+  background: rgba(255, 255, 255, 0.9);
+  font: inherit;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.rune-echo-demo__input:focus {
+  border-color: #7E57C2;
+  box-shadow: 0 0 0 2px rgba(126, 87, 194, 0.2);
+}
+.rune-echo-demo__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.55);
+}
+.rune-echo-demo__meta code {
+  font-family: Consolas, Monaco, monospace;
+  background: rgba(126, 87, 194, 0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
 </style>`
 }
 

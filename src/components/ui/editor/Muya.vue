@@ -365,10 +365,6 @@ const createRuneRendererCtor = (rune = {}) => {
       value: {
         type: String,
         default: ''
-      },
-      onValueChange: {
-        type: Function,
-        default: null
       }
     },
     data () {
@@ -377,44 +373,12 @@ const createRuneRendererCtor = (rune = {}) => {
         runeMeta: this.rune || rune
       }
     },
-    methods: {
-      forwardRuneInput (nextValue) {
-        const onValueChange = this.onValueChange
-        if (typeof onValueChange !== 'function') return
-        onValueChange({
-          runeId: String(this.runeId || ''),
-          nodeId: String(this.nodeId || ''),
-          value: nextValue == null ? '' : String(nextValue)
-        })
-      }
-    },
     render (h) {
       const vnode = compiled.render.call(this, h)
       if (vnode && typeof vnode === 'object') {
         const existingChildren = Array.isArray(vnode.children) ? vnode.children : []
         if (!existingChildren.length) {
           vnode.children = [String(this.value == null ? '' : this.value)]
-        }
-      }
-      // 把内层 SFC 触发的 input 事件转发为 onValueChange，
-      // 供 RunePreviewRenderer → Muya.updateRunePlaceholderValue 链路同步 Markdown。
-      if (vnode && typeof vnode === 'object') {
-        vnode.on = vnode.on || {}
-        const existingInput = vnode.on.input
-        const self = this
-        vnode.on.input = function (...args) {
-          if (typeof existingInput === 'function') {
-            try { existingInput.apply(this, args) } catch (error) { console.warn('[Rune] inner input handler error:', error) }
-          }
-          // 取原生 input 事件中的字符串值，避免破坏用户自定义 handler
-          const raw = args[0]
-          let nextValue
-          if (raw && typeof raw === 'object' && 'target' in raw && raw.target) {
-            nextValue = raw.target.value
-          } else {
-            nextValue = raw
-          }
-          self.forwardRuneInput(nextValue)
         }
       }
       return vnode
@@ -459,13 +423,32 @@ const RunePreviewRenderer = Vue.extend({
       return h('div')
     }
 
+    // 把内层 SFC 的 input 事件转发到 onValueChange，
+    // 让 RuneValue { runeId, nodeId, value } 回流到 Markdown 源。
+    const self = this
     return h(this.rendererCtor, {
       props: {
         runeId: this.runeId,
         nodeId: this.nodeId,
         rune: this.rune,
-        value: this.value,
-        onValueChange: this.onValueChange
+        value: this.value
+      },
+      on: {
+        input: function (...args) {
+          if (typeof self.onValueChange !== 'function') return
+          const raw = args[0]
+          let nextValue
+          if (raw && typeof raw === 'object' && 'target' in raw && raw.target) {
+            nextValue = raw.target.value
+          } else {
+            nextValue = raw
+          }
+          self.onValueChange({
+            runeId: self.runeId,
+            nodeId: self.nodeId,
+            value: nextValue == null ? '' : String(nextValue)
+          })
+        }
       }
     })
   }
@@ -948,7 +931,11 @@ export default {
       Muya.use(TableBarTools)
 
       this.echoRegistry.refresh(this.echoCards || [])
+      // 把 Vue 实例注入 Muya options，让 Muya 内部的 StateRender 能回调到我们的回写方法
+      // （见 src/libs/muya/lib/parser/render/index.js 的 mountRuneVueHosts）
+      const muyaSelf = this
       const { container } = this.contentEditor = new Muya(this.$refs.muya, {
+        __memocastMuya: muyaSelf,
         quickInsertProvider: () => {
           const runeItems = (this.runeCards || [])
             .filter(rune => rune && (rune.name || rune.text || rune.label))
