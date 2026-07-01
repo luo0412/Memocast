@@ -1,0 +1,79 @@
+// Design System Variables
+// These variables are injected into all SCSS files
+
+// Font families
+$font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', SF Pro SC,
+  SF Pro Display, SF Pro Icons, PingFang SC, Hiragino Sans GB, Microsoft YaHei,
+  Helvetica Neue, Helvetica, Arial, sans-serif;
+
+// Font sizes
+$font-h1: 600 26px / 36px #{$font-family};
+$font-h2: 700 20px / 32px #{$font-family};
+$font-h3: 600 16px / 24px #{$font-family};
+$font-large: 400 20px / 28px #{$font-family};
+$font-base: 400 16px / 24px #{$font-family};
+$font-small: 400 14px / 22px #{$font-family};
+$font-xs: 400 12px / 18px #{$font-family};
+
+// Border radius
+$radius-xxs: 4px;
+$radius-xs: 10px;
+$radius-s: 12px;
+$radius-m: 16px;
+$radius-l: 20px;
+$radius-xl: 24px;
+
+// Colors - Brand
+$color-brand-primary: #0057ff;
+$color-brand-primary-hover: #004ad9;
+$color-brand-primary-pressed: #003db3;
+$color-brand-primary-disable: rgba($color-brand-primary, 0.3);
+
+// Colors - Text
+$color-text-primary: #000;
+$color-text-secondary: rgba($color-text-primary, 0.85);
+$color-text-tertiary: rgba($color-text-primary, 0.5);
+$color-text-quaternary: rgba($color-text-primary, 0.3);
+$color-text-disable: rgba($color-text-primary, 0.15);
+$color-text-inverse: #fff;
+
+// Colors - Background
+$color-bg-primary: #fff;
+$color-bg-secondary: #f9fafb;
+$color-bg-tertiary: #f3f4f6;
+$color-bg-base: #f3f4f6;
+$color-bg-float: #fff;
+$color-bg-invert-primary: #232629;
+
+// Colors - Border
+$color-border-primary: rgba(#000, 0.1);
+$color-border-secondary: rgba(#000, 0.12);
+$color-border-tertiary: rgba(#000, 0.08);
+
+// Colors - System
+$color-success: #2fbc52;
+$color-alert: #ff3b30;
+$color-warning: #ff9500;
+$color-info: #0057ff;
+
+// Shadows
+$shadow-lv1: 0px 1px 2px 0px rgba(0, 0, 0, 0.05), 0px 0px 1px 0px rgba(0, 0, 0, 0.15);
+$shadow-lv2: 0px 6px 10px 0px rgba(0, 0, 0, 0.08), 0px 0px 1px 0px rgba(0, 0, 0, 0.15);
+$shadow-lv3: 0px 10px 20px 0px rgba(0, 0, 0, 0.1), 0px 0px 1px 0px rgba(0, 0, 0, 0.15);
+
+// CSS Custom Properties export
+:root {
+  --s-font-family: #{$font-family};
+  --s-color-brand-primary-default: #{$color-brand-primary};
+  --s-color-brand-primary-hover: #{$color-brand-primary-hover};
+  --s-color-text-primary: #{$color-text-primary};
+  --s-color-text-secondary: #{$color-text-secondary};
+  --s-color-text-tertiary: #{$color-text-tertiary};
+  --s-color-text-quaternary: #{$color-text-quaternary};
+  --s-color-bg-primary: #{$color-bg-primary};
+  --s-color-bg-secondary: #{$color-bg-secondary};
+  --s-color-bg-float: #{$color-bg-float};
+  --s-color-border-primary: #{$color-border-primary};
+  --s-color-border-secondary: #{$color-border-secondary};
+  --s-color-border-tertiary: #{$color-border-tertiary};
+}

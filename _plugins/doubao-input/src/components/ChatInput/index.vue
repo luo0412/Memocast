@@ -8,6 +8,9 @@ import type { CustomEditor, CustomElement } from "../type";
 import SelectTag from "./components/SelectTag.vue";
 import InputTag from "./components/InputTag.vue";
 
+const emit = defineEmits<{
+  (e: 'send', text: string): void;
+}>();
 
 // #region ➤ 初始化编辑器
 // ================================================
@@ -98,37 +101,38 @@ const serializeToPlainText = (nodes: any[]): string => {
 
 function send() {
     const content = serializeToPlainText(editor.children);
-    console.info('输出内容', content);
-    alert(content);
+    if (content.trim()) {
+        emit('send', content);
+        // 清空编辑器
+        Editor.withoutNormalizing(editor, () => {
+            for (let i = editor.children.length - 1; i >= 0; i--) {
+                Transforms.removeNodes(editor, { at: [i] });
+            }
+            Transforms.insertNodes(editor, initialValue);
+        });
+    }
 }
 
 // #endregion 获取发送内容
+
 
 // #region ➤ 使用技能
 // ================================================
 
 function setEditValue(value: Node | Node[]) {
-
-    // 应用新内容
     Editor.withoutNormalizing(editor, () => {
-        // 清空现有内容
         for (let i = editor.children.length - 1; i >= 0; i--) {
             Transforms.removeNodes(editor, { at: [i] });
         }
-
-        // 插入新内容
         Transforms.insertNodes(editor, value);
     });
 
-    // 重置选择位置到开头
     const startPoint = Editor.start(editor, [0, 0]);
     Transforms.select(editor, {
         anchor: startPoint,
         focus: startPoint
     });
 }
-
-
 
 // #endregion 使用技能
 
@@ -245,7 +249,18 @@ defineExpose({
 
         .send-btn {
             border-radius: 18px;
-            background-color: var(--s-color-text-disable);
+            background-color: var(--s-color-brand-primary-default, #0057ff);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            
+            &:hover {
+                background-color: var(--s-color-brand-primary-hover, #004ad9);
+                transform: scale(1.05);
+            }
+            
+            &:active {
+                transform: scale(0.95);
+            }
         }
     }
 }

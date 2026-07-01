@@ -1,113 +1,194 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import ChatInput from './components/ChatInput/index.vue'
-import type { Node } from 'slate-vue3/core';
-import type { CustomNode } from './components/type';
+import ChatInput from './components/ChatInput/index.vue';
+import MessageList from './components/ChatMessage/MessageList.vue';
+import SkillsPanel from './components/Skills/SkillsPanel.vue';
+import { skillsData, type Skill } from './components/Skills/skillsData';
+import type { ChatMessage } from './components/ChatMessage/type';
 
-const skills = ref<{
-  label: string;
-  value: string;
-  url: string;
-  description: string;
-  skill: CustomNode[];
-}[]>([
-  {
-    label: '写作',
-    value: '1',
-    url: "",
-    description: "分步骤生成大纲和文档",
-    skill: [
-      {
-        type: 'paragraph',
-        children: [
-          { text: '我是一名' },
-          { type: 'input-tag', children: [{ text: '公众号博主' }], label: '[输入职业]' },
-          { text: '，帮我写一篇关于' },
-          { type: 'input-tag', children: [{ text: '' }], label: '[输入主题]' },
-          { type: 'select-tag', children: [{ text: '' }], value: '文章', options: [{ label: '文章', value: '文章' }, { label: '论文', value: '论文' }, { label: '研究报告', value: '研究报告' }] },
-        ]
-      }
-    ]
-  },
-  {
-    label: '翻译',
-    value: '2',
-    url: "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/samantha/writing-templates/icon/Article.png",
-    description: "撰写各主流平台文章",
-    skill: [
-      {
-        type: 'paragraph', children: [
-          { text: '我是', },
-          { type: 'input-tag', children: [{ text: '计算机' }], label: '[计算机]' },
-          { text: '专业的', },
-          { type: 'select-tag', children: [{ text: '' }], value: '本科生', options: [{ label: '本科生', value: '本科生' }, { label: '研究生', value: '研究生' }, { label: '博士生', value: '博士生' }] },
-          { text: '帮我写一篇关于', },
-          { type: 'input-tag', children: [{ text: '' }], label: '[输入主题]' },
-          { text: '的论文。', },
-        ],
-      },
-    ]
-  },
-  {
-    label: '翻译',
-    value: '3',
-    url: "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/samantha/writing-templates/icon/Article.png",
-    description: "凝练你的工作成效",
-    skill: [
-      {
-        type: 'paragraph',
-        children: [{ text: '这是一个段落' }]
-      }
-    ]
-  },
-  {
-    label: '翻译',
-    value: '4',
-    url: "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/samantha/writing-templates/icon/Article.png",
-    description: "撰写专业详实的论文",
-    skill: [
-      {
-        type: 'paragraph',
-        children: [{ text: '这是一个段落' }]
-      }
-    ]
-  },
-  {
-    label: '翻译',
-    value: '5',
-    url: "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/samantha/writing-templates/icon/Article.png",
-    description: "专为学生打造满分作文",
-    skill: [
-      {
-        type: 'paragraph',
-        children: [{ text: '这是一个段落' }]
-      }
-    ]
-  },
-])
-
+// Message list
+const messages = ref<ChatMessage[]>([]);
+const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
 
-function handleSelect(item: { skill: Node[] }) {
-  chatInputRef.value?.setEditValue(item.skill)
+// Skills panel state
+const showSkillsPanel = ref(true);
+const skillsCategories = ref(skillsData);
+
+// Generate unique ID
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// Handle skill selection
+function handleSkillSelect(skill: Skill) {
+  // Use the skill template nodes
+  if (chatInputRef.value) {
+    chatInputRef.value.setEditValue(skill.nodes);
+  }
+  showSkillsPanel.value = false;
+}
+
+// Toggle skills panel
+function toggleSkillsPanel() {
+  showSkillsPanel.value = !showSkillsPanel.value;
+}
+
+// Send message handler
+async function handleSend(text: string) {
+  if (!text.trim()) return;
+  
+  // Hide skills panel when sending
+  showSkillsPanel.value = false;
+  
+  // Add user message
+  const userMessage: ChatMessage = {
+    id: generateId(),
+    role: 'user',
+    content: text,
+    createdAt: Date.now(),
+    status: 'done'
+  };
+  messages.value.push(userMessage);
+  
+  // Add placeholder assistant message for streaming
+  const assistantMessage: ChatMessage = {
+    id: generateId(),
+    role: 'assistant',
+    content: '',
+    createdAt: Date.now(),
+    status: 'loading'
+  };
+  messages.value.push(assistantMessage);
+  
+  // Scroll to bottom
+  await new Promise(resolve => setTimeout(resolve, 100));
+  messageListRef.value?.scrollToBottom();
+  
+  // Simulate streaming response
+  await simulateStreamingResponse(assistantMessage);
+}
+
+// Simulate AI streaming response
+async function simulateStreamingResponse(message: ChatMessage) {
+  const responses = [
+    `你好！我是你的 AI 助手。让我来回答你的问题。
+
+## 关于这个问题
+
+我可以提供以下帮助：
+
+1. **信息检索** - 帮你查找相关资料
+2. **问题解答** - 回答你的疑问
+3. **内容创作** - 帮助你写作和创作
+
+有什么我可以帮你的吗？
+
+\`\`\`javascript
+function hello() {
+  console.log("Hello, World!");
+}
+\`\`\`
+`,
+    `好的，让我来为你解答。
+
+这是一个关于编程的问题。我可以提供详细的代码示例：
+
+### 解决方案
+
+\`\`\`python
+def calculate_sum(n):
+    total = 0
+    for i in range(1, n + 1):
+        total += i
+    return total
+\`\`\`
+
+如果你有任何其他问题，请随时提问！
+`,
+    `感谢你的提问！让我思考一下...
+
+### 分析
+
+根据你的描述，这个问题可以分为以下几个步骤：
+
+- 步骤 1：理解需求
+- 步骤 2：设计方案
+- 步骤 3：实现代码
+- 步骤 4：测试验证
+
+如果你需要更具体的帮助，请提供更多细节。`
+  ];
+  
+  const response = responses[Math.floor(Math.random() * responses.length)];
+  message.status = 'streaming';
+  
+  // Stream character by character
+  for (let i = 0; i < response.length; i++) {
+    await new Promise(resolve => setTimeout(resolve, 20 + Math.random() * 30));
+    message.content = response.slice(0, i + 1);
+    messageListRef.value?.scrollToBottom();
+  }
+  
+  message.status = 'done';
+}
+
+// Clear messages
+function handleClear() {
+  messages.value = [];
 }
 </script>
 
 <template>
   <div class="container">
-    <div class="content-wrapper">
-      <h1>帮我写作</h1>
-      <h2>多种体裁，润色校对，一键成文</h2>
-      <ChatInput ref="chatInputRef" />
-      <!-- 技能列表 -->
-      <div class="skill-box">
-        <div class="skill-item" v-for="item in skills" :key="item.value" @click="handleSelect(item)">
-          <div class="item-header">
-            <img v-if="item.url" :src="item.url" class="skill-icon" />
-            <div class="skill-label">{{ item.label }}</div>
+    <div class="chat-wrapper">
+      <!-- Header -->
+      <div class="chat-header">
+        <h1>AI 助手</h1>
+        <div class="header-actions">
+          <button 
+            class="action-btn" 
+            :class="{ active: showSkillsPanel }"
+            @click="toggleSkillsPanel"
+            title="技能模板"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/>
+            </svg>
+          </button>
+          <button v-if="messages.length > 0" class="action-btn" @click="handleClear" title="清空对话">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Main Content -->
+      <div class="chat-main">
+        <!-- Skills Panel -->
+        <transition name="slide">
+          <div v-if="showSkillsPanel" class="skills-sidebar">
+            <SkillsPanel 
+              :categories="skillsCategories" 
+              @select="handleSkillSelect"
+            />
           </div>
-          <div class="item-description">
-            {{ item.description }}
+        </transition>
+        
+        <!-- Message Area -->
+        <div class="message-area">
+          <!-- Message List -->
+          <div class="chat-body">
+            <MessageList ref="messageListRef" :messages="messages" />
+          </div>
+          
+          <!-- Input Area -->
+          <div class="chat-footer">
+            <ChatInput 
+              ref="chatInputRef" 
+              @send="handleSend" 
+            />
           </div>
         </div>
       </div>
@@ -122,77 +203,112 @@ function handleSelect(item: { skill: Node[] }) {
   display: flex;
   justify-content: center;
   align-items: center;
+  background: var(--s-color-bg-primary, #ffffff);
+}
 
-  .content-wrapper {
+.chat-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--s-color-border-tertiary, rgba(0, 0, 0, 0.08));
+  flex-shrink: 0;
+  
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--s-color-text-primary, #000);
+    margin: 0;
+  }
+  
+  .header-actions {
     display: flex;
-    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .action-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
     justify-content: center;
-    max-width: 809px;
-    width: 100%;
-
-    h1 {
-      color: var(--s-color-text-secondary);
-      font: var(--s-font-h1);
-      margin: 28px 0 10px 0;
-      text-align: center;
+    border: 1px solid var(--s-color-border-tertiary, rgba(0, 0, 0, 0.08));
+    border-radius: 8px;
+    background: transparent;
+    color: var(--s-color-text-secondary, rgba(0, 0, 0, 0.85));
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    svg {
+      width: 18px;
+      height: 18px;
     }
-
-    h2 {
-      height: 52px;
-      font: var(--s-font-base);
-      text-align: center;
-      color: rgba(0, 0, 0, 0.3);
-      margin-bottom: 20px;
+    
+    &:hover {
+      background: var(--s-color-bg-secondary, #f3f4f6);
+      border-color: var(--s-color-border-secondary, rgba(0, 0, 0, 0.15));
     }
-
-    .skill-box {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-bottom: 20px;
-      margin-top: 20px;
-
-      .skill-item {
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        border-radius: 10px;
-        height: 86px;
-        display: flex;
-        flex-direction: column;
-        padding: 10px 16px 0 16px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-
-        &:hover {
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-          transform: translateY(-2px);
-        }
-
-        .item-header {
-          display: flex;
-          align-items: center;
-
-          .skill-icon {
-            width: 18px;
-            height: 18px;
-          }
-
-          .skill-label {
-            color: var(--s-color-text-primary);
-            font: var(--s-font-small-strong);
-            padding-left: 8px;
-          }
-        }
-
-        .item-description {
-          height: 32px;
-          margin-top: 4px;
-          width: 100%;
-          color: var(--s-color-text-quaternary);
-          font-size: 12px;
-          line-height: 16px;
-        }
-      }
+    
+    &.active {
+      background: var(--s-color-brand-primary-default, #0057ff);
+      border-color: var(--s-color-brand-primary-default, #0057ff);
+      color: white;
     }
   }
+}
+
+.chat-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.skills-sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--s-color-border-tertiary, rgba(0, 0, 0, 0.08));
+  overflow: hidden;
+}
+
+.message-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.chat-footer {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--s-color-border-tertiary, rgba(0, 0, 0, 0.08));
+  background: var(--s-color-bg-primary, #ffffff);
+}
+
+// Transition animations
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  width: 0;
+  opacity: 0;
 }
 </style>

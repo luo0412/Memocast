@@ -1,13 +1,39 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + Vue + TS</title>
+    <title>AI 助手</title>
+    <style>
+      /* 防止样式闪烁 */
+      html { background: #fff; }
+      html.dark { background: #232629; }
+    </style>
   </head>
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      // 从 URL 参数或父窗口获取主题设置
+      (function() {
+        const params = new URLSearchParams(window.location.search);
+        const theme = params.get('theme') || 'light';
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        }
+        
+        // 监听父窗口的主题变化
+        window.addEventListener('message', function(e) {
+          if (e.data && e.data.type === 'theme') {
+            if (e.data.theme === 'dark') {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
+            }
+          }
+        });
+      })();
+    </script>
   </body>
 </html>
