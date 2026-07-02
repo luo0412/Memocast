@@ -134,7 +134,42 @@
           <div class='rune-form-editor-wrap'>
             <div class='row items-center justify-between q-mb-xs'>
               <div class='rune-form-label q-mb-none'>模板内容</div>
-              <q-btn flat dense no-caps size='sm' color='primary' icon='refresh' label='重置模板' @click='resetTemplate' />
+              <div class='row items-center no-wrap q-gutter-xs'>
+                <q-select
+                  v-model='selectedPreset'
+                  dense
+                  outlined
+                  :options='presetTemplateOptions'
+                  option-label='label'
+                  option-value='value'
+                  emit-value
+                  map-options
+                  display-value=''
+                  hide-selected
+                  fill-input
+                  use-input
+                  clearable
+                  placeholder='预设模板'
+                  class='preset-template-select'
+                  @input='onPresetSelected'
+                >
+                  <template v-slot:selected-item='scope'>
+                    <span class='preset-template-label'>{{ scope.opt ? scope.opt.label : '' }}</span>
+                  </template>
+                  <template v-slot:option='scope'>
+                    <q-item v-bind='scope.itemProps' v-on='scope.itemEvents'>
+                      <q-item-section avatar>
+                        <q-icon :name='scope.opt.icon' :color='scope.opt.color' size='1.2em' />
+                      </q-item-section>
+                      <q-item-section>
+                        <q-item-label>{{ scope.opt.label }}</q-item-label>
+                        <q-item-label caption lines='1'>{{ scope.opt.desc }}</q-item-label>
+                      </q-item-section>
+                    </q-item>
+                  </template>
+                </q-select>
+                <q-btn flat dense no-caps size='sm' color='primary' icon='refresh' label='重置' @click='resetTemplate' />
+              </div>
             </div>
             <div
               ref='editorContainer'
@@ -275,6 +310,21 @@
   border-radius: 4px;
   overflow: hidden;
   margin-top: 4px;
+}
+
+.preset-template-select {
+  min-width: 120px;
+  max-width: 180px;
+}
+
+.preset-template-select :deep(.q-field__control) {
+  min-height: 32px;
+}
+
+.preset-template-label {
+  font-size: 12px;
+  color: #7E57C2;
+  font-weight: 500;
 }
 
 .body--dark .rune-monaco-editor {
@@ -457,6 +507,181 @@ export default {
 </style>`
 }
 
+// ===== 圣光庇护：演示 this.$hel.preFetchLib 远程加载 lodash =====
+export const createHolyShieldTemplate = () => {
+  return `<template>
+  <div class="rune-holy-shield">
+    <div class="rune-holy-shield__banner">
+      <div class="rune-holy-shield__icon">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+        </svg>
+      </div>
+      <div class="rune-holy-shield__title">圣光庇护</div>
+    </div>
+
+    <div class="rune-holy-shield__desc">
+      演示 hel-micro 远程加载 lodash
+    </div>
+
+    <div class="rune-holy-shield__input-row">
+      <input
+        class="rune-holy-shield__input"
+        v-model="rawInput"
+        placeholder="输入数字，每 300ms 防抖后显示结果"
+        @input="onInput"
+      />
+    </div>
+
+    <div class="rune-holy-shield__result" v-if="result !== null">
+      <span class="rune-holy-shield__result-label">lodash debounce 结果：</span>
+      <code class="rune-holy-shield__result-value">{{ result }}</code>
+    </div>
+
+    <div class="rune-holy-shield__meta">
+      <span>nodeId: <code>{{ nodeId || '-' }}</code></span>
+      <span>runeId: <code>{{ runeId || '-' }}</code></span>
+    </div>
+  </div>
+</temp` + `late>
+
+<s` + `cript>
+// 圣光庇护符文：通过 this.$hel.preFetchLib 远程加载 lodash
+// hel-micro 会先从 CDN 拉取模块，缓存在内存中供后续调用复用。
+// this.$hel 在 src/boot/hel-micro-renderer.js 中挂载。
+export default {
+  props: {
+    value: { type: [String, Number], default: null },
+    runeId: { type: String, default: '' },
+    nodeId: { type: String, default: '' },
+    rune: { type: Object, default: null }
+  },
+  data() {
+    return {
+      rawInput: '',
+      result: null,
+      _debounceTimer: null
+    }
+  },
+  watch: {
+    value(next) {
+      const s = next == null ? '' : String(next)
+      if (s !== this.rawInput) this.rawInput = s
+    }
+  },
+  methods: {
+    async onInput() {
+      clearTimeout(this._debounceTimer)
+      this._debounceTimer = setTimeout(async () => {
+        try {
+          // hel-micro 会按 appName='lodash' 从 CDN 拉取并缓存
+          const lodash = await this.\$hel.preFetchLib('lodash')
+          const n = parseFloat(this.rawInput)
+          this.result = lodash.isNumber(n) ? lodash.debounce(x => x, 300)(n) : 'NaN'
+          this.\$emit('input', String(this.result))
+        } catch (e) {
+          console.error('[HolyShield] lodash load failed:', e)
+          this.result = 'load failed'
+        }
+      }, 300)
+    }
+  },
+  beforeDestroy() {
+    clearTimeout(this._debounceTimer)
+  }
+}
+</scri` +  `pt>
+
+<style lang="less" scoped>
+.rune-holy-shield {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 202, 40, 0.07);
+  border: 1px solid rgba(255, 193, 7, 0.4);
+  font-family: inherit;
+  color: inherit;
+}
+.rune-holy-shield__banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rune-holy-shield__icon {
+  color: #FFC107;
+  display: flex;
+  align-items: center;
+}
+.rune-holy-shield__title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: rgba(255, 160, 0, 0.9);
+}
+.rune-holy-shield__desc {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+  margin-top: -4px;
+}
+.rune-holy-shield__input-row {
+  display: flex;
+}
+.rune-holy-shield__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 193, 7, 0.5);
+  background: rgba(255, 255, 255, 0.92);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.rune-holy-shield__input:focus {
+  border-color: #FFB300;
+  box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.18);
+}
+.rune-holy-shield__result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.7);
+  background: rgba(255, 193, 7, 0.1);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.rune-holy-shield__result-label {
+  font-weight: 500;
+}
+.rune-holy-shield__result-value {
+  font-family: Consolas, Monaco, monospace;
+  background: rgba(255, 160, 0, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #E65100;
+  font-weight: 600;
+}
+.rune-holy-shield__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.45);
+}
+.rune-holy-shield__meta code {
+  font-family: Consolas, Monaco, monospace;
+  background: rgba(255, 193, 7, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+</style>`
+}
+
 const ICON_NAME_MAP = {
   whatshot: 'local_fire_department',
   ac_unit: 'ac_unit',
@@ -515,6 +740,23 @@ export default {
         template: createDefaultRuneTemplate(),
         category: DEFAULT_RUNE_CATEGORY
       },
+      selectedPreset: null,
+      presetTemplateOptions: [
+        {
+          label: '圣光庇护',
+          desc: 'hel-micro 远程加载 lodash，演示 preFetchLib 用法',
+          icon: 'security',
+          color: 'amber',
+          templateFn: 'createHolyShieldTemplate'
+        },
+        {
+          label: '空白模板',
+          desc: '基础演示，接收 input 事件回写到 Markdown',
+          icon: 'description',
+          color: 'purple',
+          templateFn: 'createDefaultRuneTemplate'
+        }
+      ],
       monacoEditor: null,
       runeCategoryOptions: RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) })),
       iconOptions: [
@@ -744,9 +986,25 @@ export default {
     resetTemplate () {
       const nextTemplate = createDefaultRuneTemplate()
       this.form.template = nextTemplate
+      this.selectedPreset = null
       if (this.monacoEditor && this.monacoReady) {
         this.monacoEditor.setValue(nextTemplate)
       }
+    },
+    onPresetSelected (preset) {
+      if (!preset) return
+      const fnName = preset.templateFn
+      let nextTemplate = createDefaultRuneTemplate()
+      if (fnName === 'createHolyShieldTemplate') {
+        nextTemplate = createHolyShieldTemplate()
+      }
+      this.form.template = nextTemplate
+      if (this.monacoEditor && this.monacoReady) {
+        this.monacoEditor.setValue(nextTemplate)
+      }
+      this.$nextTick(() => {
+        this.selectedPreset = null
+      })
     },
     submit () {
       if (!String(this.form.name || '').trim()) {
