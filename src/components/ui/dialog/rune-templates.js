@@ -107,48 +107,25 @@ export default {
 </style>`
 }
 
-// ===== 圣光庇护：演示 this.$hel.preFetchLib 远程加载 lodash =====
+// ===== hel-micro：演示 this.$hel.preFetchLib 远程加载 =====
 export const createHolyShieldTemplate = () => {
   return `<template>
-  <div class="rune-holy-shield">
-    <div class="rune-holy-shield__banner">
-      <div class="rune-holy-shield__icon">
-        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-        </svg>
-      </div>
-      <div class="rune-holy-shield__title">圣光庇护</div>
-    </div>
-
-    <div class="rune-holy-shield__desc">
-      演示 hel-micro 远程加载 lodash
-    </div>
-
-    <div class="rune-holy-shield__input-row">
-      <input
-        class="rune-holy-shield__input"
-        v-model="rawInput"
-        placeholder="输入数字，每 300ms 防抖后显示结果"
-        @blur="onInput"
-      />
-    </div>
-
-    <div class="rune-holy-shield__result" v-if="result !== null">
-      <span class="rune-holy-shield__result-label">lodash debounce 结果：</span>
-      <code class="rune-holy-shield__result-value">{{ result }}</code>
-    </div>
-
-    <div class="rune-holy-shield__meta">
-      <span>nodeId: <code>{{ nodeId || '-' }}</code></span>
-      <span>runeId: <code>{{ runeId || '-' }}</code></span>
+  <div class="hel-micro">
+    <input
+      class="hel-micro__input"
+      v-model="rawInput"
+      placeholder="输入数字，失焦后显示结果"
+      @blur="onInput"
+    />
+    <div class="hel-micro__result" v-if="result !== null">
+      <span>num.random 结果：</span>
+      <code>{{ result }}</code>
     </div>
   </div>
 <\/template>
 
 <script>
-// 圣光庇护符文：通过 this.$hel.preFetchLib 远程加载 lodash
-// hel-micro 会先从 CDN 拉取模块，缓存在内存中供后续调用复用。
-// this.$hel 在 src/boot/hel-micro-renderer.js 中挂载。
+// hel-micro 远程加载：this.$hel 在 src/boot/hel-micro-renderer.js 中挂载
 export default {
   props: {
     value: { type: [String, Number], default: null },
@@ -174,15 +151,13 @@ export default {
       clearTimeout(this._debounceTimer)
       this._debounceTimer = setTimeout(async () => {
         try {
-          // hel-micro 会按 appName='hel-tpl-remote-lib' 从 CDN 拉取并缓存
           const lib = await this.$hel.preFetchLib('hel-tpl-remote-lib', '2.0.1')
-
           console.log('lib', lib)
           const n = parseFloat(this.rawInput)
           this.result = lib.num.random(n)
           this.$emit('input', String(this.result))
         } catch (e) {
-          console.error('[HolyShield] lodash load failed:', e)
+          console.error('[hel-micro] load failed:', e)
           this.result = 'load failed'
         }
       }, 300)
@@ -195,58 +170,34 @@ export default {
 <\/script>
 
 <style lang="less" scoped>
-.rune-holy-shield {
+.hel-micro {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: rgba(255, 202, 40, 0.07);
-  border: 1px solid rgba(255, 193, 7, 0.4);
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 193, 7, 0.06);
+  border: 1px dashed rgba(255, 193, 7, 0.4);
   font-family: inherit;
   color: inherit;
 }
-.rune-holy-shield__banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.rune-holy-shield__icon {
-  color: #FFC107;
-  display: flex;
-  align-items: center;
-}
-.rune-holy-shield__title {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: rgba(255, 160, 0, 0.9);
-}
-.rune-holy-shield__desc {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.55);
-  margin-top: -4px;
-}
-.rune-holy-shield__input-row {
-  display: flex;
-}
-.rune-holy-shield__input {
+.hel-micro__input {
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 12px;
+  padding: 7px 10px;
   border-radius: 8px;
   border: 1px solid rgba(255, 193, 7, 0.5);
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.9);
   font: inherit;
   font-size: 13px;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.rune-holy-shield__input:focus {
+.hel-micro__input:focus {
   border-color: #FFB300;
-  box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.18);
+  box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.2);
 }
-.rune-holy-shield__result {
+.hel-micro__result {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -257,29 +208,13 @@ export default {
   border-radius: 6px;
   padding: 6px 10px;
 }
-.rune-holy-shield__result-label {
-  font-weight: 500;
-}
-.rune-holy-shield__result-value {
+.hel-micro__result code {
   font-family: Consolas, Monaco, monospace;
   background: rgba(255, 160, 0, 0.12);
   padding: 1px 6px;
   border-radius: 4px;
   color: #E65100;
   font-weight: 600;
-}
-.rune-holy-shield__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.45);
-}
-.rune-holy-shield__meta code {
-  font-family: Consolas, Monaco, monospace;
-  background: rgba(255, 193, 7, 0.1);
-  padding: 1px 5px;
-  border-radius: 4px;
 }
 </style>`
 }
