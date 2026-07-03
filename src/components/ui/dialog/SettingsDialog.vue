@@ -2143,7 +2143,7 @@ export default {
 .rune-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, 132px);
-  justify-content: start;
+  justify-content: space-around;
   gap: 8px;
   padding: 4px 2px;
   min-height: 80px;
