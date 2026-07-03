@@ -380,7 +380,8 @@ import {
   createBlankTemplate,
   createInputTemplate,
   createHolyShieldTemplate,
-  createJxgDemoTemplate
+  createJxgDemoTemplate,
+  createFireflyTemplate
 } from './rune-templates'
 
 const createUuid = () => {
@@ -475,6 +476,20 @@ export default {
           icon: 'cloud_download',
           color: 'amber',
           templateFn: 'createHolyShieldTemplate'
+        },
+        {
+          label: '星河绘图',
+          desc: '通过 this.$jxg 绘制坐标系与函数图像（JSXGraph）',
+          icon: 'show_chart',
+          color: 'blue',
+          templateFn: 'createJxgDemoTemplate'
+        },
+        {
+          label: '萤火虫',
+          desc: 'CSS3 多点发光动画，点击萤火虫上报坐标（参考博客园）',
+          icon: 'auto_awesome',
+          color: 'amber',
+          templateFn: 'createFireflyTemplate'
         }
       ],
       monacoEditor: null,
@@ -755,6 +770,8 @@ export default {
         nextTemplate = createHolyShieldTemplate()
       } else if (fnName === 'createJxgDemoTemplate') {
         nextTemplate = createJxgDemoTemplate()
+      } else if (fnName === 'createFireflyTemplate') {
+        nextTemplate = createFireflyTemplate()
       }
       this.form.template = nextTemplate
       if (this.monacoEditor && this.monacoReady) {
