@@ -882,11 +882,17 @@ export default {
       }
     },
     runeCategoryOptions () {
-      return RUNE_CATEGORIES.map(c => ({
+      const opts = RUNE_CATEGORIES.map(c => ({
         value: c.value,
         label: this.$t(c.i18nKey),
         count: (this.localRuneCards || []).filter(r => getRuneCategoryValue(r && r.category) === c.value).length
       }))
+      // 通用永远靠前,其余按数量倒序
+      return opts.sort((a, b) => {
+        if (a.value === 'general') return -1
+        if (b.value === 'general') return 1
+        return b.count - a.count
+      })
     },
     localRuneCardsInCategory () {
       const target = this.runeCategory
@@ -904,7 +910,7 @@ export default {
       return (this.echoCards || []).filter(echo => !echo.isBuiltin)
     },
     echoCategoryOptions () {
-      return ECHO_CATEGORIES.map(c => ({
+      const opts = ECHO_CATEGORIES.map(c => ({
         value: c.value,
         label: this.$t(c.i18nKey),
         count: (this.localEchoCards || []).filter(e => {
@@ -912,6 +918,12 @@ export default {
           return cat === c.value
         }).length
       }))
+      // 内置永远靠前,其余按数量倒序
+      return opts.sort((a, b) => {
+        if (a.value === 'builtin') return -1
+        if (b.value === 'builtin') return 1
+        return b.count - a.count
+      })
     },
     localEchoCardsInCategory () {
       const target = this.echoCategory
