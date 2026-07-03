@@ -276,6 +276,11 @@ module.exports = function (/* ctx */) {
 
       builder: {
         appId: 'cn.coolma.app',
+        // ─── 跳过原生模块 Electron target 重新编译 ───
+        // bufferutil / utf-8-validate / cpu-features 均为 optionalDependencies，
+        // 不需要为 Electron 版本的 Node 重新编译，跳过可避免 Windows 下无 Visual Studio 而报错
+        npmRebuild: false,
+
         // ─── 第二轮优化：Electron 构建优化 ───
 
         // 禁用不必要的功能以减小体积

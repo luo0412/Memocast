@@ -278,7 +278,7 @@
 </template>
 
 <script>
-import { getBlogDeployConfig, saveBlogDeployConfig, selectDirectory, invokeApi } from 'src/ApiInvoker'
+import { getBlogDeployConfig, saveBlogDeployConfig, selectDirectory, invokeApi, sftpTestConnection } from 'src/ApiInvoker'
 
 export default {
   name: 'BlogDeployDialog',
@@ -364,7 +364,7 @@ export default {
     },
     async selectPrivateKey () {
       try {
-        const result = await invokeApi('select-directory', { title: this.$t('sftpSelectKeyFile') })
+        const result = await selectDirectory(this.$t('sftpSelectKeyFile'))
         if (!result.canceled && result.filePath) {
           this.localConfig.sftp.privateKeyPath = result.filePath
         }
@@ -378,7 +378,7 @@ export default {
     async testSftpConnection () {
       this.testingConnection = true
       try {
-        const result = await invokeApi('sftp-test-connection', this.localConfig.sftp)
+        const result = await sftpTestConnection(this.localConfig.sftp)
         if (result.success) {
           this.$q.notify({
             message: this.$t('sftpTestSuccess'),

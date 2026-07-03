@@ -143,5 +143,11 @@
   },
   "resolutions": {
     "@types/minimatch": "5.1.2"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^4.0.0",
+    "cpu-features": "~0.0.10",
+    "nan": "^2.23.0",
+    "utf-8-validate": "^5.0.0"
   }
 }

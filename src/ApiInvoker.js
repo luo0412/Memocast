@@ -130,6 +130,17 @@ async function selectDirectory (title) {
   return ipcRenderer.invoke(channels.selectDirectory, { title })
 }
 
+/**
+ * 通用 IPC 调用（兜底用）
+ */
+function invokeApi (channel, ...args) {
+  return ipcRenderer.invoke(channel, ...args)
+}
+
+async function sftpTestConnection (config) {
+  return ipcRenderer.invoke(channels.sftpTestConnection, config)
+}
+
 export {
   exportMarkdownFile,
   exportPng,
@@ -155,5 +166,7 @@ export {
   cancelBlogDeploy,
   getBlogDeployConfig,
   saveBlogDeployConfig,
-  selectDirectory
+  selectDirectory,
+  invokeApi,
+  sftpTestConnection
 }
