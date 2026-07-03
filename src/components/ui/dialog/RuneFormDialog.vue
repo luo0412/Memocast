@@ -1041,6 +1041,38 @@ export default {
         this.monacoInitTimer = null
       }
     },
+    _setupMonacoClipboard () {
+      if (window.__electronClipboard) {
+        const self = this
+        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+          const selection = self.monacoEditor.getSelection()
+          const selectedText = self.monacoEditor.getModel().getValueInRange(selection)
+          if (selectedText) {
+            window.__electronClipboard.writeText(selectedText)
+          }
+          self.monacoEditor.trigger('keyboard', 'editor.action.clipboardCopyAction', null)
+        })
+        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+          const text = window.__electronClipboard.readText()
+          if (text) {
+            const selection = self.monacoEditor.getSelection()
+            self.monacoEditor.executeEdits('paste', [{
+              range: selection,
+              text: text,
+              forceMoveMarkers: true
+            }])
+          }
+        })
+        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+          const selection = self.monacoEditor.getSelection()
+          const selectedText = self.monacoEditor.getModel().getValueInRange(selection)
+          if (selectedText) {
+            window.__electronClipboard.writeText(selectedText)
+          }
+          self.monacoEditor.trigger('keyboard', 'editor.action.clipboardCutAction', null)
+        })
+      }
+    },
     disposeMonaco () {
       this.monacoReady = false
       if (this.monacoEditor) {
@@ -1123,6 +1155,7 @@ export default {
         domReadOnly: false,
         fontFamily: 'JetBrains Mono, Fira Code, Monaco, PingFang SC, Hiragino Sans GB, 微软雅黑, Arial, sans-serif'
       })
+      this._setupMonacoClipboard()
       this.monacoEditor.onDidChangeModelContent(() => {
         if (!this.monacoEditor) return
         this.form.template = this.monacoEditor.getValue()
