@@ -317,27 +317,41 @@ async function initDatabase() {
 function initSchema() {
   const BUILTIN_RUNE_IDS = new Set(['rune-1', 'rune-2', 'rune-3', 'rune-4', 'rune-5', 'rune-6'])
   const createDefaultRuneTemplate = () => `<template>
-   <span class="rune-text"> {{ text }}</span>
+  <div class="blank-page">
+    <!-- HTML 结构区域 -->
+    <p>Vue2 空白组件</p>
+  </div>
 </template>
 
 <script>
 export default {
-    props: {
-        value: {
-            type: [String, Number],
-            default: null
-        }
-    },
-    data() {
-        return {
-            text: this.value
-        }
+  name: 'BlankDemo',
+  // 接收父组件参数
+  props: {},
+  data() {
+    return {
+      // 响应式数据
     }
+  },
+  computed: {
+    // 计算属性
+  },
+  watch: {
+    // 数据监听
+  },
+  methods: {
+    // 业务方法
+  },
+  // 生命周期钩子
+  created() {},
+  mounted() {},
+  updated() {},
+  destroyed() {}
 }
-</script>
+<\/script>
 
 <style lang="less" scoped>
-.rune-text { color: purple; }
+
 </style>`
   const createDefaultEchoAnnoSource = (echoName = '回响') => `export default {
     kind: 'echo',
