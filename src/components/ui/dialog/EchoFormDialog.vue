@@ -141,7 +141,7 @@
               </div>
               <q-btn flat dense no-caps size='sm' color='teal-5' icon='refresh' label='重置模板' @click='resetTemplate' />
             </div>
-            <div ref='editorContainer' class='echo-monaco-editor' />
+            <div ref='editorContainer' class='echo-monaco-editor' :style='monacoEditorStyle' />
           </div>
         </div>
       </q-card-section>
@@ -309,9 +309,9 @@
 }
 
 .echo-monaco-editor {
-  flex: 0 0 420px;
+  flex: 0 0 auto;
   width: 100%;
-  min-height: 0;
+  min-height: 120px;
   border: 1px solid #c0c0c0;
   border-radius: 4px;
   overflow: hidden;
@@ -416,7 +416,10 @@ export default {
       monacoInitTimer: null,
       monacoReady: false,
       _monacoRo: null,
+      _dialogRo: null,
+      _windowResizeHandler: null,
       monacoEditor: null,
+      monacoEditorHeight: 420,
       form: {
         id: '',
         name: '',
@@ -456,14 +459,19 @@ export default {
     },
     isBuiltin () {
       return Boolean(this.echo && this.echo.isBuiltin)
+    },
+    monacoEditorStyle () {
+      return { height: `${this.monacoEditorHeight}px` }
     }
   },
   watch: {
     value (val) {
       if (val) {
         this.scheduleMonacoInit()
+        this.$nextTick(() => this.installDialogHeightListener())
       } else {
         this.clearMonacoInitTimer()
+        this.uninstallDialogHeightListener()
       }
     },
     'form.name': function (val, oldVal) {
@@ -529,6 +537,7 @@ export default {
   },
   beforeDestroy () {
     this.clearMonacoInitTimer()
+    this.uninstallDialogHeightListener()
     if (this._monacoRo) {
       this._monacoRo.disconnect()
       this._monacoRo = null
@@ -536,6 +545,37 @@ export default {
     this.disposeMonaco()
   },
   methods: {
+    installDialogHeightListener () {
+      this.uninstallDialogHeightListener()
+      if (!this.$refs.dialog) return
+      this.recomputeMonacoHeight()
+      this._dialogRo = new ResizeObserver(() => this.recomputeMonacoHeight())
+      this._dialogRo.observe(this.$refs.dialog)
+      this._windowResizeHandler = () => this.recomputeMonacoHeight()
+      window.addEventListener('resize', this._windowResizeHandler)
+    },
+    uninstallDialogHeightListener () {
+      if (this._dialogRo) {
+        this._dialogRo.disconnect()
+        this._dialogRo = null
+      }
+      if (this._windowResizeHandler) {
+        window.removeEventListener('resize', this._windowResizeHandler)
+        this._windowResizeHandler = null
+      }
+    },
+    recomputeMonacoHeight () {
+      const dialogEl = this.$refs.dialog
+      if (!dialogEl) return
+      const dialogHeight = dialogEl.clientHeight
+      if (!dialogHeight) return
+      // Monaco 高度 = floor(dialog 高度 * 0.6 / 10) * 10，向下取整到 10 的倍数
+      const raw = dialogHeight * 0.6
+      const floored = Math.max(120, Math.floor(raw / 10) * 10)
+      if (floored !== this.monacoEditorHeight) {
+        this.monacoEditorHeight = floored
+      }
+    },
     clearMonacoInitTimer () {
       if (this.monacoInitTimer) {
         clearTimeout(this.monacoInitTimer)

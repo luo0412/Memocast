@@ -174,6 +174,7 @@
             <div
               ref='editorContainer'
               class='rune-monaco-editor'
+              :style='monacoEditorStyle'
             />
           </div>
         </div>
@@ -216,12 +217,16 @@
   min-width: 0;
   display: flex;
   gap: 14px;
+  align-items: stretch;
+  height: 100%;
+  overflow: hidden;
 }
 
 .rune-form-fields {
   flex: 0 0 220px;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -229,11 +234,18 @@
 }
 
 .rune-form-editor-wrap {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow: hidden;
+}
+
+.rune-form-editor-wrap > .row.items-center.justify-between {
+  flex: 0 0 auto;
 }
 
 .rune-form-field {
@@ -310,7 +322,8 @@
 .rune-monaco-editor {
   flex: 0 0 auto;
   width: 100%;
-  height: 420px;
+  height: calc(100% - 350px);
+  min-height: 0;
   border: 1px solid #c0c0c0;
   border-radius: 4px;
   overflow: hidden;
@@ -390,7 +403,8 @@ import {
   createJsxGraphTemplate,
   createFireflyTemplate,
   createElInputTemplate,
-  createElSelectTemplate
+  createElSelectTemplate,
+  createResumeCanvasTemplate
 } from './rune-templates'
 
 const createUuid = () => {
@@ -453,6 +467,9 @@ export default {
       monacoReady: false,
       monacoInitAttempt: 0,
       _monacoRo: null,
+      _dialogRo: null,
+      _windowResizeHandler: null,
+      monacoEditorHeight: 420,
       form: {
         id: '',
         name: '',
@@ -513,6 +530,13 @@ export default {
           icon: 'arrow_drop_down_circle',
           color: 'indigo',
           templateFn: 'createElSelectTemplate'
+        },
+        {
+          label: '简历画布',
+          desc: '可拖拽简历画布（vuedraggable + 5 种组件 + A4 引导线，参考 dnd-resume）',
+          icon: 'description',
+          color: 'purple',
+          templateFn: 'createResumeCanvasTemplate'
         }
       ],
       monacoEditor: null,
@@ -569,6 +593,9 @@ export default {
     resolvedDescLabel () {
       return this.isEchoMode ? this.$t('echoCardDesc') : this.$t('runeCardDesc')
     },
+    monacoEditorStyle () {
+      return { height: `${this.monacoEditorHeight}px` }
+    },
     resolvedPowerLabel () {
       return this.isEchoMode ? this.$t('echoCardPower') : this.$t('runeCardPower')
     }
@@ -577,8 +604,10 @@ export default {
     value (val) {
       if (val) {
         this.scheduleMonacoInit()
+        this.$nextTick(() => this.installDialogHeightListener())
       } else {
         this.clearMonacoInitTimer()
+        this.uninstallDialogHeightListener()
       }
     },
     rune: {
@@ -626,6 +655,7 @@ export default {
   },
   beforeDestroy () {
     this.clearMonacoInitTimer()
+    this.uninstallDialogHeightListener()
     if (this._monacoRo) {
       this._monacoRo.disconnect()
       this._monacoRo = null
@@ -633,6 +663,36 @@ export default {
     this.disposeMonaco()
   },
   methods: {
+    installDialogHeightListener () {
+      this.uninstallDialogHeightListener()
+      if (!this.$refs.dialog) return
+      this.recomputeMonacoHeight()
+      this._dialogRo = new ResizeObserver(() => this.recomputeMonacoHeight())
+      this._dialogRo.observe(this.$refs.dialog)
+      this._windowResizeHandler = () => this.recomputeMonacoHeight()
+      window.addEventListener('resize', this._windowResizeHandler)
+    },
+    uninstallDialogHeightListener () {
+      if (this._dialogRo) {
+        this._dialogRo.disconnect()
+        this._dialogRo = null
+      }
+      if (this._windowResizeHandler) {
+        window.removeEventListener('resize', this._windowResizeHandler)
+        this._windowResizeHandler = null
+      }
+    },
+    recomputeMonacoHeight () {
+      const dialogEl = this.$refs.dialog
+      if (!dialogEl) return
+      const dialogHeight = dialogEl.clientHeight
+      if (!dialogHeight) return
+      const raw = dialogHeight * 0.6
+      const floored = Math.max(120, Math.floor(raw / 10) * 10)
+      if (floored !== this.monacoEditorHeight) {
+        this.monacoEditorHeight = floored
+      }
+    },
     getIconName (value) {
       return ICON_NAME_MAP[value] || value
     },
@@ -776,6 +836,10 @@ export default {
         nextTemplate = createElInputTemplate()
       } else if (fnName === 'createElSelectTemplate') {
         nextTemplate = createElSelectTemplate()
+      } else if (fnName === 'createResumeCanvasTemplate') {
+        nextTemplate = createResumeCanvasTemplate()
+      } else if (fnName === 'createResumeCanvasTemplate') {
+        nextTemplate = createResumeCanvasTemplate()
       }
       this.form.template = nextTemplate
       if (this.monacoEditor && this.monacoReady) {
