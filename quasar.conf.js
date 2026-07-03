@@ -24,7 +24,8 @@ module.exports = function (/* ctx */) {
       'element-ui',
       'antd',
       'electron-clipboard',
-      'jxgraph'
+      'jxgraph',
+      'hel-micro-renderer'
     ],
 
     // https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-css
