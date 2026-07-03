@@ -215,6 +215,52 @@ const createDisperseAnnoSource = () => `export default {
   }
 }`
 
+// ===== 报时（clock）：演示"用户自定义 rune handler"的样板 —— 在容器内注入一个本地时间小标记 =====
+const createClockAnnoSource = () => `export default {
+  kind: 'rune',
+  runeId: 'clock',
+  version: 1,
+  name: '报时',
+
+  render (context = {}) {
+    const attrs = context.attrs || {}
+    const prompt = context.prompt || ''
+    return {
+      type: 'card',
+      icon: attrs.icon || context.echo?.icon || 'schedule',
+      color: attrs.color || context.echo?.color || '#3949AB',
+      title: attrs.title || context.echo?.name || '报时',
+      description: attrs.desc || context.echo?.desc || '在容器右上角注入当前时间',
+      prompt,
+      attrs: { ...attrs, kind: 'rune', runeId: 'clock', position: attrs.position || 'top-right' },
+      html: '<span class="ag-rune ag-rune--clock" data-rune-id="clock">报时</span>'
+    }
+  },
+
+  // 自定义副作用：给当前 block 容器加一个悬浮的时间标签
+  handler (runeNode, container, meta) {
+    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
+    if (!block) return () => {}
+    const previous = block.getAttribute('data-clock-active')
+    block.setAttribute('data-clock-active', 'true')
+    block.style.position = block.style.position || 'relative'
+    const tag = document.createElement('span')
+    tag.className = 'ag-rune-clock-tag'
+    tag.textContent = new Date().toLocaleTimeString()
+    tag.style.cssText = 'position:absolute;top:6px;right:8px;padding:1px 6px;font-size:11px;background:rgba(57,73,171,.12);color:#3949AB;border-radius:4px;'
+    block.appendChild(tag)
+    const timer = setInterval(() => {
+      try { tag.textContent = new Date().toLocaleTimeString() } catch (error) { /* ignore */ }
+    }, 1000)
+    return () => {
+      clearInterval(timer)
+      if (tag && tag.parentElement) tag.parentElement.removeChild(tag)
+      if (previous === null) block.removeAttribute('data-clock-active')
+      else block.setAttribute('data-clock-active', previous)
+    }
+  }
+}`
+
 export const BUILTIN_ECHO_CARDS = Object.freeze([
   Object.freeze({
     id: '__builtin_nice__',
@@ -305,6 +351,15 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
     color: '#00897B',
     anno_source: createDisperseAnnoSource(),
     isBuiltin: true
+  }),
+  Object.freeze({
+    id: '__builtin_clock__',
+    name: '报时',
+    desc: '演示：自定义 rune handler，在当前 block 注入悬浮时间标签',
+    icon: 'schedule',
+    color: '#3949AB',
+    anno_source: createClockAnnoSource(),
+    isBuiltin: true
   })
 ])
 
@@ -312,7 +367,7 @@ export const getDefaultEchoAnnoSource = createDefaultEchoAnnoSource
 
 export const isBuiltinEcho = (echo = {}) => Boolean(echo && echo.isBuiltin)
 
-// 9 个符文 / 替罪 / 招灾 / 离析 元信息集中导出，方便外部按 runeId 查找
+// 11 个符文 / 替罪 / 招灾 / 离析 / 报时 元信息集中导出，方便外部按 runeId 查找
 export const BUILTIN_RUNE_IDS = Object.freeze([
   'growth',
   'shatter',
@@ -322,7 +377,8 @@ export const BUILTIN_RUNE_IDS = Object.freeze([
   'lucky',
   'scapegoat',
   'calamity',
-  'disperse'
+  'disperse',
+  'clock'
 ])
 
 export const isBuiltinRuneId = (runeId = '') => BUILTIN_RUNE_IDS.includes(String(runeId || '').trim())

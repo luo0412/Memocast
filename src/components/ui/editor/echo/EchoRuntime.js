@@ -124,6 +124,56 @@ export const createDefaultEchoAnnoSource = (echoName = '回响') => `export defa
   }
 }`
 
+// 默认的 rune 类（"影响附近元素/符文排版"）模板。
+// 关键点：
+//  - kind: 'rune'，render() 仍然返回标准的 { type, icon, color, title, ... }，用于卡片/host 外观
+//  - handler(runeNode, scopeContainer, meta) 是副作用钩子，编译时被自动注册到 EchoRuntime.customHandlers
+//    meta = { runeId, kind, attrs }，attrs 已经从 host 的 data-echo-attrs-json / data-rune-attrs / dataset 里聚合
+//    可选地返回 cleanup 函数，在卸载/重渲染时被调用
+//  - renderToHtml 输出的 <span> 会带上 data-rune-id / data-rune-kind，所以 afterRender() 会派发到这个 handler
+export const createDefaultRuneAnnoSource = (echoName = '回响') => `export default {
+  kind: 'rune',
+  version: 1,
+  name: '${String(echoName || '回响').replace(/'/g, "\\'")}',
+  runeId: 'my-rune',
+
+  render (context = {}) {
+    const attrs = context.attrs || {}
+    const prompt = context.prompt || ''
+    return {
+      type: 'card',
+      icon: attrs.icon || context.echo?.icon || 'auto_awesome',
+      color: attrs.color || context.echo?.color || '${DEFAULT_ECHO_COLOR}',
+      title: attrs.title || context.echo?.name || '${String(echoName || '回响').replace(/'/g, "\\'")}',
+      description: attrs.desc || context.echo?.desc || '影响附近元素或符文',
+      prompt,
+      attrs: { ...attrs, kind: 'rune', runeId: this.runeId },
+      html: ''
+    }
+  },
+
+  // 副作用钩子 —— 在容器 paint 完成时由 EchoRuntime.afterRender() 调用
+  //   runeNode      当前 echo 对应的 <span data-rune-id="...">
+  //   container     编辑器根 DOM 容器
+  //   meta          { runeId, kind, attrs }，attrs 已经聚合自 data-echo-attrs-json / data-rune-attrs / dataset
+  // 返回值可选：返回 cleanup 函数，将在编辑器下次重渲染/卸载时被调用
+  handler (runeNode, container, meta) {
+    const scope = meta?.attrs?.scope || 'siblings'
+    // 简单示例：给同段落所有兄弟加个调试 outline
+    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, h1, h2, h3, h4, h5, h6, li, blockquote') || runeNode.parentElement
+    const target = block && block.parentElement ? block.parentElement : container
+    if (!target) return () => {}
+    const previous = target.getAttribute('data-my-rune-active')
+    target.setAttribute('data-my-rune-active', 'true')
+    target.style.outline = '1px dashed #9C27B0'
+    return () => {
+      if (previous === null) target.removeAttribute('data-my-rune-active')
+      else target.setAttribute('data-my-rune-active', previous)
+      target.style.outline = ''
+    }
+  }
+}`
+
 const createFallbackRenderResult = (context = {}) => {
   const attrs = context.attrs || {}
   return {
@@ -540,6 +590,34 @@ export const findRuneHandler = (runeId = '') => {
   return RUNE_HANDLERS.find(handler => handler.id === target) || null
 }
 
+// 让运行时能挂载"由 echo anno_source 内置 handler 字段动态声明"的 rune handler
+// - id 必须唯一（建议用 `echo:${definitionId}` 或自定义 runeId）
+// - match(runeMeta) -> boolean，决定该 handler 是否对该 rune 起作用
+// - apply(runeNode, scopeContainer, runeMeta) -> cleanupFn? 与内置 handler 同样语义
+export const normalizeCustomHandler = (raw = {}, fallbackId = '') => {
+  if (!raw || typeof raw !== 'object') return null
+  const id = String(raw.id || raw.runeId || fallbackId || '').trim()
+  if (!id) return null
+  const match = (typeof raw.match === 'function')
+    ? raw.match
+    : (meta) => Boolean(meta) && (meta.runeId === id || meta?.attrs?.runeId === id)
+  const apply = (typeof raw.apply === 'function')
+    ? raw.apply
+    : (typeof raw.handler === 'function')
+      ? raw.handler
+      : null
+  if (!apply) return null
+  const cleanupFn = (typeof raw.cleanup === 'function') ? raw.cleanup : null
+  return {
+    id,
+    match,
+    apply,
+    cleanup: cleanupFn,
+    description: typeof raw.description === 'string' ? raw.description : '',
+    source: typeof raw.source === 'string' ? raw.source : ''
+  }
+}
+
 export const extractRuneMeta = (rendered = {}) => {
   const attrs = (rendered && rendered.attrs && typeof rendered.attrs === 'object') ? rendered.attrs : {}
   const kind = String(attrs.kind || '').trim()
@@ -557,6 +635,8 @@ export default class EchoRuntime {
   constructor ({ registry } = {}) {
     this.registry = registry
     this.definitionCache = new Map()
+    // 用户/动态注册 rune handler，id -> { id, match, apply, cleanup, ... }
+    this.customHandlers = new Map()
   }
 
   invalidate (echoId) {
@@ -565,6 +645,62 @@ export default class EchoRuntime {
       return
     }
     this.definitionCache.delete(String(echoId))
+  }
+
+  /**
+   * 动态注册一个 rune handler。
+   *  - raw 可以是已规整的 { id, match, apply } 或 anno_source 里的 handler 字段。
+   *  - 注册后，afterRender() 派发时会优先命中 custom handler；找不到再退到 RUNE_HANDLERS。
+   *  - 同一 id 重复 register 会覆盖。
+   *  - 返回注册的 id，失败返回空串。
+   */
+  registerRuneHandler (raw = {}, fallbackId = '') {
+    const normalized = normalizeCustomHandler(raw, fallbackId)
+    if (!normalized) {
+      console.warn('[EchoRuntime] registerRuneHandler: invalid handler', raw)
+      return ''
+    }
+    this.customHandlers.set(normalized.id, normalized)
+    return normalized.id
+  }
+
+  unregisterRuneHandler (id = '') {
+    const target = String(id || '').trim()
+    if (!target) return false
+    return this.customHandlers.delete(target)
+  }
+
+  listCustomRuneHandlers () {
+    return Array.from(this.customHandlers.values())
+  }
+
+  /**
+   * 查找 handler（custom 优先于内置）。
+   * 提供给内部 afterRender() 使用，外部也可直接调用。
+   */
+  resolveRuneHandler (runeMeta = {}) {
+    const id = String(runeMeta?.runeId || '').trim()
+    const kind = String(runeMeta?.kind || 'rune')
+    // 1) 自定义 handler（精确按 id）
+    if (id && this.customHandlers.has(id)) {
+      return this.customHandlers.get(id)
+    }
+    // 2) 自定义 handler（按 match 探测）
+    for (const handler of this.customHandlers.values()) {
+      try {
+        if (typeof handler.match === 'function' && handler.match(runeMeta)) {
+          return handler
+        }
+      } catch (error) {
+        console.warn('[EchoRuntime] custom handler.match failed:', handler.id, error)
+      }
+    }
+    // 3) 内置 rune handler
+    const builtIn = findRuneHandler(id)
+    if (builtIn) return builtIn
+    // 4) rune-tbd 兜底
+    if (kind === 'rune-tbd') return findRuneHandler('__tbd__')
+    return null
   }
 
   compileDefinition (echo = {}) {
@@ -590,6 +726,33 @@ export default class EchoRuntime {
         name: echo.name || '',
         render: context => createFallbackRenderResult(context)
       }
+    }
+
+    // === 自动注册 anno_source 内置的 rune handler ===
+    // 约定：definition.handler = function (runeNode, scopeContainer, runeMeta) { ... }
+    // 同时 definition.kind === 'rune' | 'rune-tbd' 且 definition.runeId / definition.id 已声明。
+    try {
+      const kind = String(definition.kind || definition?.attrs?.kind || '').trim()
+      if (kind === 'rune' || kind === 'rune-tbd') {
+        const handlerSpec = definition.handler || definition
+        const fallbackId = String(definition.runeId || definition.id || cacheKey || '').trim()
+        if (typeof handlerSpec?.apply === 'function' || typeof handlerSpec === 'function' || typeof handlerSpec?.match === 'function') {
+          const normalized = normalizeCustomHandler({
+            ...(typeof handlerSpec === 'object' ? handlerSpec : {}),
+            // 函数形式：apply(runeNode, container, meta)
+            apply: (typeof handlerSpec === 'function')
+              ? handlerSpec
+              : (typeof handlerSpec?.apply === 'function' ? handlerSpec.apply : undefined),
+            id: String(definition.runeId || definition.id || fallbackId || '').trim(),
+            source: `definition:${cacheKey}`
+          }, fallbackId)
+          if (normalized) {
+            this.customHandlers.set(normalized.id, normalized)
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[EchoRuntime] auto-register definition handler failed:', error)
     }
 
     this.definitionCache.set(cacheKey, { source, definition })
@@ -701,13 +864,13 @@ export default class EchoRuntime {
     const installed = []
     runeNodes.forEach(node => {
       const runeId = node.getAttribute('data-rune-id') || ''
-      const handler = findRuneHandler(runeId) || findRuneHandler('__tbd__')
-      if (!handler) return
       const meta = {
         runeId,
         kind: node.getAttribute('data-rune-kind') || 'rune',
         attrs: this._readRuneAttrs(node)
       }
+      const handler = this.resolveRuneHandler(meta)
+      if (!handler) return
       let cleanup = null
       try {
         cleanup = handler.apply(node, container, meta) || null
@@ -717,6 +880,11 @@ export default class EchoRuntime {
       if (typeof cleanup === 'function') {
         installed.push({ node, runeId, cleanup })
         node.__agRuneCleanup = cleanup
+      } else if (typeof handler.cleanup === 'function') {
+        // 自定义 handler 可能把 cleanup 挂在自身而不是 apply 返回值
+        const boundCleanup = handler.cleanup.bind(handler, node, container, meta)
+        installed.push({ node, runeId, cleanup: boundCleanup })
+        node.__agRuneCleanup = boundCleanup
       }
     })
 

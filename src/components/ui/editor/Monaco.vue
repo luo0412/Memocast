@@ -16,6 +16,7 @@ import debugLogger from 'src/utils/debugLogger'
 import helper from 'src/utils/helper'
 import bus from 'components/bus'
 import events from 'src/constants/events'
+import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
 import { escape } from 'lodash'
 
 const {
@@ -150,47 +151,9 @@ export default {
       this.contentEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.US_DOT, () => bus.$emit(events.VIEW_SHORTCUT_CALL.sourceMode, 'sourceMode'))
       this.contentEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, this.saveHandler)
 
-      // Override Monaco's built-in clipboard to use Electron clipboard
-      // This ensures copy/paste works correctly in Electron environment
-      const self = this
-
-      // Use Monaco's built-in clipboard service override for better Electron integration
-      if (window.__electronClipboard) {
-        // Override copy command - use Monaco's default action and sync to Electron clipboard
-        this.contentEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
-          const selection = self.contentEditor.getSelection()
-          const selectedText = self.contentEditor.getModel().getValueInRange(selection)
-          if (selectedText) {
-            window.__electronClipboard.writeText(selectedText)
-          }
-          // Trigger Monaco's default copy action to handle selection cleanup
-          self.contentEditor.trigger('keyboard', 'editor.action.clipboardCopyAction', null)
-        })
-
-        // Override paste command - read from Electron clipboard, then let Monaco handle insertion
-        this.contentEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-          const text = window.__electronClipboard.readText()
-          if (text) {
-            const selection = self.contentEditor.getSelection()
-            self.contentEditor.executeEdits('paste', [{
-              range: selection,
-              text: text,
-              forceMoveMarkers: true
-            }])
-          }
-        })
-
-        // Override cut command - sync to Electron clipboard, then trigger Monaco's default cut
-        this.contentEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
-          const selection = self.contentEditor.getSelection()
-          const selectedText = self.contentEditor.getModel().getValueInRange(selection)
-          if (selectedText) {
-            window.__electronClipboard.writeText(selectedText)
-          }
-          // Trigger Monaco's default cut action to handle selection cleanup and deletion
-          self.contentEditor.trigger('keyboard', 'editor.action.clipboardCutAction', null)
-        })
-      }
+      // Override Monaco's built-in clipboard to use Electron clipboard via shared bridge.
+      // This ensures copy/paste/cut works correctly in Electron environment.
+      this._monacoClipboardDisposable = setupMonacoClipboard(this.contentEditor, monaco)
 
       // Register copyAsMarkdown, copyAsHtml, pasteAsPlainText actions consumed by the app
       this.contentEditor.addAction({
@@ -380,6 +343,10 @@ export default {
     bus.$off(events.EDIT_SHORTCUT_CALL.pasteAsPlainText, this.editCopyPasteHandler)
     bus.$off(events.EDIT_SHORTCUT_CALL.undo, this.editCopyPasteHandler)
     bus.$off(events.EDIT_SHORTCUT_CALL.redo, this.editCopyPasteHandler)
+    if (this._monacoClipboardDisposable && typeof this._monacoClipboardDisposable.dispose === 'function') {
+      try { this._monacoClipboardDisposable.dispose() } catch (_) { /* noop */ }
+    }
+    this._monacoClipboardDisposable = null
     if (this.contentEditor) {
       this.contentEditor.dispose()
     }

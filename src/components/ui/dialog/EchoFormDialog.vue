@@ -174,8 +174,9 @@
 }
 
 .echo-form-content {
-  height: 100%;
-  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
   display: flex;
   gap: 14px;
 }
@@ -183,15 +184,20 @@
 .echo-form-fields {
   flex: 0 0 240px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
+  padding-right: 2px;
 }
 
 .echo-form-editor-wrap {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .echo-form-field {
@@ -282,7 +288,8 @@
 
 .echo-monaco-editor {
   flex: 1 1 auto;
-  min-height: 420px;
+  min-height: 0;
+  width: 100%;
   border: 1px solid #c0c0c0;
   border-radius: 4px;
   overflow: hidden;
@@ -363,6 +370,7 @@ import * as monaco from 'monaco-editor'
 import { v4 as uuidv4 } from 'uuid'
 import { createDefaultEchoAnnoSource } from 'components/ui/editor/echo/EchoRuntime'
 import { ECHO_CATEGORIES, DEFAULT_ECHO_CATEGORY, getEchoCategoryValue } from 'src/constants/runeEchoCategories'
+import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
 
 const DEFAULT_ECHO_ICON = 'graphic_eq'
 const DEFAULT_ECHO_COLOR = '#26A69A'
@@ -524,6 +532,10 @@ export default {
     },
     disposeMonaco () {
       this.monacoReady = false
+      if (this._monacoClipboardDisposable && typeof this._monacoClipboardDisposable.dispose === 'function') {
+        try { this._monacoClipboardDisposable.dispose() } catch (_) { /* noop */ }
+      }
+      this._monacoClipboardDisposable = null
       if (this.monacoEditor) {
         this.monacoEditor.dispose()
         this.monacoEditor = null
@@ -596,36 +608,7 @@ export default {
       })
     },
     _setupMonacoClipboard () {
-      if (window.__electronClipboard) {
-        const self = this
-        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
-          const selection = self.monacoEditor.getSelection()
-          const selectedText = self.monacoEditor.getModel().getValueInRange(selection)
-          if (selectedText) {
-            window.__electronClipboard.writeText(selectedText)
-          }
-          self.monacoEditor.trigger('keyboard', 'editor.action.clipboardCopyAction', null)
-        })
-        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-          const text = window.__electronClipboard.readText()
-          if (text) {
-            const selection = self.monacoEditor.getSelection()
-            self.monacoEditor.executeEdits('paste', [{
-              range: selection,
-              text: text,
-              forceMoveMarkers: true
-            }])
-          }
-        })
-        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
-          const selection = self.monacoEditor.getSelection()
-          const selectedText = self.monacoEditor.getModel().getValueInRange(selection)
-          if (selectedText) {
-            window.__electronClipboard.writeText(selectedText)
-          }
-          self.monacoEditor.trigger('keyboard', 'editor.action.clipboardCutAction', null)
-        })
-      }
+      this._monacoClipboardDisposable = setupMonacoClipboard(this.monacoEditor, monaco)
     },
     resetTemplate () {
       const nextSource = createDefaultEchoAnnoSource(this.form.name || '回响')

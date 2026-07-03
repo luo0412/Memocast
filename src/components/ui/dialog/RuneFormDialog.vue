@@ -211,8 +211,9 @@
 }
 
 .rune-form-content {
-  height: 100%;
-  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
   display: flex;
   gap: 14px;
 }
@@ -220,15 +221,20 @@
 .rune-form-fields {
   flex: 0 0 220px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
+  padding-right: 2px;
 }
 
 .rune-form-editor-wrap {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .rune-form-field {
@@ -304,8 +310,8 @@
 
 .rune-monaco-editor {
   flex: 1 1 auto;
-  height: 380px;
-  min-height: 380px;
+  min-height: 0;
+  width: 100%;
   border: 1px solid #c0c0c0;
   border-radius: 4px;
   overflow: hidden;
@@ -376,6 +382,7 @@
 <script>
 import * as monaco from 'monaco-editor'
 import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY, getRuneCategoryValue } from 'src/constants/runeEchoCategories'
+import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
 import {
   createBlankTemplate,
   createInputTemplate,
@@ -636,39 +643,17 @@ export default {
       }
     },
     _setupMonacoClipboard () {
-      if (window.__electronClipboard) {
-        const self = this
-        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
-          const selection = self.monacoEditor.getSelection()
-          const selectedText = self.monacoEditor.getModel().getValueInRange(selection)
-          if (selectedText) {
-            window.__electronClipboard.writeText(selectedText)
-          }
-          self.monacoEditor.trigger('keyboard', 'editor.action.clipboardCopyAction', null)
-        })
-        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-          const text = window.__electronClipboard.readText()
-          if (text) {
-            const selection = self.monacoEditor.getSelection()
-            self.monacoEditor.executeEdits('paste', [{
-              range: selection,
-              text: text,
-              forceMoveMarkers: true
-            }])
-          }
-        })
-        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
-          const selection = self.monacoEditor.getSelection()
-          const selectedText = self.monacoEditor.getModel().getValueInRange(selection)
-          if (selectedText) {
-            window.__electronClipboard.writeText(selectedText)
-          }
-          self.monacoEditor.trigger('keyboard', 'editor.action.clipboardCutAction', null)
-        })
+      this._monacoClipboardDisposable = setupMonacoClipboard(this.monacoEditor, monaco)
+    },
+    _disposeMonacoClipboard () {
+      if (this._monacoClipboardDisposable && typeof this._monacoClipboardDisposable.dispose === 'function') {
+        try { this._monacoClipboardDisposable.dispose() } catch (_) { /* noop */ }
       }
+      this._monacoClipboardDisposable = null
     },
     disposeMonaco () {
       this.monacoReady = false
+      this._disposeMonacoClipboard()
       if (this.monacoEditor) {
         this.monacoEditor.dispose()
         this.monacoEditor = null
@@ -743,7 +728,7 @@ export default {
         scrollBeyondLastLine: false,
         lineNumbers: 'on',
         renderLineHighlight: 'line',
-        automaticLayout: false,
+        automaticLayout: true,
         wordWrap: 'on',
         readOnly: false,
         domReadOnly: false,
@@ -763,8 +748,7 @@ export default {
       this.monacoReady = true
       this.monacoEditor.updateOptions({ readOnly: false, domReadOnly: false })
       this.$nextTick(() => {
-        if (!this.monacoEditor || !container) return
-        this.monacoEditor.layout({ width: container.clientWidth, height: 380 })
+        if (!this.monacoEditor) return
         this.monacoEditor.focus()
       })
     },
