@@ -380,8 +380,10 @@ import {
   createBlankTemplate,
   createInputTemplate,
   createHolyShieldTemplate,
-  createJxgDemoTemplate,
-  createFireflyTemplate
+  createJsxGraphTemplate,
+  createFireflyTemplate,
+  createElInputTemplate,
+  createElSelectTemplate
 } from './rune-templates'
 
 const createUuid = () => {
@@ -478,11 +480,11 @@ export default {
           templateFn: 'createHolyShieldTemplate'
         },
         {
-          label: '星河绘图',
-          desc: '通过 this.$jxg 绘制坐标系与函数图像（JSXGraph）',
+          label: 'JsxGraph',
+          desc: '通过 this.$jxg 初始化坐标系，点击上报坐标（JSXGraph）',
           icon: 'show_chart',
           color: 'blue',
-          templateFn: 'createJxgDemoTemplate'
+          templateFn: 'createJsxGraphTemplate'
         },
         {
           label: '萤火虫',
@@ -490,6 +492,20 @@ export default {
           icon: 'auto_awesome',
           color: 'amber',
           templateFn: 'createFireflyTemplate'
+        },
+        {
+          label: 'el-input',
+          desc: 'Element-UI 输入框，@blur 时触发 $emit("input")',
+          icon: 'input',
+          color: 'teal',
+          templateFn: 'createElInputTemplate'
+        },
+        {
+          label: 'el-select',
+          desc: 'Element-UI 下拉选择，@change 时触发 $emit("input")',
+          icon: 'arrow_drop_down_circle',
+          color: 'indigo',
+          templateFn: 'createElSelectTemplate'
         }
       ],
       monacoEditor: null,
@@ -768,10 +784,14 @@ export default {
         nextTemplate = createInputTemplate()
       } else if (fnName === 'createHolyShieldTemplate') {
         nextTemplate = createHolyShieldTemplate()
-      } else if (fnName === 'createJxgDemoTemplate') {
-        nextTemplate = createJxgDemoTemplate()
+      } else if (fnName === 'createJsxGraphTemplate') {
+        nextTemplate = createJsxGraphTemplate()
       } else if (fnName === 'createFireflyTemplate') {
         nextTemplate = createFireflyTemplate()
+      } else if (fnName === 'createElInputTemplate') {
+        nextTemplate = createElInputTemplate()
+      } else if (fnName === 'createElSelectTemplate') {
+        nextTemplate = createElSelectTemplate()
       }
       this.form.template = nextTemplate
       if (this.monacoEditor && this.monacoReady) {

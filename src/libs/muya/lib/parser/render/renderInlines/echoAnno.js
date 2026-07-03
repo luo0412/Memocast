@@ -57,15 +57,32 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
   }
   if (hasExplicitWidth) dataset.echoWidth = width
   if (hasExplicitHeight) dataset.echoHeight = height
+  // 把 token 的 attrsParsed（@离析{density:'very-loose'} 这种）原样写到 host.dataset，
+  // 让 EchoRuntime._readRuneAttrs() 在 afterRender() 时能拿到实例参数。
+  const parsedAttrs = (token && token.attrsParsed && typeof token.attrsParsed === 'object')
+    ? token.attrsParsed
+    : null
+  let echoAttrsJson = ''
+  if (parsedAttrs) {
+    try {
+      // 把 value/width/height 这种已知字段合并到 props，再补 kind/runeId 让 handler 能 fallback 用上
+      const merged = { ...parsedAttrs, value, echoName, echoId, definitionId }
+      echoAttrsJson = JSON.stringify(merged)
+      dataset.echoAttrsJson = echoAttrsJson
+    } catch (error) { /* ignore */ }
+  }
 
   return [
     h(`span.${className}.ag-echo-anno-token.${CLASS_OR_ID.AG_INLINE_RULE}`, {
       dataset,
-      attrs: {
-        spellcheck: 'false',
-        title,
-        contenteditable: 'false'
-      },
+      attrs: Object.assign(
+        {
+          spellcheck: 'false',
+          title,
+          contenteditable: 'false'
+        },
+        echoAttrsJson ? { 'data-echo-attrs-json': echoAttrsJson } : {}
+      ),
       style: hostStyle
     }, [
       h('span.ag-echo-placeholder-marker', {

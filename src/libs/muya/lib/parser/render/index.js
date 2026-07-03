@@ -16,6 +16,13 @@ const RUNE_CARD_CLASS = 'ag-rune-placeholder-card'
 const ECHO_HOST_CLASS = 'ag-echo-placeholder-host'
 const ECHO_CARD_CLASS = 'ag-echo-placeholder-card'
 
+// 把字符串安全地写进 HTML 属性值（双引号围栏 + 防注入）
+const escapeAttrString = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/"/g, '&quot;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+
 class StateRender {
   constructor (muya) {
     this.muya = muya
@@ -238,6 +245,7 @@ class StateRender {
     if (!root) return
 
     const echoMap = this.getEchoMap()
+    const runtime = this.muya?.options?.__echoRuntime || null
     const hosts = root.querySelectorAll(ECHO_PLACEHOLDER_SELECTOR)
 
     hosts.forEach(host => {
@@ -255,6 +263,28 @@ class StateRender {
       // For anonymous echo with only attrs, use echoId or echoName for lookup
       const lookupKey = echoId ? `id:${echoId}` : echoName
       const echo = echoMap.get(lookupKey) || (echoId ? echoMap.get(echoName) : null) || null
+      // 解析出当前实例的 attrs，决定是否走 rune 副作用链路
+      const instanceAttrs = (() => {
+        try {
+          // 来源 1：attrsRaw 已经写在 token；这里暂用 definition 的 anno_source 默认空对象
+          // 来源 2：从 echo 定义里推断 kind（多数 rune 类的 kind 由 anno_source.render() 注入）
+          return {}
+        } catch (error) { return {} }
+      })()
+      const isRuneLike = (() => {
+        if (!echo) return false
+        const kindFromAnno = (() => {
+          try {
+            const src = String(echo.anno_source || echo.template || '')
+            const m = src.match(/kind\s*:\s*['"]([^'"]+)['"]/)
+            return m ? m[1] : ''
+          } catch (error) { return '' }
+        })()
+        if (kindFromAnno === 'rune' || kindFromAnno === 'rune-tbd') return true
+        // 兜底：attrs 已经写在 host dataset（如果有 echoHighlight 等场景）
+        const dsKind = String(dataset.kind || '')
+        return dsKind === 'rune' || dsKind === 'rune-tbd'
+      })()
       const cacheKey = JSON.stringify({
         echoName,
         echoId,
@@ -268,7 +298,8 @@ class StateRender {
         hasExplicitWidth,
         hasExplicitHeight,
         width,
-        height
+        height,
+        runeLike: isRuneLike
       })
 
       if (this.echoPlaceholderCache.get(host) === cacheKey) {
@@ -277,7 +308,87 @@ class StateRender {
 
       host.classList.add(ECHO_HOST_CLASS)
       host.setAttribute('contenteditable', 'false')
-      host.innerHTML = this.createEchoPlaceholderMarkup(echo, { ...dataset, hasExplicitWidth, hasExplicitHeight, width, height })
+
+      // === 回响可以"影响附近元素"的真正接线点 ===
+      // 对于 kind === 'rune' | 'rune-tbd' 的 echo 定义（生生不息 / 破万法 / 天行健 / 双生花 /
+      // 夺心魄 / 强运 / 离析 / 替罪 / 招灾），调用 EchoRuntime.renderToHtml 输出包含
+      // data-rune-id / data-rune-kind 的 span；随后在 renderRunes() 末由 afterRender()
+      // 接管，让对应 handler 改兄弟 / 容器节点的 CSS / 动画 / 边距。
+      // 其它（普通的 nice / 自定义 echo / 找不到定义的 echo）继续走卡片 markup。
+      //
+      // === 配套桥接：把 echo 实例的 attrsParsed 序列化到 host 的 dataset，
+      // 让 EchoRuntime._readRuneAttrs() 在 afterRender() 时能够读到具体参数
+      // （比如 @离析{density:'very-loose'} 中的 density 会改变排版密度）。
+      const echoAttrsJson = (() => {
+        try { return JSON.stringify(echo?.anno_source || '') } catch (error) { return '' }
+      })()
+      if (echo && echoAttrsJson) {
+        host.dataset.echoAttrsJson = echoAttrsJson
+      }
+      let innerHtml = ''
+      if (isRuneLike && runtime && typeof runtime.renderToHtml === 'function') {
+        try {
+          // 1) 用 editor 默认的 *当前* echo 定义做一次 sim-text render，拿 attrs 上下文
+          //    （因为快捷插入/迁移进来的 token 可能没把 attrsParsed 写到 host dataset 上，
+          //    这里从 echoCard 上重新组装一份。）
+          const simAttrs = (() => {
+            const out = { id: echoId, definitionId, value }
+            try {
+              if (echo?.anno_source || echo?.template) {
+                // 只从 echoCard 的 anno_source 抽取直接写明的 kind / runeId / 派生 attrs，
+                // 真实的实例属性（如 @离析{density:'very-loose'}）目前 host dataset 还没有
+                // 这一层（见 Muya.vue 中 echoToken 回写流程）。这里把"echoCard 渲染结果"
+                // 作为兜底 baseline，再在 afterRender() 时尝试从宿主 dataset 里再扩一层。
+                return out
+              }
+            } catch (error) { /* ignore */ }
+            return out
+          })()
+          const token = {
+            echoName,
+            echoId,
+            attrsParsed: simAttrs,
+            attrsRaw: '',
+            prompt: value,
+            value,
+            raw: '',
+            payload: '',
+            payloadRaw: ''
+          }
+          const matchedEcho = echo || null
+          innerHtml = runtime.renderToHtml(token, matchedEcho)
+          // 2) 把内层 span 的 data-rune-attrs 直接补成"当前 echoCard 渲染结果 + id/definitionId"
+          //    —— 这样 EchoRuntime._readRuneAttrs() 走 node.querySelector('[data-rune-attrs]')
+          //    或者回退读 data-rune-attr-* 时都能拿到 baseline。
+          try {
+            const baselineAttrs = Object.assign({}, simAttrs, {
+              echoName,
+              echoId,
+              definitionId,
+              value: simAttrs.value || value
+            })
+            const attrJson = JSON.stringify(baselineAttrs)
+            if (attrJson) {
+              innerHtml = innerHtml.replace(
+                /<span\b/,
+                `<span data-rune-attrs="${escapeAttrString(attrJson)}"`,
+                1
+              )
+              if (innerHtml.indexOf('data-rune-attrs=') === -1) {
+                // 渲染产物不包含 span（例如只是文本），包裹一层
+                innerHtml = `<span data-rune-attrs="${escapeAttrString(attrJson)}">${innerHtml}</span>`
+              }
+            }
+          } catch (error) { /* ignore */ }
+        } catch (error) {
+          console.warn('[StateRender] runtime.renderToHtml failed, fallback to card', error)
+          innerHtml = ''
+        }
+      }
+      if (!innerHtml) {
+        innerHtml = this.createEchoPlaceholderMarkup(echo, { ...dataset, hasExplicitWidth, hasExplicitHeight, width, height })
+      }
+      host.innerHTML = innerHtml
       host.dataset.echoRenderKey = cacheKey
       this.echoPlaceholderCache.set(host, cacheKey)
     })
@@ -556,6 +667,19 @@ class StateRender {
     } else {
       this.cleanupDetachedRuneVms(true)
       this.cleanupDetachedEchoVms(true)
+    }
+    // === 让回响（rune 类）真正影响附近节点的排版/动画/边距 ===
+    // 上面 renderEchoPlaceholderNodes 已经把包含 data-rune-id 的 span 写进了 host.innerHTML，
+    // 这里再让 EchoRuntime 派发对应 handler（growth / shatter / skywalk / twinbloom /
+    // mindsteal / lucky / disperse / tbd）。
+    const runtime = this.muya?.options?.__echoRuntime
+    const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+    if (runtime && typeof runtime.afterRender === 'function' && root) {
+      try {
+        runtime.afterRender(root, { cleanupFirst: true })
+      } catch (error) {
+        console.warn('[StateRender] runtime.afterRender failed:', error)
+      }
     }
   }
 

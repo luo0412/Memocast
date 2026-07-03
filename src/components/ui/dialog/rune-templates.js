@@ -431,40 +431,18 @@ export default {
 </style>`
 }
 
-// ===== 星河绘图：演示 this.$jxg 绑定 JSXGraph 绘制数学图形 =====
-export const createJxgDemoTemplate = () => {
+// ===== JsxGraph：演示 this.$jxg 绑定 JSXGraph 初始化与点击坐标上报 =====
+export const createJsxGraphTemplate = () => {
   return `<template>
-  <div class="rune-jxg-demo">
-    <div class="rune-jxg-demo__header">
-      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" class="rune-jxg-demo__icon">
-        <path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/>
-      </svg>
-      <span class="rune-jxg-demo__title">星河绘图</span>
-    </div>
-    <div class="rune-jxg-demo__desc">通过 this.$jxg 绘制数学坐标系与函数图像</div>
-
-    <div id="jxgBox" ref="jxgBox" class="rune-jxg-demo__board"/>
-
-    <div class="rune-jxg-demo__controls">
-      <span class="rune-jxg-demo__hint">点击坐标轴上的点查看坐标值</span>
-    </div>
-
-    <div class="rune-jxg-demo__meta">
-      <span>nodeId: <code>{{ nodeId || '-' }}</code></span>
-      <span>runeId: <code>{{ runeId || '-' }}</code></span>
-    </div>
-  </div>
+  <div ref="jxgBox" class="rune-jsxgraph-demo"/>
 <\/template>
 
 <script>
-// 星河绘图符文：通过 this.$jxg 调用 JSXGraph 绘制坐标系和函数图像
+// JsxGraph 符文：通过 this.$jxg 调用 JSXGraph 初始化坐标系，鼠标点击上报坐标
 // this.$jxg 在 src/boot/jxgraph.js 中挂载。
 export default {
   props: {
-    value: { type: [String, Number], default: null },
-    runeId: { type: String, default: '' },
-    nodeId: { type: String, default: '' },
-    rune: { type: Object, default: null }
+    value: { type: [String, Number], default: null }
   },
   data() {
     return {
@@ -473,7 +451,7 @@ export default {
   },
   mounted() {
     this.$nextTick(() => {
-      this.initJxg()
+      this.initBoard()
     })
   },
   beforeDestroy() {
@@ -483,26 +461,18 @@ export default {
     }
   },
   methods: {
-    initJxg() {
+    initBoard() {
       const container = this.$refs.jxgBox
       if (!container || !this.$jxg) return
       if (this.board) {
         this.board.destroy && this.board.destroy()
       }
-      this.board = this.$jxg.JSXGraph.initBoard('jxgBox', {
+      this.board = this.$jxg.JSXGraph.initBoard(container, {
         boundingbox: [-6, 6, 6, -6],
         axis: true,
         grid: true,
         showNavigation: false
       })
-      const p1 = this.board.create('point', [-1, 2], { name: 'A', color: '#2196F3', size: 4 })
-      const p2 = this.board.create('point', [3, -2], { name: 'B', color: '#4CAF50', size: 4 })
-      this.board.create('line', [p1, p2], { strokeColor: '#9C27B0', strokeWidth: 2 })
-      this.board.create('functiongraph', [
-        (x) => Math.sin(x) * 2,
-        -5, 5
-      ], { strokeColor: '#F44336', strokeWidth: 3, curveType: 'plot' })
-      this.board.create('text', [4, 4, 'y = 2sin(x)'], { fontSize: 14, color: '#F44336' })
       this.board.on('down', (e) => {
         const pos = this.board.getUsrCoordsOfMouse(e)
         this.$emit('input', JSON.stringify({ x: pos[0].toFixed(2), y: pos[1].toFixed(2) }))
@@ -513,69 +483,191 @@ export default {
 <\/script>
 
 <style lang="less" scoped>
-.rune-jxg-demo {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: rgba(33, 150, 243, 0.05);
-  border: 1px solid rgba(33, 150, 243, 0.35);
-  font-family: inherit;
-  color: inherit;
-}
-.rune-jxg-demo__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.rune-jxg-demo__icon {
-  color: #2196F3;
-  flex-shrink: 0;
-}
-.rune-jxg-demo__title {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: rgba(33, 150, 243, 0.9);
-}
-.rune-jxg-demo__desc {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.55);
-  margin-top: -4px;
-}
-.rune-jxg-demo__board {
+.rune-jsxgraph-demo {
   width: 100%;
-  height: 280px;
-  border: 1px solid rgba(33, 150, 243, 0.25);
+  height: 320px;
   border-radius: 8px;
   overflow: hidden;
   background: #fff;
 }
-.rune-jxg-demo__controls {
+.body--dark .rune-jsxgraph-demo {
+  background: #2a2a2a;
+}
+</style>`
+}
+
+// ===== el-input 模板：基于 Element-UI <el-input>，blur 时触发 $emit('input') =====
+export const createElInputTemplate = () => {
+  return `<template>
+  <div class="rune-el-input-demo">
+    <el-input
+      class="rune-el-input-demo__field"
+      v-model="text"
+      :placeholder="placeholder"
+      clearable
+      @blur="handleBlur"
+    />
+    <div class="rune-el-input-demo__meta">
+      <span>v-model: <code>{{ text || '-' }}</code></span>
+      <span>value: <code>{{ value == null ? '-' : value }}</code></span>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    value: {
+      type: [String, Number],
+      default: null
+    },
+    placeholder: {
+      type: String,
+      default: '输入内容，失焦后同步数据'
+    }
+  },
+  data() {
+    return {
+      text: this.value == null ? '' : String(this.value)
+    }
+  },
+  watch: {
+    value(next) {
+      const normalized = next == null ? '' : String(next)
+      if (normalized !== this.text) {
+        this.text = normalized
+      }
+    }
+  },
+  methods: {
+    handleBlur() {
+      const next = this.text == null ? '' : String(this.text)
+      this.$emit('input', next)
+    }
+  }
+}
+<\/script>
+
+<style lang="less" scoped>
+.rune-el-input-demo {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+  font-family: inherit;
+  color: inherit;
 }
-.rune-jxg-demo__hint {
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.5);
-  font-style: italic;
+.rune-el-input-demo__field {
+  width: 100%;
 }
-.rune-jxg-demo__meta {
+.rune-el-input-demo__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(0, 0, 0, 0.55);
 }
-.rune-jxg-demo__meta code {
+.rune-el-input-demo__meta code {
   font-family: Consolas, Monaco, monospace;
-  background: rgba(33, 150, 243, 0.1);
+  background: rgba(126, 87, 194, 0.1);
   padding: 1px 5px;
   border-radius: 4px;
+  color: #6A1B9A;
 }
-.body--dark .rune-jxg-demo__board {
-  background: #2a2a2a;
+</style>`
+}
+
+// ===== el-select 模板：基于 Element-UI <el-select>，change 时触发 $emit('input') =====
+export const createElSelectTemplate = () => {
+  return `<template>
+  <div class="rune-el-select-demo">
+    <el-select
+      class="rune-el-select-demo__field"
+      v-model="selected"
+      :placeholder="placeholder"
+      clearable
+      @change="handleChange"
+    >
+      <el-option
+        v-for="opt in options"
+        :key="opt.value"
+        :label="opt.label"
+        :value="opt.value"
+      />
+    </el-select>
+    <div class="rune-el-select-demo__meta">
+      <span>v-model: <code>{{ selected || '-' }}</code></span>
+      <span>value: <code>{{ value == null ? '-' : value }}</code></span>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    value: {
+      type: [String, Number],
+      default: null
+    },
+    placeholder: {
+      type: String,
+      default: '选择一项后同步数据'
+    }
+  },
+  data() {
+    return {
+      selected: this.value == null ? '' : String(this.value),
+      options: [
+        { value: 'purple', label: '紫水晶' },
+        { value: 'blue',   label: '海蓝宝' },
+        { value: 'green',  label: '翡翠' },
+        { value: 'amber',  label: '琥珀' },
+        { value: 'crimson', label: '红玛瑙' }
+      ]
+    }
+  },
+  watch: {
+    value(next) {
+      const normalized = next == null ? '' : String(next)
+      if (normalized !== this.selected) {
+        this.selected = normalized
+      }
+    }
+  },
+  methods: {
+    handleChange(val) {
+      const next = val == null ? '' : String(val)
+      this.$emit('input', next)
+    }
+  }
+}
+<\/script>
+
+<style lang="less" scoped>
+.rune-el-select-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+  font-family: inherit;
+  color: inherit;
+}
+.rune-el-select-demo__field {
+  width: 100%;
+}
+.rune-el-select-demo__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.55);
+}
+.rune-el-select-demo__meta code {
+  font-family: Consolas, Monaco, monospace;
+  background: rgba(126, 87, 194, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #6A1B9A;
 }
 </style>`
 }

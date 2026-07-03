@@ -33,6 +33,7 @@ import debugLogger from 'src/utils/debugLogger'
 import { attachThemeColor } from 'src/utils/theme'
 import { showContextMenu as showEditorContextMenu } from 'src/contextMenu/muya'
 import EchoRegistry from './echo/EchoRegistry'
+import EchoRuntime from './echo/EchoRuntime'
 import { decodeEchoPayload, encodeEchoPayload, createEchoPlaceholderPayload, parseEchoAttrs } from './echo/EchoRuntime'
 
 const {
@@ -704,9 +705,15 @@ export default {
     },
     refreshEchoDefinitions () {
       this.echoRegistry.refresh(this.echoCards || [])
+      // 让 runtime 实例保持与 registry 一致；新增/删除 echo 后让旧的 compiled definition 缓存失效
+      if (!this._echoRuntime) {
+        this._echoRuntime = new EchoRuntime({ registry: this.echoRegistry })
+      }
+      this._echoRuntime.invalidate()
       if (this.contentEditor && this.contentEditor.options) {
         this.contentEditor.options.echoRegistry = this.echoRegistry
         this.contentEditor.options.echoCards = this.echoCards || []
+        this.contentEditor.options.__echoRuntime = this._echoRuntime
         const quickInsert = this.contentEditor.ui && this.contentEditor.ui.quickInsert
         if (quickInsert) {
           quickInsert.renderObj = quickInsert.getRenderObj()
@@ -931,11 +938,13 @@ export default {
       Muya.use(TableBarTools)
 
       this.echoRegistry.refresh(this.echoCards || [])
+      this._echoRuntime = new EchoRuntime({ registry: this.echoRegistry })
       // 把 Vue 实例注入 Muya options，让 Muya 内部的 StateRender 能回调到我们的回写方法
       // （见 src/libs/muya/lib/parser/render/index.js 的 mountRuneVueHosts）
       const muyaSelf = this
       const { container } = this.contentEditor = new Muya(this.$refs.muya, {
         __memocastMuya: muyaSelf,
+        __echoRuntime: this._echoRuntime,
         quickInsertProvider: () => {
           const runeItems = (this.runeCards || [])
             .filter(rune => rune && (rune.name || rune.text || rune.label))

@@ -745,10 +745,22 @@ export default class EchoRuntime {
       const raw = card.getAttribute('data-rune-attrs')
       if (raw) return JSON.parse(raw)
     } catch (error) { /* ignore */ }
+    // 再回退：直接从当前 rune host（node 自身）读 data-echo-attrs-json，
+    // 这样 Muya 端如果把 echo 实例属性只挂在 host.dataset 上也能命中。
+    try {
+      const ownerHost = (typeof node.closest === 'function')
+        ? node.closest('[data-echo-node-id]')
+        : null
+      const hostRaw = ownerHost && ownerHost.getAttribute('data-echo-attrs-json')
+      if (hostRaw) return JSON.parse(hostRaw)
+    } catch (error) { /* ignore */ }
     const result = {}
-    Array.from(node.attributes || []).forEach(attr => {
-      if (attr.name.startsWith('data-rune-attr-')) {
-        const key = attr.name.replace(/^data-rune-attr-/, '')
+    const attrSource = (typeof node.attributes !== 'undefined') ? node : card
+    Array.from(attrSource.attributes || []).forEach(attr => {
+      if (attr.name.startsWith('data-rune-attr-') || attr.name.startsWith('data-echo-attr-')) {
+        const key = attr.name
+          .replace(/^data-rune-attr-/, '')
+          .replace(/^data-echo-attr-/, '')
         try {
           result[key] = JSON.parse(attr.value)
         } catch (error) {
@@ -756,6 +768,21 @@ export default class EchoRuntime {
         }
       }
     })
+    // 兜底：把 host 上数据集中可能写着的 attrs.* 关键字段（kind/runeId/scope/...）
+    // 也一并合并进来，让运行时 handler 可以无依赖使用。
+    try {
+      const host = (typeof node.closest === 'function')
+        ? node.closest('[data-echo-node-id]')
+        : null
+      if (host && host.dataset) {
+        for (const key of Object.keys(host.dataset)) {
+          if (Object.prototype.hasOwnProperty.call(result, key)) continue
+          if (['echoName', 'echoId', 'echoDefinitionId', 'echoNodeId', 'echoValue'].includes(key)) continue
+          if (!['kind', 'runeId', 'scope', 'trigger', 'target', 'theme', 'layout', 'density', 'mode', 'targets', 'placeholder', 'source', 'label', 'action', 'model'].includes(key)) continue
+          result[key] = host.dataset[key]
+        }
+      }
+    } catch (error) { /* ignore */ }
     return result
   }
 }
