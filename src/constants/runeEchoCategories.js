@@ -39,7 +39,8 @@ export const RUNE_CATEGORIES = Object.freeze([
   { value: 'trading', i18nKey: 'runeCategoryTrading' },
   { value: 'agriculture', i18nKey: 'runeCategoryAgriculture' },
   { value: 'energy', i18nKey: 'runeCategoryEnergy' },
-  { value: 'environment', i18nKey: 'runeCategoryEnvironment' }
+  { value: 'environment', i18nKey: 'runeCategoryEnvironment' },
+  { value: 'resume', i18nKey: 'runeCategoryResume' }
 ])
 
 export const ECHO_CATEGORIES = Object.freeze([

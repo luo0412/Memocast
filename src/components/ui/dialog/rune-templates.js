@@ -434,7 +434,9 @@ export default {
 // ===== JsxGraph：演示 this.$jxg 绑定 JSXGraph 初始化与点击坐标上报 =====
 export const createJsxGraphTemplate = () => {
   return `<template>
-  <div ref="jxgBox" class="rune-jsxgraph-demo"/>
+  <div>
+    <div ref="jxgBox" class="rune-jsxgraph-demo"/>
+  </div>
 <\/template>
 
 <script>

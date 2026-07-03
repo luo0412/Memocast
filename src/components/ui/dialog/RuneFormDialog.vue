@@ -229,12 +229,11 @@
 }
 
 .rune-form-editor-wrap {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  position: relative;
 }
 
 .rune-form-field {
@@ -309,13 +308,14 @@
 }
 
 .rune-monaco-editor {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;
   width: 100%;
+  height: 420px;
   border: 1px solid #c0c0c0;
   border-radius: 4px;
   overflow: hidden;
   margin-top: 4px;
+  position: relative;
 }
 
 .preset-template-select {
