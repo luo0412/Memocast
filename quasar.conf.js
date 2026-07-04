@@ -25,6 +25,7 @@ module.exports = function (/* ctx */) {
       'antd',
       'electron-clipboard',
       'jxgraph',
+      'rune-deps',
       'hel-micro-renderer'
     ],
 

@@ -404,7 +404,11 @@ import {
   createFireflyTemplate,
   createElInputTemplate,
   createElSelectTemplate,
-  createResumeCanvasTemplate
+  createResumeBasicInfoTemplate,
+  createResumeTitleTemplate,
+  createResumeExperienceTemplate,
+  createResumeTextTemplate,
+  createResumeSkillTemplate
 } from './rune-templates'
 
 const createUuid = () => {
@@ -469,7 +473,7 @@ export default {
       _monacoRo: null,
       _dialogRo: null,
       _windowResizeHandler: null,
-      monacoEditorHeight: 420,
+      monacoEditorHeight: 250,
       form: {
         id: '',
         name: '',
@@ -532,11 +536,39 @@ export default {
           templateFn: 'createElSelectTemplate'
         },
         {
-          label: '简历画布',
-          desc: '可拖拽简历画布（vuedraggable + 5 种组件 + A4 引导线，参考 dnd-resume）',
-          icon: 'description',
+          label: '简历-基本信息',
+          desc: '头像 + 姓名 + 职位 + 联系方式，独立 rune 卡片，可自由组合',
+          icon: 'person',
           color: 'purple',
-          templateFn: 'createResumeCanvasTemplate'
+          templateFn: 'createResumeBasicInfoTemplate'
+        },
+        {
+          label: '简历-标题段落',
+          desc: '段落标题（H1/H2/H3），独立 rune 卡片',
+          icon: 'title',
+          color: 'indigo',
+          templateFn: 'createResumeTitleTemplate'
+        },
+        {
+          label: '简历-时间段经历',
+          desc: '工作 / 项目经历（职位 / 机构 / 起止 / 描述），独立 rune 卡片',
+          icon: 'schedule',
+          color: 'teal',
+          templateFn: 'createResumeExperienceTemplate'
+        },
+        {
+          label: '简历-自由文本',
+          desc: '自我介绍 / 备注，多行文本，独立 rune 卡片',
+          icon: 'subject',
+          color: 'blue',
+          templateFn: 'createResumeTextTemplate'
+        },
+        {
+          label: '简历-技能标签',
+          desc: '技能名 + 熟练度进度条，独立 rune 卡片',
+          icon: 'insights',
+          color: 'amber',
+          templateFn: 'createResumeSkillTemplate'
         }
       ],
       monacoEditor: null,
@@ -601,13 +633,22 @@ export default {
     }
   },
   watch: {
-    value (val) {
-      if (val) {
-        this.scheduleMonacoInit()
-        this.$nextTick(() => this.installDialogHeightListener())
-      } else {
-        this.clearMonacoInitTimer()
-        this.uninstallDialogHeightListener()
+    value: {
+      immediate: true,
+      handler (val) {
+        console.log('[RuneFormDialog] value changed =>', val, 'this.dialog=', !!this.$refs.dialog)
+        if (val) {
+          this.scheduleMonacoInit()
+          this.$nextTick(() => {
+            this.$nextTick(() => {
+              console.log('[RuneFormDialog] installDialogHeightListener, dialog clientHeight=', this.$refs.dialog && this.$refs.dialog.clientHeight)
+              this.installDialogHeightListener()
+            })
+          })
+        } else {
+          this.clearMonacoInitTimer()
+          this.uninstallDialogHeightListener()
+        }
       }
     },
     rune: {
@@ -650,8 +691,17 @@ export default {
     }
   },
   mounted () {
+    console.log('[RuneFormDialog] mounted, value=', this.value, '$refs.dialog=', !!this.$refs.dialog, 'clientHeight=', this.$refs.dialog && this.$refs.dialog.clientHeight)
     this.dialog = this.$refs.dialog
     this.scheduleMonacoInit()
+    // mounted 是组件挂载完毕的最早时机（DOM 已就绪），立即安装 dialog 高度监听，
+    // 这样在 watch.immediate 之前能抢先拿到正确的 clientHeight。
+    this.$nextTick(() => {
+      this.$nextTick(() => {
+        console.log('[RuneFormDialog] mounted -> installDialogHeightListener, dialog clientHeight=', this.$refs.dialog && this.$refs.dialog.clientHeight)
+        this.installDialogHeightListener()
+      })
+    })
   },
   beforeDestroy () {
     this.clearMonacoInitTimer()
@@ -664,15 +714,28 @@ export default {
   },
   methods: {
     installDialogHeightListener () {
+      console.log('[RuneFormDialog] installDialogHeightListener enter')
       this.uninstallDialogHeightListener()
-      if (!this.$refs.dialog) return
+      if (!this.$refs.dialog) {
+        console.warn('[RuneFormDialog] installDialogHeightListener: $refs.dialog missing, skip')
+        return
+      }
+      console.log('[RuneFormDialog] dialog clientHeight before recompute=', this.$refs.dialog.clientHeight)
       this.recomputeMonacoHeight()
-      this._dialogRo = new ResizeObserver(() => this.recomputeMonacoHeight())
+      this._dialogRo = new ResizeObserver(() => {
+        console.log('[RuneFormDialog] dialog ResizeObserver fired')
+        this.recomputeMonacoHeight()
+      })
       this._dialogRo.observe(this.$refs.dialog)
-      this._windowResizeHandler = () => this.recomputeMonacoHeight()
+      this._windowResizeHandler = () => {
+        console.log('[RuneFormDialog] window resize fired')
+        this.recomputeMonacoHeight()
+      }
       window.addEventListener('resize', this._windowResizeHandler)
+      console.log('[RuneFormDialog] installDialogHeightListener done, monacoEditorHeight=', this.monacoEditorHeight)
     },
     uninstallDialogHeightListener () {
+      console.log('[RuneFormDialog] uninstallDialogHeightListener')
       if (this._dialogRo) {
         this._dialogRo.disconnect()
         this._dialogRo = null
@@ -684,13 +747,20 @@ export default {
     },
     recomputeMonacoHeight () {
       const dialogEl = this.$refs.dialog
-      if (!dialogEl) return
+      const trace = (new Error()).stack.split('\n').slice(1, 4).join(' | ')
+      if (!dialogEl) {
+        console.warn('[RuneFormDialog] recomputeMonacoHeight: dialogEl missing. trace=', trace)
+        return
+      }
       const dialogHeight = dialogEl.clientHeight
-      if (!dialogHeight) return
-      const raw = dialogHeight * 0.6
-      const floored = Math.max(120, Math.floor(raw / 10) * 10)
-      if (floored !== this.monacoEditorHeight) {
-        this.monacoEditorHeight = floored
+      if (!dialogHeight) {
+        console.warn('[RuneFormDialog] recomputeMonacoHeight: dialogHeight=0. trace=', trace)
+        return
+      }
+      const next = Math.max(120, dialogHeight - 300)
+      console.log('[RuneFormDialog] recomputeMonacoHeight: dialogHeight=', dialogHeight, 'next=', next, 'current=', this.monacoEditorHeight, 'changed=', next !== this.monacoEditorHeight)
+      if (next !== this.monacoEditorHeight) {
+        this.monacoEditorHeight = next
       }
     },
     getIconName (value) {
@@ -836,10 +906,16 @@ export default {
         nextTemplate = createElInputTemplate()
       } else if (fnName === 'createElSelectTemplate') {
         nextTemplate = createElSelectTemplate()
-      } else if (fnName === 'createResumeCanvasTemplate') {
-        nextTemplate = createResumeCanvasTemplate()
-      } else if (fnName === 'createResumeCanvasTemplate') {
-        nextTemplate = createResumeCanvasTemplate()
+      } else if (fnName === 'createResumeBasicInfoTemplate') {
+        nextTemplate = createResumeBasicInfoTemplate()
+      } else if (fnName === 'createResumeTitleTemplate') {
+        nextTemplate = createResumeTitleTemplate()
+      } else if (fnName === 'createResumeExperienceTemplate') {
+        nextTemplate = createResumeExperienceTemplate()
+      } else if (fnName === 'createResumeTextTemplate') {
+        nextTemplate = createResumeTextTemplate()
+      } else if (fnName === 'createResumeSkillTemplate') {
+        nextTemplate = createResumeSkillTemplate()
       }
       this.form.template = nextTemplate
       if (this.monacoEditor && this.monacoReady) {

@@ -419,7 +419,7 @@ export default {
       _dialogRo: null,
       _windowResizeHandler: null,
       monacoEditor: null,
-      monacoEditorHeight: 420,
+      monacoEditorHeight: 250,
       form: {
         id: '',
         name: '',
@@ -465,13 +465,22 @@ export default {
     }
   },
   watch: {
-    value (val) {
-      if (val) {
-        this.scheduleMonacoInit()
-        this.$nextTick(() => this.installDialogHeightListener())
-      } else {
-        this.clearMonacoInitTimer()
-        this.uninstallDialogHeightListener()
+    value: {
+      immediate: true,
+      handler (val) {
+        console.log('[EchoFormDialog] value changed =>', val, 'this.dialog=', !!this.$refs.dialog)
+        if (val) {
+          this.scheduleMonacoInit()
+          this.$nextTick(() => {
+            this.$nextTick(() => {
+              console.log('[EchoFormDialog] installDialogHeightListener, dialog clientHeight=', this.$refs.dialog && this.$refs.dialog.clientHeight)
+              this.installDialogHeightListener()
+            })
+          })
+        } else {
+          this.clearMonacoInitTimer()
+          this.uninstallDialogHeightListener()
+        }
       }
     },
     'form.name': function (val, oldVal) {
@@ -546,15 +555,28 @@ export default {
   },
   methods: {
     installDialogHeightListener () {
+      console.log('[EchoFormDialog] installDialogHeightListener enter')
       this.uninstallDialogHeightListener()
-      if (!this.$refs.dialog) return
+      if (!this.$refs.dialog) {
+        console.warn('[EchoFormDialog] installDialogHeightListener: $refs.dialog missing, skip')
+        return
+      }
+      console.log('[EchoFormDialog] dialog clientHeight before recompute=', this.$refs.dialog.clientHeight)
       this.recomputeMonacoHeight()
-      this._dialogRo = new ResizeObserver(() => this.recomputeMonacoHeight())
+      this._dialogRo = new ResizeObserver(() => {
+        console.log('[EchoFormDialog] dialog ResizeObserver fired')
+        this.recomputeMonacoHeight()
+      })
       this._dialogRo.observe(this.$refs.dialog)
-      this._windowResizeHandler = () => this.recomputeMonacoHeight()
+      this._windowResizeHandler = () => {
+        console.log('[EchoFormDialog] window resize fired')
+        this.recomputeMonacoHeight()
+      }
       window.addEventListener('resize', this._windowResizeHandler)
+      console.log('[EchoFormDialog] installDialogHeightListener done, monacoEditorHeight=', this.monacoEditorHeight)
     },
     uninstallDialogHeightListener () {
+      console.log('[EchoFormDialog] uninstallDialogHeightListener')
       if (this._dialogRo) {
         this._dialogRo.disconnect()
         this._dialogRo = null
@@ -566,14 +588,20 @@ export default {
     },
     recomputeMonacoHeight () {
       const dialogEl = this.$refs.dialog
-      if (!dialogEl) return
+      const trace = (new Error()).stack.split('\n').slice(1, 4).join(' | ')
+      if (!dialogEl) {
+        console.warn('[EchoFormDialog] recomputeMonacoHeight: dialogEl missing. trace=', trace)
+        return
+      }
       const dialogHeight = dialogEl.clientHeight
-      if (!dialogHeight) return
-      // Monaco 高度 = floor(dialog 高度 * 0.6 / 10) * 10，向下取整到 10 的倍数
-      const raw = dialogHeight * 0.6
-      const floored = Math.max(120, Math.floor(raw / 10) * 10)
-      if (floored !== this.monacoEditorHeight) {
-        this.monacoEditorHeight = floored
+      if (!dialogHeight) {
+        console.warn('[EchoFormDialog] recomputeMonacoHeight: dialogHeight=0. trace=', trace)
+        return
+      }
+      const next = Math.max(120, dialogHeight - 300)
+      console.log('[EchoFormDialog] recomputeMonacoHeight: dialogHeight=', dialogHeight, 'next=', next, 'current=', this.monacoEditorHeight, 'changed=', next !== this.monacoEditorHeight)
+      if (next !== this.monacoEditorHeight) {
+        this.monacoEditorHeight = next
       }
     },
     clearMonacoInitTimer () {

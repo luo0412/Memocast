@@ -675,388 +675,16 @@ export default {
 }
 
 // =====================================================================
-// 简历拖拽系列：参考 dnd-resume 项目（React 19 + @dnd-kit + Zustand）
-// 把 dnd-resume 的"纵向 Sortable + 节点流 + A4 引导线"思路移植到 Vue 2。
-// - 容器：简历画布（持有 widgets 数组 + vuedraggable + 选区 + 增删）
-// - 5 个内容组件：基本信息 / 标题段落 / 时间段经历 / 自由文本 / 技能标签
-// 所有节点数据 JSON 序列化到 rune value，回写父组件持久化。
+// 简历系列组件：每个组件都是独立的 Vue SFC 字符串模板，可单独作为一张
+// rune 卡片被 muya quickInsert 插入到笔记中，用户可自行按任意顺序组合。
+// 数据形态：value 为业务字段对象，部分字段约定 JSON 字符串；失焦/输入时
+// 通过 $emit('input', newValue) 同步给父组件持久化。
+//
+// 历史上曾有一个"简历画布"容器模板（vuedraggable + 内嵌 5 个组件 + A4 引导线 +
+// 内嵌编辑弹窗），现已下线。本文件不再导出 createResumeCanvasTemplate。
 // =====================================================================
 
-// ----- 1. 简历画布（容器，内置 vuedraggable） -----
-export const createResumeCanvasTemplate = () => {
-  return `<template>
-  <div class="rune-resume-canvas">
-    <div class="rune-resume-toolbar">
-      <q-icon name="description" color="purple-5" size="1.2em" class="q-mr-xs" />
-      <span class="rune-resume-toolbar-title">简历画布</span>
-      <q-space />
-      <q-btn-dropdown
-        dense flat no-caps color="purple-5" size="sm"
-        label="添加组件" icon="add"
-        content-style="min-width: 180px"
-      >
-        <q-list>
-          <q-item clickable v-close-popup @click="addWidget('BasicInfo')">
-            <q-item-section avatar><q-icon name="person" color="purple-5" /></q-item-section>
-            <q-item-section>基本信息</q-item-section>
-          </q-item>
-          <q-item clickable v-close-popup @click="addWidget('TitleSection')">
-            <q-item-section avatar><q-icon name="title" color="indigo-5" /></q-item-section>
-            <q-item-section>标题段落</q-item-section>
-          </q-item>
-          <q-item clickable v-close-popup @click="addWidget('ExperienceTime')">
-            <q-item-section avatar><q-icon name="schedule" color="teal-5" /></q-item-section>
-            <q-item-section>时间段经历</q-item-section>
-          </q-item>
-          <q-item clickable v-close-popup @click="addWidget('TextContent')">
-            <q-item-section avatar><q-icon name="subject" color="blue-5" /></q-item-section>
-            <q-item-section>自由文本</q-item-section>
-          </q-item>
-          <q-item clickable v-close-popup @click="addWidget('SkillBar')">
-            <q-item-section avatar><q-icon name="insights" color="amber-6" /></q-item-section>
-            <q-item-section>技能标签</q-item-section>
-          </q-item>
-        </q-list>
-      </q-btn-dropdown>
-      <q-btn flat dense no-caps icon="print" label="打印" size="sm" class="q-ml-xs" @click="handlePrint" />
-    </div>
-
-    <div class="rune-resume-paper" ref="paper">
-      <draggable
-        v-model="widgets"
-        group="resume-widgets"
-        handle=".rune-resume-drag-handle"
-        animation="160"
-        ghost-class="rune-resume-ghost"
-        chosen-class="rune-resume-chosen"
-        drag-class="rune-resume-drag"
-        @start="onDragStart"
-        @end="onDragEnd"
-      >
-        <transition-group type="transition" :name="'flip-list'">
-          <div
-            v-for="w in widgets"
-            :key="w.id"
-            class="rune-resume-widget"
-            :class="{ 'is-active': activeId === w.id }"
-            @click.self="activeId = w.id"
-          >
-            <span class="rune-resume-drag-handle" title="拖拽调整顺序">⋮⋮</span>
-            <div v-if="w.type === 'BasicInfo'" class="rune-rb">
-              <div class="rune-rb__avatar">
-                <img v-if="w.data.propsData && w.data.propsData.avatar" :src="w.data.propsData.avatar" alt="avatar" />
-                <span v-else class="rune-rb__avatar-fallback">{{ initialsOf(w) }}</span>
-              </div>
-              <div class="rune-rb__main">
-                <div class="rune-rb__name">{{ (w.data.propsData && w.data.propsData.name) || '未命名' }}</div>
-                <div class="rune-rb__title">{{ (w.data.propsData && w.data.propsData.title) || '' }}</div>
-                <div class="rune-rb__meta">
-                  <span v-if="w.data.propsData && w.data.propsData.phone"><q-icon name="phone" size="0.95em" class="q-mr-xs" />{{ w.data.propsData.phone }}</span>
-                  <span v-if="w.data.propsData && w.data.propsData.email"><q-icon name="email" size="0.95em" class="q-mr-xs" />{{ w.data.propsData.email }}</span>
-                  <span v-if="w.data.propsData && w.data.propsData.location"><q-icon name="place" size="0.95em" class="q-mr-xs" />{{ w.data.propsData.location }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div v-else-if="w.type === 'TitleSection'" :class="['rune-rt', 'rune-rt--' + (w.data.propsData && w.data.propsData.level === 1 ? 'h1' : (w.data.propsData && w.data.propsData.level === 3 ? 'h3' : 'h2'))]">
-              <span class="rune-rt__bar" />
-              <span class="rune-rt__text">{{ (w.data.propsData && w.data.propsData.text) || '标题' }}</span>
-            </div>
-
-            <div v-else-if="w.type === 'ExperienceTime'" class="rune-re">
-              <div class="rune-re__head">
-                <div class="rune-re__title">{{ (w.data.propsData && w.data.propsData.title) || '职位' }}</div>
-                <div class="rune-re__time">
-                  <q-icon name="schedule" size="0.9em" class="q-mr-xs" />
-                  {{ (w.data.propsData && w.data.propsData.startDate) || '开始' }} ~ {{ w.data.propsData && w.data.propsData.current ? '至今' : ((w.data.propsData && w.data.propsData.endDate) || '结束') }}
-                </div>
-              </div>
-              <div class="rune-re__org">
-                <q-icon name="business" size="0.9em" class="q-mr-xs" />
-                {{ (w.data.propsData && w.data.propsData.org) || '机构' }}
-              </div>
-              <div class="rune-re__desc" v-if="w.data.propsData && w.data.propsData.desc">{{ w.data.propsData.desc }}</div>
-            </div>
-
-            <div v-else-if="w.type === 'TextContent'" class="rune-rtx">
-              <div class="rune-rtx__text" v-if="w.data.propsData && w.data.propsData.text">{{ w.data.propsData.text }}</div>
-              <div class="rune-rtx__placeholder" v-else>自由文本组件，点击编辑...</div>
-            </div>
-
-            <div v-else-if="w.type === 'SkillBar'" class="rune-rs">
-              <div v-for="(s, i) in (Array.isArray((w.data.propsData || {}).items) ? w.data.propsData.items : [])" :key="i" class="rune-rs__row">
-                <div class="rune-rs__name">{{ s.name }}</div>
-                <div class="rune-rs__bar">
-                  <div class="rune-rs__bar-inner" :style="{ width: clampLevel(s.level) + '%' }"></div>
-                </div>
-                <div class="rune-rs__val">{{ clampLevel(s.level) }}%</div>
-              </div>
-              <div v-if="!(Array.isArray((w.data.propsData || {}).items) && w.data.propsData.items.length)" class="rune-rs__empty">暂无技能</div>
-            </div>
-
-            <div v-else class="rune-rtx">
-              <div class="rune-rtx__placeholder">未知组件类型: {{ w.type }}</div>
-            </div>
-
-            <button class="rune-resume-remove" title="删除组件" @click.stop="removeWidget(w.id)">×</button>
-          </div>
-        </transition-group>
-      </draggable>
-
-      <div v-if="!widgets || widgets.length === 0" class="rune-resume-empty">
-        <q-icon name="add_circle_outline" size="2.4em" color="grey-5" />
-        <div class="rune-resume-empty-title">画布是空的</div>
-        <div class="rune-resume-empty-desc">点击右上角"添加组件"开始组装你的简历</div>
-      </div>
-
-      <!-- A4 分页引导线 -->
-      <div
-        v-for="(g, idx) in pageGuides"
-        :key="g.key"
-        class="rune-resume-page-guide"
-        :style="{ top: g.top + 'px' }"
-      >
-        <span>页 {{ idx + 2 }} 起</span>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script>
-// 简历画布符文：纵向 vuedraggable + 选区 + 增删 + A4 引导线
-// 数据形态：{ widgets: [{id, type, data:{propsData, styleData}}], activeId }
-import draggable from 'vuedraggable'
-
-const RESUME_PAPER_WIDTH = 760
-const A4_RATIO = 297 / 210
-const PAGE_BREAK_HEIGHT = RESUME_PAPER_WIDTH * A4_RATIO
-
-const createWidgetId = () => 'w-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
-
-const defaultProps = {
-  BasicInfo: () => ({ name: '你的名字', title: '前端工程师', phone: '138-0000-0000', email: 'me@example.com', location: '北京', avatar: '' }),
-  TitleSection: () => ({ text: '工作经历', level: 2 }),
-  ExperienceTime: () => ({ title: '高级前端工程师', org: '某科技公司', startDate: '2022.01', endDate: '至今', current: true, desc: '负责 xxx 业务线' }),
-  TextContent: () => ({ text: '热爱技术、关注用户体验，喜欢在业余时间做开源项目。' }),
-  SkillBar: () => ({ items: [{ name: 'Vue', level: 90 }, { name: 'TypeScript', level: 80 }] })
-}
-
-export default {
-  name: 'RuneResumeCanvas',
-  components: { draggable },
-  props: {
-    value: { type: String, default: '' }
-  },
-  data () {
-    const parsed = this._parseValue(this.value)
-    return {
-      widgets: parsed.widgets || [],
-      activeId: null,
-      pageGuides: [],
-      _ro: null
-    }
-  },
-  mounted () {
-    this._observePaper()
-    this._nextTickRecalc()
-  },
-  beforeDestroy () {
-    if (this._ro) { this._ro.disconnect(); this._ro = null }
-  },
-  watch: {
-    widgets: {
-      deep: true,
-      handler (val) {
-        this._emit()
-        this._nextTickRecalc()
-      }
-    }
-  },
-  methods: {
-    _parseValue (raw) {
-      try {
-        const obj = raw ? JSON.parse(raw) : null
-        if (obj && Array.isArray(obj.widgets)) return obj
-      } catch (e) { /* noop */ }
-      return { widgets: [] }
-    },
-    _emit () {
-      this.$emit('input', JSON.stringify({ widgets: this.widgets }))
-    },
-    initialsOf (w) {
-      const n = ((w.data && w.data.propsData && w.data.propsData.name) || '').trim()
-      if (!n) return '?'
-      return n.slice(0, 1).toUpperCase()
-    },
-    clampLevel (v) {
-      const n = Number(v)
-      if (!isFinite(n)) return 0
-      return Math.max(0, Math.min(100, Math.round(n)))
-    },
-    addWidget (type) {
-      const factory = defaultProps[type]
-      if (!factory) return
-      const widget = {
-        id: createWidgetId(),
-        type,
-        data: { propsData: factory(), styleData: {} }
-      }
-      this.widgets = [...this.widgets, widget]
-      this.activeId = widget.id
-    },
-    removeWidget (id) {
-      this.widgets = this.widgets.filter(w => w.id !== id)
-      if (this.activeId === id) this.activeId = null
-    },
-    onDragStart () { /* hook point */ },
-    onDragEnd () { this._nextTickRecalc() },
-    _observePaper () {
-      const el = this.$refs.paper
-      if (!el || typeof ResizeObserver === 'undefined') return
-      this._ro = new ResizeObserver(() => this._recalcGuides())
-      this._ro.observe(el)
-    },
-    _nextTickRecalc () {
-      this.$nextTick(() => this._recalcGuides())
-    },
-    _recalcGuides () {
-      const el = this.$refs.paper
-      if (!el) return
-      const scrollH = el.scrollHeight
-      if (!scrollH) { this.pageGuides = []; return }
-      const count = Math.floor((scrollH - 1) / PAGE_BREAK_HEIGHT)
-      const arr = []
-      for (let i = 1; i <= count; i++) {
-        arr.push({ key: 'g' + i, top: Math.round(i * PAGE_BREAK_HEIGHT) })
-      }
-      this.pageGuides = arr
-    },
-    handlePrint () {
-      window.print && window.print()
-    }
-  }
-}
-<\/script>
-
-<style lang="less" scoped>
-.rune-resume-canvas {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-family: 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', Arial, sans-serif;
-}
-.rune-resume-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: rgba(126, 87, 194, 0.06);
-  border: 1px solid rgba(126, 87, 194, 0.2);
-  border-radius: 8px;
-}
-.rune-resume-toolbar-title {
-  font-weight: 600;
-  color: #6A1B9A;
-  font-size: 13px;
-}
-.rune-resume-paper {
-  position: relative;
-  width: 100%;
-  min-height: 320px;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 24px 28px;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-.rune-resume-widget {
-  position: relative;
-  padding: 10px 32px 10px 28px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  margin: 4px 0;
-  transition: background 0.15s, border-color 0.15s;
-  cursor: pointer;
-}
-.rune-resume-widget:hover {
-  background: rgba(126, 87, 194, 0.04);
-  border-color: rgba(126, 87, 194, 0.15);
-}
-.rune-resume-widget.is-active {
-  background: rgba(126, 87, 194, 0.08);
-  border-color: rgba(126, 87, 194, 0.45);
-  box-shadow: 0 0 0 2px rgba(126, 87, 194, 0.15);
-}
-.rune-resume-drag-handle {
-  position: absolute;
-  left: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: rgba(0, 0, 0, 0.3);
-  cursor: grab;
-  font-size: 14px;
-  user-select: none;
-  padding: 2px 4px;
-}
-.rune-resume-drag-handle:active { cursor: grabbing; }
-.rune-resume-remove {
-  position: absolute;
-  right: 4px;
-  top: 4px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.06);
-  color: rgba(0, 0, 0, 0.55);
-  cursor: pointer;
-  line-height: 16px;
-  font-size: 14px;
-  padding: 0;
-}
-.rune-resume-remove:hover {
-  background: #EF5350;
-  color: #fff;
-}
-.rune-resume-ghost { opacity: 0.4; background: rgba(126, 87, 194, 0.08); }
-.rune-resume-chosen { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12); }
-.rune-resume-drag { transform: rotate(1deg); }
-.rune-resume-empty {
-  padding: 60px 20px;
-  text-align: center;
-  color: rgba(0, 0, 0, 0.5);
-}
-.rune-resume-empty-title { font-size: 14px; font-weight: 600; margin-top: 8px; }
-.rune-resume-empty-desc { font-size: 12px; margin-top: 4px; }
-.rune-resume-page-guide {
-  position: absolute;
-  left: 0;
-  right: 0;
-  border-top: 1px dashed rgba(126, 87, 194, 0.4);
-  pointer-events: none;
-}
-.rune-resume-page-guide span {
-  position: absolute;
-  right: 8px;
-  top: -10px;
-  background: #fff;
-  padding: 0 6px;
-  font-size: 11px;
-  color: #7E57C2;
-}
-.flip-list-move { transition: transform 0.3s; }
-@media print {
-  .rune-resume-toolbar { display: none; }
-  .rune-resume-paper { box-shadow: none; border: none; }
-  .rune-resume-drag-handle, .rune-resume-remove { display: none; }
-}
-</style>`
-}
-
-// ----- 2. 基本信息（BasicInfo） -----
+// ----- 1. 基本信息（BasicInfo） -----
 export const createResumeBasicInfoTemplate = () => {
   return `<template>
   <div class="rune-rb">
@@ -1104,7 +732,7 @@ export default {
 </style>`
 }
 
-// ----- 3. 标题段落（TitleSection） -----
+// ----- 2. 标题段落（TitleSection） -----
 export const createResumeTitleTemplate = () => {
   return `<template>
   <div :class="['rune-rt', 'rune-rt--' + level]">
@@ -1142,7 +770,7 @@ export default {
 </style>`
 }
 
-// ----- 4. 时间段经历（ExperienceTime） -----
+// ----- 3. 时间段经历（ExperienceTime） -----
 export const createResumeExperienceTemplate = () => {
   return `<template>
   <div class="rune-re">
@@ -1180,7 +808,7 @@ export default {
 </style>`
 }
 
-// ----- 5. 自由文本（TextContent） -----
+// ----- 4. 自由文本（TextContent） -----
 export const createResumeTextTemplate = () => {
   return `<template>
   <div class="rune-rtx">
@@ -1205,7 +833,7 @@ export default {
 </style>`
 }
 
-// ----- 6. 技能标签（SkillBar） -----
+// ----- 5. 技能标签（SkillBar） -----
 export const createResumeSkillTemplate = () => {
   return `<template>
   <div class="rune-rs">

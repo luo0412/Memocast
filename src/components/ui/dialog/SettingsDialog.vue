@@ -1618,8 +1618,12 @@ export default {
       this.openRuneFormDialog()
     },
     openRuneFormDialog: function () {
+      console.log('[SettingsDialog] openRuneFormDialog: BEFORE', 'runeFormKey=', this.runeFormKey, 'runeFormVisible=', this.runeFormVisible)
       this.runeFormKey += 1
       this.runeFormVisible = true
+      console.log('[SettingsDialog] openRuneFormDialog: AFTER', 'runeFormKey=', this.runeFormKey, 'runeFormVisible=', this.runeFormVisible)
+      window.__MEMOCAST_OPENED_DIALOGS = (window.__MEMOCAST_OPENED_DIALOGS || 0) + 1
+      console.log('[SettingsDialog] __MEMOCAST_OPENED_DIALOGS=', window.__MEMOCAST_OPENED_DIALOGS)
     },
     onRuneFormVisibleChange: function (visible) {
       this.runeFormVisible = visible
@@ -1644,8 +1648,12 @@ export default {
       this.openEchoFormDialog()
     },
     openEchoFormDialog: function () {
+      console.log('[SettingsDialog] openEchoFormDialog: BEFORE', 'echoFormKey=', this.echoFormKey, 'echoFormVisible=', this.echoFormVisible)
       this.echoFormKey += 1
       this.echoFormVisible = true
+      console.log('[SettingsDialog] openEchoFormDialog: AFTER', 'echoFormKey=', this.echoFormKey, 'echoFormVisible=', this.echoFormVisible)
+      window.__MEMOCAST_OPENED_DIALOGS = (window.__MEMOCAST_OPENED_DIALOGS || 0) + 1
+      console.log('[SettingsDialog] __MEMOCAST_OPENED_DIALOGS=', window.__MEMOCAST_OPENED_DIALOGS)
     },
     onEchoFormVisibleChange: function (visible) {
       this.echoFormVisible = visible
