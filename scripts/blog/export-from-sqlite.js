@@ -25,6 +25,9 @@ const os = require('os')
 const path = require('path')
 const initSqlJs = require('sql.js')
 
+const incremental = require('./incremental')
+const { shortlinkForExport } = require('./shortlink')
+
 // 与项目 src/utils/constants.js 保持一致
 const OFFLINE_ROOT_CATEGORY = '/My Notes/'
 
@@ -299,7 +302,14 @@ async function exportFromSqlite(args) {
   const assetsRoot = path.join(args.out, '.vuepress', 'public', 'assets')
   fs.mkdirSync(assetsRoot, { recursive: true })
 
+  // 加载增量 manifest（让 export 阶段也具备"内容未变则不覆盖"的能力）
+  // 注意：incremental manifest 落在 stage 目录里（更适合与最终产物一同发布/忽略），
+  // 但 export 阶段也能用同一份（写到 out/.vuepress/.blog-build-manifest.json），
+  // 这样 stageDocs 不需要重复 hash。
+  const manifest = incremental.loadManifest(args.out)
+
   let exported = 0
+  let skippedByCache = 0
   for (const [category, list] of grouped) {
     const outDir = categoryToOutDir(args.out, category)
     fs.mkdirSync(outDir, { recursive: true })
@@ -317,10 +327,16 @@ async function exportFromSqlite(args) {
       // 2) 重新生成 YAML front-matter（保留关键元信息）
       const tags = String(n.tags || '').split(',').map(s => s.trim()).filter(Boolean).join(', ')
       const date = new Date((n.data_created || n.local_modified || Date.now()) * (n.data_created > 1e12 ? 1 : 1000))
+      // permalink：用 shortlink 算法算出稳定短链，与 build-sidebar
+      // 阶段保持完全一致（同样的 basename+dir，同样的 cyrb53）。
+      // 这样 vuepress build 时按 permalink 渲染，与 sidebar.json 的
+      // 链接始终吻合，不会出现"链接打不开"的问题。
+      const permalink = shortlinkForExport(fileName, outDir)
       const yaml = [
         '---',
         `title: "${fmTitle.replace(/"/g, '\\"')}"`,
         `order: ${order}`,
+        `permalink: ${permalink}`,
         `note_id: ${noteId}`,
         tags ? `tags: [${tags.split(',').map(t => `"${t.trim()}"`).join(', ')}]` : null,
         `created: "${date.toISOString()}"`,
@@ -332,14 +348,38 @@ async function exportFromSqlite(args) {
       content = content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '')
       const finalContent = yaml + '\n' + content.trim() + '\n'
 
-      fs.writeFileSync(path.join(outDir, fileName), finalContent, 'utf8')
-      exported++
+      const relPath = path.relative(args.out, path.join(outDir, fileName)).replace(/\\/g, '/')
+      const { written } = incremental.writeIncremental(args.out, manifest, relPath, finalContent)
+      if (written) exported++
+      else skippedByCache++
     })
+
+    // 给目录补一份 README.md（带 permalink: /<id>/），让 vuepress 把目录当页面
+    const dirPermalink = shortlinkForExport('', outDir, { isDir: true })
+    const catName = path.basename(outDir)
+    const readmePath = path.join(outDir, 'README.md')
+    const readmeYaml = [
+      '---',
+      `title: "${catName.replace(/^[^.]+\./, '')}"`,
+      `permalink: ${dirPermalink}`,
+      '---',
+      '',
+      `# ${catName.replace(/^[^.]+\./, '')}`,
+      ''
+    ].join('\n')
+    const relReadme = path.relative(args.out, readmePath).replace(/\\/g, '/')
+    const { written: readmeWritten } = incremental.writeIncremental(args.out, manifest, relReadme, readmeYaml)
+    if (readmeWritten) {
+      // README 不计入 exported 计分，仅作为目录索引
+    }
   }
+  // 清理 stale
+  const prune = incremental.pruneManifest(args.out, manifest)
+  incremental.saveManifest(args.out, manifest)
 
   db.close()
-  console.log(`[export] 完成，导出 ${exported} 篇到 ${args.out}`)
-  return { exported, skipped: notes.length - published.length, plan: [] }
+  console.log(`[export] 完成，导出 ${exported} 篇（跳过 ${skippedByCache}，清理 ${prune.removed} stale）`)
+  return { exported, skipped: notes.length - published.length + skippedByCache, plan: [] }
 }
 
 module.exports = {

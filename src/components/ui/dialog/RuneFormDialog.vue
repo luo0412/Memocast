@@ -404,6 +404,7 @@ import {
   createFireflyTemplate,
   createElInputTemplate,
   createElSelectTemplate,
+  createElDatePickerTemplate,
   createResumeBasicInfoTemplate,
   createResumeTitleTemplate,
   createResumeExperienceTemplate,
@@ -534,6 +535,13 @@ export default {
           icon: 'arrow_drop_down_circle',
           color: 'indigo',
           templateFn: 'createElSelectTemplate'
+        },
+        {
+          label: 'el-date-picker',
+          desc: 'Element-UI 日期选择（默认 date），@change 时触发 $emit("input")',
+          icon: 'event',
+          color: 'deep-purple',
+          templateFn: 'createElDatePickerTemplate'
         },
         {
           label: '简历-基本信息',
@@ -906,6 +914,8 @@ export default {
         nextTemplate = createElInputTemplate()
       } else if (fnName === 'createElSelectTemplate') {
         nextTemplate = createElSelectTemplate()
+      } else if (fnName === 'createElDatePickerTemplate') {
+        nextTemplate = createElDatePickerTemplate()
       } else if (fnName === 'createResumeBasicInfoTemplate') {
         nextTemplate = createResumeBasicInfoTemplate()
       } else if (fnName === 'createResumeTitleTemplate') {

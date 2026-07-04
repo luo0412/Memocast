@@ -188,13 +188,13 @@ function getChildren(baseDir, relativeDir, seqManifest) {
   const fullDir = relativeDir ? path.join(baseDir, relativeDir) : baseDir
   const files = readdirSafe(fullDir)
     .filter(name => name.endsWith('.md') && isDirectory(path.join(fullDir, name)) === false)
+    .filter(name => name !== 'README.md')
     .map(name => {
       const fullPath = path.join(fullDir, name)
       const { order } = readMarkdownMeta(fullPath)
-      let relPath = relativeDir ? `${relativeDir}/${name}` : name
-      relPath = relPath.slice(0, -3) // 去掉 .md
-      if (relPath.endsWith('README')) relPath = relPath.slice(0, -6)
-      return { path: relPath, order }
+      const relPath = relativeDir ? `${relativeDir}/${name}` : name
+      const noExt = relPath.slice(0, -3) // 去掉 .md
+      return { path: noExt, order }
     })
   return files.sort((a, b) => {
     const ao = a.order === undefined ? Number.MAX_SAFE_INTEGER : a.order

@@ -674,6 +674,104 @@ export default {
 </style>`
 }
 
+// ===== el-date-picker 模板：基于 Element-UI <el-date-picker type="date">，
+// 默认 date 模式（年/月/日），change 时触发 $emit('input') =====
+export const createElDatePickerTemplate = () => {
+  return `<template>
+  <div class="rune-el-date-demo">
+    <el-date-picker
+      class="rune-el-date-demo__field"
+      v-model="picked"
+      :type="type"
+      :placeholder="placeholder"
+      :format="format"
+      :value-format="valueFormat"
+      clearable
+      @change="handleChange"
+    />
+    <div class="rune-el-date-demo__meta">
+      <span>v-model: <code>{{ picked || '-' }}</code></span>
+      <span>value: <code>{{ value == null ? '-' : value }}</code></span>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    value: {
+      type: String,
+      default: null
+    },
+    placeholder: {
+      type: String,
+      default: '选择日期，变化时同步数据'
+    },
+    type: {
+      type: String,
+      default: 'date'
+    },
+    format: {
+      type: String,
+      default: 'yyyy-MM-dd'
+    },
+    valueFormat: {
+      type: String,
+      default: 'yyyy-MM-dd'
+    }
+  },
+  data() {
+    return {
+      picked: this.value == null ? '' : String(this.value)
+    }
+  },
+  watch: {
+    value(next) {
+      const normalized = next == null ? '' : String(next)
+      if (normalized !== this.picked) {
+        this.picked = normalized
+      }
+    }
+  },
+  methods: {
+    handleChange(val) {
+      const next = val == null ? '' : String(val)
+      this.picked = next
+      this.$emit('input', next)
+    }
+  }
+}
+<\/script>
+
+<style lang="less" scoped>
+.rune-el-date-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+  font-family: inherit;
+  color: inherit;
+}
+.rune-el-date-demo__field {
+  width: 100%;
+}
+.rune-el-date-demo__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.55);
+}
+.rune-el-date-demo__meta code {
+  font-family: Consolas, Monaco, monospace;
+  background: rgba(126, 87, 194, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #6A1B9A;
+}
+</style>`
+}
+
 // =====================================================================
 // 简历系列组件：每个组件都是独立的 Vue SFC 字符串模板，可单独作为一张
 // rune 卡片被 muya quickInsert 插入到笔记中，用户可自行按任意顺序组合。

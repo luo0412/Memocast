@@ -18,7 +18,16 @@
     "build-all": "quasar build -m electron -T all -P",
     "build": "quasar build -m electron",
     "build-7z": "cross-env ELECTRON_BUILDER_COMPRESSION_LEVEL=9 ELECTRON_BUILDER_7Z_FILTER=bcj2 quasar build -m electron",
-    "build-7z-develop": "cross-env ELECTRON_BUILDER_COMPRESSION_LEVEL=9 ELECTRON_BUILDER_7Z_FILTER=bcj2 quasar build -m electron -d"
+    "build-7z-develop": "cross-env ELECTRON_BUILDER_COMPRESSION_LEVEL=9 ELECTRON_BUILDER_7Z_FILTER=bcj2 quasar build -m electron -d",
+    "blog:export": "node scripts/blog/pipeline.js --export-only",
+    "blog:stage": "node scripts/blog/pipeline.js --stage-only",
+    "blog:sidebar": "node scripts/blog/pipeline.js --sidebar-only",
+    "blog:config": "node scripts/blog/pipeline.js --config-only",
+    "blog:build": "node scripts/blog/pipeline.js",
+    "blog:preview": "node scripts/blog/pipeline.js && vuepress dev _docs",
+    "blog:init-ci": "node scripts/blog/init-ci.js",
+    "blog:skeleton": "node scripts/blog/init-ci.js --target ci --quiet && node scripts/blog/gen-vuepress-config.js",
+    "blog:test": "node scripts/blog/__tests__/m1.test.js && node scripts/blog/__tests__/m2.test.js && node scripts/blog/__tests__/m3.test.js && node scripts/blog/__tests__/m4.test.js && node scripts/blog/__tests__/m5.test.js && node scripts/blog/__tests__/m6.test.js && node scripts/blog/__tests__/e2e.test.js && node scripts/blog/__tests__/init-ci.test.js && node scripts/blog/__tests__/gh-workflow.test.js"
   },
   "dependencies": {
     "@electron/remote": "^2.1.3",

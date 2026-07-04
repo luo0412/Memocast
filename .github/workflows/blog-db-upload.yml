@@ -1,0 +1,51 @@
+# 由 `yarn blog:init-ci` 自动生成；可手工修改但下次 init-ci 会被覆盖。
+name: blog-db-upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      kb_guid:
+        description: 'kb_guid（可选，留空导出全部）'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - name: Decode db from base64 secret
+        run: |
+          if [ -z "${{ secrets.MEMOCAST_DB_BASE64 }}" ]; then
+            echo "::error::secrets.MEMOCAST_DB_BASE64 未配置"
+            exit 1
+          fi
+          mkdir -p .cache
+          echo "${{ secrets.MEMOCAST_DB_BASE64 }}" | base64 -d > .cache/memocast.db
+          ls -la .cache/memocast.db
+
+      - name: Sanity-check the db
+        run: |
+          node -e '
+            const fs = require("fs");
+            const buf = fs.readFileSync(".cache/memocast.db");
+            const sig = buf.slice(0, 16).toString("ascii");
+            if (!sig.startsWith("SQLite format 3")) {
+              console.error("::error::文件不是合法 SQLite：", JSON.stringify(sig));
+              process.exit(1);
+            }
+            console.log("[ok] SQLite 文件签名正确，大小:", buf.length, "bytes");
+          '
+
+      - name: Upload as artifact (retained 14 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: memocast-db
+          path: .cache/memocast.db
+          retention-days: 14
+          if-no-files-found: error

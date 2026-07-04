@@ -1,0 +1,19 @@
+/**
+ * vuepress 客户端启动钩子 —— 把 base 暴露到 window.__BLOG_BASE__
+ *
+ * vuepress 在 SSR/客户端两侧都会执行这份文件。
+ * 把 base 注入到 window 后，自定义组件就可以用
+ *   const base = (typeof window !== 'undefined' && window.__BLOG_BASE__) || '/'
+ * 安全地拼接资源链接。
+ */
+
+export default ({}) => {
+  // 这里要拿到 base，只能通过 SSR 注入或相对路径计算。
+  // 因为我们写死了 base（部署后不变），用相对根路径也安全。
+  if (typeof window !== 'undefined') {
+    // 用 location.pathname 的第一段路径作为 base
+    // 例如部署在 /memocast-blog/ 下时，第一段就是 'memocast-blog'
+    const segs = window.location.pathname.split('/').filter(Boolean)
+    window.__BLOG_BASE__ = segs.length > 0 ? '/' + segs[0] + '/' : '/'
+  }
+}
