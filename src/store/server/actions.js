@@ -2533,14 +2533,15 @@ export default {
         }
       })
 
-      // 4. Write to blog _posts directory
-      await BlogDeployService.writeBlogPosts(config.blogDir, contents, config.theme || 'default')
+      // 4. Write to blog _posts directory (同时生成 shortlink-map.json)
+      const blogPath = path.join(config.blogDir)
+      await BlogDeployService.writeBlogPosts(blogPath, contents, config.theme || 'default', category)
 
       // 5. Generate sidebar.json
-      await BlogDeployService.generateSidebarJson(config.blogDir, contents)
+      await BlogDeployService.generateSidebarJson(blogPath, contents)
 
       // 6. Ensure README.md exists
-      await BlogDeployService.ensureReadme(config.blogDir, category)
+      await BlogDeployService.ensureReadme(blogPath, category)
 
       // 7. Trigger main process: vuepress build + GitHub trigger
       Loading.hide()

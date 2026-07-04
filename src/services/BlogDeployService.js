@@ -2,9 +2,11 @@ import path from 'path'
 import fs from 'fs-extra'
 
 /**
- * 极简 cyrb53（与 scripts/blog/hash-id.js 算法一致 —— 保证迁移过来的
- * 历史 permalink 在 vuepress 重建后仍然命中同样的 URL）。
- * 如修改必须与 .github/workflows/blog-build.yml 内的 shortlink 保持一致。
+ * 极简 cyrb53 —— 与 vuepress-build 的 shortlink 算法一致。
+ * 笔记原始标题 → 短链 id。让 permalink 在 vuepress 重建后仍命中
+ * 同一 URL（重命名只改 title，不影响 id）。
+ *
+ * 与 vuepress build 时 sidebar / config 脚本共用同一算法。
  */
 function cyrb53 (str, seed = 0) {
   let h1 = 0xdeadbeef ^ seed
@@ -20,35 +22,60 @@ function cyrb53 (str, seed = 0) {
 }
 
 /**
- * 计算 permalink —— 与 sidebar.json 的 shortlink 算法保持完全一致
- * 让 vuepress 按 permalink 渲染，与侧边栏链接永远吻合。
+ * 短链 id —— sidebar 与 permalink 共用。
  *
- * @param {string} dir    分类目录最后一层，如 'tech'
+ * 规则：
+ *   - 剥掉文件名前缀序号（01-、a- 等），让序号排序不影响 id
+ *   - 把 dir 编进 hash 链（避免不同分类下同 title 撞 id）
+ *
+ * @param {string} dir    分类目录最后一段，如 'tech'
  * @param {string} base   文件 basename（无 .md），如 'Hello'
- * @returns {string}      '/<id>.html'
+ * @returns {string}      base36 id，如 'fayv5l4z77'
+ */
+function shortlinkId (dir, base) {
+  const basename = String(base || '').replace(/^\d+[a-zA-Z]*[-_]/, '')
+  return cyrb53((basename || 'index') + (dir ? '/' + dir : ''))
+}
+
+/**
+ * 计算 frontmatter 的 permalink —— vuepress 把页面渲染到这个 URL。
+ *
+ * 与 sidebar.json item.path 完全同源（同 shortlinkId）：
+ *   sidebar item.path    = '_posts/<id>.md'
+ *   frontmatter permalink = '/<id>.html'
+ *
+ * 物理上：md 源文件以 id 命名存于 _posts/，vuepress 渲染后输出到 /<id>.html。
+ * 访问 /<id>.html = 访问 sidebar 里指向的同一份内容 → 不 404。
+ *
+ * @param {string} dir   分类目录最后一段，如 'tech'
+ * @param {string} base  文件 basename（无 .md），如 'Hello'
+ * @returns {string}     '/<id>.html'
  */
 function permalinkFor (dir, base) {
-  const basename = String(base || '').replace(/^\d+[a-zA-Z]*[-_]/, '')
-  const id = cyrb53((basename || 'index') + (dir ? '/' + dir : ''))
-  return `/${id}.html`
+  return `/${shortlinkId(dir, base)}.html`
+}
+
+/**
+ * 给 sidebar.json 用的 path —— 与 permalink 指向同一物理文件。
+ *
+ * @param {string} dir   分类目录最后一段
+ * @param {string} base  文件 basename（无 .md），如 'Hello'
+ * @returns {string}     '_posts/<id>.md'
+ */
+function sidebarPathFor (dir, base) {
+  return `_posts/${shortlinkId(dir, base)}.md`
 }
 
 /**
  * 内置的 GitHub Actions workflow 模板（字符串常量）
  *
- * 来源：scripts/blog/templates/workflows/blog-*.yml.template（已删除）
+ * 来源：scripts/blog/templates/workflows/blog-*.yml.template
  * 这里直接以字符串形式内联，作为"运行时产物"——避免 runtime 与 template 双份维护。
  *
  * 三个 workflow 的职责：
  *   blog-build.yml    完整构建 + 部署 + 推动 github-pages
  *   blog-db-upload.yml 手动上传 memocast.db 到 artifact
  *   blog-preview.yml  PR 上自动跑 sidebar/config（不部署）
- *
- * 公共变量：
- *   {{NODE_VERSION}}         Node 版本（默认 20）
- *   {{VUEPRESS_VERSION}}     vuepress 版本（默认 ^1.9.10）
- *   {{BLOG_BASE_DEFAULT}}    默认 base
- *   {{BRANCHES_LIST}}        push 触发分支列表
  */
 const CI_WORKFLOWS = {
   'blog-build.yml': `name: blog-build
@@ -268,37 +295,140 @@ export default {
     console.log('[BlogDeploy] Created README.md with title:', folderName)
   },
 
+  /**
+   * 生成 sidebar.json —— 与 frontmatter permalink 同源，避免点侧边栏 404。
+   *
+   * @param {string} blogDir    博客源目录
+   * @param {Array<{title:string}>} noteFields 笔记列表（title 可含 .md）
+   */
   async generateSidebarJson (blogDir, noteFields) {
     const sidebarPath = path.join(blogDir, 'sidebar.json')
     const sidebarData = {}
+    const dirTag = path.basename(blogDir)
 
     noteFields.forEach(note => {
       const filename = note.title.replace(/\.md$/i, '')
-      const postsDir = '_posts'
-      if (!sidebarData[postsDir]) {
-        sidebarData[postsDir] = []
-      }
-      sidebarData[postsDir].push({
+      if (!sidebarData._posts) sidebarData._posts = []
+      sidebarData._posts.push({
         title: filename,
-        path: `${postsDir}/${filename}.md`
+        path: sidebarPathFor(dirTag, filename)
       })
     })
 
     await fs.writeJson(sidebarPath, sidebarData, { spaces: 2 })
   },
 
-  async writeBlogPosts (blogDir, notes, theme = 'default') {
+  /**
+   * 写 _posts/<id>.md —— 文件名用 shortlinkId，与 sidebar path 对齐。
+   *
+   * @param {string} blogDir  博客源目录
+   * @param {Array<{title:string, content:string, docGuid?:string}>} notes
+   * @param {string} theme    'default' | 'vdoing'
+   * @param {string} category 当前分类名（可选，写进 shortlink-map.json）
+   */
+  async writeBlogPosts (blogDir, notes, theme = 'default', category = '') {
     const postsDir = path.join(blogDir, '_posts')
     await fs.ensureDir(postsDir)
 
     const dirTag = path.basename(blogDir)
+    const mapEntries = []
 
     for (const note of notes) {
       const baseName = note.title.replace(/\.md$/i, '')
-      const filepath = path.join(postsDir, `${baseName}.md`)
+      // 文件名直接用 shortlink id —— 与 sidebar path 完全一致
+      const fileId = shortlinkId(dirTag, baseName)
+      const filepath = path.join(postsDir, `${fileId}.md`)
       const frontmatter = this.buildFrontmatter(note, theme, dirTag, baseName)
       const content = frontmatter + '\n\n' + note.content
       await fs.writeFile(filepath, content)
+
+      mapEntries.push({
+        id: fileId,
+        title: baseName,
+        permalink: `/${fileId}.html`,
+        category,
+        docGuid: note.docGuid || ''
+      })
+    }
+
+    // 实时合并 + 写映射文件（让 vuepress 构建期任何脚本/enhanceApp 都能用）
+    await this.appendShortlinkMap(blogDir, mapEntries)
+    return { writtenFiles: mapEntries.length }
+  },
+
+  /**
+   * 把 id→title/category/permalink 的映射写到 blogDir/.vuepress/shortlink-map.json
+   *
+   * vuepress 构建期任何脚本（enhanceApp.js / sidebar extender / 主题 hack）都能
+   * require('./shortlink-map.json') 直接拿到映射：
+   *   - 把 sidebar 显示 title 从短链改成人类可读
+   *   - 给路由加自定 resolveTitle
+   *   - breadcrumb 显示分类
+   *
+   * 文件结构：
+   *   {
+   *     "version": 1,
+   *     "generatedAt": "ISO 时间",
+   *     "byId": {
+   *       "abc123": { "title": "Hello", "category": "/My Notes/技术/", "permalink": "/abc123.html", "docGuid": "..." }
+   *     },
+   *     "byDocGuid": { "...": "abc123" }
+   *   }
+   *
+   * 二次调用会合并（不删旧项；同 id 覆盖）。
+   *
+   * @param {string} blogDir
+   * @param {Array<{id,title,permalink,category,docGuid}>} entries
+   */
+  async appendShortlinkMap (blogDir, entries) {
+    if (!entries || entries.length === 0) return { written: false, path: '' }
+    const vpDir = path.join(blogDir, '.vuepress')
+    await fs.ensureDir(vpDir)
+    const mapPath = path.join(vpDir, 'shortlink-map.json')
+
+    // 读旧映射（如有）
+    let existing = { version: 1, byId: {}, byDocGuid: {} }
+    if (await fs.pathExists(mapPath)) {
+      try {
+        const old = JSON.parse(await fs.readFile(mapPath, 'utf8'))
+        if (old && old.byId) existing = old
+      } catch (e) {
+        console.warn('[BlogDeploy] shortlink-map.json 解析失败，将覆盖:', e.message)
+      }
+    }
+
+    // 合并
+    for (const e of entries) {
+      existing.byId[e.id] = {
+        title: e.title,
+        category: e.category || '',
+        permalink: e.permalink,
+        docGuid: e.docGuid || ''
+      }
+      if (e.docGuid) existing.byDocGuid[e.docGuid] = e.id
+    }
+    existing.version = 1
+    existing.generatedAt = new Date().toISOString()
+    existing.count = Object.keys(existing.byId).length
+
+    await fs.writeJson(mapPath, existing, { spaces: 2 })
+    console.log(`[BlogDeploy] shortlink-map.json -> ${mapPath}（${existing.count} 条）`)
+    return { written: true, path: mapPath, count: existing.count }
+  },
+
+  /**
+   * 读取当前映射 —— 给 IPC / 其它模块（如冲突合并、第三方同步）复用。
+   * @param {string} blogDir
+   * @returns {Promise<{version, byId, byDocGuid, ...}>}
+   */
+  async readShortlinkMap (blogDir) {
+    const mapPath = path.join(blogDir, '.vuepress', 'shortlink-map.json')
+    if (!(await fs.pathExists(mapPath))) return null
+    try {
+      return JSON.parse(await fs.readFile(mapPath, 'utf8'))
+    } catch (e) {
+      console.warn('[BlogDeploy] readShortlinkMap 解析失败:', e.message)
+      return null
     }
   },
 
@@ -352,5 +482,16 @@ export default {
     }
     console.log(`[BlogDeploy] exportCIWorkflows -> ${wfDir}（写入 ${written.length}，跳过 ${skipped.length}）`)
     return { written, skipped, targetDir: wfDir }
+  },
+
+  /**
+   * 短链 id —— 暴露给其它模块复用，保证 sidebar / permalink / file name 三处一致。
+   *
+   * @param {string} dir   分类目录最后一段
+   * @param {string} base  文件 basename（无 .md）
+   * @returns {string}     base36 id
+   */
+  shortlinkId (dir, base) {
+    return shortlinkId(dir, base)
   }
 }
