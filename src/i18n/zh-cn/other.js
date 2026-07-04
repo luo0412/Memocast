@@ -128,5 +128,12 @@ export default {
   sftpUploading: '正在上传到服务器...',
   sftpUploadSuccess: '上传完成！',
   sftpUploadFailed: '上传失败',
-  sftpNoKeySelected: '请选择私钥文件'
+  sftpNoKeySelected: '请选择私钥文件',
+
+  // 导出 GitHub Actions CI 配置
+  exportBlogCiOptional: '（可选）导出 GitHub Actions CI 配置',
+  exportBlogCiHint: '把内置的 .github/workflows/blog-*.yml 三个文件写到「博客源目录」下，提交并推送到 GitHub 后会自动触发 CI 部署。',
+  exportBlogCi: '导出 CI 配置到博客目录',
+  exportBlogCiSuccess: 'CI 配置已导出：写入 {written} 个、跳过 {skipped} 个（已存在）。目录：{targetDir}',
+  exportBlogCiFailed: 'CI 配置导出失败'
 }

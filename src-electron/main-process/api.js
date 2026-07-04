@@ -323,6 +323,31 @@ export default {
     }).catch(err => throw err)
 
     /**
+     * Blog Deploy: 导出 GitHub Actions CI 配置
+     *
+     * 把内置的 3 个 blog-*.yml 写到 targetDir/.github/workflows/
+     * 已存在的文件跳过（不覆盖），由用户决定是否替换。
+     *
+     * 入参：
+     *   { targetDir: string } - 目标目录（一般是 blogDir）
+     * 出参：
+     *   { written: string[], skipped: string[], targetDir: string }
+     */
+    handleApi('export-blog-ci', async (e, { targetDir } = {}) => {
+      if (!targetDir) {
+        return { error: 'targetDirRequired', message: '需要指定目标目录' }
+      }
+      const BlogDeployService = require('../../src/services/BlogDeployService').default
+      try {
+        const result = await BlogDeployService.exportCIWorkflows(targetDir)
+        return { success: true, ...result }
+      } catch (err) {
+        console.error('[export-blog-ci] 失败:', err)
+        return { error: 'exportFailed', message: err.message || String(err) }
+      }
+    }).catch(err => { throw err })
+
+    /**
      * Select directory dialog
      */
     handleApi('select-directory', async (e, { title }) => {

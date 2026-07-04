@@ -125,5 +125,12 @@ export default {
   sftpUploading: 'Uploading to server...',
   sftpUploadSuccess: 'Upload complete!',
   sftpUploadFailed: 'Upload failed',
-  sftpNoKeySelected: 'Please select a private key file'
+  sftpNoKeySelected: 'Please select a private key file',
+
+  // Export GitHub Actions CI configuration
+  exportBlogCiOptional: '(Optional) Export GitHub Actions CI configuration',
+  exportBlogCiHint: 'Write the built-in .github/workflows/blog-*.yml to your blog directory. After committing & pushing to GitHub, CI deploy will run automatically.',
+  exportBlogCi: 'Export CI config to blog directory',
+  exportBlogCiSuccess: 'CI config exported: {written} written, {skipped} skipped (existing). Target: {targetDir}',
+  exportBlogCiFailed: 'CI config export failed'
 }
