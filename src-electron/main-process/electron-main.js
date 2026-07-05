@@ -17,6 +17,11 @@ import log from 'electron-log'
 import CryptoJS from 'crypto-js'
 import Portkey from 'portkey-ai'
 const { DEFAULT_ROOT_CATEGORY } = require('./constants')
+const createRuneTemplateService = require('./service/rune-template-service')
+
+// rune 预设模板服务（schema + CRUD）。仅在 initSchema 阶段真正调用 createRuneTemplateService，
+// registerDatabaseHandlers 阶段直接复用 module 级 runeTemplateService，避免重复闭包。
+let runeTemplateService = null
 
 // sql.js 数据库
 let db = null
@@ -795,6 +800,43 @@ export default {
     }
     saveDatabase()
     log.info(`[DB] Backfilled default anno sources for ${emptyAnnoSourceEchoes.length} echo(es)`)
+  }
+
+  // === rune 预设模板 (rune_templates) ===
+  // 单独的服务（service/rune-template-service.js）只负责 schema + CRUD。
+  // 用 module 级变量保存实例，供后续 registerDatabaseHandlers 复用，避免重复建闭包。
+  runeTemplateService = createRuneTemplateService({ db, execToObjects, execOne, saveDatabase, log })
+  runeTemplateService.ensureSchema()
+  const runeTplCount = execOne('SELECT COUNT(*) as count FROM rune_templates')
+  if (runeTplCount && runeTplCount.count === 0) {
+    try {
+      const seedModule = require('./service/builtin-rune-templates')
+      const list = (seedModule && seedModule.BUILTIN_RUNE_TEMPLATES) || []
+      if (list.length) {
+        const now = Date.now()
+        const rows = list.map((it, idx) => ({
+          id: it.id,
+          category_key: it.category_key,
+          name: it.name,
+          desc: it.desc,
+          color: it.color,
+          icon: it.icon,
+          template: it.template,
+          source_url: '',
+          is_builtin: 1,
+          sort_order: idx,
+          created_at: now,
+          updated_at: now
+        }))
+        const result = runeTemplateService.saveMany(rows)
+        if (result && result.success) {
+          saveDatabase()
+          log.info(`[DB] Seeded ${result.count} built-in rune templates into rune_templates`)
+        }
+      }
+    } catch (seedError) {
+      console.warn('[DB] seedRuneTemplates skipped:', seedError && seedError.message)
+    }
   }
 
   log.info('[Main] Database schema initialized')
@@ -2208,6 +2250,39 @@ function registerDatabaseHandlers() {
         message: error && error.message ? error.message : String(error)
       }
     }
+  })
+
+  // === rune 预设模板（独立 rune_templates 表）===
+  // 与 runes（用户实际保存的符文卡片）解耦：rune_templates 只承担"下拉选项 / 远端导入"。
+  // 复用 initSchema 阶段创建的 runeTemplateService，避免重复闭包。
+  if (!runeTemplateService) {
+    runeTemplateService = createRuneTemplateService({ db, execToObjects, execOne, saveDatabase, log })
+    runeTemplateService.ensureSchema()
+  }
+
+  ipcMain.handle('db:getRuneTemplates', async () => {
+    try {
+      return runeTemplateService.listAll()
+    } catch (error) {
+      log.error('[DB] getRuneTemplates error:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle('db:saveRuneTemplate', async (event, row) => {
+    return runeTemplateService.saveOne(row || {})
+  })
+
+  ipcMain.handle('db:saveRuneTemplates', async (event, rows) => {
+    return runeTemplateService.saveMany(rows || [])
+  })
+
+  ipcMain.handle('db:deleteRuneTemplate', async (event, id) => {
+    return runeTemplateService.remove(id)
+  })
+
+  ipcMain.handle('rune-template:fetchRemote', async (event, payload) => {
+    return await runeTemplateService.importFromRemote(payload || {})
   })
 
   // 获取所有回响

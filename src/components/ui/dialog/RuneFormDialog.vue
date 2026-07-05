@@ -1,4 +1,5 @@
 <template>
+  <div>
   <q-dialog
     ref='dialog'
     transition-show='fade'
@@ -135,39 +136,26 @@
             <div class='row items-center justify-between q-mb-xs'>
               <div class='rune-form-label q-mb-none'>模板内容</div>
               <div class='row items-center no-wrap q-gutter-xs'>
-                <q-select
-                  v-model='selectedPreset'
+                <category-picker
+                  v-model='selectedPresetKey'
+                  :option='categoryPickerOption'
+                  type='object'
+                  :show-all-levels='true'
+                  :show-child-count='true'
+                  placeholder='选择分类 / 模板'
+                  class='preset-template-picker'
+                  @change='onPresetPicked'
+                />
+                <q-btn
+                  flat
                   dense
-                  outlined
-                  :options='presetTemplateOptions'
-                  option-label='label'
-                  option-value='value'
-                  emit-value
-                  map-options
-                  display-value=''
-                  hide-selected
-                  fill-input
-                  use-input
-                  clearable
-                  placeholder='预设模板'
-                  class='preset-template-select'
-                  @input='onPresetSelected'
-                >
-                  <template v-slot:selected-item='scope'>
-                    <span class='preset-template-label'>{{ scope.opt ? scope.opt.label : '' }}</span>
-                  </template>
-                  <template v-slot:option='scope'>
-                    <q-item v-bind='scope.itemProps' v-on='scope.itemEvents'>
-                      <q-item-section avatar>
-                        <q-icon :name='scope.opt.icon' :color='scope.opt.color' size='1.2em' />
-                      </q-item-section>
-                      <q-item-section>
-                        <q-item-label>{{ scope.opt.label }}</q-item-label>
-                        <q-item-label caption lines='1'>{{ scope.opt.desc }}</q-item-label>
-                      </q-item-section>
-                    </q-item>
-                  </template>
-                </q-select>
+                  no-caps
+                  size='sm'
+                  color='primary'
+                  icon='cloud_download'
+                  label='远端导入'
+                  @click='openRemoteImportDialog'
+                />
                 <q-btn flat dense no-caps size='sm' color='primary' icon='refresh' label='重置' @click='resetTemplate' />
               </div>
             </div>
@@ -186,6 +174,17 @@
       </q-card-actions>
     </q-card>
   </q-dialog>
+
+  <remote-rune-import-dialog
+    v-model='remoteImportDialogVisible'
+    :url='remoteImportUrl'
+    :category='remoteImportCategory'
+    :category-options='runeCategoryOptions'
+    :submitting='remoteImporting'
+    :error-message='remoteImportError'
+    @submit='onRemoteImportSubmit'
+  />
+  </div>
 </template>
 
 <style lang="scss" scoped>
@@ -331,13 +330,9 @@
   position: relative;
 }
 
-.preset-template-select {
-  min-width: 120px;
-  max-width: 180px;
-}
-
-.preset-template-select :deep(.q-field__control) {
-  min-height: 32px;
+.preset-template-picker {
+  min-width: 180px;
+  max-width: 240px;
 }
 
 .preset-template-label {
@@ -396,21 +391,10 @@
 import * as monaco from 'monaco-editor'
 import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY, getRuneCategoryValue } from 'src/constants/runeEchoCategories'
 import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
-import {
-  createBlankTemplate,
-  createInputTemplate,
-  createHolyShieldTemplate,
-  createJsxGraphTemplate,
-  createFireflyTemplate,
-  createElInputTemplate,
-  createElSelectTemplate,
-  createElDatePickerTemplate,
-  createResumeBasicInfoTemplate,
-  createResumeTitleTemplate,
-  createResumeExperienceTemplate,
-  createResumeTextTemplate,
-  createResumeSkillTemplate
-} from './rune-templates'
+import { createBlankTemplate } from './rune-templates'
+import CategoryPicker from 'components/common/CategoryPicker'
+import RemoteRuneImportDialog from './RemoteRuneImportDialog'
+import runeTemplateService from 'src/services/RuneTemplateService'
 
 const createUuid = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -446,6 +430,10 @@ export default {
   model: {
     prop: 'value',
     event: 'input'
+  },
+  components: {
+    CategoryPicker,
+    RemoteRuneImportDialog
   },
   props: {
     value: {
@@ -485,100 +473,13 @@ export default {
         template: createBlankTemplate(),
         category: DEFAULT_RUNE_CATEGORY
       },
-      selectedPreset: null,
-      presetTemplateOptions: [
-        {
-          label: '空白模板',
-          desc: '标准 Vue SFC 格式（template + script + style + data + methods）',
-          icon: 'description',
-          color: 'purple',
-          templateFn: 'createBlankTemplate'
-        },
-        {
-          label: '输入框',
-          desc: '@blur 时触发 $emit("input")，适合表单场景',
-          icon: 'edit',
-          color: 'green',
-          templateFn: 'createInputTemplate'
-        },
-        {
-          label: 'hel-micro',
-          desc: '远程组件，演示 $hel.preFetchLib',
-          icon: 'cloud_download',
-          color: 'amber',
-          templateFn: 'createHolyShieldTemplate'
-        },
-        {
-          label: 'JsxGraph',
-          desc: '通过 this.$jxg 初始化坐标系，点击上报坐标（JSXGraph）',
-          icon: 'show_chart',
-          color: 'blue',
-          templateFn: 'createJsxGraphTemplate'
-        },
-        {
-          label: '萤火虫',
-          desc: 'CSS3 多点发光动画，点击萤火虫上报坐标（参考博客园）',
-          icon: 'auto_awesome',
-          color: 'amber',
-          templateFn: 'createFireflyTemplate'
-        },
-        {
-          label: 'el-input',
-          desc: 'Element-UI 输入框，@blur 时触发 $emit("input")',
-          icon: 'input',
-          color: 'teal',
-          templateFn: 'createElInputTemplate'
-        },
-        {
-          label: 'el-select',
-          desc: 'Element-UI 下拉选择，@change 时触发 $emit("input")',
-          icon: 'arrow_drop_down_circle',
-          color: 'indigo',
-          templateFn: 'createElSelectTemplate'
-        },
-        {
-          label: 'el-date-picker',
-          desc: 'Element-UI 日期选择（默认 date），@change 时触发 $emit("input")',
-          icon: 'event',
-          color: 'deep-purple',
-          templateFn: 'createElDatePickerTemplate'
-        },
-        {
-          label: '简历-基本信息',
-          desc: '头像 + 姓名 + 职位 + 联系方式，独立 rune 卡片，可自由组合',
-          icon: 'person',
-          color: 'purple',
-          templateFn: 'createResumeBasicInfoTemplate'
-        },
-        {
-          label: '简历-标题段落',
-          desc: '段落标题（H1/H2/H3），独立 rune 卡片',
-          icon: 'title',
-          color: 'indigo',
-          templateFn: 'createResumeTitleTemplate'
-        },
-        {
-          label: '简历-时间段经历',
-          desc: '工作 / 项目经历（职位 / 机构 / 起止 / 描述），独立 rune 卡片',
-          icon: 'schedule',
-          color: 'teal',
-          templateFn: 'createResumeExperienceTemplate'
-        },
-        {
-          label: '简历-自由文本',
-          desc: '自我介绍 / 备注，多行文本，独立 rune 卡片',
-          icon: 'subject',
-          color: 'blue',
-          templateFn: 'createResumeTextTemplate'
-        },
-        {
-          label: '简历-技能标签',
-          desc: '技能名 + 熟练度进度条，独立 rune 卡片',
-          icon: 'insights',
-          color: 'amber',
-          templateFn: 'createResumeSkillTemplate'
-        }
-      ],
+      selectedPresetKey: null,
+      categoryPickerTree: [],
+      remoteImportDialogVisible: false,
+      remoteImportUrl: '',
+      remoteImportCategory: '',
+      remoteImporting: false,
+      remoteImportError: '',
       monacoEditor: null,
       runeCategoryOptions: RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) })),
       iconOptions: [
@@ -638,6 +539,42 @@ export default {
     },
     resolvedPowerLabel () {
       return this.isEchoMode ? this.$t('echoCardPower') : this.$t('runeCardPower')
+    },
+    categoryPickerOption () {
+      const groups = new Map()
+      const i18nMap = {}
+      for (const opt of (this.runeCategoryOptions || [])) {
+        i18nMap[opt.value] = opt.label
+      }
+      for (const row of (this.categoryPickerTree || [])) {
+        const key = (row && row.category_key) || 'general'
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key).push(row)
+      }
+      const tree = []
+      for (const [key, items] of groups.entries()) {
+        const children = items.map(item => ({
+          key: 'tpl::' + item.id,
+          title: item.name || item.id,
+          desc: item.desc || '',
+          _isCategory: false,
+          _templateRow: item,
+          children: []
+        }))
+        tree.push({
+          key: 'cat::' + key,
+          title: i18nMap[key] || key,
+          _isCategory: true,
+          _templateRow: null,
+          children
+        })
+      }
+      tree.sort((a, b) => String(a.title).localeCompare(String(b.title)))
+      return {
+        datas: tree,
+        fieldNames: { key: 'key', title: 'title', children: 'children' },
+        selectable: (node) => !!(node && node._isCategory === false)
+      }
     }
   },
   watch: {
@@ -647,15 +584,15 @@ export default {
         console.log('[RuneFormDialog] value changed =>', val, 'this.dialog=', !!this.$refs.dialog)
         if (val) {
           this.scheduleMonacoInit()
-          this.$nextTick(() => {
-            this.$nextTick(() => {
-              console.log('[RuneFormDialog] installDialogHeightListener, dialog clientHeight=', this.$refs.dialog && this.$refs.dialog.clientHeight)
-              this.installDialogHeightListener()
-            })
-          })
+          this.loadTemplatePicker(true)
+          this._scheduleDialogHeightInstall()
         } else {
           this.clearMonacoInitTimer()
           this.uninstallDialogHeightListener()
+          if (this._dialogHeightPollTimer) {
+            clearTimeout(this._dialogHeightPollTimer)
+            this._dialogHeightPollTimer = null
+          }
         }
       }
     },
@@ -718,29 +655,76 @@ export default {
       this._monacoRo.disconnect()
       this._monacoRo = null
     }
+    if (this._dialogHeightPollTimer) {
+      clearTimeout(this._dialogHeightPollTimer)
+      this._dialogHeightPollTimer = null
+    }
     this.disposeMonaco()
   },
   methods: {
     installDialogHeightListener () {
       console.log('[RuneFormDialog] installDialogHeightListener enter')
       this.uninstallDialogHeightListener()
-      if (!this.$refs.dialog) {
-        console.warn('[RuneFormDialog] installDialogHeightListener: $refs.dialog missing, skip')
+      const dialogEl = this._resolveDialogElement()
+      if (!dialogEl) {
+        console.warn('[RuneFormDialog] installDialogHeightListener: dialog DOM missing, skip')
         return
       }
-      console.log('[RuneFormDialog] dialog clientHeight before recompute=', this.$refs.dialog.clientHeight)
       this.recomputeMonacoHeight()
       this._dialogRo = new ResizeObserver(() => {
         console.log('[RuneFormDialog] dialog ResizeObserver fired')
         this.recomputeMonacoHeight()
       })
-      this._dialogRo.observe(this.$refs.dialog)
+      this._dialogRo.observe(dialogEl)
       this._windowResizeHandler = () => {
         console.log('[RuneFormDialog] window resize fired')
         this.recomputeMonacoHeight()
       }
       window.addEventListener('resize', this._windowResizeHandler)
       console.log('[RuneFormDialog] installDialogHeightListener done, monacoEditorHeight=', this.monacoEditorHeight)
+    },
+    /**
+     * 解析 q-dialog 对应的真实 DOM 元素（q-dialog 是 Vue 组件，$refs.dialog 拿到的是实例，
+     * 必须 .$el 或 .$refs.content 才能给 ResizeObserver / clientHeight 使用）。
+     */
+    _resolveDialogElement () {
+      const ref = this.$refs && this.$refs.dialog
+      if (!ref) return null
+      const candidate = ref.$el || (ref.$refs && ref.$refs.content) || ref
+      if (candidate && candidate.nodeType === 1) return candidate
+      // 兜底：沿父链查找最近含 clientHeight 的 DOM
+      let node = candidate
+      while (node && node.nodeType !== 1) node = node.parentNode
+      return node || null
+    },
+    /**
+     * 等待 q-dialog 真正挂载完毕（其内部使用 QPortal，初始 render 时 $el 可能还不存在），
+     * 再去安装 ResizeObserver。最多等 ~1s，避免无限轮询。
+     */
+    _scheduleDialogHeightInstall () {
+      if (this._dialogHeightPollTimer) {
+        clearTimeout(this._dialogHeightPollTimer)
+        this._dialogHeightPollTimer = null
+      }
+      let attempt = 0
+      const maxAttempts = 20 // 20 * 50ms = 1s
+      const tryInstall = () => {
+        attempt += 1
+        if (!this.value) return
+        const el = this._resolveDialogElement()
+        if (el && el.clientHeight > 0) {
+          this.installDialogHeightListener()
+          return
+        }
+        if (attempt >= maxAttempts) {
+          // 兜底：即使 clientHeight=0 也安装，依赖 ResizeObserver 后续回调补一次
+          console.warn('[RuneFormDialog] _scheduleDialogHeightInstall: dialog 1s 内未挂载 clientHeight>0，尝试兜底安装')
+          this.installDialogHeightListener()
+          return
+        }
+        this._dialogHeightPollTimer = setTimeout(tryInstall, 50)
+      }
+      this._dialogHeightPollTimer = setTimeout(tryInstall, 0)
     },
     uninstallDialogHeightListener () {
       console.log('[RuneFormDialog] uninstallDialogHeightListener')
@@ -754,7 +738,7 @@ export default {
       }
     },
     recomputeMonacoHeight () {
-      const dialogEl = this.$refs.dialog
+      const dialogEl = this._resolveDialogElement()
       const trace = (new Error()).stack.split('\n').slice(1, 4).join(' | ')
       if (!dialogEl) {
         console.warn('[RuneFormDialog] recomputeMonacoHeight: dialogEl missing. trace=', trace)
@@ -893,47 +877,93 @@ export default {
     resetTemplate () {
       const nextTemplate = createBlankTemplate()
       this.form.template = nextTemplate
-      this.selectedPreset = null
+      this.selectedPresetKey = null
       if (this.monacoEditor && this.monacoReady) {
         this.monacoEditor.setValue(nextTemplate)
       }
     },
-    onPresetSelected (preset) {
-      if (!preset) return
-      const fnName = preset.templateFn
-      let nextTemplate = createBlankTemplate()
-      if (fnName === 'createInputTemplate') {
-        nextTemplate = createInputTemplate()
-      } else if (fnName === 'createHolyShieldTemplate') {
-        nextTemplate = createHolyShieldTemplate()
-      } else if (fnName === 'createJsxGraphTemplate') {
-        nextTemplate = createJsxGraphTemplate()
-      } else if (fnName === 'createFireflyTemplate') {
-        nextTemplate = createFireflyTemplate()
-      } else if (fnName === 'createElInputTemplate') {
-        nextTemplate = createElInputTemplate()
-      } else if (fnName === 'createElSelectTemplate') {
-        nextTemplate = createElSelectTemplate()
-      } else if (fnName === 'createElDatePickerTemplate') {
-        nextTemplate = createElDatePickerTemplate()
-      } else if (fnName === 'createResumeBasicInfoTemplate') {
-        nextTemplate = createResumeBasicInfoTemplate()
-      } else if (fnName === 'createResumeTitleTemplate') {
-        nextTemplate = createResumeTitleTemplate()
-      } else if (fnName === 'createResumeExperienceTemplate') {
-        nextTemplate = createResumeExperienceTemplate()
-      } else if (fnName === 'createResumeTextTemplate') {
-        nextTemplate = createResumeTextTemplate()
-      } else if (fnName === 'createResumeSkillTemplate') {
-        nextTemplate = createResumeSkillTemplate()
+    onPresetPicked (picked) {
+      if (!picked) {
+        this.selectedPresetKey = null
+        return
       }
+      this.selectedPresetKey = picked
+      const row = picked._templateRow
+      if (!row) {
+        // 点中分类节点本身，只下钻，不替换编辑器内容
+        return
+      }
+      if (row.name && !this.form.name) this.form.name = row.name
+      if (row.desc && !this.form.desc) this.form.desc = row.desc
+      if (row.category_key) this.form.category = row.category_key
+      const nextTemplate = row.template || createBlankTemplate()
       this.form.template = nextTemplate
       if (this.monacoEditor && this.monacoReady) {
         this.monacoEditor.setValue(nextTemplate)
+        // Monaco reset 后 setValue 会丢光标位置：nextTick 再 focus
+        this.$nextTick(() => {
+          if (this.monacoEditor) this.monacoEditor.focus()
+        })
       }
-      this.$nextTick(() => {
-        this.selectedPreset = null
-      })
+    },
+    onPresetSelected (preset) {
+      // 兼容层：保留这个旧入口名，避免外部可能还在引用。
+      // 内部统一走 CategoryPicker 的 @change 形态。
+      return this.onPresetPicked(preset)
+    },
+    async loadTemplatePicker (force = false) {
+      try {
+        const resolver = (key) => {
+          const opt = (this.runeCategoryOptions || []).find(o => o.value === key)
+          return opt ? opt.label : key
+        }
+        const grouped = await runeTemplateService.listGroupedByCategory(resolver, force)
+        const flat = []
+        for (const g of (grouped || [])) {
+          for (const it of (g.items || [])) flat.push(it)
+        }
+        this.categoryPickerTree = flat
+      } catch (e) {
+        console.warn('[RuneFormDialog] loadTemplatePicker failed:', e && e.message)
+        this.categoryPickerTree = []
+      }
+    },
+    openRemoteImportDialog () {
+      this.remoteImportError = ''
+      this.remoteImportUrl = ''
+      this.remoteImportCategory = this.form.category || ''
+      this.remoteImportDialogVisible = true
+    },
+    async onRemoteImportSubmit ({ url, category } = {}) {
+      this.remoteImporting = true
+      this.remoteImportError = ''
+      try {
+        const res = await runeTemplateService.fetchFromGithub({
+          sourceUrl: url || '',
+          categoryKey: category || this.form.category || DEFAULT_RUNE_CATEGORY
+        })
+        if (!res || !res.success) {
+          this.remoteImportError = (res && (res.message || res.code)) || '导入失败'
+          return
+        }
+        await this.loadTemplatePicker(true)
+        const newRow = res.data
+        if (newRow) {
+          this.selectedPresetKey = {
+            key: 'tpl::' + newRow.id,
+            title: newRow.name,
+            _isCategory: false,
+            _templateRow: newRow,
+            children: []
+          }
+          this.onPresetPicked(this.selectedPresetKey)
+        }
+        this.remoteImportDialogVisible = false
+      } catch (e) {
+        this.remoteImportError = (e && e.message) || String(e)
+      } finally {
+        this.remoteImporting = false
+      }
     },
     submit () {
       if (!String(this.form.name || '').trim()) {

@@ -314,6 +314,32 @@ const runes = {
   }
 }
 
+/**
+ * 符文预设模板（rune_templates 表）。
+ * 与 runes（用户保存的符文卡片实例）解耦，仅承担"下拉选项 / 远端导入"职责。
+ */
+const runeTemplates = {
+  async getAll() {
+    return await invoke('db:getRuneTemplates')
+  },
+
+  async save(item) {
+    return await invoke('db:saveRuneTemplate', item)
+  },
+
+  async saveMany(list) {
+    return await invoke('db:saveRuneTemplates', list)
+  },
+
+  async remove(id) {
+    return await invoke('db:deleteRuneTemplate', id)
+  },
+
+  async fetchRemote({ sourceUrl, categoryKey }) {
+    return await invoke('rune-template:fetchRemote', { sourceUrl, categoryKey })
+  }
+}
+
 const echoes = {
   async getAll() {
     return await invoke('db:getEchoes')
@@ -340,6 +366,7 @@ const DatabaseClient = {
   appState,
   aiModels,
   runes,
+  runeTemplates,
   echoes
 }
 
