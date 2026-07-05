@@ -90,13 +90,18 @@ function buildNav () {
       nav.push({ text: '文章', items: arr })
     } else {
       const node = { text: cat }
-      if (arr.length > 0) node.link = arr[0].link
+      // 分类组 link: 指向分类子目录下 README.md (vuepress 默认主题把 README.md 路由到 /<cat>/)
+      // 反斜杠规则: 模板字符串里 '\\/+' (2 source) -> string value '\\/+' (2 char) -> 磁盘 regex body '\\/+' = regex '\\/+' = 匹配 1+ 个 '/'
+      node.link = './' + cat.replace(/^\\/+|\\/+$/g, '') + '/'
       node.items = arr
       nav.push(node)
     }
   }
+  // 若 nav 里所有 node 都没有 link,补一个"首页"占位
   if (nav.length === 0 || !nav.some(n => n && n.link)) {
-    nav.unshift({ text: '首页', link: '/' })
+    nav.unshift({ text: '首页', link: './' })
+  } else if (!nav.some(n => n.text === '首页')) {
+    nav.unshift({ text: '首页', link: './' })
   }
   fs.writeFileSync(OUT, JSON.stringify(nav, null, 2), 'utf-8')
   console.log('[nav-builder] wrote', nav.length, 'groups ->', OUT)
@@ -246,22 +251,48 @@ async function writeVuepressConfig (blogDir, theme = 'default', opts = {}) {
     console.log('[blog-config-writer] config.js exists, skip:', dest)
     return null
   }
+  // 与 blog-deploy-handler.ensureBlogConfig 同源:
+  //  - lodash patch: 修复高版本 Node.js 下 VuePress 1.x 编译时 lodash 各种未定义
+  //  - base: './': 相对路径, github-pages 不需要 repo 子路径
+  //  - 即时调用 buildSidebar()/buildNav(): 第一次构建就能拿到值
   const content =
-`const path = require('path')
-const { buildSidebar } = require(path.join(__dirname, 'utils', 'sidebar-builder.js'))
-const { buildNav }     = require(path.join(__dirname, 'utils', 'nav-builder.js'))
-
-module.exports = {
-  title: ${JSON.stringify(opts.title || 'My Blog')},
-  description: ${JSON.stringify(opts.description || '')},
-  theme: ${JSON.stringify(theme)},
-  themeConfig: {
-    nav: buildNav(),
-    sidebar: buildSidebar(),
-    sidebarDepth: 2,
-    lastUpdated: true
-  }
+`// 修复高版本 Node.js 下 VuePress 1.x 编译时 lodash 各种未定义 (assignWith, arrayEach 等) 的 Bug
+if (typeof global !== 'undefined') {
+  const lodashInternal = ['assignWith', 'arrayEach', 'baseAssignValue', 'baseEach']
+  lodashInternal.forEach(method => {
+    if (!global[method]) {
+      try {
+        global[method] = require(\`lodash/\${method}\`);
+      } catch (e) {
+        if (method === 'assignWith') global[method] = Object.assign;
+        if (method === 'arrayEach') global[method] = (arr, iter) => arr?.forEach(iter);
+      }
+    }
+  });
 }
+
+const path = require('path')
+module.exports = (function () {
+  const sidebarObj = require(path.join(__dirname, 'utils', 'sidebar-builder.js')).buildSidebar()
+  const navObj     = require(path.join(__dirname, 'utils', 'nav-builder.js')).buildNav()
+  return {
+    title: ${JSON.stringify(opts.title || 'My Blog')},
+    description: ${JSON.stringify(opts.description || 'Blog powered by Memocast')},
+    base: './',
+    dest: '.vuepress/dist',
+    head: [
+      ['link', { rel: 'icon', href: './favicon.ico' }],
+      ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+    ],
+    themeConfig: {
+      nav: navObj,
+      sidebar: sidebarObj,
+      sidebarDepth: 2,
+      lastUpdated: true
+    },
+    markdown: { lineNumbers: true }
+  }
+})()
 `
   await fse.writeFile(dest, content, 'utf-8')
   console.log('[blog-config-writer] wrote config.js ->', dest)

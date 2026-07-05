@@ -371,6 +371,13 @@ export default {
     mapEntries.forEach((e, idx) => { seqMap[e.id] = idx + 1 })
     await this.writeSeqManifest(blogDir, seqMap)
 
+    // 在分类子目录下生成 README.md (vuepress 默认主题把 README.md 当作目录索引页)
+    // - 用户点 sidebar 分类组时,落地到 /<category>/ 路径不会 404
+    // - README 里附同分类笔记链接列表,方便人工定位
+    if (category) {
+      await this.writeCategoryReadme(blogDir, category, mapEntries)
+    }
+
     return { writtenFiles: mapEntries.length }
   },
 
@@ -508,6 +515,61 @@ export default {
     await fs.writeJson(mapPath, seqMap, { spaces: 2 })
     console.log(`[BlogDeploy] seq-manifest.json -> ${mapPath}（${Object.keys(seqMap).length} 条）`)
     return { written: true, path: mapPath }
+  },
+
+  /**
+   * 写分类子目录的 README.md —— 作为该分类在 vuepress 里的索引页（避免 404）
+   *
+   * vuepress 1.x 默认主题会把 `<dir>/README.md` 渲染到 URL `/<dir>/`。
+   * 当 sidebar 把笔记按 category 分组、用户点击分组时:
+   *   - 旧版：分组点击只显示子笔记列表，没有"分组首页"，体验差
+   *   - 新版：每个分类目录下都有 README.md，vuepress 自动路由到 /<category>/
+   *
+   * 内容：
+   *   - 分类标题（用 / 末段作为展示名）
+   *   - 一段简介
+   *   - 同分类下笔记链接（用 frontmatter permalink 而非 file 路径，与 sidebar 完全一致）
+   *
+   * @param {string} blogDir     博客根目录
+   * @param {string} category    分类路径，如 '技术/前端'
+   * @param {Array<{id,title,permalink}>} entries   writeBlogPosts 已写出的笔记
+   * @returns {Promise<{written:boolean, path:string, linkCount:number}>}
+   */
+  async writeCategoryReadme (blogDir, category, entries) {
+    if (!category) return { written: false, path: '', linkCount: 0 }
+    const catPath = category.split('/').filter(Boolean).join('/')
+    const readmePath = path.join(blogDir, catPath, 'README.md')
+    await fs.ensureDir(path.dirname(readmePath))
+
+    const displayName = catPath.split('/').pop() || catPath
+    const inCategory = entries.filter(e => e.category === catPath)
+
+    const lines = []
+    lines.push('---')
+    lines.push(`title: ${displayName}`)
+    lines.push(`sidebar: auto`)
+    lines.push('---')
+    lines.push('')
+    lines.push(`# ${displayName}`)
+    lines.push('')
+    lines.push(`> 分类路径: \`${catPath}\`，共 ${inCategory.length} 篇笔记。`)
+    lines.push('')
+    if (inCategory.length > 0) {
+      lines.push('## 笔记列表')
+      lines.push('')
+      inCategory.forEach(e => {
+        lines.push(`- [${e.title}](${e.permalink})`)
+      })
+    } else {
+      lines.push('## 笔记列表')
+      lines.push('')
+      lines.push('_暂无笔记_')
+    }
+    lines.push('')
+    const content = lines.join('\n')
+    await fs.writeFile(readmePath, content, 'utf-8')
+    console.log(`[BlogDeploy] category README -> ${readmePath}（${inCategory.length} 条链接）`)
+    return { written: true, path: readmePath, linkCount: inCategory.length }
   },
 
   /**

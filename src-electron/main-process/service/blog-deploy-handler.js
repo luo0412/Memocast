@@ -395,25 +395,31 @@ if (typeof global !== 'undefined') {
   });
 }
 
+// —— v2: relative base + sidebar/nav 从 utils 加载 ——
+//  使用相对路径,github-pages 不需 repo 子路径
+//  即时执行 buildSidebar()/buildNav() 而非 require,确保第一次构建也能拿到值
 const path = require('path')
 const fs = require('fs')
 
 module.exports = {
   title: 'My Blog',
   description: 'Blog powered by Memocast',
-  base: '/',
+  base: './',
   dest: '.vuepress/dist',
   head: [
-    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['link', { rel: 'icon', href: './favicon.ico' }],
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
-  themeConfig: {
-    nav: [
-      { text: '首页', link: '/' },
-      { text: '文章', link: '/_posts/' }
-    ],
-    sidebar: []
-  },
+  themeConfig: (function () {
+    const sidebarObj = require(path.join(__dirname, 'utils', 'sidebar-builder.js')).buildSidebar()
+    const navObj     = require(path.join(__dirname, 'utils', 'nav-builder.js')).buildNav()
+    return {
+      nav: navObj,
+      sidebar: sidebarObj,
+      sidebarDepth: 2,
+      lastUpdated: true
+    }
+  })(),
   markdown: { lineNumbers: true }
 }
 `
