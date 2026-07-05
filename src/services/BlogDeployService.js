@@ -353,6 +353,24 @@ export default {
 
     // 实时合并 + 写映射文件（让 vuepress 构建期任何脚本/enhanceApp 都能用）
     await this.appendShortlinkMap(blogDir, mapEntries)
+
+    // 同步写入 id-mappings.json + seq-manifest.json,供 .vuepress/utils/{sidebar,nav,verify}-builder.js 读取
+    // 不破坏既有 permalink 算法: id 直接复用 fileId (短链 base36)
+    const idEntries = mapEntries.map(e => ({
+      id: e.id,
+      fileName: e.title + '.md',
+      fullPath: (e.category ? e.category + '/' : '') + e.title,
+      title: e.title,
+      category: e.category || '',
+      defaultUrl: e.permalink,
+      shortUrl: e.permalink,
+      level: e.category ? 2 : 1
+    }))
+    await this.writeIdMappings(blogDir, idEntries)
+    const seqMap = {}
+    mapEntries.forEach((e, idx) => { seqMap[e.id] = idx + 1 })
+    await this.writeSeqManifest(blogDir, seqMap)
+
     return { writtenFiles: mapEntries.length }
   },
 
@@ -430,6 +448,66 @@ export default {
       console.warn('[BlogDeploy] readShortlinkMap 解析失败:', e.message)
       return null
     }
+  },
+
+  /**
+   * 写 id-mappings.json —— 由 .vuepress/utils/{sidebar,nav}-builder.js 读取
+   *
+   * 文件结构：
+   *   {
+   *     "mappings": [
+   *       { "id": "...", "fileName": "序章.md", "fullPath": "技术/前端/序章",
+   *         "title": "序章", "category": "技术/前端",
+   *         "defaultUrl": "/<id>.html", "shortUrl": "/<id>.html", "level": 2 }
+   *     ],
+   *     "stats": { "total": 4, "conflicts": [] }
+   *   }
+   *
+   * 二次调用覆盖（id-mappings 是从 byId/shortlink-map 推导出来的中间产物，无需合并）。
+   *
+   * @param {string} blogDir
+   * @param {Array<{id,fileName,fullPath,title,category,defaultUrl,shortUrl,level}>} entries
+   */
+  async writeIdMappings (blogDir, entries) {
+    if (!Array.isArray(entries)) return { written: false, path: '' }
+    const vpDir = path.join(blogDir, '.vuepress')
+    await fs.ensureDir(vpDir)
+    const mapPath = path.join(vpDir, 'id-mappings.json')
+    const seen = new Set()
+    const conflicts = []
+    const mappings = entries.map(e => {
+      if (seen.has(e.id)) conflicts.push(e.id)
+      seen.add(e.id)
+      return {
+        id: e.id,
+        fileName: e.fileName,
+        fullPath: e.fullPath || (e.category ? e.category + '/' : '') + (e.title || ''),
+        title: e.title || e.id,
+        category: e.category || '',
+        defaultUrl: e.defaultUrl || `/${e.id}.html`,
+        shortUrl:   e.shortUrl   || `/${e.id}.html`,
+        level: typeof e.level === 'number' ? e.level : (e.category ? 2 : 1)
+      }
+    })
+    const payload = { mappings, stats: { total: mappings.length, conflicts } }
+    await fs.writeJson(mapPath, payload, { spaces: 2 })
+    console.log(`[BlogDeploy] id-mappings.json -> ${mapPath}（${mappings.length} 条）`)
+    return { written: true, path: mapPath, count: mappings.length, conflicts }
+  },
+
+  /**
+   * 写 seq-manifest.json —— 由 sidebar-builder.js 按 seq 排序
+   * @param {string} blogDir
+   * @param {Object<string,number>} seqMap  id -> seq
+   */
+  async writeSeqManifest (blogDir, seqMap) {
+    if (!seqMap || typeof seqMap !== 'object') return { written: false, path: '' }
+    const vpDir = path.join(blogDir, '.vuepress')
+    await fs.ensureDir(vpDir)
+    const mapPath = path.join(vpDir, 'seq-manifest.json')
+    await fs.writeJson(mapPath, seqMap, { spaces: 2 })
+    console.log(`[BlogDeploy] seq-manifest.json -> ${mapPath}（${Object.keys(seqMap).length} 条）`)
+    return { written: true, path: mapPath }
   },
 
   /**

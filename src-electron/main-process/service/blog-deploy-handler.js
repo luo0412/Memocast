@@ -12,6 +12,7 @@ const fs = require('fs-extra')
 const { BrowserWindow, app } = require('electron')
 const { dispatchWorkflow } = require('./github-api')
 const { uploadDirectory: sftpUpload, backupRemoteDir, testConnection: sftpTestConnection } = require('./sftp-service')
+const blogConfigWriter = require('./blog-config-writer')
 
 let currentProcess = null
 let cancelled = false
@@ -522,6 +523,20 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     sendProgress(webContents, 'config', 'Setting up blog config...', 4)
     await ensureBlogConfig(blogDir, theme)
     console.log('[BlogDeploy] Blog config ensured')
+
+    // 0.7 防 404: 写 .vuepress/utils/*.js (sidebar/nav/verify builders) 并跑一次 verify-paths
+    //         - 若 id-mappings.json 或 _posts/<id>.md 不全,verify 会抛错,这里仅 warning 不阻断构建
+    //         - 与 TODO-vuepress部署优化.md §9 行为一致
+    sendProgress(webContents, 'config', 'Verifying permalinks...', 5)
+    try {
+      await blogConfigWriter.writeBlogUtilities(blogDir)
+      const verifyResult = await blogConfigWriter.runVerifyPaths(blogDir)
+      console.log('[BlogDeploy] verify-paths OK:', verifyResult)
+    } catch (verifyErr) {
+      const msg = (verifyErr && verifyErr.message) ? verifyErr.message : String(verifyErr)
+      console.warn('[BlogDeploy] verify-paths warning (non-blocking):', msg)
+      event.sender.send('blog-deploy-warn', `[verify-paths] ${msg}`)
+    }
 
     // 1. 确保博客目录有 node_modules（软链接策略）
     sendProgress(webContents, 'config', 'Setting up node_modules...', 5)

@@ -1,0 +1,65 @@
+---
+description: Safe shell / filesystem rules to prevent destructive accidents
+alwaysApply: true
+---
+
+# Safe Shell & Filesystem Rules
+
+> 目的：防止任何 agent（包含 IDE 自动命令、shell helper、清理脚本）误删用户文件。
+> 上一轮事故中 agent 拼接 `cmd /c "for /d %i in (...) do rd /s /q ..."` 造成源码被破坏。本规则强制替换那种写法。
+
+## 1. 禁止使用的危险命令形态
+
+- **禁止** 任何形式的 `for /d %i in (...) do rd /s /q ...` 或带 `&`/`;` 的 PowerShell 多语句拼接。
+- **禁止** `rm -rf <带通配符的路径>`、`del /s /q <含通配符的路径>`，除非路径**已经**在单条字面字符串里、不含任何变量展开。
+- **禁止** `process.chdir(__dirname)` 之后再 `path.join(__dirname, '..', '..', ...)` 拼接跨层路径。
+- **禁止** 在 PowerShell 里直接执行 `dir /s /b` 或 `findstr` 处理**含中文路径**的项目；如必须，统一用 `cmd /c "dir ..."` 前缀或 Glob 工具。
+
+## 2. 清理临时目录的标准做法
+
+- 清理 `os.tmpdir()`（Windows ≈ `%LOCALAPPDATA%\Temp`）下的内容时，**必须**写成独立的 `.js` 或 `.ps1` 脚本文件，再执行该脚本。
+- 脚本里只用 `path.join(os.tmpdir(), '已知前缀-')` 这种**字面前缀**过滤，不要用 `process.cwd()` / `__dirname/..` 倒推项目根。
+- 一次只清理一个前缀（如 `memocast-blog-smoke-`），用 `fs.remove(...)` 之前 `console.log` 出被删的**完整路径**，便于人工回溯。
+
+## 3. 删除/移动/覆盖 > 1 个文件前的强制备份
+
+- **任何**涉及 >1 个文件的删除、移动或覆盖之前，必须**先二选一**：
+  - `git tag backup-before-<操作简述>-<yyyymmddHHMMSS>` （前提：仓库 `.git` 完整且 HEAD 工作树 clean 或仅新增文件）
+  - `Copy-Item -Recurse <来源> <$env:USERPROFILE\memocast-backup-<时间戳>>` 或 `cp -a <来源> <备份目录>`
+- 备份完成后才允许执行破坏性命令。
+
+## 4. 临时工作沙箱
+
+- 所有"试验性 / 烟雾测试 / 一次性打包"必须在仓库根下的 **`./_temp/`** 子目录进行。
+- `./_temp/` 必须加入 `.gitignore`（如果还没加入）；里面的内容**永远不被** git 跟踪。
+- `./_temp/` 之外的位置（包括 `src/`、`src-electron/`、`scripts/`、`.git/`、`node_modules/`）一律视为受保护区，写入前必须得到用户确认。
+
+## 5. shell 调用规范
+
+- PowerShell 默认禁止多语句 `;`/`&&`/`||` 拼接。所有命令链**分多条 Shell 调用**。
+- 如果必须用 `cmd /c`，参数必须**单语句、不含变量替换**：
+  - 允许：`cmd /c "dir C:\Users"`
+  - 禁止：`cmd /c "for /d %i in (C:\Users\COLORFUL\AppData\Local\Temp\memocast-blog-smoke-*) do rd /s /q \"%i\""`
+  - 禁止：连用 `&` 拼接多条命令：`cmd /c "mkdir X 2>nul & dir /b X"` —— 必须分两次调用
+- 跨平台路径必须用 `path.join(...)` 拼接，不允许在 shell 字符串里手工拼 `..\`。
+
+## 5.1 已知的违规示例（自我警告）
+
+> 本规则首次落地时 agent 自己写了一条 `cmd /c "mkdir e:\...\_temp 2>nul & dir /b e:\...\_temp"` —— 这是 `&` 拼接，**正好命中** §5 红线。幸运目标只是 `mkdir` 且已存在，无破坏；但凡是 `rm`、`rd`、`del`、`move`、`copy /y` 一旦混入 `&` 拼接都是同形态事故。
+>
+> **自此：所有 shell 命令一律单条 `cmd /c "<单条命令>"`，不连用任何 `&`/`;`/`&&`/`||`。**
+
+## 6. 文件修改前的可读性自检
+
+- `StrReplace` / `Write` 之前必须先 `Read` 该文件，确认存在再修改。
+- 不修改与当前任务无关的文件。即使用户附加了 TODO 文档，未在用户当前指令中明确点名的文件**默认只读**。
+- 删文件之前必须 `Glob`/`Read` 确认其存在，且 `Read` 输出完整路径。
+
+## 7. 不可挽回性自检（每次写操作前默念）
+
+1. 这个操作会让哪些文件消失/变化？
+2. 是否已经 git tag / cp -a 备份？
+3. 是否在受保护区（`src/`、`.git/`、`package.json`、`quasar.conf.js`、`node_modules/`）内？
+4. 如果删错，回滚成本多高？
+
+任何一项不能确定 → **先停下来问用户**，不要继续。

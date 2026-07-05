@@ -7,6 +7,7 @@ import { OFFLINE_ROOT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY, normalizeCategoryForM
 import SessionStorageService from 'src/services/SessionStorageService'
 import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/constants/calendarDateBasis'
 import { APP_STATE_KEYS, loadWorkspaceState, saveWorkspaceStateValue } from 'src/store/server/workspaceState'
+import path from 'path'
 import {
   buildCategoryTreeFromNotes,
   categoryExistsInTree,
