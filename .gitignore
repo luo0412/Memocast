@@ -48,3 +48,5 @@ public/box-im/
 # Blog build artifacts（增量缓存、临时导出物）
 _docs-export
 _docs/.vuepress/.blog-build-manifest.json
+
+_temp
