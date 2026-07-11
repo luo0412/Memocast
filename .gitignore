@@ -50,3 +50,5 @@ _docs-export
 _docs/.vuepress/.blog-build-manifest.json
 
 _temp
+
+.codegraph
