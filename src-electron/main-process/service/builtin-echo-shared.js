@@ -37,10 +37,22 @@ const __safeQueryAll = (root, sel) => {
 const withAttrsSource = `
 const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})`.trim()
 
+const sampleShuffleSource = `
+const __sampleShuffle = (arr, n) => {
+  if (!Array.isArray(arr) || arr.length === 0 || n <= 0) return []
+  const copy = arr.slice()
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const tmp = copy[i]; copy[i] = copy[j]; copy[j] = tmp
+  }
+  return copy.slice(0, Math.min(n, copy.length))
+}`.trim()
+
 const handlerPrelude = [
   resolveScopeContainerSource,
   safeQueryAllSource,
-  withAttrsSource
+  withAttrsSource,
+  sampleShuffleSource
 ].join('\n\n')
 
 // ---- handlerFieldSource(fieldName) ----
@@ -70,6 +82,15 @@ const handlerFieldSource = (fieldName) => `${fieldName}: function (runeNode, sco
       try { return Array.from(root.querySelectorAll(sel)) } catch (error) { return [] }
     }
     const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})
+    const __sampleShuffle = (arr, n) => {
+      if (!Array.isArray(arr) || arr.length === 0 || n <= 0) return []
+      const copy = arr.slice()
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        const tmp = copy[i]; copy[i] = copy[j]; copy[j] = tmp
+      }
+      return copy.slice(0, Math.min(n, copy.length))
+    }
 
     // === 模仿者写的 handler 逻辑（紧随 prelude 之后） ===`
 

@@ -55,11 +55,24 @@ const __safeQueryAll = (root, sel) => {
 export const withAttrsSource = `
 const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})`.trim()
 
+// ---- 随机抽样 helper 源码 ----
+export const sampleShuffleSource = `
+const __sampleShuffle = (arr, n) => {
+  if (!Array.isArray(arr) || arr.length === 0 || n <= 0) return []
+  const copy = arr.slice()
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const tmp = copy[i]; copy[i] = copy[j]; copy[j] = tmp
+  }
+  return copy.slice(0, Math.min(n, copy.length))
+}`.trim()
+
 // ---- 给 anno_source 内嵌入 helper 的整段 prelude ----
 export const handlerPrelude = [
   resolveScopeContainerSource,
   safeQueryAllSource,
-  withAttrsSource
+  withAttrsSource,
+  sampleShuffleSource
 ].join('\n\n')
 
 // ---- 默认图标/颜色 ----

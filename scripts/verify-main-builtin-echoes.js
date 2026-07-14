@@ -27,6 +27,15 @@ const HANDLER_PRELUDE_SOURCE = [
   "  try { return Array.from(root.querySelectorAll(sel)) } catch (error) { return [] }",
   "}",
   "const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})",
+  "const __sampleShuffle = (arr, n) => {",
+  "  if (!Array.isArray(arr) || arr.length === 0 || n <= 0) return []",
+  "  const copy = arr.slice()",
+  "  for (let i = copy.length - 1; i > 0; i--) {",
+  "    const j = Math.floor(Math.random() * (i + 1))",
+  "    const tmp = copy[i]; copy[i] = copy[j]; copy[j] = tmp",
+  "  }",
+  "  return copy.slice(0, Math.min(n, copy.length))",
+  "}",
   ""
 ].join('\n')
 

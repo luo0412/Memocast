@@ -103,23 +103,33 @@ export const createDefaultEchoAnnoSource = (echoName = '回响') => `export defa
   kind: 'echo',
   version: 1,
   name: '${String(echoName || '回响').replace(/'/g, "\\'")}',
-  render (context = {}) {
-    const attrs = context.attrs || {}
-    const prompt = context.prompt || ''
-    const icon = attrs.icon || context.echo?.icon || '${DEFAULT_ECHO_ICON}'
-    const color = attrs.color || context.echo?.color || '${DEFAULT_ECHO_COLOR}'
-    const title = attrs.title || context.echo?.name || '${String(echoName || '回响').replace(/'/g, "\\'")}'
-    const description = attrs.desc || context.echo?.desc || ''
+  namespace: '回响',
 
+  // === 新模板签名（TODO 提议）：node + ancestors ===
+  //   - node     : token = { type:'echo_anno', echoName, echoId, attrsParsed, prompt, raw, range, ... }
+  //   - ancestors: { echo: echoCard, block, document, parent }
+  // 模仿者如果只想要旧形态 render(context)，把函数改成单参即可。
+  render (node, ancestors) {
+    const attrs = (node && node.attrsParsed) || {}
+    const prompt = (node && node.prompt) || ''
+    const echoMeta = (ancestors && ancestors.echo) || {}
     return {
       type: 'card',
-      icon,
-      color,
-      title,
-      description,
+      icon: attrs.icon || echoMeta.icon || '${DEFAULT_ECHO_ICON}',
+      color: attrs.color || echoMeta.color || '${DEFAULT_ECHO_COLOR}',
+      title: attrs.title || echoMeta.name || '${String(echoName || '回响').replace(/'/g, "\\'")}',
+      description: attrs.desc || echoMeta.desc || '',
       prompt,
       attrs,
       html: attrs.html || ''
+    }
+  },
+
+  // === 后渲染钩子：domElement 已插入到 DOM，可访问 nextElementSibling / classList / dataset ===
+  // 默认实现仅给宿主加 class 以便直观辨认；模仿者可改此钩子影响周围节点。
+  afterRender (node, domElement, ancestors) {
+    if (domElement && domElement.classList) {
+      domElement.classList.add('ag-echo-default-mounted')
     }
   }
 }`
@@ -232,18 +242,113 @@ export const decodeEchoPayload = (payload = '') => {
   }
 }
 
-export const createEchoPlaceholderPayload = (echo = {}) => {
+export const createEchoPlaceholderPayload = (echo = {}, options = {}) => {
+  const inheritEnabled = echoInheritFromPrevious(echo) || (options && options.inheritFromPrevious === true)
+  const inheritedValue = inheritEnabled ? String(options && options.inheritedValue || '') : ''
   return encodeEchoPayload({
-    prompt: '',
+    prompt: inheritedValue,
     attrs: {
-      value: '',
+      value: inheritedValue,
       definitionId: String(echo?.id || '').trim(),
       title: echo?.name || '回响',
       desc: echo?.desc || '',
       icon: echo?.icon || DEFAULT_ECHO_ICON,
-      color: echo?.color || DEFAULT_ECHO_COLOR
+      color: echo?.color || DEFAULT_ECHO_COLOR,
+      inheritFromPrevious: inheritEnabled
     }
   })
+}
+
+// === 上一节点 value 继承（默认关闭） ===
+//
+// 当 echo 名片层的 anno_source 通过 render 把 attrs.inheritFromPrevious 显式设为 true 时，
+// 创建新回响实例的 placeholder / migrate 流程会从「同一 markdown 中当前位置之前最近的 echo token」
+// 提取 attrs.value（或 prompt）注入新实例的 value。用户没显式声明时，行为是关闭的。
+//
+// 设计意图：
+//   - 默认 createDefaultEchoAnnoSource 不会输出 inheritFromPrevious，因此默认行为是「不继承」。
+//   - 用户可在自己的 anno_source render 里把 inheritFromPrevious 设为 true 开启。
+//   - 真正"提取上一节点 value"的责任在 caller（Muya Vue 那一层扫描整段 markdown 时做）。
+const INHERIT_FROM_PREVIOUS_KEYS = ['inheritFromPrevious', 'inherit_from_previous', 'inheritPrevValue']
+
+export const isInheritFromPreviousEnabled = (input = {}) => {
+  if (!input || typeof input !== 'object') return false
+  for (const key of INHERIT_FROM_PREVIOUS_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(input, key)) continue
+    const raw = input[key]
+    if (raw === true) return true
+    if (typeof raw === 'string') {
+      const norm = raw.trim().toLowerCase()
+      if (norm === 'true' || norm === '1' || norm === 'yes' || norm === 'on') return true
+    }
+    if (typeof raw === 'number' && raw === 1) return true
+  }
+  return false
+}
+
+/**
+ * 解析一个 echo 名片（registry 注册的回响定义）是否声明了「继承上一节点 value」。
+ * 支持三种字段挂载位置：
+ *   - echo.inheritFromPrevious         直接挂在 echo 顶层
+ *   - echo.attrs.inheritFromPrevious    挂在 echo.attrs 里
+ *   - echo.definitionAttrs.inheritFromPrevious  备用挂载
+ */
+export const echoInheritFromPrevious = (echo = {}) => {
+  if (!echo || typeof echo !== 'object') return false
+  if (isInheritFromPreviousEnabled(echo)) return true
+  if (isInheritFromPreviousEnabled(echo.attrs)) return true
+  if (isInheritFromPreviousEnabled(echo.definitionAttrs)) return true
+  return false
+}
+
+/**
+ * 从 markdown 字符串的 currentIndex 之前，找最近一个 echo token 的 value。
+ * 没有匹配则返回空字符串。仅依赖 CURRENT_ECHO_PLACEHOLDER_RE（与 backfill 同源）。
+ *
+ * @param {string} markdown
+ * @param {number} currentIndex  当前正在构造/处理的位置（即 "当前节点" 之前的 markdown 末尾）
+ * @param {{ echoName?: string }} [options]  当 echoName 非空时，仅匹配同名回响；否则匹配任意 echo
+ * @returns {string}  上一节点 token 的 attrs.value / prompt；找不到返回 ''
+ */
+export const extractPrevEchoTokenValue = (markdown = '', currentIndex = -1, options = {}) => {
+  const source = String(markdown || '')
+  if (!source) return ''
+  const upperBound = (typeof currentIndex === 'number' && currentIndex >= 0 && currentIndex <= source.length)
+    ? currentIndex
+    : source.length
+  const prefix = source.slice(0, upperBound)
+  if (!prefix || prefix.indexOf('@') === -1) return ''
+
+  const onlyName = (options && options.echoName) ? String(options.echoName).trim() : ''
+  let lastValue = ''
+  // 用一个与文件顶部 CURRENT_ECHO_PLACEHOLDER_RE 等价的本地正则（不可跨文件复用变量，
+  // 否则拿到的是 defined 时的旧引用），逐 match 取最后一个值
+  const localRe = /@([^\s{}()@]*)\{([\s\S]*?)\}\(([^)]*)\)/g
+  let match
+  while ((match = localRe.exec(prefix)) !== null) {
+    const rawEchoName = String(match[1] || '').trim()
+    if (!rawEchoName) continue
+    if (onlyName && rawEchoName !== onlyName) continue
+    const attrsRaw = String(match[2] || '')
+    const promptRaw = String(match[3] || '')
+    const attrs = parseEchoAttrs(attrsRaw)
+    lastValue = String(attrs.value || promptRaw || '')
+  }
+  return lastValue
+}
+
+/**
+ * 应用上一节点 value 继承：attrs.inheritFromPrevious === true 且当前 value 空 → 用 prevValue 填充。
+ * 返回新的 attrs 对象（不修改入参）。值变化时 `inherited === true`。
+ */
+export const applyInheritedEchoValue = (attrs = {}, prevValue = '') => {
+  const source = (attrs && typeof attrs === 'object') ? attrs : {}
+  if (!isInheritFromPreviousEnabled(source)) return { attrs: source, inherited: false }
+  const currentValue = typeof source.value === 'string' ? source.value : ''
+  if (currentValue.trim()) return { attrs: source, inherited: false }
+  const filled = String(prevValue || '')
+  if (!filled) return { attrs: source, inherited: false }
+  return { attrs: { ...source, value: filled }, inherited: true }
 }
 
 export const buildUpdatedEchoAnnotationText = ({ raw, echo, keepInstanceId = false } = {}) => {
@@ -813,11 +918,22 @@ export default class EchoRuntime {
       ...(payload.attrs || {}),
       ...tokenAttrs
     }
+    // 运行期兜底：如果 token 上声明了 inheritFromPrevious: true 且当前 value 为空，
+    // 用 caller 传入的 token.prevValue（来自 Muya 扫描同一 markdown 中前一个 echo token）填入。
+    // 这层兜底的存在是：当 caller 来不及提前把 inheritFromPrevious 写进 attrs.value，
+    // 也能在 render 出口处补上继承值。
+    let inheritedValue = ''
+    if (token && isInheritFromPreviousEnabled(mergedAttrs) && !String(mergedAttrs.value || '').trim()) {
+      inheritedValue = String(token.prevValue || '')
+      if (inheritedValue) mergedAttrs.value = inheritedValue
+    }
     const payloadValue = typeof payload?.attrs?.value === 'string' ? payload.attrs.value : ''
     const tokenAttrValue = typeof tokenAttrs.value === 'string' ? tokenAttrs.value : ''
+    const mergedAttrValue = typeof mergedAttrs.value === 'string' ? mergedAttrs.value : ''
     const payloadPrompt = typeof payload.prompt === 'string' ? payload.prompt : payloadValue
     const tokenPrompt = typeof token.prompt === 'string' ? token.prompt : ''
-    const resolvedValue = tokenAttrValue || payloadValue || tokenPrompt || payloadPrompt || ''
+    // resolvedValue 优先级：tokenAttrs.value > mergedAttrs.value (含继承值) > payload.attrs.value > token.prompt > payload.prompt
+    const resolvedValue = tokenAttrValue || mergedAttrValue || payloadValue || tokenPrompt || payloadPrompt || ''
     const resolvedPrompt = tokenPrompt || payloadPrompt || resolvedValue || ''
     const context = {
       name: token.echoName || matchedEcho?.name || '',
@@ -848,7 +964,33 @@ export default class EchoRuntime {
     let result = null
     try {
       if (definition && typeof definition.render === 'function') {
-        result = definition.render(context)
+        // 双轨：render.length === 2 视为新模板签名 render(node, ancestors)，
+        // 单参或无 length 信息视为旧 render(context)。
+        const isNewShape = definition.render.length === 2
+        if (isNewShape) {
+          const ancestors = {
+            echo: matchedEcho,
+            block: token?.range && matchedEcho,
+            document: typeof window !== 'undefined' ? window.document : null
+          }
+          result = definition.render(token, ancestors)
+        } else {
+          result = definition.render(context)
+        }
+        if (typeof definition.afterRender === 'function') {
+          normalized.afterRenderHook = (domElement) => {
+            try {
+              const ancestors = {
+                echo: matchedEcho,
+                block: token?.range && matchedEcho,
+                document: typeof window !== 'undefined' ? window.document : null
+              }
+              definition.afterRender(token, domElement, ancestors)
+            } catch (error) {
+              console.error('[EchoRuntime] afterRender hook failed:', error)
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('[EchoRuntime] render failed:', error)
@@ -893,7 +1035,7 @@ export default class EchoRuntime {
       ? ` data-rune-id="${escapeHtml(rendered.runeMeta.runeId || 'unknown')}" data-rune-kind="${escapeHtml(rendered.runeMeta.kind || 'rune')}"`
       : ''
 
-    return `<span class="ag-echo-inline" data-echo-inline="true"${runeAttr} style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}${customHtml}</span></span>`
+    return `<span class="ag-echo-inline" data-echo-inline="true" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}"${runeAttr} style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}${customHtml}</span></span>`
   }
 
   // 渲染完成后的副作用入口。
@@ -906,8 +1048,42 @@ export default class EchoRuntime {
       this.disposeAll(container)
     }
 
-    const runeNodes = safeQueryAll(container, '[data-rune-id]')
+    const echoNodes = safeQueryAll(container, '[data-echo-inline="true"]')
     const installed = []
+
+    // === 新模板签名：definition.afterRender(node, domElement, ancestors) ===
+    // 对每个 echo host 调一次（无论是否有 runeId）；hook 可访问 domElement 与 neighbors。
+    echoNodes.forEach(node => {
+      const echoName = node.getAttribute('data-echo-name') || ''
+      const echoId = node.getAttribute('data-echo-id') || ''
+      const definitionId = node.getAttribute('data-echo-definition-id') || ''
+      const matchedEcho = (definitionId && this.registry?.getById?.(definitionId))
+        || (echoName && this.registry?.getByName?.(echoName))
+        || null
+      if (!matchedEcho) return
+      const definition = this.compileDefinition(matchedEcho)
+      if (!definition || typeof definition.afterRender !== 'function') return
+      let cleanup = null
+      try {
+        const fakeToken = {
+          echoName,
+          echoId,
+          definitionId,
+          attrsParsed: this._readRuneAttrs(node),
+          prompt: node.getAttribute('data-echo-value') || ''
+        }
+        const ancestors = { echo: matchedEcho, document: container }
+        cleanup = definition.afterRender(fakeToken, node, ancestors) || null
+      } catch (error) {
+        console.error('[EchoRuntime] afterRender hook failed:', echoName, error)
+      }
+      if (typeof cleanup === 'function') {
+        installed.push({ node, runeId: `__afterRender_${echoName}_${echoId}`, cleanup })
+        node.__agEchoCleanup = cleanup
+      }
+    })
+
+    const runeNodes = safeQueryAll(container, '[data-rune-id]')
     runeNodes.forEach(node => {
       const runeId = node.getAttribute('data-rune-id') || ''
       const meta = {

@@ -34,7 +34,8 @@ import { attachThemeColor } from 'src/utils/theme'
 import { showContextMenu as showEditorContextMenu } from 'src/contextMenu/muya'
 import EchoRegistry from './echo/EchoRegistry'
 import EchoRuntime from './echo/EchoRuntime'
-import { decodeEchoPayload, encodeEchoPayload, createEchoPlaceholderPayload, parseEchoAttrs } from './echo/EchoRuntime'
+import { decodeEchoPayload, encodeEchoPayload, createEchoPlaceholderPayload, parseEchoAttrs, extractPrevEchoTokenValue, echoInheritFromPrevious } from './echo/EchoRuntime'
+import AiProofreadService from 'src/services/AiProofreadService'
 
 const {
   mapGetters: mapServerGetters,
@@ -246,9 +247,18 @@ const migrateLegacyRunePlaceholders = (markdown = '', runeCards = []) => {
   })
 }
 
-const createEchoPlaceholderMarkup = (echo = {}) => {
+const createEchoPlaceholderMarkup = (echo = {}, options = {}) => {
   const echoName = String(echo?.name || '回响').trim() || '回响'
-  const payload = createEchoPlaceholderPayload(echo)
+  // 「上一节点 value 继承」：默认不开启；当 echo 名片层（或调用方 options）声明 inheritFromPrevious: true 时，
+  // 从 markdown 中 currentIndex 之前最近的 echo token 提取 value 注入 placeholder。
+  const inheritEnabled = echoInheritFromPrevious(echo) || options.inheritFromPrevious === true
+  const prevValue = inheritEnabled
+    ? extractPrevEchoTokenValue(options.markdown || '', options.currentIndex, { echoName })
+    : ''
+  const payload = createEchoPlaceholderPayload(echo, {
+    inheritFromPrevious: inheritEnabled,
+    inheritedValue: prevValue
+  })
   return buildEchoAnnotationText(echoName, payload, {
     echoId: createEchoInstanceId(),
     definitionId: String(echo?.id || '').trim()
@@ -269,7 +279,11 @@ const migrateLegacyEchoPlaceholders = (markdown = '', echoCards = []) => {
     const echoName = String(rawEchoName || '').trim()
     const echo = echoMap.get(echoName)
     if (!echo) return match
-    return createEchoPlaceholderMarkup(echo)
+    // 「上一节点 value 继承」：从当前 match 之前的 markdown 切片找上一个 echo token value
+    return createEchoPlaceholderMarkup(echo, {
+      markdown: source,
+      currentIndex: source.indexOf(match)
+    })
   }).replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, rawEchoName = '', attrsRaw = '', promptRaw = '') => {
     const echoName = String(rawEchoName || '').trim()
     const attrs = parseEchoAttrs(attrsRaw)
@@ -277,13 +291,22 @@ const migrateLegacyEchoPlaceholders = (markdown = '', echoCards = []) => {
     const generatedEchoId = createEchoInstanceId()
     const matchedEcho = echoMap.get(echoName)
     const generatedDefinitionId = String(attrs.definitionId || matchedEcho?.id || '').trim()
+    // 已存在的 attrs.value 优先；当 echo 名片层声明了 inheritFromPrevious: true 且原 value 为空，
+    // 从 match 之前的 markdown 切片提取上一节点 value 注入。
+    const existingValue = String(attrs.value || promptRaw || '')
+    let resolvedValue = existingValue
+    if (!resolvedValue && matchedEcho && echoInheritFromPrevious(matchedEcho)) {
+      const prevValue = extractPrevEchoTokenValue(source, source.indexOf(match), { echoName })
+      if (prevValue) resolvedValue = prevValue
+    }
     const upgradedPayload = encodeEchoPayload({
-      prompt: String(promptRaw || attrs.value || ''),
+      prompt: resolvedValue,
       attrs: {
         ...attrs,
         id: generatedEchoId,
         definitionId: generatedDefinitionId,
-        value: String(attrs.value || promptRaw || '')
+        value: resolvedValue,
+        inheritFromPrevious: echoInheritFromPrevious(matchedEcho) || echoInheritFromPrevious(attrs)
       }
     })
     return buildEchoAnnotationText(echoName || '回响', upgradedPayload, {
@@ -703,6 +726,56 @@ export default {
       this.updateNoteState('changed')
       return true
     },
+    // lucky 全局回调：@强运() 点击后真正调 AI 校对。
+    // 入参由 EchoRuntime / RUNE_HANDLERS.lucky 在 handler 内传 {runeNode, meta, scopeContainer}
+    async handleLuckyRuneTrigger ({ runeNode, meta = {}, scopeContainer } = {}) {
+      try {
+        if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return
+        const markdown = this.contentEditor.getMarkdown() || ''
+        if (!markdown.trim()) {
+          this.$q && this.$q.notify && this.$q.notify({ message: this.$t('aiLuckyEmpty'), type: 'warning', position: 'top' })
+          return
+        }
+        const loadingClass = 'ag-rune-lucky-loading'
+        if (runeNode && runeNode.classList) runeNode.classList.add(loadingClass)
+        try {
+          const result = await AiProofreadService.proofread(markdown, { model: meta?.attrs?.model || undefined })
+          if (!result || !result.corrected) {
+            this.$q && this.$q.notify && this.$q.notify({ message: this.$t('aiLuckyNoChange'), type: 'info', position: 'top' })
+            return
+          }
+          if (result.corrected === markdown) {
+            this.$q && this.$q.notify && this.$q.notify({ message: this.$t('aiLuckyNoChange'), type: 'info', position: 'top' })
+            return
+          }
+          // 替换当前笔记内容
+          const cursor = typeof this.contentEditor.getCursor === 'function' ? this.contentEditor.getCursor() : null
+          this.contentEditor.setMarkdown(result.corrected, cursor, false)
+          this.updateContentsList(this.contentEditor.getTOC())
+          this.updateNoteState('changed')
+          this.$q && this.$q.notify && this.$q.notify({
+            message: this.$t('aiLuckyDone') + `（model=${result.model}）`,
+            type: 'positive',
+            position: 'top'
+          })
+        } finally {
+          if (runeNode && runeNode.classList) runeNode.classList.remove(loadingClass)
+        }
+      } catch (error) {
+        console.error('[lucky] handler failed:', error)
+        const code = error && error.code
+        let message = this.$t('aiLuckyFailed')
+        if (code === 'AI_PROOFREAD_NO_DEFAULT_CONFIG') {
+          message = this.$t('aiLuckyNoConfig')
+        } else if (code === 'AI_PROOFREAD_CONFIG_INCOMPLETE') {
+          const fields = Array.isArray(error.missingFields) ? error.missingFields.join(', ') : ''
+          message = this.$t('aiLuckyConfigIncomplete') + (fields ? ` (${fields})` : '')
+        } else if (error && error.message) {
+          message += `: ${error.message}`
+        }
+        this.$q && this.$q.notify && this.$q.notify({ message, type: 'negative', position: 'top' })
+      }
+    },
     refreshEchoDefinitions () {
       this.echoRegistry.refresh(this.echoCards || [])
       // 让 runtime 实例保持与 registry 一致；新增/删除 echo 后让旧的 compiled definition 缓存失效
@@ -939,6 +1012,14 @@ export default {
 
       this.echoRegistry.refresh(this.echoCards || [])
       this._echoRuntime = new EchoRuntime({ registry: this.echoRegistry })
+
+      // 注册全局 lucky 回调：@强运 点击后真正调 AI 校对。
+      if (typeof window !== 'undefined') {
+        window.__memocastRuneHandlers = Object.assign(window.__memocastRuneHandlers || {}, {
+          lucky: this.handleLuckyRuneTrigger.bind(this)
+        })
+      }
+
       // 把 Vue 实例注入 Muya options，让 Muya 内部的 StateRender 能回调到我们的回写方法
       // （见 src/libs/muya/lib/parser/render/index.js 的 mountRuneVueHosts）
       const muyaSelf = this
@@ -1139,6 +1220,9 @@ export default {
   beforeDestroy () {
     if (this.contentEditor && typeof this.contentEditor.destroy === 'function') {
       this.contentEditor.destroy()
+    }
+    if (typeof window !== 'undefined' && window.__memocastRuneHandlers) {
+      delete window.__memocastRuneHandlers.lucky
     }
     appBus.$off(appEvents.PARAGRAPH_SHORTCUT_CALL)
     appBus.$off(appEvents.FORMAT_SHORTCUT_CALL)

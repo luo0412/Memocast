@@ -618,6 +618,7 @@
                           :disable-delete='echo.isBuiltin'
                           :disable-drag='echo.isBuiltin'
                           :is-builtin='echo.isBuiltin'
+                          :i18n-desc-key='echoI18nDescKey(echo)'
                           @edit='openEditEcho'
                           @delete='confirmDeleteEcho'
                         />
@@ -1642,6 +1643,23 @@ export default {
     openEditEcho: function (echo) {
       this.editingEcho = { ...echo }
       this.openEchoFormDialog()
+    },
+    echoI18nDescKey: function (echo = {}) {
+      if (!echo || !echo.isBuiltin || !echo.id) return ''
+      const idMap = {
+        '__builtin_nice__': 'echoBuiltinNiceDesc',
+        '__builtin_growth__': 'echoBuiltinGrowthDesc',
+        '__builtin_shatter__': 'echoBuiltinShatterDesc',
+        '__builtin_skywalk__': 'echoBuiltinSkywalkDesc',
+        '__builtin_twinbloom__': 'echoBuiltinTwinbloomDesc',
+        '__builtin_mindsteal__': 'echoBuiltinMindstealDesc',
+        '__builtin_lucky__': 'echoBuiltinLuckyDesc',
+        '__builtin_scapegoat__': 'echoBuiltinScapegoatDesc',
+        '__builtin_calamity__': 'echoBuiltinCalamityDesc',
+        '__builtin_disperse__': 'echoBuiltinDisperseDesc',
+        '__builtin_clock__': 'echoBuiltinClockDesc'
+      }
+      return idMap[String(echo.id)] || ''
     },
     openAddEcho: function () {
       this.editingEcho = null

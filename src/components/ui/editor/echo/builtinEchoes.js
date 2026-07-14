@@ -1,5 +1,5 @@
 import { createDefaultEchoAnnoSource as createRuntimeDefaultAnnoSource } from './EchoRuntime'
-import { banner, handlerExampleDoc } from './builtin-echo-shared'
+import { banner, handlerExampleDoc, handlerAndExampleDoc, handlerPrelude } from './builtin-echo-shared'
 
 // ============================================================================
 // 内置回响（系统提供，固定不可删改）
@@ -474,40 +474,82 @@ const createLuckyAnnoSource = () => `export default {
 }`
 
 // ============================================================================
-// 8. 替罪（scapegoat）：rune-tbd 占位
+// 8. 替罪（scapegoat）：作用域内的"救场位"
+//   - 把最近的 block 标记为 ag-rune-scapegoat-standby（黄色描边 + "🛡️ 救场位"）
+//   - 监听 window.error 与 ag:rune:error 事件，
+//     一旦后续 rune 抛错 / DOM 异常，把它转成 ag-rune-scapegoat-injured（红边 + 错误描述）
+//   - handler 清理时移除监听并清掉 standby/injured 状态。
 // ============================================================================
 const createScapegoatAnnoSource = () => `export default {
   ${banner([
-    '【替罪 / scapegoat】 —— 占位符文（rune-tbd）',
-    '回响种类：rune-tbd（兜底 handler 仅给节点加 active 标记）',
-    '模仿提示：把 kind 改为 rune 并补一份完整 handler 即可接管'
+    '【替罪 / scapegoat】 —— 作用域内的"救场位"',
+    '回响种类：rune（替换原 rune-tbd 占位）',
+    '语义：把最近 block 标为 standby；后续 rune / DOM 抛错时把 standby 转 injured，错误写到 data-scapegoat-error',
+    '模仿提示：把 attr.intensity 改成 0.5 可以让 standby 默认变 injured（模拟"已知错误"）'
   ])},
-  kind: 'rune-tbd',
+  kind: 'rune',
   runeId: 'scapegoat',
   version: 1,
   name: '替罪',
 
-  render (context = {}) {
-    const attrs = context.attrs || {}
-    const prompt = context.prompt || ''
+  render (node, ancestors) {
+    const attrs = (node && node.attrsParsed) || {}
+    const prompt = (node && node.prompt) || ''
+    const echoMeta = (ancestors && ancestors.echo) || {}
     return {
       type: 'card',
-      icon: attrs.icon || context.echo?.icon || 'shield',
-      color: attrs.color || context.echo?.color || '#6D4C41',
-      title: attrs.title || context.echo?.name || '替罪',
-      description: attrs.desc || context.echo?.desc || '规则待定',
+      icon: attrs.icon || echoMeta.icon || 'shield',
+      color: attrs.color || echoMeta.color || '#6D4C41',
+      title: attrs.title || echoMeta.name || '替罪',
+      description: attrs.desc || echoMeta.desc || '在作用域内接住后续 rune / DOM 抛出的错误，并以受伤态提示',
       prompt,
-      attrs: { ...attrs, kind: 'rune-tbd', runeId: 'scapegoat' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'scapegoat' },
       html: '<span class="ag-rune ag-rune--scapegoat" data-rune-id="scapegoat">替罪</span>'
     }
   },
 
-  ${handlerExampleDoc([
-    '【stub 示例】仅打印、便于调试'
-  ])}
-    runeNode.classList.add('ag-rune-scapegoat-stub')
-    console.info('[scapegoat] stub invoked, attrs =', meta && meta.attrs)
-    return () => runeNode.classList.remove('ag-rune-scapegoat-stub')
+  ${handlerAndExampleDoc([
+    'handler / handlerExample 同体；handler 在 afterRender 时被 EchoRuntime 注册接管',
+    '—— 见 __resolveScopeContainer / __safeQueryAll / __withAttrs 三个 prelude helper',
+    'cleanup：移除监听 + 移除 standby/injured 状态'
+  ])},
+    const block = __resolveScopeContainer(runeNode, 'block')
+    if (!block) return () => {}
+
+    const intensity = Number(meta && meta.attrs && meta.attrs.intensity) || 0
+    if (intensity > 0) {
+      block.classList.add('ag-rune-scapegoat-injured')
+      block.setAttribute('data-scapegoat-error', (meta && meta.attrs && meta.attrs.error) || 'pre-injured by intensity')
+    } else {
+      block.classList.add('ag-rune-scapegoat-standby')
+    }
+
+    const onError = (event) => {
+      block.classList.remove('ag-rune-scapegoat-standby')
+      block.classList.add('ag-rune-scapegoat-injured')
+      block.setAttribute('data-scapegoat-error', (event && event.message) || 'unknown error')
+    }
+    const onRuneError = (event) => {
+      const detail = event && event.detail
+      if (!detail) return
+      block.classList.remove('ag-rune-scapegoat-standby')
+      block.classList.add('ag-rune-scapegoat-injured')
+      block.setAttribute('data-scapegoat-rune-error', String(detail.runeId || 'unknown'))
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', onError, true)
+      window.addEventListener('ag:rune:error', onRuneError)
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('error', onError, true)
+        window.removeEventListener('ag:rune:error', onRuneError)
+      }
+      block.classList.remove('ag-rune-scapegoat-standby', 'ag-rune-scapegoat-injured')
+      block.removeAttribute('data-scapegoat-error')
+      block.removeAttribute('data-scapegoat-rune-error')
+    }
   }
 }`
 
@@ -516,36 +558,53 @@ const createScapegoatAnnoSource = () => `export default {
 // ============================================================================
 const createCalamityAnnoSource = () => `export default {
   ${banner([
-    '【招灾 / calamity】 —— 占位符文（rune-tbd）',
-    '回响种类：rune-tbd（同 scapegoat）',
-    '模仿提示：当规则敲定时把 kind 改为 rune，补上完整 handler'
+    '【招灾 / calamity】 —— "随机哥德"：作用域内随机给文字片段染上哥特渐变彩',
+    '回响种类：rune（替换原 rune-tbd 占位）',
+    '参数：intensity = 0.1-0.8 的小数（默认 0.3，最大 0.8）',
+    'CSS 钩子：.ag-rune-calamity-gothic',
+    '示例：@招灾{intensity: 0.5}(周围一半文字染彩)'
   ])},
-  kind: 'rune-tbd',
+  kind: 'rune',
   runeId: 'calamity',
   version: 1,
   name: '招灾',
 
-  render (context = {}) {
-    const attrs = context.attrs || {}
-    const prompt = context.prompt || ''
+  render (node, ancestors) {
+    const attrs = (node && node.attrsParsed) || {}
+    const prompt = (node && node.prompt) || ''
+    const echoMeta = (ancestors && ancestors.echo) || {}
     return {
       type: 'card',
-      icon: attrs.icon || context.echo?.icon || 'thunderstorm',
-      color: attrs.color || context.echo?.color || '#5E35B1',
-      title: attrs.title || context.echo?.name || '招灾',
-      description: attrs.desc || context.echo?.desc || '规则待定',
+      icon: attrs.icon || echoMeta.icon || 'thunderstorm',
+      color: attrs.color || echoMeta.color || '#5E35B1',
+      title: attrs.title || echoMeta.name || '招灾',
+      description: attrs.desc || echoMeta.desc || '在作用域内随机给文字片段染上哥特渐变彩',
       prompt,
-      attrs: { ...attrs, kind: 'rune-tbd', runeId: 'calamity' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'calamity' },
       html: '<span class="ag-rune ag-rune--calamity" data-rune-id="calamity">招灾</span>'
     }
   },
 
-  ${handlerExampleDoc([
-    '【stub 示例】仅打印、便于调试'
-  ])}
-    runeNode.classList.add('ag-rune-calamity-stub')
-    console.info('[calamity] stub invoked, attrs =', meta && meta.attrs)
-    return () => runeNode.classList.remove('ag-rune-calamity-stub')
+  ${handlerAndExampleDoc([
+    'handler / handlerExample 同体；handler 在 afterRender 时被 EchoRuntime 注册接管',
+    '—— 见 __resolveScopeContainer / __safeQueryAll / __sampleShuffle 三个 prelude helper',
+    'cleanup：取消染彩 class'
+  ])},
+    const container = __resolveScopeContainer(runeNode, (meta && meta.attrs && meta.attrs.scope) || 'siblings')
+    if (!container) return () => {}
+
+    const intensity = Math.max(0.05, Math.min(0.8,
+      Number(meta && meta.attrs && meta.attrs.intensity) || 0.3))
+
+    const textHosts = __safeQueryAll(container, 'p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, dd, dt')
+      .filter(el => el && el !== runeNode && (el.textContent || '').trim().length >= 2)
+    const targetCount = Math.max(1, Math.floor(textHosts.length * intensity))
+    const picked = __sampleShuffle(textHosts, targetCount)
+
+    picked.forEach((el) => el.classList && el.classList.add('ag-rune-calamity-gothic'))
+    return () => {
+      picked.forEach((el) => el.classList && el.classList.remove('ag-rune-calamity-gothic'))
+    }
   }
 }`
 
@@ -723,7 +782,7 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
   Object.freeze({
     id: '__builtin_scapegoat__',
     name: '替罪',
-    desc: '规则待定',
+    desc: '在作用域内接住后续 rune / DOM 抛出的错误，并以受伤态提示',
     icon: 'shield',
     color: '#6D4C41',
     anno_source: createScapegoatAnnoSource(),
@@ -732,7 +791,7 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
   Object.freeze({
     id: '__builtin_calamity__',
     name: '招灾',
-    desc: '规则待定',
+    desc: '在作用域内随机给文字片段染上哥特渐变彩',
     icon: 'thunderstorm',
     color: '#5E35B1',
     anno_source: createCalamityAnnoSource(),

@@ -16,7 +16,7 @@
     </div>
     <div class='rune-card-body'>
       <div class='rune-card-name'>{{ rune.name }}</div>
-      <div class='rune-card-desc'>{{ rune.desc }}</div>
+      <div class='rune-card-desc'>{{ resolvedDesc }}</div>
     </div>
     <div class='rune-card-footer'>
       <q-btn
@@ -96,6 +96,10 @@ export default {
     builtinBadgeLabel: {
       type: String,
       default: ''
+    },
+    i18nDescKey: {
+      type: String,
+      default: ''
     }
   },
   computed: {
@@ -144,6 +148,13 @@ export default {
     },
     resolvedBuiltinBadgeLabel () {
       return this.builtinBadgeLabel || this.$t('echoBuiltinBadge') || 'Built-in'
+    },
+    resolvedDesc () {
+      if (this.i18nDescKey) {
+        const translated = this.$t(this.i18nDescKey)
+        if (translated && translated !== this.i18nDescKey) return translated
+      }
+      return this.rune.desc || ''
     }
   }
 }
