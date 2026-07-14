@@ -461,6 +461,71 @@
                     </q-card-section>
                   </q-card>
                 </div>
+
+                <!-- AI 技能管理 -->
+                <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
+                  <div class='panel-title-bar bg-yellow-9' />
+                  <span class='text-subtitle2 text-weight-medium'>{{ $t('aiSkillSettings') }}</span>
+                  <q-space />
+                  <q-btn
+                    dense flat no-caps
+                    color='yellow-9'
+                    icon='add'
+                    size='sm'
+                    :label="$t('aiSkillAdd')"
+                    @click='openAiSkillDialog()'
+                  />
+                </div>
+                <q-separator class='q-my-sm server-section-separator' />
+
+                <div class='text-caption text-grey-6 q-mb-sm'>
+                  {{ $t('aiSkillSettingsHint') }}
+                </div>
+
+                <div v-if='aiSkillsLoading' class='row items-center text-grey-6 q-py-md'>
+                  <q-spinner size='20px' class='q-mr-sm' />
+                  <span>{{ $t('loading') }}</span>
+                </div>
+
+                <div v-else-if='aiSkillConfigs.length === 0' class='text-center text-grey q-pa-md ai-model-empty'>
+                  <q-icon name='auto_fix_high' size='2rem' />
+                  <div class='q-mt-sm'>{{ $t('aiSkillEmpty') }}</div>
+                </div>
+
+                <div v-else class='column q-gutter-sm q-mb-md'>
+                  <q-card
+                    v-for='skill in aiSkillConfigs'
+                    :key='skill.id'
+                    flat
+                    bordered
+                    class='ai-model-card'
+                  >
+                    <q-card-section class='q-pa-sm'>
+                      <div class='row items-start no-wrap q-col-gutter-sm'>
+                        <div class='col'>
+                          <div class='row items-center no-wrap q-gutter-xs'>
+                            <div class='text-body2 text-weight-medium'>{{ skill.title }}</div>
+                            <q-badge v-if='!skill.enabled' color='grey-6' outline>{{ $t('aiSkillDisabled') }}</q-badge>
+                          </div>
+                          <div class='text-caption text-grey-6 q-mt-xs'>{{ skill.name }}</div>
+                          <div class='text-caption text-grey-7 q-mt-xs ai-skill-content'>{{ truncateText(skill.content, 160) }}</div>
+                        </div>
+                        <div class='column q-gutter-xs'>
+                          <q-btn
+                            dense flat no-caps color='yellow-9' size='sm' icon='edit'
+                            :label="$t('aiSkillEdit')"
+                            @click='openAiSkillDialog(skill.id)'
+                          />
+                          <q-btn
+                            dense flat no-caps color='negative' size='sm' icon='delete'
+                            :label="$t('aiSkillDelete')"
+                            @click='confirmDeleteAiSkill(skill)'
+                          />
+                        </div>
+                      </div>
+                    </q-card-section>
+                  </q-card>
+                </div>
               </q-tab-panel>
 
               <q-tab-panel name='rune' class='q-pa-sm'>
@@ -748,6 +813,60 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- AI 技能表单弹框 -->
+    <q-dialog v-model='aiSkillDialogVisible' persistent>
+      <q-card class='ai-model-form-card'>
+        <q-card-section class='row items-center no-wrap q-pb-sm'>
+          <div class='text-subtitle1 text-weight-medium'>{{ aiSkillForm.id ? $t('aiSkillEdit') : $t('aiSkillAdd') }}</div>
+          <q-space />
+          <q-btn flat round dense icon='close' v-close-popup />
+        </q-card-section>
+
+        <q-card-section class='q-pt-none'>
+          <q-input
+            v-model.trim='aiSkillForm.name'
+            dense
+            outlined
+            class='q-mb-sm'
+            :label="$t('aiSkillName')"
+            :hint="$t('aiSkillNameHint')"
+            :error='!!aiSkillFormNameError'
+            :error-message='aiSkillFormNameError'
+          />
+          <q-input
+            v-model.trim='aiSkillForm.title'
+            dense
+            outlined
+            class='q-mb-sm'
+            :label="$t('aiSkillTitle')"
+            :hint="$t('aiSkillTitleHint')"
+          />
+          <q-input
+            v-model='aiSkillForm.content'
+            dense
+            outlined
+            type='textarea'
+            rows='6'
+            class='q-mb-sm'
+            :label="$t('aiSkillContent')"
+            :hint="$t('aiSkillContentHint')"
+            :error='!!aiSkillFormContentError'
+            :error-message='aiSkillFormContentError'
+          />
+          <q-toggle
+            v-model='aiSkillForm.enabled'
+            color='positive'
+            :label="$t('aiSkillEnabled')"
+          />
+        </q-card-section>
+
+        <q-card-actions align='right'>
+          <q-btn flat :label="$t('cancel')" v-close-popup />
+          <q-btn color='yellow-9' unelevated :label="$t('save')" :loading='aiSkillSaving' @click='submitAiSkillForm' />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-dialog>
 </template>
 
@@ -856,7 +975,20 @@ export default {
         is_default: false,
         clear_api_key: false,
         clear_virtual_key: false
-      }
+      },
+      aiSkillsLoading: false,
+      aiSkillSaving: false,
+      aiSkillDialogVisible: false,
+      aiSkillConfigs: [],
+      aiSkillForm: {
+        id: null,
+        name: '',
+        title: '',
+        content: '',
+        enabled: true
+      },
+      aiSkillFormNameError: '',
+      aiSkillFormContentError: ''
     }
   },
   computed: {
@@ -1466,6 +1598,150 @@ export default {
         this.$q.notify({ message: this.$t('aiConfigDeleted'), type: 'positive', position: 'top' })
       })
     },
+
+    // ==================== AI 技能管理 ====================
+    truncateText (text, maxLen = 120) {
+      if (!text) return ''
+      return text.length > maxLen ? text.slice(0, maxLen) + '…' : text
+    },
+
+    async loadAiSkillConfigs () {
+      this.aiSkillsLoading = true
+      try {
+        this.aiSkillConfigs = await DatabaseClient.aiSkills.getAll()
+      } finally {
+        this.aiSkillsLoading = false
+      }
+    },
+
+    async openAiSkillDialog (id = null) {
+      this.aiSkillFormNameError = ''
+      this.aiSkillFormContentError = ''
+      this.aiSkillForm = {
+        id: null,
+        name: '',
+        title: '',
+        content: '',
+        enabled: true
+      }
+
+      if (id) {
+        const skill = await DatabaseClient.aiSkills.getById(id)
+        if (!skill) {
+          this.$q.notify({ message: this.$t('aiSkillLoadFailed'), type: 'negative', position: 'top' })
+          return
+        }
+        this.aiSkillForm = {
+          id: skill.id,
+          name: skill.name || '',
+          title: skill.title || '',
+          content: skill.content || '',
+          enabled: skill.enabled !== false
+        }
+      }
+
+      this.aiSkillDialogVisible = true
+    },
+
+    validateAiSkillForm () {
+      this.aiSkillFormNameError = ''
+      this.aiSkillFormContentError = ''
+      const name = String(this.aiSkillForm.name || '').trim()
+      const title = String(this.aiSkillForm.title || '').trim()
+      const content = String(this.aiSkillForm.content || '').trim()
+
+      if (!name) {
+        this.aiSkillFormNameError = this.$t('aiSkillNameRequired')
+        return false
+      }
+      if (!title) {
+        this.$q.notify({ message: this.$t('aiSkillTitleRequired'), type: 'warning', position: 'top' })
+        return false
+      }
+      if (!content) {
+        this.aiSkillFormContentError = this.$t('aiSkillContentRequired')
+        return false
+      }
+
+      const duplicateName = this.aiSkillConfigs.find(item => {
+        if (!item || !item.name) return false
+        if (String(item.id) === String(this.aiSkillForm.id)) return false
+        return String(item.name).trim().toLowerCase() === name.toLowerCase()
+      })
+      if (duplicateName) {
+        this.aiSkillFormNameError = this.$t('aiSkillNameExists')
+        return false
+      }
+
+      return true
+    },
+
+    async submitAiSkillForm () {
+      if (!this.validateAiSkillForm()) return
+
+      this.aiSkillSaving = true
+      try {
+        const payload = {
+          id: this.aiSkillForm.id || null,
+          name: this.aiSkillForm.name.trim(),
+          title: this.aiSkillForm.title.trim(),
+          content: this.aiSkillForm.content,
+          enabled: this.aiSkillForm.enabled
+        }
+
+        const result = await DatabaseClient.aiSkills.save(payload)
+        if (!result || result.success === false) {
+          const code = result && result.code
+          let message = this.$t('aiSkillSaveFailed')
+          if (code === 'AI_SKILL_DUPLICATE_NAME') {
+            message = this.$t('aiSkillNameExists')
+            this.aiSkillFormNameError = message
+          } else if (code === 'AI_SKILL_REQUIRED_FIELDS') {
+            message = this.$t('aiSkillRequiredFields')
+          } else if (result && result.message) {
+            message = `${message}: ${result.message}`
+          }
+          this.$q.notify({ message, type: 'warning', position: 'top' })
+          return
+        }
+
+        this.aiSkillDialogVisible = false
+        await this.loadAiSkillConfigs()
+        this.$q.notify({ message: this.$t('aiSkillSaved'), type: 'positive', position: 'top' })
+      } catch (error) {
+        const isDuplicateNameError = /UNIQUE constraint failed:\s*ai_skills\.name/i.test(
+          String(error && error.message ? error.message : error)
+        )
+        if (isDuplicateNameError) {
+          this.aiSkillFormNameError = this.$t('aiSkillNameExists')
+        }
+        this.$q.notify({
+          message: this.$t(isDuplicateNameError ? 'aiSkillNameExists' : 'aiSkillSaveFailed'),
+          type: isDuplicateNameError ? 'warning' : 'negative',
+          position: 'top'
+        })
+      } finally {
+        this.aiSkillSaving = false
+      }
+    },
+
+    confirmDeleteAiSkill (skill) {
+      this.$q.dialog({
+        title: this.$t('aiSkillDelete'),
+        message: this.$t('aiSkillDeleteConfirm', { title: skill.title }),
+        cancel: { label: this.$t('cancel') },
+        ok: { label: this.$t('aiSkillDelete'), color: 'negative' }
+      }).onOk(async () => {
+        const success = await DatabaseClient.aiSkills.remove(skill.id)
+        if (!success) {
+          this.$q.notify({ message: this.$t('aiSkillDeleteFailed'), type: 'negative', position: 'top' })
+          return
+        }
+        await this.loadAiSkillConfigs()
+        this.$q.notify({ message: this.$t('aiSkillDeleted'), type: 'positive', position: 'top' })
+      })
+    },
+
     resetSqliteHandler: async function () {
       this.$q.dialog({
         title: this.$t('resetSqlite'),
@@ -1981,6 +2257,7 @@ export default {
     this.loadRunes()
     this.loadEchoes()
     this.loadAiModelConfigs()
+    this.loadAiSkillConfigs()
     // 初始化云同步状态
     CloudSyncService.addListener(this.onCloudSyncStatusChange)
     this.refreshCloudSyncStatus()

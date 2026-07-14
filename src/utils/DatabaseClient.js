@@ -296,6 +296,34 @@ const aiModels = {
   }
 }
 
+const aiSkills = {
+  /**
+   * 获取用户可见的自定义技能列表（排除内置）
+   */
+  async getAll() {
+    return await invoke('db:getAiSkills')
+  },
+
+  /**
+   * 获取全部技能（含内置），仅供开发调试使用
+   */
+  async getAllIncludingBuiltin() {
+    return await invoke('db:getAllAiSkills')
+  },
+
+  async getById(id) {
+    return await invoke('db:getAiSkill', id)
+  },
+
+  async save(skill) {
+    return await invoke('db:saveAiSkill', skill)
+  },
+
+  async remove(id) {
+    return await invoke('db:deleteAiSkill', id)
+  }
+}
+
 const runes = {
   async getAll() {
     return await invoke('db:getRunes')
@@ -365,6 +393,7 @@ const DatabaseClient = {
   categories,
   appState,
   aiModels,
+  aiSkills,
   runes,
   runeTemplates,
   echoes

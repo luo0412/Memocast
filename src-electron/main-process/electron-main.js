@@ -88,6 +88,16 @@ function normalizeAiModelConfigRow(row, { includeApiKey = false } = {}) {
   }
 }
 
+function normalizeAiSkillRow(row) {
+  if (!row) return null
+  return {
+    ...row,
+    builtin: Number(row.builtin) === 1,
+    enabled: Number(row.enabled) === 1,
+    sort_order: Number(row.sort_order) || 0
+  }
+}
+
 function parseAiModelJsonField(value, fallback = {}) {
   if (!value) return fallback
   if (typeof value === 'object') return value
@@ -714,6 +724,57 @@ export default {
     }
   } catch (error) {
     console.warn('[DB] AI model config migration check failed:', error.message)
+  }
+
+  // AI 技能表（用户管理 title + content，可在 AI 生成场景中选用）
+  // 通过 builtin 字段区分内置与自定义：1 = 内置（用户不可见，仅供开发调试），0 = 自定义
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ai_skills (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL DEFAULT '',
+      builtin INTEGER NOT NULL DEFAULT 0,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER,
+      updated_at INTEGER
+    )
+  `)
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_skills_name ON ai_skills(name)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ai_skills_builtin ON ai_skills(builtin)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ai_skills_sort ON ai_skills(sort_order)`)
+
+  // 初始化内置技能（仅当没有任何内置技能时写入；用户不可见，仅供开发侧调试）
+  const builtinSkillCount = execOne('SELECT COUNT(*) as count FROM ai_skills WHERE builtin = 1')
+  if (builtinSkillCount && builtinSkillCount.count === 0) {
+    const now = Date.now()
+    const builtinSkills = [
+      {
+        name: '__builtin_summarize__',
+        title: '总结',
+        content: '请阅读以下内容，给出一段不超过 200 字的中文摘要，保留关键事实与结论，使用列表形式输出要点。'
+      },
+      {
+        name: '__builtin_polish__',
+        title: '润色',
+        content: '请保留原文事实与风格，将以下中文内容润色为更流畅、更易读的版本，不引入额外信息，不缩短为过短的版本。'
+      },
+      {
+        name: '__builtin_translate_en__',
+        title: '英译中',
+        content: '请将以下内容翻译为地道、简洁的中文，保留专有名词原文，必要时给出脚注式说明。'
+      }
+    ]
+    for (const skill of builtinSkills) {
+      db.run(
+        `INSERT INTO ai_skills (name, title, content, builtin, enabled, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, 1, 1, 0, ?, ?)`,
+        [skill.name, skill.title, skill.content, now, now]
+      )
+    }
+    saveDatabase()
+    log.info('[DB] Built-in AI skills seeded')
   }
 
   // 初始化默认符文数据（仅当表为空时）
@@ -1706,6 +1767,124 @@ function registerDatabaseHandlers() {
       return true
     } catch (error) {
       log.error('[DB] setDefaultAiModelConfig error:', error)
+      return false
+    }
+  })
+
+  // ==================== AI 技能管理 ====================
+  // 用户可见的列表：排除 builtin=1 的记录，内置仅供开发侧调试
+  ipcMain.handle('db:getAiSkills', async () => {
+    try {
+      const rows = execToObjects(
+        'SELECT * FROM ai_skills WHERE builtin = 0 ORDER BY sort_order ASC, updated_at DESC, id DESC'
+      )
+      return rows.map(row => normalizeAiSkillRow(row))
+    } catch (error) {
+      log.error('[DB] getAiSkills error:', error)
+      return []
+    }
+  })
+
+  // 开发调试：列出所有 AI 技能（含内置），与内置回响一致
+  ipcMain.handle('db:getAllAiSkills', async () => {
+    try {
+      const rows = execToObjects(
+        'SELECT * FROM ai_skills ORDER BY builtin DESC, sort_order ASC, updated_at DESC, id DESC'
+      )
+      return rows.map(row => normalizeAiSkillRow(row))
+    } catch (error) {
+      log.error('[DB] getAllAiSkills error:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle('db:getAiSkill', async (event, id) => {
+    try {
+      if (!id) return null
+      const row = execOne('SELECT * FROM ai_skills WHERE id = ?', [id])
+      return normalizeAiSkillRow(row)
+    } catch (error) {
+      log.error('[DB] getAiSkill error:', error)
+      return null
+    }
+  })
+
+  // 仅保存 / 创建 / 更新自定义技能（builtin=0）；内置技能在设置弹框不可编辑
+  ipcMain.handle('db:saveAiSkill', async (event, payload = {}) => {
+    try {
+      const now = Date.now()
+      const id = payload.id ? Number(payload.id) : null
+      const name = String(payload.name || '').trim()
+      const title = String(payload.title || '').trim()
+      const content = String(payload.content || '')
+      const enabled = payload.enabled === false ? 0 : 1
+      const sortOrder = Number.isFinite(Number(payload.sort_order)) ? Number(payload.sort_order) : 0
+
+      if (!name || !title || !content.trim()) {
+        return { success: false, code: 'AI_SKILL_REQUIRED_FIELDS' }
+      }
+
+      const existing = id ? execOne('SELECT * FROM ai_skills WHERE id = ?', [id]) : null
+      if (id && !existing) {
+        return { success: false, code: 'AI_SKILL_NOT_FOUND' }
+      }
+      if (existing && Number(existing.builtin) === 1) {
+        // 防御性保护：内置技能不允许通过渲染层编辑
+        return { success: false, code: 'AI_SKILL_BUILTIN_READONLY' }
+      }
+
+      const duplicateNameRow = execOne(
+        'SELECT id FROM ai_skills WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND (? IS NULL OR id != ?)',
+        [name, id, id]
+      )
+      if (duplicateNameRow) {
+        return { success: false, code: 'AI_SKILL_DUPLICATE_NAME' }
+      }
+
+      if (existing) {
+        await db.run(
+          `UPDATE ai_skills SET name = ?, title = ?, content = ?, enabled = ?, sort_order = ?, updated_at = ?
+           WHERE id = ?`,
+          [name, title, content, enabled, sortOrder, now, id]
+        )
+        saveDatabase()
+        return { success: true, data: normalizeAiSkillRow(execOne('SELECT * FROM ai_skills WHERE id = ?', [id])) }
+      }
+
+      await db.run(
+        `INSERT INTO ai_skills (name, title, content, builtin, enabled, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, 0, ?, ?, ?, ?)`,
+        [name, title, content, enabled, sortOrder, now, now]
+      )
+      saveDatabase()
+      return { success: true, data: normalizeAiSkillRow(execOne('SELECT * FROM ai_skills WHERE id = ?', [getLastInsertRowid()])) }
+    } catch (error) {
+      log.error('[DB] saveAiSkill error:', error)
+      if (/UNIQUE constraint failed:\s*ai_skills\.name/i.test(String(error && error.message ? error.message : error))) {
+        return { success: false, code: 'AI_SKILL_DUPLICATE_NAME' }
+      }
+      return {
+        success: false,
+        code: 'AI_SKILL_SAVE_FAILED',
+        message: error && error.message ? error.message : String(error)
+      }
+    }
+  })
+
+  ipcMain.handle('db:deleteAiSkill', async (event, id) => {
+    try {
+      if (!id) return false
+      const existing = execOne('SELECT builtin FROM ai_skills WHERE id = ?', [id])
+      if (!existing) return false
+      if (Number(existing.builtin) === 1) {
+        // 内置技能不通过渲染层删除
+        return false
+      }
+      await db.run('DELETE FROM ai_skills WHERE id = ?', [id])
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] deleteAiSkill error:', error)
       return false
     }
   })
