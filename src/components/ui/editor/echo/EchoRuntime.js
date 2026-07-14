@@ -125,12 +125,10 @@ export const createDefaultEchoAnnoSource = (echoName = '回响') => `export defa
     }
   },
 
-  // === 后渲染钩子：domElement 已插入到 DOM，可访问 nextElementSibling / classList / dataset ===
-  // 默认实现仅给宿主加 class 以便直观辨认；模仿者可改此钩子影响周围节点。
+  // === 后渲染钩子：domElement 已插入到 DOM ===
+  // 直接用 jQuery 操作节点，简洁明了。
   afterRender (node, domElement, ancestors) {
-    if (domElement && domElement.classList) {
-      domElement.classList.add('ag-echo-default-mounted')
-    }
+    $(domElement).addClass('ag-echo-default-mounted')
   }
 }`
 
@@ -167,19 +165,19 @@ export const createDefaultRuneAnnoSource = (echoName = '回响') => `export defa
   //   container     编辑器根 DOM 容器
   //   meta          { runeId, kind, attrs }，attrs 已经聚合自 data-echo-attrs-json / data-rune-attrs / dataset
   // 返回值可选：返回 cleanup 函数，将在编辑器下次重渲染/卸载时被调用
+  // 直接用 jQuery 写，简洁明了。
   handler (runeNode, container, meta) {
-    const scope = meta?.attrs?.scope || 'siblings'
-    // 简单示例：给同段落所有兄弟加个调试 outline
-    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, h1, h2, h3, h4, h5, h6, li, blockquote') || runeNode.parentElement
-    const target = block && block.parentElement ? block.parentElement : container
+    const $rune = $(runeNode)
+    const $target = $rune.closest('[data-block-type], .mu-block, p, pre, h1, h2, h3, h4, h5, h6, li, blockquote').parent()
+    const target = $target.length ? $target.get(0) : container
     if (!target) return () => {}
-    const previous = target.getAttribute('data-my-rune-active')
-    target.setAttribute('data-my-rune-active', 'true')
-    target.style.outline = '1px dashed #9C27B0'
+    const $targetEl = $(target)
+    const previous = $targetEl.attr('data-my-rune-active') || null
+    $targetEl.attr('data-my-rune-active', 'true').css('outline', '1px dashed #9C27B0')
     return () => {
-      if (previous === null) target.removeAttribute('data-my-rune-active')
-      else target.setAttribute('data-my-rune-active', previous)
-      target.style.outline = ''
+      if (previous === null) $targetEl.removeAttr('data-my-rune-active')
+      else $targetEl.attr('data-my-rune-active', previous)
+      $targetEl.css('outline', '')
     }
   }
 }`

@@ -21,20 +21,12 @@ import { banner, handlerExampleDoc, handlerAndExampleDoc, handlerPrelude } from 
 // === jQuery 集成（2026-07 改造）===
 //   apply 函数体里所有 DOM 调用都改用 jQuery 形式：$(node).addClass / .attr /
 //   .css / .removeClass / .on / .off / .clone / .append / .before 等。
-//   编译器（HANDLER_PRELUDE_SOURCE）注入 `const $ = window.jQuery`，并在
-//   handler 函数体顶部再次声明 `const $ = window.jQuery && window.jQuery || window.$`
-//   以保证 boot 时序异常（jQuery 尚未挂上 window）时仍能 fallback。
+//   编译器（HANDLER_PRELUDE_SOURCE）会注入 `const $ = window.jQuery`，直接用即可，
+//   无需在函数体里再写 const $ = ...。
 // ============================================================================
 
 // 默认 echo 的 anno_source 直接复用 EchoRuntime 内置版本（避免双源漂移）
 const createDefaultEchoAnnoSource = (echoName = '回响') => createRuntimeDefaultAnnoSource(echoName)
-
-// ============================================================================
-// 0. shared $ 安全引用 —— 所有 rune 函数体公共摘要
-//   在每个 apply 函数体首行加入 \`const $ = window.jQuery || window.$\`，
-//   防止某些破坏式 boot 时序让 jQuery 晚到。
-// ============================================================================
-const safeDollarRef = 'const __safeDollar = (typeof window !== "undefined" && (window.jQuery || window.$)) || null\nif (!__safeDollar) console.warn("[rune] jQuery is not on window; rune handler may fail")\nconst $ = __safeDollar'
 
 // ============================================================================
 // 1. nice：纯标记，无副作用（用 createDefaultEchoAnnoSource 即可）
@@ -70,12 +62,10 @@ const createNiceAnnoSource = () => `export default {
     }
   },
 
+  // === 后渲染钩子：domElement 已插入到 DOM ===
+  // 直接用 jQuery 操作节点，简洁明了。
   afterRender (node, domElement, ancestors) {
-    if (domElement && (window.jQuery || window.$)) {
-      $(domElement).addClass('ag-echo-default-mounted')
-    } else if (domElement && domElement.classList) {
-      domElement.classList.add('ag-echo-default-mounted')
-    }
+    $(domElement).addClass('ag-echo-default-mounted')
   }
 }`
 
@@ -122,7 +112,6 @@ const createGrowthAnnoSource = () => `export default {
     '   __safeQueryAll(root, sel)             容错 querySelectorAll（jQuery 版）',
     '   __withAttrs(meta, defaults)           meta.attrs 默认值合并'
   ])}
-    ${safeDollarRef}
     const attrs = __withAttrs(meta, { scope: 'siblings', trigger: 'auto' })
     const targetSelector = attrs.target || '[data-block-type], p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table'
     const container = __resolveScopeContainer(runeNode, attrs.scope)
@@ -179,7 +168,6 @@ const createShatterAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】target=line 关闭同段其他 echo；target=block 关闭整个 block'
   ])}
-    ${safeDollarRef}
     const attrs = __withAttrs(meta, { target: 'line' })
     const useBlockScope = attrs.target === 'block'
     const container = useBlockScope
@@ -235,7 +223,6 @@ const createSkywalkAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】document scope：记忆原值，cleanup 还原'
   ])}
-    ${safeDollarRef}
     const attrs = __withAttrs(meta, { theme: 'auto', layout: 'enhanced' })
     const documentRoot = $(runeNode).closest('[data-echo-document], .mu-editor, article, [data-doc-id]').get(0) || scopeContainer || document.body
     if (!documentRoot) return () => {}
@@ -306,7 +293,6 @@ const createTwinbloomAnnoSource = () => `export default {
     '  - 用 __resolveScopeContainer(., source) 直接复用 4 种 scope 的解析',
     '  - 给克隆块加 outline + 标记条，cleanup 时一并移除'
   ])}
-    ${safeDollarRef}
     const $rune = $(runeNode)
     const attrs = __withAttrs(meta, { source: 'prev-block', placeholder: '双生节点' })
     const source = String(attrs.source || 'prev-block').toLowerCase()
@@ -327,27 +313,25 @@ const createTwinbloomAnnoSource = () => `export default {
         insertTarget = block  // 插入到当前 block 之后
       }
     } else if (source === 'next-block') {
-      const next = block.nextElementSibling
-      if (next && next !== block) {
-        sourceNode = next
-        insertTarget = block  // 插入到当前 block 之前（= 插到 insertTarget 之前）
+      const $next = $(block).next()
+      if ($next.length && $next.get(0) !== block) {
+        sourceNode = $next.get(0)
+        insertTarget = block
       }
     } else {
-      // clone-self：克隆当前 block，插入到当前之后
       sourceNode = block
       insertTarget = block
     }
 
-    // 防重入：检查上一次插入的克隆
     const twinId = $rune.attr('data-rune-id') || 'twinbloom'
     const sentinel = 'data-twinbloom-of'
     let cloned = null
     let insertedBefore = (source === 'next-block')
     let existedBefore = false
     {
-      const neighbor = insertedBefore ? insertTarget.previousElementSibling : insertTarget.nextElementSibling
-      if (neighbor && neighbor.getAttribute(sentinel) === twinId) {
-        cloned = neighbor
+      const $neighbor = $(insertTarget)[insertedBefore ? 'prev' : 'next']()
+      if ($neighbor.length && $neighbor.attr(sentinel) === twinId) {
+        cloned = $neighbor.get(0)
         existedBefore = true
       }
     }
@@ -362,14 +346,14 @@ const createTwinbloomAnnoSource = () => `export default {
         .css({
           'outline': '2px dashed #8E24AA',
           'outline-offset': '2px',
-          'position': cloned.style.position || 'relative',
-          'padding': cloned.style.padding || '8px 12px',
-          'border-radius': cloned.style.borderRadius || '6px',
+          'position': $(cloned).css('position') || 'relative',
+          'padding': $(cloned).css('padding') || '8px 12px',
+          'border-radius': $(cloned).css('border-radius') || '6px',
           'background': 'rgba(142,36,170,0.06)'
         })
 
       // 在克隆块顶部追加一张 "🌸 双生花 · 双生节点" 标记条（仅一次）
-      if (!cloned.querySelector('[data-twinbloom-badge]')) {
+      if (!$(cloned).find('[data-twinbloom-badge]').length) {
         const $badge = $('<div></div>')
           .attr('data-twinbloom-badge', twinId)
           .text('🌸 双生花 · ' + placeholder)
@@ -387,7 +371,7 @@ const createTwinbloomAnnoSource = () => `export default {
       }
 
       // 若克隆源是 prev-block 但 prev-block 全空，用 placeholder 文本填充
-      if (source === 'prev-block' && !(cloned.textContent || '').trim()) {
+      if (source === 'prev-block' && !$(cloned).text().trim()) {
         $(cloned).text(placeholder)
       }
 
@@ -442,7 +426,6 @@ const createMindstealAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】mode=disable 直接停掉动画，stack/override 由各 rune 自己解读'
   ])}
-    ${safeDollarRef}
     const attrs = __withAttrs(meta, { mode: 'override', targets: '' })
     const targetsCsv = String(attrs.targets || '').trim()
     const targets = targetsCsv ? targetsCsv.split(',').map(s => s.trim()).filter(Boolean) : null
@@ -504,7 +487,6 @@ const createLuckyAnnoSource = () => `export default {
     '   handlerExample 给节点加 role=button / tabindex=0；click 与 Enter/Space 触发',
     '   callback 走 window.__memocastRuneHandlers.lucky（应用层注册）'
   ])}
-    ${safeDollarRef}
     const attrs = __withAttrs(meta, { label: '点击触发 AI 校对' })
     const $rune = $(runeNode)
     $rune.css('cursor', 'pointer')
@@ -578,7 +560,6 @@ const createScapegoatAnnoSource = () => `export default {
     '—— 见 __resolveScopeContainer / __safeQueryAll / __withAttrs 三个 prelude helper',
     'cleanup：移除监听 + 移除 standby/injured 状态'
   ])},
-    ${safeDollarRef}
     const block = __resolveScopeContainer(runeNode, 'block')
     if (!block) return () => {}
     const $block = $(block)
@@ -652,7 +633,6 @@ const createCalamityAnnoSource = () => `export default {
     '—— 见 __resolveScopeContainer / __safeQueryAll / __sampleShuffle 三个 prelude helper',
     'cleanup：取消染彩 class'
   ])},
-    ${safeDollarRef}
     const container = __resolveScopeContainer(runeNode, (meta && meta.attrs && meta.attrs.scope) || 'siblings')
     if (!container) return () => {}
 
@@ -660,7 +640,7 @@ const createCalamityAnnoSource = () => `export default {
       Number(meta && meta.attrs && meta.attrs.intensity) || 0.3))
 
     const textHosts = __safeQueryAll(container, 'p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, dd, dt')
-      .filter((_i, el) => el && el !== runeNode && (el.textContent || '').trim().length >= 2)
+      .filter((_i, el) => el && el !== runeNode && $(el).text().trim().length >= 2)
       .get()
     const targetCount = Math.max(1, Math.floor(textHosts.length * intensity))
     const picked = __sampleShuffle(textHosts, targetCount)
@@ -705,7 +685,6 @@ const createDisperseAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】block scope 写 data-disperse-density；CSS 据此调整 line-height/margin'
   ])}
-    ${safeDollarRef}
     const attrs = __withAttrs(meta, { density: 'loose' })
     const block = $(runeNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || runeNode.parentElement
     if (!block) return () => {}
@@ -756,9 +735,6 @@ const createClockAnnoSource = () => `export default {
 
   // 【已实装 handler】—— 注意：内置 RUNE_HANDLERS 没占这个 id，所以这里实装是安全的
   handler (runeNode, _container, _meta) {
-    const __safeDollarInner = (typeof window !== "undefined" && (window.jQuery || window.$)) || null
-    const $ = __safeDollarInner
-    if (!$) return () => {}
     const $rune = $(runeNode)
     const $block = $rune.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').addBack().first()
     const block = $block.get(0)
