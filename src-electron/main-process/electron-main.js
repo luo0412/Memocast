@@ -758,9 +758,9 @@ export default {
   if (echoCount && echoCount.count === 0) {
     const now = Date.now()
     const defaultEchoes = [
-      { id: 'echo-1', name: '晨星批注', desc: '适合在正文中插入强调型提示卡片', color: '#26A69A', icon: 'graphic_eq', anno_source: createDefaultEchoAnnoSource('晨星批注') },
-      { id: 'echo-2', name: '折光回声', desc: '把段落转成带说明的注解块', color: '#5C6BC0', icon: 'auto_fix_high', anno_source: createDefaultEchoAnnoSource('折光回声') },
-      { id: 'echo-3', name: '边界低语', desc: '适合提示风险、注意事项与旁白信息', color: '#EC407A', icon: 'campaign', anno_source: createDefaultEchoAnnoSource('边界低语') }
+      // { id: 'echo-1', name: '晨星批注', desc: '适合在正文中插入强调型提示卡片', color: '#26A69A', icon: 'graphic_eq', anno_source: createDefaultEchoAnnoSource('晨星批注') },
+      // { id: 'echo-2', name: '折光回声', desc: '把段落转成带说明的注解块', color: '#5C6BC0', icon: 'auto_fix_high', anno_source: createDefaultEchoAnnoSource('折光回声') },
+      // { id: 'echo-3', name: '边界低语', desc: '适合提示风险、注意事项与旁白信息', color: '#EC407A', icon: 'campaign', anno_source: createDefaultEchoAnnoSource('边界低语') }
     ]
     for (const echo of defaultEchoes) {
       db.run(`INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
