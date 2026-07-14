@@ -1,0 +1,121 @@
+# 由 `yarn blog:init-ci` 自动生成；可手工修改但下次 init-ci 会被覆盖。
+name: blog-preview
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+
+    types: [opened, reopened, synchronize]
+
+concurrency:
+  group: blog-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile --network-timeout 600000
+
+      - name: Re-render GitHub workflow files
+        run: node scripts/blog/init-ci.js --target ci --quiet
+
+      - name: Build sidebar & config (no export — requires db artifact)
+        env:
+          BLOG_BASE: ${{ github.event.pull_request.base.ref == 'main' && '/' || '/memocast-blog/' }}
+        run: |
+          yarn blog:test
+          yarn blog:sidebar
+          yarn blog:config
+
+      - name: Upload preview artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: blog-preview-${{ github.event.pull_request.number }}
+          path: |
+            _docs/.vuepress/sidebar.json
+            _docs/.vuepress/config.js
+            _docs/seq-manifest.json
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Comment PR with build summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const sidebarFile = '_docs/.vuepress/sidebar.json';
+            const configFile = '_docs/.vuepress/config.js';
+
+            let sidebarCount = 0;
+            let navCount = 0;
+            let base = '/';
+
+            try {
+              const sb = JSON.parse(fs.readFileSync(sidebarFile, 'utf8'));
+              navCount = Array.isArray(sb.nav) ? sb.nav.length : 0;
+              sidebarCount = Object.keys(sb.sidebar || {}).length;
+            } catch (e) {
+              console.log('sidebar read failed:', e.message);
+            }
+
+            try {
+              const cfg = fs.readFileSync(configFile, 'utf8');
+              const m = cfg.match(/const base = "([^"]+)"/);
+              if (m) base = m[1];
+            } catch (e) {
+              console.log('config read failed:', e.message);
+            }
+
+            const body = [
+              '### 博客构建预览',
+              '',
+              '| 指标 | 值 |',
+              '| --- | --- |',
+              `| BLOG_BASE | \`${base}\` |`,
+              `| nav 大项 | ${navCount} |`,
+              `| sidebar 路由 | ${sidebarCount} |`,
+              '',
+              '> 部署只在 push 到 master/main 时进行；PR 仅预览。',
+              '> 如需本地预览：`yarn blog:preview`'
+            ].join('\n');
+
+            const marker = '<!-- blog-preview-comment -->';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: marker + '\n' + body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: marker + '\n' + body
+              });
+            }

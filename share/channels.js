@@ -24,6 +24,8 @@ export default {
   getBlogDeployConfig: 'get-blog-deploy-config',
   saveBlogDeployConfig: 'save-blog-deploy-config',
   selectDirectory: 'select-directory',
+  // Export CI workflows (.github/workflows/*.yml) to blog directory
+  exportBlogCI: 'export-blog-ci',
   // SFTP 部署
   sftpTestConnection: 'sftp-test-connection',
   sftpUpload: 'sftp-upload'

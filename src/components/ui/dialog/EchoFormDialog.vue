@@ -131,13 +131,17 @@
 
           <div class='echo-form-editor-wrap'>
             <div class='row items-center justify-between q-mb-xs'>
-              <div class='echo-form-label q-mb-none'>Anno 源码</div>
+              <div class='row items-center no-wrap q-gutter-xs'>
+                <div class='echo-form-label q-mb-none'>Anno 源码</div>
+                <q-icon name='info' size='14px' class='echo-form-info-icon'>
+                  <q-tooltip anchor='top middle' self='bottom middle' :offset='[0, 6]'>
+                    导出默认对象，支持 <code>render(node, ancestors)</code> 和 <code>afterRender(node, domElement, ancestors)</code>。可通过 <code>node.attributes</code> 访问属性，通过 <code>domElement.nextElementSibling</code> 修改相邻元素。
+                  </q-tooltip>
+                </q-icon>
+              </div>
               <q-btn flat dense no-caps size='sm' color='teal-5' icon='refresh' label='重置模板' @click='resetTemplate' />
             </div>
-            <div ref='editorContainer' class='echo-monaco-editor' />
-            <div class='echo-form-tip q-mt-sm'>
-              导出默认对象，支持 <code>render(node, ancestors)</code> 和 <code>afterRender(node, domElement, ancestors)</code>。可通过 <code>node.attributes</code> 访问属性，通过 <code>domElement.nextElementSibling</code> 修改相邻元素。
-            </div>
+            <div ref='editorContainer' class='echo-monaco-editor' :style='monacoEditorStyle' />
           </div>
         </div>
       </q-card-section>
@@ -179,12 +183,16 @@
   min-width: 0;
   display: flex;
   gap: 14px;
+  align-items: stretch;
+  height: 100%;
+  overflow: hidden;
 }
 
 .echo-form-fields {
   flex: 0 0 240px;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -195,9 +203,15 @@
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
+  position: relative;
   overflow: hidden;
+}
+
+.echo-form-editor-wrap > .row.items-center.justify-between {
+  flex: 0 0 auto;
 }
 
 .echo-form-field {
@@ -222,6 +236,15 @@
   margin-bottom: 4px;
   font-weight: 500;
   line-height: 1.2;
+}
+
+.echo-form-info-icon {
+  color: rgba(0, 0, 0, 0.45);
+  cursor: help;
+}
+
+.body--dark .echo-form-info-icon {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .echo-form-input {
@@ -273,8 +296,7 @@
   word-break: break-word;
 }
 
-.echo-form-help code,
-.echo-form-tip code {
+.echo-form-help code {
   font-family: Consolas, Monaco, monospace;
   background: rgba(0, 0, 0, 0.08);
   padding: 1px 4px;
@@ -287,22 +309,17 @@
 }
 
 .echo-monaco-editor {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;
   width: 100%;
+  min-height: 120px;
   border: 1px solid #c0c0c0;
   border-radius: 4px;
   overflow: hidden;
+  position: relative;
 }
 
 .body--dark .echo-monaco-editor {
   border-color: #434343;
-}
-
-.echo-form-tip {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.55);
-  line-height: 1.5;
 }
 
 .echo-form-footer {
@@ -321,17 +338,12 @@
   color: rgba(255, 255, 255, 0.88);
 }
 
-.body--dark .echo-form-help code,
-.body--dark .echo-form-tip code {
+.body--dark .echo-form-help code {
   background: rgba(255, 255, 255, 0.08);
 }
 
 .body--dark .echo-form-help__desc {
   color: rgba(255, 255, 255, 0.72);
-}
-
-.body--dark .echo-form-tip {
-  color: rgba(255, 255, 255, 0.62);
 }
 
 .body--dark .echo-form-footer {
@@ -404,7 +416,10 @@ export default {
       monacoInitTimer: null,
       monacoReady: false,
       _monacoRo: null,
+      _dialogRo: null,
+      _windowResizeHandler: null,
       monacoEditor: null,
+      monacoEditorHeight: 250,
       form: {
         id: '',
         name: '',
@@ -444,14 +459,28 @@ export default {
     },
     isBuiltin () {
       return Boolean(this.echo && this.echo.isBuiltin)
+    },
+    monacoEditorStyle () {
+      return { height: `${this.monacoEditorHeight}px` }
     }
   },
   watch: {
-    value (val) {
-      if (val) {
-        this.scheduleMonacoInit()
-      } else {
-        this.clearMonacoInitTimer()
+    value: {
+      immediate: true,
+      handler (val) {
+        console.log('[EchoFormDialog] value changed =>', val, 'this.dialog=', !!this.$refs.dialog)
+        if (val) {
+          this.scheduleMonacoInit()
+          this.$nextTick(() => {
+            this.$nextTick(() => {
+              console.log('[EchoFormDialog] installDialogHeightListener, dialog clientHeight=', this.$refs.dialog && this.$refs.dialog.clientHeight)
+              this.installDialogHeightListener()
+            })
+          })
+        } else {
+          this.clearMonacoInitTimer()
+          this.uninstallDialogHeightListener()
+        }
       }
     },
     'form.name': function (val, oldVal) {
@@ -517,6 +546,7 @@ export default {
   },
   beforeDestroy () {
     this.clearMonacoInitTimer()
+    this.uninstallDialogHeightListener()
     if (this._monacoRo) {
       this._monacoRo.disconnect()
       this._monacoRo = null
@@ -524,6 +554,56 @@ export default {
     this.disposeMonaco()
   },
   methods: {
+    installDialogHeightListener () {
+      console.log('[EchoFormDialog] installDialogHeightListener enter')
+      this.uninstallDialogHeightListener()
+      if (!this.$refs.dialog) {
+        console.warn('[EchoFormDialog] installDialogHeightListener: $refs.dialog missing, skip')
+        return
+      }
+      console.log('[EchoFormDialog] dialog clientHeight before recompute=', this.$refs.dialog.clientHeight)
+      this.recomputeMonacoHeight()
+      this._dialogRo = new ResizeObserver(() => {
+        console.log('[EchoFormDialog] dialog ResizeObserver fired')
+        this.recomputeMonacoHeight()
+      })
+      this._dialogRo.observe(this.$refs.dialog)
+      this._windowResizeHandler = () => {
+        console.log('[EchoFormDialog] window resize fired')
+        this.recomputeMonacoHeight()
+      }
+      window.addEventListener('resize', this._windowResizeHandler)
+      console.log('[EchoFormDialog] installDialogHeightListener done, monacoEditorHeight=', this.monacoEditorHeight)
+    },
+    uninstallDialogHeightListener () {
+      console.log('[EchoFormDialog] uninstallDialogHeightListener')
+      if (this._dialogRo) {
+        this._dialogRo.disconnect()
+        this._dialogRo = null
+      }
+      if (this._windowResizeHandler) {
+        window.removeEventListener('resize', this._windowResizeHandler)
+        this._windowResizeHandler = null
+      }
+    },
+    recomputeMonacoHeight () {
+      const dialogEl = this.$refs.dialog
+      const trace = (new Error()).stack.split('\n').slice(1, 4).join(' | ')
+      if (!dialogEl) {
+        console.warn('[EchoFormDialog] recomputeMonacoHeight: dialogEl missing. trace=', trace)
+        return
+      }
+      const dialogHeight = dialogEl.clientHeight
+      if (!dialogHeight) {
+        console.warn('[EchoFormDialog] recomputeMonacoHeight: dialogHeight=0. trace=', trace)
+        return
+      }
+      const next = Math.max(120, dialogHeight - 300)
+      console.log('[EchoFormDialog] recomputeMonacoHeight: dialogHeight=', dialogHeight, 'next=', next, 'current=', this.monacoEditorHeight, 'changed=', next !== this.monacoEditorHeight)
+      if (next !== this.monacoEditorHeight) {
+        this.monacoEditorHeight = next
+      }
+    },
     clearMonacoInitTimer () {
       if (this.monacoInitTimer) {
         clearTimeout(this.monacoInitTimer)
@@ -599,6 +679,8 @@ export default {
         fontSize: 13,
         lineHeight: 20,
         tabSize: 2,
+        // ✅ 与 RuneFormDialog 保持一致：编辑器内长行自动软换行
+        wordWrap: 'on',
         theme: 'Memocast-Dark'
       })
       this._setupMonacoClipboard()

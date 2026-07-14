@@ -126,6 +126,16 @@ async function saveBlogDeployConfig (config) {
   return ipcRenderer.invoke(channels.saveBlogDeployConfig, config)
 }
 
+/**
+ * 把内置的 GitHub Actions CI 模板 yml 写到 {targetDir}/.github/workflows/
+ *
+ * @param {string} targetDir  博客源目录（一般是 localConfig.blogDir）
+ * @returns {Promise<{success?: boolean, written?: string[], skipped?: string[], error?: string, message?: string, targetDir?: string}>}
+ */
+async function exportBlogCI (targetDir) {
+  return ipcRenderer.invoke(channels.exportBlogCI, { targetDir })
+}
+
 async function selectDirectory (title) {
   return ipcRenderer.invoke(channels.selectDirectory, { title })
 }
@@ -166,6 +176,7 @@ export {
   cancelBlogDeploy,
   getBlogDeployConfig,
   saveBlogDeployConfig,
+  exportBlogCI,
   selectDirectory,
   invokeApi,
   sftpTestConnection

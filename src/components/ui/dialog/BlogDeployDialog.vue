@@ -128,6 +128,31 @@
 
         <q-separator class="q-my-md" />
 
+        <!-- 导出 GitHub Actions CI 配置（可选） -->
+        <div class="config-section">
+          <div class="text-body2 text-weight-medium q-mb-xs config-label">
+            {{ $t('exportBlogCiOptional') }}
+          </div>
+          <div class="text-caption text-grey-6 q-mb-sm">
+            {{ $t('exportBlogCiHint') }}
+          </div>
+          <q-btn
+            flat
+            color="primary"
+            icon="code"
+            :label="$t('exportBlogCi')"
+            :disable="!localConfig.blogDir"
+            :loading="exportingCI"
+            @click="exportCI"
+          >
+            <q-tooltip v-if="!localConfig.blogDir">
+              {{ $t('blogDeployConfigRequired') }}
+            </q-tooltip>
+          </q-btn>
+        </div>
+
+        <q-separator class="q-my-md" />
+
         <!-- SFTP 部署（可选） -->
         <div class="config-section">
           <div class="text-body2 text-weight-medium q-mb-xs config-label">
@@ -278,7 +303,7 @@
 </template>
 
 <script>
-import { getBlogDeployConfig, saveBlogDeployConfig, selectDirectory, invokeApi, sftpTestConnection } from 'src/ApiInvoker'
+import { getBlogDeployConfig, saveBlogDeployConfig, selectDirectory, invokeApi, sftpTestConnection, exportBlogCI } from 'src/ApiInvoker'
 
 export default {
   name: 'BlogDeployDialog',
@@ -312,7 +337,8 @@ export default {
       showSftpPassword: false,
       savingConfig: false,
       savingAndDeploying: false,
-      testingConnection: false
+      testingConnection: false,
+      exportingCI: false
     }
   },
   async mounted () {
@@ -439,6 +465,42 @@ export default {
         })
       } finally {
         this.savingAndDeploying = false
+      }
+    },
+    async exportCI () {
+      if (!this.localConfig.blogDir) return
+      this.exportingCI = true
+      try {
+        const result = await exportBlogCI(this.localConfig.blogDir)
+        if (result.error) {
+          this.$q.notify({
+            message: this.$t('exportBlogCiFailed') + ': ' + (result.message || result.error),
+            type: 'negative',
+            icon: 'close'
+          })
+          return
+        }
+        const written = (result.written || []).length
+        const skipped = (result.skipped || []).length
+        const msg = this.$t('exportBlogCiSuccess', {
+          written,
+          skipped,
+          targetDir: result.targetDir || ''
+        })
+        this.$q.notify({
+          message: msg,
+          type: written > 0 ? 'positive' : 'info',
+          icon: written > 0 ? 'check' : 'info',
+          timeout: 4500
+        })
+      } catch (err) {
+        this.$q.notify({
+          message: this.$t('exportBlogCiFailed') + ': ' + (err.message || String(err)),
+          type: 'negative',
+          icon: 'close'
+        })
+      } finally {
+        this.exportingCI = false
       }
     },
     onCancel () {

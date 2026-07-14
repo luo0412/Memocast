@@ -42,6 +42,12 @@
                 :label="$t('server')"
                 class='text-green-7'
               />
+              <q-tab
+                name='ai'
+                icon='auto_awesome'
+                :label="$t('ai')"
+                class='text-yellow-9'
+              />
             </q-tabs>
           </div>
           <q-separator vertical class='settings-dialog-sep' />
@@ -306,127 +312,6 @@
                         />
                       </div>
                     </div>
-
-                    <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
-                      <div class='panel-title-bar bg-green-7' />
-                      <span class='text-subtitle2 text-weight-medium'>{{ $t('aiAssistantEntry') }}</span>
-                    </div>
-                    <q-separator class='q-my-sm server-section-separator' />
-
-                    <div class='text-caption text-grey-6 q-mb-sm'>
-                      {{ $t('aiAssistantEntryHint') }}
-                    </div>
-                    <div class='q-mb-md'>
-                      <q-option-group
-                        :value='aiAssistantProvider'
-                        :options='aiAssistantProviderOptionsResolved'
-                        color='green-7'
-                        type='radio'
-                        inline
-                        @input='v => handleAiAssistantProviderChange(v)'
-                      />
-                    </div>
-
-                    <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
-                      <div class='panel-title-bar bg-green-7' />
-                      <span class='text-subtitle2 text-weight-medium'>{{ $t('aiModelSettings') }}</span>
-                      <q-space />
-                      <q-btn
-                        dense flat no-caps
-                        color='green-7'
-                        icon='add'
-                        size='sm'
-                        :label="$t('aiModelAdd')"
-                        @click='openAiModelDialog()'
-                      />
-                    </div>
-                    <q-separator class='q-my-sm server-section-separator' />
-
-                    <div v-if='aiModelsLoading' class='row items-center text-grey-6 q-py-md'>
-                      <q-spinner size='20px' class='q-mr-sm' />
-                      <span>{{ $t('loading') }}</span>
-                    </div>
-
-                    <div v-else-if='aiModelConfigs.length === 0' class='text-center text-grey q-pa-md ai-model-empty'>
-                      <q-icon name='smart_toy' size='2rem' />
-                      <div class='q-mt-sm'>{{ $t('aiNoModelConfigured') }}</div>
-                    </div>
-
-                    <div v-else class='column q-gutter-sm q-mb-md'>
-                      <q-card
-                        v-for='item in aiModelConfigs'
-                        :key='item.id'
-                        flat
-                        bordered
-                        class='ai-model-card'
-                      >
-                        <q-card-section class='q-pa-sm'>
-                          <div class='row items-start no-wrap q-col-gutter-sm'>
-                            <div class='col'>
-                              <div class='row items-center no-wrap q-gutter-xs'>
-                                <div class='text-body2 text-weight-medium'>{{ item.name }}</div>
-                                <q-badge v-if='item.is_default' color='primary' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
-                                <q-badge :color='getAiModelStatusColor(item)' outline>
-                                  {{ getAiModelStatusLabel(item) }}
-                                </q-badge>
-                              </div>
-                              <div class='text-caption text-grey-6 q-mt-xs'>{{ getAiProviderLabel(item.provider_type) }}</div>
-                              <div class='text-caption text-grey-7 q-mt-xs'>{{ item.base_url }}</div>
-                              <div class='text-caption text-grey-7 q-mt-xs'>{{ item.model }}</div>
-                              <div
-                                class='text-caption q-mt-xs'
-                                :class='isAiModelUsable(item) ? "text-positive" : "text-warning"'
-                              >
-                                {{ getAiModelStatusHint(item) }}
-                              </div>
-                              <div
-                                v-if='!isAiModelUsable(item) && getAiModelMissingFieldLabels(item).length > 0'
-                                class='row items-center q-gutter-xs q-mt-sm'
-                              >
-                                <q-badge
-                                  v-for='field in getAiModelMissingFieldLabels(item)'
-                                  :key='field'
-                                  color='warning'
-                                  outline
-                                >
-                                  {{ field }}
-                                </q-badge>
-                              </div>
-                              <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasApiKey'>
-                                {{ item.provider_type === 'portkey' ? $t('aiPortkeyApiKey') : $t('aiApiKey') }}: {{ item.apiKeyMasked }}
-                              </div>
-                              <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasVirtualKey'>
-                                {{ $t('aiPortkeyVirtualKey') }}: {{ item.portkeyVirtualKeyMasked }}
-                              </div>
-                              <div
-                                v-if='aiModelTestResults[item.id]'
-                                class='text-caption q-mt-xs'
-                                :class='aiModelTestResults[item.id].success ? "text-positive" : "text-negative"'
-                              >
-                                {{ getAiModelTestResultText(item) }}
-                              </div>
-                            </div>
-                            <div class='column q-gutter-xs'>
-                              <q-btn
-                                dense flat no-caps color='teal' size='sm' icon='network_check'
-                                :label="$t('aiModelTestConnection')"
-                                :loading='testingAiModelId === item.id'
-                                :disable='testingAiModelId !== null || !isAiModelUsable(item)'
-                                @click='testAiModelConnection(item)'
-                              />
-                              <q-btn dense flat no-caps color='primary' size='sm' icon='edit' :label="$t('aiModelEdit')" @click='openAiModelDialog(item.id)' />
-                              <q-btn
-                                v-if='!item.is_default'
-                                dense flat no-caps color='positive' size='sm' icon='check_circle'
-                                :label="$t('aiSetDefault')"
-                                @click='setDefaultAiModel(item)'
-                              />
-                              <q-btn dense flat no-caps color='negative' size='sm' icon='delete' :label="$t('aiModelDelete')" @click='confirmDeleteAiModel(item)' />
-                            </div>
-                          </div>
-                        </q-card-section>
-                      </q-card>
-                    </div>
                   </div>
                 </div>
                 <q-separator class='q-my-xs' />
@@ -446,6 +331,135 @@
                   <div class='text-caption text-grey-6'>
                     {{ $t('resetSqliteHint') }}
                   </div>
+                </div>
+              </q-tab-panel>
+
+              <q-tab-panel name='ai' class='q-pa-sm'>
+                <div class='row items-center no-wrap q-mb-xs panel-title'>
+                  <div class='panel-title-bar bg-yellow-9' />
+                  <span class='text-subtitle2 text-weight-medium'>{{ $t('ai') }}</span>
+                </div>
+                <q-separator class='q-my-xs' />
+
+                <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
+                  <div class='panel-title-bar bg-yellow-9' />
+                  <span class='text-subtitle2 text-weight-medium'>{{ $t('aiAssistantEntry') }}</span>
+                </div>
+                <q-separator class='q-my-sm server-section-separator' />
+
+                <div class='text-caption text-grey-6 q-mb-sm'>
+                  {{ $t('aiAssistantEntryHint') }}
+                </div>
+                <div class='q-mb-md'>
+                  <q-option-group
+                    :value='aiAssistantProvider'
+                    :options='aiAssistantProviderOptionsResolved'
+                    color='yellow-9'
+                    type='radio'
+                    inline
+                    @input='v => handleAiAssistantProviderChange(v)'
+                  />
+                </div>
+
+                <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
+                  <div class='panel-title-bar bg-yellow-9' />
+                  <span class='text-subtitle2 text-weight-medium'>{{ $t('aiModelSettings') }}</span>
+                  <q-space />
+                  <q-btn
+                    dense flat no-caps
+                    color='yellow-9'
+                    icon='add'
+                    size='sm'
+                    :label="$t('aiModelAdd')"
+                    @click='openAiModelDialog()'
+                  />
+                </div>
+                <q-separator class='q-my-sm server-section-separator' />
+
+                <div v-if='aiModelsLoading' class='row items-center text-grey-6 q-py-md'>
+                  <q-spinner size='20px' class='q-mr-sm' />
+                  <span>{{ $t('loading') }}</span>
+                </div>
+
+                <div v-else-if='aiModelConfigs.length === 0' class='text-center text-grey q-pa-md ai-model-empty'>
+                  <q-icon name='smart_toy' size='2rem' />
+                  <div class='q-mt-sm'>{{ $t('aiNoModelConfigured') }}</div>
+                </div>
+
+                <div v-else class='column q-gutter-sm q-mb-md'>
+                  <q-card
+                    v-for='item in aiModelConfigs'
+                    :key='item.id'
+                    flat
+                    bordered
+                    class='ai-model-card'
+                  >
+                    <q-card-section class='q-pa-sm'>
+                      <div class='row items-start no-wrap q-col-gutter-sm'>
+                        <div class='col'>
+                          <div class='row items-center no-wrap q-gutter-xs'>
+                            <div class='text-body2 text-weight-medium'>{{ item.name }}</div>
+                            <q-badge v-if='item.is_default' color='yellow-9' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
+                            <q-badge :color='getAiModelStatusColor(item)' outline>
+                              {{ getAiModelStatusLabel(item) }}
+                            </q-badge>
+                          </div>
+                          <div class='text-caption text-grey-6 q-mt-xs'>{{ getAiProviderLabel(item.provider_type) }}</div>
+                          <div class='text-caption text-grey-7 q-mt-xs'>{{ item.base_url }}</div>
+                          <div class='text-caption text-grey-7 q-mt-xs'>{{ item.model }}</div>
+                          <div
+                            class='text-caption q-mt-xs'
+                            :class='isAiModelUsable(item) ? "text-positive" : "text-warning"'
+                          >
+                            {{ getAiModelStatusHint(item) }}
+                          </div>
+                          <div
+                            v-if='!isAiModelUsable(item) && getAiModelMissingFieldLabels(item).length > 0'
+                            class='row items-center q-gutter-xs q-mt-sm'
+                          >
+                            <q-badge
+                              v-for='field in getAiModelMissingFieldLabels(item)'
+                              :key='field'
+                              color='warning'
+                              outline
+                            >
+                              {{ field }}
+                            </q-badge>
+                          </div>
+                          <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasApiKey'>
+                            {{ item.provider_type === 'portkey' ? $t('aiPortkeyApiKey') : $t('aiApiKey') }}: {{ item.apiKeyMasked }}
+                          </div>
+                          <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasVirtualKey'>
+                            {{ $t('aiPortkeyVirtualKey') }}: {{ item.portkeyVirtualKeyMasked }}
+                          </div>
+                          <div
+                            v-if='aiModelTestResults[item.id]'
+                            class='text-caption q-mt-xs'
+                            :class='aiModelTestResults[item.id].success ? "text-positive" : "text-negative"'
+                          >
+                            {{ getAiModelTestResultText(item) }}
+                          </div>
+                        </div>
+                        <div class='column q-gutter-xs'>
+                          <q-btn
+                            dense flat no-caps color='yellow-9' size='sm' icon='network_check'
+                            :label="$t('aiModelTestConnection')"
+                            :loading='testingAiModelId === item.id'
+                            :disable='testingAiModelId !== null || !isAiModelUsable(item)'
+                            @click='testAiModelConnection(item)'
+                          />
+                          <q-btn dense flat no-caps color='yellow-9' size='sm' icon='edit' :label="$t('aiModelEdit')" @click='openAiModelDialog(item.id)' />
+                          <q-btn
+                            v-if='!item.is_default'
+                            dense flat no-caps color='positive' size='sm' icon='check_circle'
+                            :label="$t('aiSetDefault')"
+                            @click='setDefaultAiModel(item)'
+                          />
+                          <q-btn dense flat no-caps color='negative' size='sm' icon='delete' :label="$t('aiModelDelete')" @click='confirmDeleteAiModel(item)' />
+                        </div>
+                      </div>
+                    </q-card-section>
+                  </q-card>
                 </div>
               </q-tab-panel>
 
@@ -722,14 +736,14 @@
           />
           <q-toggle
             v-model='aiModelForm.is_default'
-            color='primary'
+            color='yellow-9'
             :label="$t('aiSetDefault')"
           />
         </q-card-section>
 
         <q-card-actions align='right'>
           <q-btn flat :label="$t('cancel')" v-close-popup />
-          <q-btn color='primary' unelevated :label="$t('save')" :loading='aiModelSaving' @click='submitAiModelForm' />
+          <q-btn color='yellow-9' unelevated :label="$t('save')" :loading='aiModelSaving' @click='submitAiModelForm' />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -1604,8 +1618,12 @@ export default {
       this.openRuneFormDialog()
     },
     openRuneFormDialog: function () {
+      console.log('[SettingsDialog] openRuneFormDialog: BEFORE', 'runeFormKey=', this.runeFormKey, 'runeFormVisible=', this.runeFormVisible)
       this.runeFormKey += 1
       this.runeFormVisible = true
+      console.log('[SettingsDialog] openRuneFormDialog: AFTER', 'runeFormKey=', this.runeFormKey, 'runeFormVisible=', this.runeFormVisible)
+      window.__MEMOCAST_OPENED_DIALOGS = (window.__MEMOCAST_OPENED_DIALOGS || 0) + 1
+      console.log('[SettingsDialog] __MEMOCAST_OPENED_DIALOGS=', window.__MEMOCAST_OPENED_DIALOGS)
     },
     onRuneFormVisibleChange: function (visible) {
       this.runeFormVisible = visible
@@ -1630,8 +1648,12 @@ export default {
       this.openEchoFormDialog()
     },
     openEchoFormDialog: function () {
+      console.log('[SettingsDialog] openEchoFormDialog: BEFORE', 'echoFormKey=', this.echoFormKey, 'echoFormVisible=', this.echoFormVisible)
       this.echoFormKey += 1
       this.echoFormVisible = true
+      console.log('[SettingsDialog] openEchoFormDialog: AFTER', 'echoFormKey=', this.echoFormKey, 'echoFormVisible=', this.echoFormVisible)
+      window.__MEMOCAST_OPENED_DIALOGS = (window.__MEMOCAST_OPENED_DIALOGS || 0) + 1
+      console.log('[SettingsDialog] __MEMOCAST_OPENED_DIALOGS=', window.__MEMOCAST_OPENED_DIALOGS)
     },
     onEchoFormVisibleChange: function (visible) {
       this.echoFormVisible = visible

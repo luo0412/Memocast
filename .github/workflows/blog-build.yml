@@ -1,0 +1,238 @@
+# Memocast 博客自动部署
+#
+# 由 `yarn blog:init-ci` 自动生成，请勿手工修改 ——
+# 修改方式：编辑 scripts/blog/templates/workflows/blog-build.yml.template
+# 再重跑 `yarn blog:init-ci`。
+#
+# 必需配置（仓库 Settings → Secrets and variables → Actions）：
+#   1. (推荐) MEMOCAST_DB_ARTIFACT_NAME
+#      上游某个 workflow 把 memocast.db 作为 artifact 上传。
+#   2. (兜底) MEMOCAST_DB_BASE64
+#      sqlite db 的 base64 编码（小文件可，>20MB 不建议）。
+#   3. (可选) MEMOCAST_BLOG_BASE
+#      默认 "/"；子路径部署时填 "/memocast-blog/"。
+
+name: blog-build
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+    tags: ['v*']
+  pull_request:
+    branches:
+      - master
+      - main
+
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: '发布到 gh-pages？'
+        required: true
+        type: boolean
+        default: true
+      base:
+        description: 'BLOG_BASE（部署路径前缀）'
+        required: false
+        type: string
+        default: /
+
+concurrency:
+  group: blog-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ${{ github.workspace }}
+
+jobs:
+  build:
+    name: build & deploy blog
+    runs-on: ubuntu-latest
+
+    env:
+      BLOG_BASE: ${{ github.event.inputs.base || secrets.MEMOCAST_BLOG_BASE || '/' }}
+      BLOG_DEPLOY: ${{ github.event_name == 'pull_request' && 'false' || (github.event.inputs.deploy || 'true') }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Yarn config (offline mirror compatible)
+        run: |
+          yarn config set ignore-engines true
+          yarn config set ignore-platform true
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile --network-timeout 600000
+        env:
+          YARN_ENABLE_TELEMETRY: '0'
+
+      - name: Generate GitHub workflow files (idempotent)
+        run: |
+          # 重新生成本目录下的 yml，确保用户改了 template 后 CI 拿到的就是最新版本
+          # 即使仓库根的 .github/workflows/ 在 CI 里被覆盖掉，模板始终是权威
+          node scripts/blog/init-ci.js --target ci --quiet
+          echo "workflow files refreshed at .github/workflows/"
+
+      - name: Restore memocast.db from upstream artifact
+        id: restore-artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ secrets.MEMOCAST_DB_ARTIFACT_NAME || 'memocast-db' }}
+          path: ${{ github.workspace }}/.cache/db
+          run-id: ${{ github.event.pull_request.head.repo.fork && '' || github.run_id }}
+
+      - name: Decode memocast.db from base64 secret
+        id: decode-secret
+        continue-on-error: true
+        if: ${{ steps.restore-artifact.outcome == 'skipped' || steps.restore-artifact.outcome == 'failure' }}
+        run: |
+          if [ -n "${{ secrets.MEMOCAST_DB_BASE64 }}" ]; then
+            echo "::notice::解码 memocast.db from base64 secret"
+            mkdir -p .cache/db
+            echo "${{ secrets.MEMOCAST_DB_BASE64 }}" | base64 -d > .cache/db/memocast.db
+            ls -la .cache/db
+          else
+            echo "::warning::未配置 MEMOCAST_DB_BASE64，将以空博客占位运行"
+            exit 1
+          fi
+
+      - name: Generate fixture SQLite for build verification
+        id: fixture
+        if: ${{ steps.decode-secret.outcome == 'skipped' || steps.decode-secret.outcome == 'failure' }}
+        run: |
+          mkdir -p .cache/db
+          node -e '
+            const path = require("path");
+            const fs = require("fs");
+            const initSqlJs = require("sql.js");
+            (async () => {
+              const SQL = await initSqlJs({
+                locateFile: f => path.join(process.cwd(), "node_modules/sql.js/dist", f)
+              });
+              const db = new SQL.Database();
+              db.run(`CREATE TABLE notes (
+                id TEXT PRIMARY KEY, doc_guid TEXT, kb_guid TEXT, title TEXT,
+                content TEXT, category TEXT, tags TEXT,
+                data_created INTEGER, data_modified INTEGER, local_modified INTEGER
+              )`);
+              db.run(`CREATE TABLE tags (name TEXT)`);
+              db.run(`CREATE TABLE local_categories (category TEXT)`);
+              db.run(`INSERT INTO notes VALUES
+                ("n1", "g1", "kb-main", "Hello",
+                 "---\ntitle: Hello\npublished: true\norder: 1\n---\n# Hello\n\nCI fixture.", "/My Notes/技术/", "published",
+                 1700000000, 1700000000, 1700000000)
+              `);
+              db.run(`INSERT INTO tags VALUES ("published")`);
+              db.run(`INSERT INTO local_categories VALUES ("/My Notes/技术/")`);
+              fs.writeFileSync(".cache/db/memocast.db", Buffer.from(db.export()));
+              db.close();
+              console.log("[fixture] 已生成最小 memocast.db");
+            })();
+          '
+
+      - name: Verify memocast.db is readable
+        run: |
+          DB_PATH=$(find .cache/db -name 'memocast.db' | head -n1)
+          if [ -z "$DB_PATH" ]; then
+            echo "::error::未找到 memocast.db"; exit 1
+          fi
+          echo "DB_PATH=$DB_PATH" >> $GITHUB_ENV
+          echo "::notice::使用数据库: $DB_PATH ($(stat -c%s "$DB_PATH") bytes)"
+
+      - name: Build sidebar & config (fast path)
+        env:
+          MEMOCAST_DB: ${{ env.DB_PATH }}
+        run: yarn blog:sidebar && yarn blog:config
+
+      - name: Export markdown from SQLite (slow path)
+        if: ${{ always() && (steps.restore-artifact.outcome == 'success' || steps.decode-secret.outcome == 'success') }}
+        env:
+          MEMOCAST_DB: ${{ env.DB_PATH }}
+        run: yarn blog:build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: blog-build-${{ github.sha }}
+          path: |
+            _docs
+            _docs-export
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Install vuepress ^1.9.10 for static site generation
+        run: |
+          yarn add -D vuepress@^1.9.10 --network-timeout 600000
+          echo "::notice::vuepress 已装在: $(node -p \"require.resolve('vuepress/package.json')\")"
+
+      - name: VuePress build
+        run: |
+          cd _docs
+          yarn vuepress build .
+          echo "::notice::静态站已构建到 $(pwd)/.vuepress/dist"
+          du -sh .vuepress/dist
+
+      - name: Add SPA fallback (404.html = index.html)
+        if: ${{ env.BLOG_DEPLOY == 'true' }}
+        run: |
+          if [ -f _docs/.vuepress/dist/index.html ]; then
+            cp _docs/.vuepress/dist/index.html _docs/.vuepress/dist/404.html
+          fi
+
+      - name: Upload static site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blog-dist-${{ github.sha }}
+          path: _docs/.vuepress/dist
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Deploy to gh-pages
+        if: ${{ env.BLOG_DEPLOY == 'true' && github.event_name != 'pull_request' }}
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: _docs/.vuepress/dist
+          publish_branch: gh-pages
+          force_orphan: false
+          keep_files: false
+          cname:
+          commit_message: "docs: blog build ${{ github.sha }}"
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          full_commit_message: |
+            docs: blog build ${{ github.sha }}
+
+            Trigger: ${{ github.event_name }} ${{ github.ref }}
+            BLOG_BASE: ${{ env.BLOG_BASE }}
+
+      - name: Dump pipeline state on failure
+        if: ${{ failure() }}
+        run: |
+          echo "==== _docs tree ===="
+          find _docs -maxdepth 3 -type f | head -n 80 || true
+          echo "==== sidebar.json ===="
+          cat _docs/.vuepress/sidebar.json | head -n 60 || true
+          echo "==== config.js head ===="
+          head -n 40 _docs/.vuepress/config.js || true

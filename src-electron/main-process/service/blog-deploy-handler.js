@@ -12,6 +12,7 @@ const fs = require('fs-extra')
 const { BrowserWindow, app } = require('electron')
 const { dispatchWorkflow } = require('./github-api')
 const { uploadDirectory: sftpUpload, backupRemoteDir, testConnection: sftpTestConnection } = require('./sftp-service')
+const blogConfigWriter = require('./blog-config-writer')
 
 let currentProcess = null
 let cancelled = false
@@ -394,25 +395,31 @@ if (typeof global !== 'undefined') {
   });
 }
 
+// —— v2: relative base + sidebar/nav 从 utils 加载 ——
+//  使用相对路径,github-pages 不需 repo 子路径
+//  即时执行 buildSidebar()/buildNav() 而非 require,确保第一次构建也能拿到值
 const path = require('path')
 const fs = require('fs')
 
 module.exports = {
   title: 'My Blog',
   description: 'Blog powered by Memocast',
-  base: '/',
+  base: './',
   dest: '.vuepress/dist',
   head: [
-    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['link', { rel: 'icon', href: './favicon.ico' }],
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
-  themeConfig: {
-    nav: [
-      { text: '首页', link: '/' },
-      { text: '文章', link: '/_posts/' }
-    ],
-    sidebar: []
-  },
+  themeConfig: (function () {
+    const sidebarObj = require(path.join(__dirname, 'utils', 'sidebar-builder.js')).buildSidebar()
+    const navObj     = require(path.join(__dirname, 'utils', 'nav-builder.js')).buildNav()
+    return {
+      nav: navObj,
+      sidebar: sidebarObj,
+      sidebarDepth: 2,
+      lastUpdated: true
+    }
+  })(),
   markdown: { lineNumbers: true }
 }
 `
@@ -522,6 +529,20 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     sendProgress(webContents, 'config', 'Setting up blog config...', 4)
     await ensureBlogConfig(blogDir, theme)
     console.log('[BlogDeploy] Blog config ensured')
+
+    // 0.7 防 404: 写 .vuepress/utils/*.js (sidebar/nav/verify builders) 并跑一次 verify-paths
+    //         - 若 id-mappings.json 或 _posts/<id>.md 不全,verify 会抛错,这里仅 warning 不阻断构建
+    //         - 与 TODO-vuepress部署优化.md §9 行为一致
+    sendProgress(webContents, 'config', 'Verifying permalinks...', 5)
+    try {
+      await blogConfigWriter.writeBlogUtilities(blogDir)
+      const verifyResult = await blogConfigWriter.runVerifyPaths(blogDir)
+      console.log('[BlogDeploy] verify-paths OK:', verifyResult)
+    } catch (verifyErr) {
+      const msg = (verifyErr && verifyErr.message) ? verifyErr.message : String(verifyErr)
+      console.warn('[BlogDeploy] verify-paths warning (non-blocking):', msg)
+      event.sender.send('blog-deploy-warn', `[verify-paths] ${msg}`)
+    }
 
     // 1. 确保博客目录有 node_modules（软链接策略）
     sendProgress(webContents, 'config', 'Setting up node_modules...', 5)

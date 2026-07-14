@@ -1,11 +1,18 @@
-// Rune 模板函数 - 这些模板字符串必须放在 .js 文件中
-// 如果放在 .vue 文件的 <script> 块里，Vue 模板编译器会错误解析其中的 </ 序列
+/**
+ * 内置 rune 预设模板 seed（自包含：不依赖任何外部目录的 require）。
+ *
+ * ⚠️ 本文件必须放在 src-electron/main-process/service/ 内（而不是 src/），
+ *    否则 electron-builder 打包后 asar 跨目录相对路径会失效。
+ *    同时严禁跨目录 require — 模板字符串全部 inline 在本文件内。
+ *
+ * 13 个 seed 元素与 src/components/ui/dialog/rune-templates.js 中导出的函数
+ * 一一对应；以后如果改了 rune-templates.js 内的某个模板字符串，本文件也要同步
+ * 更新（首启动时会覆盖式 seed；若 DB 已有数据，可手动清空 rune_templates 表
+ * 触发 reseed）。否则模板不会被"双写"——这是 TODO §0 的妥协方案。
+ */
 
-const ESCAPED_TEMPLATE_CLOSE = '<\/'
-
-// ===== 空白模板：标准 Vue SFC 格式 =====
-export const createBlankTemplate = () => {
-  return `<template>
+// ===== 1. 空白模板：标准 Vue SFC 格式 =====
+const blank = `<template>
   <div class="blank-page">
     <!-- HTML 结构区域 -->
     <p>Vue2 空白组件</p>
@@ -42,11 +49,9 @@ export default {
 <style lang="less" scoped>
 
 </style>`
-}
 
-// ===== 输入框模板：blur 时触发 $emit('input') =====
-export const createInputTemplate = () => {
-  return `<template>
+// ===== 2. 输入框模板：blur 时触发 $emit('input') =====
+const input = `<template>
   <div class="rune-echo-demo">
     <input
       class="rune-echo-demo__input"
@@ -105,11 +110,9 @@ export default {
   box-shadow: 0 0 0 2px rgba(126, 87, 194, 0.2);
 }
 </style>`
-}
 
-// ===== hel-micro：演示 this.$hel.preFetchLib 远程加载 =====
-export const createHolyShieldTemplate = () => {
-  return `<template>
+// ===== 3. hel-micro：演示 this.$hel.preFetchLib 远程加载 =====
+const holyShield = `<template>
   <div class="hel-micro">
     <input
       class="hel-micro__input"
@@ -217,11 +220,9 @@ export default {
   font-weight: 600;
 }
 </style>`
-}
 
-// ===== 萤火虫：基于 CSS3 多只随机飞行 + 发光脉冲（参考博客园《使用 CSS3 实现萤火虫发光动画效果》） =====
-export const createFireflyTemplate = () => {
-  return `<template>
+// ===== 4. 萤火虫：基于 CSS3 多只随机飞行 + 发光脉冲 =====
+const firefly = `<template>
   <div class="rune-firefly-demo">
     <div class="rune-firefly-demo__sky">
       <div
@@ -251,7 +252,6 @@ export const createFireflyTemplate = () => {
 
 <script>
 // 萤火虫符文：多只萤火虫在夜空随机飞行 + 脉冲发光
-// 思路来自 https://www.cnblogs.com/ai888/p/18622910
 export default {
   props: {
     value: { type: String, default: '' },
@@ -429,11 +429,9 @@ export default {
   color: #ffe066;
 }
 </style>`
-}
 
-// ===== JsxGraph：演示 this.$jxg 绑定 JSXGraph 初始化与点击坐标上报 =====
-export const createJsxGraphTemplate = () => {
-  return `<template>
+// ===== 5. JsxGraph：演示 this.$jxg 绑定 JSXGraph =====
+const jsxGraph = `<template>
   <div>
     <div ref="jxgBox" class="rune-jsxgraph-demo"/>
   </div>
@@ -441,7 +439,6 @@ export const createJsxGraphTemplate = () => {
 
 <script>
 // JsxGraph 符文：通过 this.$jxg 调用 JSXGraph 初始化坐标系，鼠标点击上报坐标
-// this.$jxg 在 src/boot/jxgraph.js 中挂载。
 export default {
   props: {
     value: { type: [String, Number], default: null }
@@ -496,11 +493,9 @@ export default {
   background: #2a2a2a;
 }
 </style>`
-}
 
-// ===== el-input 模板：基于 Element-UI <el-input>，blur 时触发 $emit('input') =====
-export const createElInputTemplate = () => {
-  return `<template>
+// ===== 6. el-input 模板 =====
+const elInput = `<template>
   <div class="rune-el-input-demo">
     <el-input
       class="rune-el-input-demo__field"
@@ -577,11 +572,9 @@ export default {
   color: #6A1B9A;
 }
 </style>`
-}
 
-// ===== el-select 模板：基于 Element-UI <el-select>，change 时触发 $emit('input') =====
-export const createElSelectTemplate = () => {
-  return `<template>
+// ===== 7. el-select 模板 =====
+const elSelect = `<template>
   <div class="rune-el-select-demo">
     <el-select
       class="rune-el-select-demo__field"
@@ -672,14 +665,9 @@ export default {
   color: #6A1B9A;
 }
 </style>`
-}
 
-// ===== el-date-picker 模板：基于 Element-UI <el-date-picker type="date">，
-// 默认 date 模式（年/月/日），change 时触发 $emit('input')。
-// 入参与 emit 都走 toPickedFormat() 归一化，保证传给 picker 的永远是合法日期，
-// 任何非法值都会回退到 null（不传 ''，避免 Element-UI 报 Invalid Date）。 =====
-export const createElDatePickerTemplate = () => {
-  return `<template>
+// ===== 8. el-date-picker 模板 =====
+const elDatePicker = `<template>
   <div class="rune-el-date-demo">
     <el-date-picker
       class="rune-el-date-demo__field"
@@ -736,9 +724,6 @@ export default {
     }
   },
   methods: {
-    // 统一入口：把任意入参（字符串 / 数字时间戳 / Date 对象 / null）归一化为
-    // picker 能接受的形态。返回 null 而不是 '' —— el-date-picker 内部对
-    // 空字符串解析时会打印 "Invalid Date" 警告，使用 null 才是清空态。
     toPickedFormat(raw) {
       if (raw == null || raw === '') return null
       let d
@@ -749,8 +734,6 @@ export default {
       } else {
         const s = String(raw).trim()
         if (!s) return null
-        // yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss 等常见形态直接按本地时区解析，
-        // 避免 new Date('2026-07-04') 被当 UTC 解析而少一天
         const m = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})(.*)$/)
         if (m) {
           d = new Date(
@@ -763,8 +746,6 @@ export default {
         }
       }
       if (!(d instanceof Date) || isNaN(d.getTime())) return null
-      // 用 valueFormat 把日期格式化回字符串，picker 真正能识别的形态。
-      // 简易支持 yyyy-MM-dd / yyyy-MM-dd HH:mm:ss 两种最常见的格式。
       const pad = (n) => (n < 10 ? '0' + n : '' + n)
       const yyyy = d.getFullYear()
       const MM = pad(d.getMonth() + 1)
@@ -778,11 +759,8 @@ export default {
       return yyyy + '-' + MM + '-' + dd
     },
     handleChange(val) {
-      // picker 清空按钮触发时 val 为 null —— 与 data.picked 初始化逻辑保持一致
       const next = val == null ? null : this.toPickedFormat(val)
       this.picked = next
-      // emit 时把 null 还原为空字符串，与上层 el-input/el-select 模板的
-      // "value 为空时给 ''" 的对外约定保持一致；非空时给 yyyy-MM-dd 字符串
       this.$emit('input', next == null ? '' : next)
     }
   }
@@ -816,21 +794,9 @@ export default {
   color: #6A1B9A;
 }
 </style>`
-}
 
-// =====================================================================
-// 简历系列组件：每个组件都是独立的 Vue SFC 字符串模板，可单独作为一张
-// rune 卡片被 muya quickInsert 插入到笔记中，用户可自行按任意顺序组合。
-// 数据形态：value 为业务字段对象，部分字段约定 JSON 字符串；失焦/输入时
-// 通过 $emit('input', newValue) 同步给父组件持久化。
-//
-// 历史上曾有一个"简历画布"容器模板（vuedraggable + 内嵌 5 个组件 + A4 引导线 +
-// 内嵌编辑弹窗），现已下线。本文件不再导出 createResumeCanvasTemplate。
-// =====================================================================
-
-// ----- 1. 基本信息（BasicInfo） -----
-export const createResumeBasicInfoTemplate = () => {
-  return `<template>
+// ===== 9. 简历-基本信息 =====
+const resumeBasic = `<template>
   <div class="rune-rb">
     <div class="rune-rb__avatar">
       <img v-if="value && value.avatar" :src="value.avatar" alt="avatar" />
@@ -874,11 +840,9 @@ export default {
 .rune-rb__title { font-size: 13px; color: #6A1B9A; margin-top: 2px; font-weight: 500; }
 .rune-rb__meta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; font-size: 12px; color: rgba(0, 0, 0, 0.65); }
 </style>`
-}
 
-// ----- 2. 标题段落（TitleSection） -----
-export const createResumeTitleTemplate = () => {
-  return `<template>
+// ===== 10. 简历-标题段落 =====
+const resumeTitle = `<template>
   <div :class="['rune-rt', 'rune-rt--' + level]">
     <span class="rune-rt__bar" />
     <span class="rune-rt__text">{{ (value && value.text) || '标题' }}</span>
@@ -912,11 +876,9 @@ export default {
 .rune-rt--h3 .rune-rt__text { font-size: 13px; color: #555; }
 .rune-rt--h3 .rune-rt__bar { height: 12px; background: #B39DDB; }
 </style>`
-}
 
-// ----- 3. 时间段经历（ExperienceTime） -----
-export const createResumeExperienceTemplate = () => {
-  return `<template>
+// ===== 11. 简历-时间段经历 =====
+const resumeExperience = `<template>
   <div class="rune-re">
     <div class="rune-re__head">
       <div class="rune-re__title">{{ (value && value.title) || '职位' }}</div>
@@ -950,11 +912,9 @@ export default {
 .rune-re__org { font-size: 12px; color: rgba(0, 0, 0, 0.65); }
 .rune-re__desc { font-size: 12px; color: rgba(0, 0, 0, 0.75); line-height: 1.6; white-space: pre-wrap; }
 </style>`
-}
 
-// ----- 4. 自由文本（TextContent） -----
-export const createResumeTextTemplate = () => {
-  return `<template>
+// ===== 12. 简历-自由文本 =====
+const resumeText = `<template>
   <div class="rune-rtx">
     <div class="rune-rtx__text" v-if="value && value.text">{{ value.text }}</div>
     <div class="rune-rtx__placeholder" v-else>自由文本组件，点击编辑...</div>
@@ -975,11 +935,9 @@ export default {
 .rune-rtx__text { font-size: 13px; color: rgba(0, 0, 0, 0.8); line-height: 1.7; white-space: pre-wrap; }
 .rune-rtx__placeholder { font-size: 12px; color: rgba(0, 0, 0, 0.35); font-style: italic; }
 </style>`
-}
 
-// ----- 5. 技能标签（SkillBar） -----
-export const createResumeSkillTemplate = () => {
-  return `<template>
+// ===== 13. 简历-技能标签 =====
+const resumeSkill = `<template>
   <div class="rune-rs">
     <div v-for="(s, i) in items" :key="i" class="rune-rs__row">
       <div class="rune-rs__name">{{ s.name }}</div>
@@ -1026,5 +984,125 @@ export default {
 .rune-rs__val { flex: 0 0 40px; text-align: right; font-size: 11px; color: #6A1B9A; font-family: Consolas, Monaco, monospace; }
 .rune-rs__empty { font-size: 12px; color: rgba(0, 0, 0, 0.35); font-style: italic; }
 </style>`
-}
 
+const BUILTIN_RUNE_TEMPLATES = [
+  {
+    id: 'builtin-tpl-createBlankTemplate',
+    category_key: 'general',
+    name: '空白模板',
+    desc: '标准 Vue SFC 格式（template + script + style + data + methods）',
+    color: '#7E57C2',
+    icon: 'description',
+    template: blank
+  },
+  {
+    id: 'builtin-tpl-createInputTemplate',
+    category_key: 'general',
+    name: '输入框',
+    desc: '@blur 时触发 $emit("input")，适合表单场景',
+    color: '#66BB6A',
+    icon: 'edit',
+    template: input
+  },
+  {
+    id: 'builtin-tpl-createHolyShieldTemplate',
+    category_key: 'general',
+    name: 'hel-micro',
+    desc: '远程组件，演示 $hel.preFetchLib',
+    color: '#FFB300',
+    icon: 'cloud_download',
+    template: holyShield
+  },
+  {
+    id: 'builtin-tpl-createJsxGraphTemplate',
+    category_key: 'general',
+    name: 'JsxGraph',
+    desc: '通过 this.$jxg 初始化坐标系，点击上报坐标（JSXGraph）',
+    color: '#4FC3F7',
+    icon: 'show_chart',
+    template: jsxGraph
+  },
+  {
+    id: 'builtin-tpl-createFireflyTemplate',
+    category_key: 'general',
+    name: '萤火虫',
+    desc: 'CSS3 多点发光动画，点击萤火虫上报坐标（参考博客园）',
+    color: '#FFD54F',
+    icon: 'auto_awesome',
+    template: firefly
+  },
+  {
+    id: 'builtin-tpl-createElInputTemplate',
+    category_key: 'general',
+    name: 'el-input',
+    desc: 'Element-UI 输入框，@blur 时触发 $emit("input")',
+    color: '#26A69A',
+    icon: 'input',
+    template: elInput
+  },
+  {
+    id: 'builtin-tpl-createElSelectTemplate',
+    category_key: 'general',
+    name: 'el-select',
+    desc: 'Element-UI 下拉选择，@change 时触发 $emit("input")',
+    color: '#5C6BC0',
+    icon: 'arrow_drop_down_circle',
+    template: elSelect
+  },
+  {
+    id: 'builtin-tpl-createElDatePickerTemplate',
+    category_key: 'general',
+    name: 'el-date-picker',
+    desc: 'Element-UI 日期选择（默认 date），@change 时触发 $emit("input")',
+    color: '#7E57C2',
+    icon: 'event',
+    template: elDatePicker
+  },
+  {
+    id: 'builtin-tpl-createResumeBasicInfoTemplate',
+    category_key: 'resume',
+    name: '简历-基本信息',
+    desc: '头像 + 姓名 + 职位 + 联系方式，独立 rune 卡片，可自由组合',
+    color: '#7E57C2',
+    icon: 'person',
+    template: resumeBasic
+  },
+  {
+    id: 'builtin-tpl-createResumeTitleTemplate',
+    category_key: 'resume',
+    name: '简历-标题段落',
+    desc: '段落标题（H1/H2/H3），独立 rune 卡片',
+    color: '#5C6BC0',
+    icon: 'title',
+    template: resumeTitle
+  },
+  {
+    id: 'builtin-tpl-createResumeExperienceTemplate',
+    category_key: 'resume',
+    name: '简历-时间段经历',
+    desc: '工作 / 项目经历（职位 / 机构 / 起止 / 描述），独立 rune 卡片',
+    color: '#26A69A',
+    icon: 'schedule',
+    template: resumeExperience
+  },
+  {
+    id: 'builtin-tpl-createResumeTextTemplate',
+    category_key: 'resume',
+    name: '简历-自由文本',
+    desc: '自我介绍 / 备注，多行文本，独立 rune 卡片',
+    color: '#4FC3F7',
+    icon: 'subject',
+    template: resumeText
+  },
+  {
+    id: 'builtin-tpl-createResumeSkillTemplate',
+    category_key: 'resume',
+    name: '简历-技能标签',
+    desc: '技能名 + 熟练度进度条，独立 rune 卡片',
+    color: '#FFB300',
+    icon: 'insights',
+    template: resumeSkill
+  }
+]
+
+module.exports = { BUILTIN_RUNE_TEMPLATES }

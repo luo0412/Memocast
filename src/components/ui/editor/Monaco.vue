@@ -85,6 +85,8 @@ export default {
         theme: this.darkMode ? 'Memocast-Dark' : 'Memocast-Light',
         fontSize: 17,
         scrollBeyondLastLine: false,
+        // ✅ 软换行：与 Muya 习惯一致，长行自动换行而非出现横向滚动条
+        wordWrap: 'on',
         fontLigatures: true,
         fontFamily: 'JetBrains Mono, Fira Code, Monaco, PingFang SC, Hiragino Sans GB, 微软雅黑, Arial, sans-serif, Microsoft YaHei',
         accessibilitySupport: 'on',
@@ -174,6 +176,77 @@ export default {
         keybindings: [],
         run: () => bus.$emit(events.EDIT_SHORTCUT_CALL.pasteAsPlainText, 'pasteAsPlainText')
       })
+
+      // ✅ 右键菜单 / 命令面板的 复制 / 剪切 / 粘贴 显式动作
+      // 走 Electron 剪贴板桥接（与 Ctrl/Cmd+C/X/V 共用 setupMonacoClipboard 的实现），
+      // 保证在沙箱环境、光标未聚焦、右键菜单触发等场景下也能正常工作。
+      this.contentEditor.addAction({
+        id: 'memocast.copySelection',
+        label: '复制',
+        contextMenuGroupId: 'clipboard',
+        contextMenuOrder: 1,
+        run: () => this._runClipboardFromMenu('copy')
+      })
+      this.contentEditor.addAction({
+        id: 'memocast.cutSelection',
+        label: '剪切',
+        contextMenuGroupId: 'clipboard',
+        contextMenuOrder: 2,
+        run: () => this._runClipboardFromMenu('cut')
+      })
+      this.contentEditor.addAction({
+        id: 'memocast.pasteFromClipboard',
+        label: '粘贴',
+        contextMenuGroupId: 'clipboard',
+        contextMenuOrder: 3,
+        run: () => this._runClipboardFromMenu('paste')
+      })
+    },
+    /**
+     * 通过右键菜单触发的复制 / 剪切 / 粘贴
+     * 调用同一套 Electron clipboard 桥接逻辑，避免沙箱环境下原生 clipboard 不可用。
+     */
+    _runClipboardFromMenu: function (type) {
+      if (!this.contentEditor) return
+      if (type === 'copy') {
+        const selection = this.contentEditor.getSelection()
+        const model = this.contentEditor.getModel()
+        const text = model && selection ? model.getValueInRange(selection) : ''
+        if (text) {
+          if (window.__electronClipboard && window.__electronClipboard.writeText) {
+            window.__electronClipboard.writeText(text)
+          } else if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text)
+          }
+        }
+        this.contentEditor.trigger('keyboard', 'editor.action.clipboardCopyAction', null)
+      } else if (type === 'cut') {
+        const selection = this.contentEditor.getSelection()
+        const model = this.contentEditor.getModel()
+        const text = model && selection ? model.getValueInRange(selection) : ''
+        if (text) {
+          if (window.__electronClipboard && window.__electronClipboard.writeText) {
+            window.__electronClipboard.writeText(text)
+          } else if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text)
+          }
+        }
+        this.contentEditor.trigger('keyboard', 'editor.action.clipboardCutAction', null)
+      } else if (type === 'paste') {
+        const text = window.__electronClipboard && typeof window.__electronClipboard.readText === 'function'
+          ? window.__electronClipboard.readText()
+          : ''
+        const selection = this.contentEditor.getSelection()
+        if (text && selection) {
+          this.contentEditor.executeEdits('paste', [{
+            range: selection,
+            text,
+            forceMoveMarkers: true
+          }])
+        } else {
+          this.contentEditor.trigger('keyboard', 'editor.action.clipboardPasteAction', null)
+        }
+      }
     },
     editCopyPasteHandler: function (type) {
       if (!this.active || !this.contentEditor) return
