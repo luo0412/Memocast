@@ -301,9 +301,45 @@ export const backfillEchoAnnotationsInMarkdown = ({ markdown = '', echoCards = [
   })
 }
 
-const safeEvalFactory = (source = '') => {
+// safeEvalFactory(source, prelude?) —— 把 anno_source 编译成一个工厂函数。
+//   - source:  'export default {...}' 形式的 anno_source 字符串
+//   - prelude: 可选顶层声明（如 helper 常量），拼接在 source 前面。
+//     这样 anno_source 的 handlerExample 函数体可直接引用 prelude 中
+//     定义的 __resolveScopeContainer / __safeQueryAll / __withAttrs。
+//
+// HANDLER_PRELUDE_SOURCE：默认注入到 anno_source 编译环境的 helper 常量源码。
+//   所有 builtinEchoes.js 提供的 handlerExample 模板都依赖这三个 helper。
+//   用户自定义 rune 的 handlerExample 函数体也可直接使用。
+const HANDLER_PRELUDE_SOURCE = [
+  "const __resolveScopeContainer = (node, scope) => {",
+  "  if (!node) return null",
+  "  const block = node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol') || node.parentElement",
+  "  const documentRoot = node.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body",
+  "  switch (String(scope || 'siblings').toLowerCase()) {",
+  "    case 'prev-block': {",
+  "      let prev = block && block.previousElementSibling",
+  "      while (prev && !prev.firstElementChild && (prev.textContent || '').trim() === '') {",
+  "        prev = prev.previousElementSibling",
+  "      }",
+  "      return prev || block",
+  "    }",
+  "    case 'block':      return block",
+  "    case 'document':   return documentRoot",
+  "    case 'siblings':",
+  "    default:           return block && block.parentElement ? block.parentElement : documentRoot",
+  "  }",
+  "}",
+  "const __safeQueryAll = (root, sel) => {",
+  "  if (!root || typeof root.querySelectorAll !== 'function') return []",
+  "  try { return Array.from(root.querySelectorAll(sel)) } catch (error) { return [] }",
+  "}",
+  "const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})",
+  ""
+].join('\n')
+
+const safeEvalFactory = (source = '', prelude = '') => {
   const normalized = String(source || '').replace(/export\s+default/, 'return ')
-  return new Function(normalized)
+  return new Function(String(prelude || '') + normalized)
 }
 
 // ============================================================================
@@ -714,7 +750,9 @@ export default class EchoRuntime {
     let definition = null
     try {
       if (source) {
-        const factory = safeEvalFactory(source)
+        // 为 anno_source 注入共享 helper 常量，让 handlerExample 函数体
+        // 能直接调用 __resolveScopeContainer / __safeQueryAll / __withAttrs。
+        const factory = safeEvalFactory(source, HANDLER_PRELUDE_SOURCE)
         definition = factory()
       }
     } catch (error) {
@@ -726,6 +764,14 @@ export default class EchoRuntime {
         name: echo.name || '',
         render: context => createFallbackRenderResult(context)
       }
+    }
+
+    // === 自动从 handlerExample 提升为 handler ===
+    // 约定：内置 rune 的 anno_source 只写 handlerExample（演示槽），
+    // 运行时 compileDefinition 在缺省 handler 时**自动复制**一份给 handler。
+    // 模仿者如果想禁用此行为，显式声明 `handler: null` 即可。
+    if (!definition.handler && definition.handlerExample) {
+      definition.handler = definition.handlerExample
     }
 
     // === 自动注册 anno_source 内置的 rune handler ===

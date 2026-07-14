@@ -573,7 +573,8 @@ export default {
       return {
         datas: tree,
         fieldNames: { key: 'key', title: 'title', children: 'children' },
-        selectable: (node) => !!(node && node._isCategory === false)
+        // heyui 风格：selectable 回调收到的 node 是规范化节点（含 .value 指向原数据）
+        selectable: (node) => !!(node && node.value && node.value._isCategory === false)
       }
     }
   },
@@ -888,7 +889,11 @@ export default {
         return
       }
       this.selectedPresetKey = picked
-      const row = picked._templateRow
+      // 兼容新旧形态：
+      //  - 旧 CategoryPicker：picked 本身就是叶子数据对象（带 _templateRow / _isCategory）
+      //  - 新 CategoryPicker（heyui 复刻）：picked 是规范化节点，原始数据挂在 picked.value
+      const raw = (picked && picked.value) || picked
+      const row = raw && raw._templateRow
       if (!row) {
         // 点中分类节点本身，只下钻，不替换编辑器内容
         return

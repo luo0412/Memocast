@@ -122,18 +122,36 @@ export default {
       const storedFromDb = await DatabaseClient.echoes.getAll()
       const dbCards = Array.isArray(storedFromDb) ? storedFromDb : []
 
-      // ✅ 内置回响始终在场：从 store 当前 echoCards（可能包含用户编辑过的内置拷贝）
-      // 中按 id 合并，避免被 DB 数据覆盖丢失
+      // === 内置回响以代码版 BUILTIN_ECHO_CARDS 为权威 ===
+      // 1) 先用 DB 中已存在的 builtin 行（可能是 sync seed 写入的）作为基准
+      // 2) 用代码版 BUILTIN_ECHO_CARDS 补全缺失项（保证 11 个总在场）
+      // 3) 附加非 builtin 的 dbCards
+      // 这样既能看到"DB 工具里查到的内置回响"也能在代码升级时自动补全新内置
+      // DB schema 没有 isBuiltin 列；按 id 前缀约定补标记，供 UI 区分显示
       const builtinIds = new Set(BUILTIN_ECHO_CARDS.map(echo => echo.id))
-      const existingBuiltins = (state.echoCards || []).filter(echo => isBuiltinEcho(echo))
-      const missingBuiltins = BUILTIN_ECHO_CARDS.filter(template => {
-        return !existingBuiltins.some(echo => echo.id === template.id)
+      const dbBuiltins = dbCards
+        .filter(echo => builtinIds.has(echo.id))
+        .map(echo => ({ ...echo, isBuiltin: true }))
+      const missingBuiltins = BUILTIN_ECHO_CARDS
+        .filter(template => !dbBuiltins.some(echo => echo.id === template.id))
+        .map(template => ({ ...template, isBuiltin: true }))
+      const builtinEchoes = [
+        ...dbBuiltins,
+        ...missingBuiltins
+      ]
+      const nonBuiltinDbCards = dbCards.filter(echo => !builtinIds.has(echo.id))
+
+      // 保留 store 中已有 builtin 的覆盖（向后兼容旧逻辑中可能存在的"用户编辑过的内置拷贝"）。
+      // 关键：isBuiltin 永远是 true，store override 不能把它覆盖成 false（安全护栏）。
+      const stateBuiltins = (state.echoCards || []).filter(echo => isBuiltinEcho(echo))
+      const mergedBuiltins = builtinEchoes.map(builtinEcho => {
+        const override = stateBuiltins.find(s => s && s.id === builtinEcho.id)
+        return override ? { ...builtinEcho, ...override, isBuiltin: true } : builtinEcho
       })
 
       const mergedEchoes = [
-        ...existingBuiltins,
-        ...missingBuiltins,
-        ...dbCards.filter(echo => !builtinIds.has(echo.id))
+        ...mergedBuiltins,
+        ...nonBuiltinDbCards
       ]
 
       commit(types.TOGGLE_CHANGED, { key: 'echoCards', value: mergedEchoes })

@@ -1,5 +1,4 @@
-import { createDefaultEchoAnnoSource as createRuntimeDefaultAnnoSource } from './EchoRuntime'
-import { banner, handlerExampleDoc } from './builtin-echo-shared'
+const { banner, handlerExampleDoc } = require('./builtin-echo-shared')
 
 // ============================================================================
 // 内置回响（系统提供，固定不可删改）
@@ -20,7 +19,20 @@ import { banner, handlerExampleDoc } from './builtin-echo-shared'
 // ============================================================================
 
 // 默认 echo 的 anno_source 直接复用 EchoRuntime 内置版本（避免双源漂移）
-const createDefaultEchoAnnoSource = (echoName = '回响') => createRuntimeDefaultAnnoSource(echoName)
+const createDefaultEchoAnnoSource = (echoName = '回响') => `export default {
+  kind: 'echo',
+  version: 1,
+  name: '${String(echoName || '回响').replace(/'/g, "\\'")}',
+  render (context = {}) {
+    const attrs = context.attrs || {}
+    const prompt = context.prompt || ''
+    const icon = attrs.icon || context.echo?.icon || 'graphic_eq'
+    const color = attrs.color || context.echo?.color || '#26A69A'
+    const title = attrs.title || context.echo?.name || '${String(echoName || '回响').replace(/'/g, "\\'")}'
+    const description = attrs.desc || context.echo?.desc || ''
+    return { type: 'card', icon, color, title, description, prompt, attrs, html: attrs.html || '' }
+  }
+}`
 
 // ============================================================================
 // 1. nice：纯标记，无副作用（用 createDefaultEchoAnnoSource 即可）
@@ -656,7 +668,7 @@ const createClockAnnoSource = () => `export default {
 // ============================================================================
 // 对外导出
 // ============================================================================
-export const BUILTIN_ECHO_CARDS = Object.freeze([
+const BUILTIN_ECHO_CARDS = Object.freeze([
   Object.freeze({
     id: '__builtin_nice__',
     name: 'nice',
@@ -758,12 +770,12 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
   })
 ])
 
-export const getDefaultEchoAnnoSource = createDefaultEchoAnnoSource
+const getDefaultEchoAnnoSource = createDefaultEchoAnnoSource
 
-export const isBuiltinEcho = (echo = {}) => Boolean(echo && echo.isBuiltin)
+const isBuiltinEcho = (echo = {}) => Boolean(echo && echo.isBuiltin)
 
 // 11 个符文元信息集中导出，方便外部按 runeId 查找
-export const BUILTIN_RUNE_IDS = Object.freeze([
+const BUILTIN_RUNE_IDS = Object.freeze([
   'growth',
   'shatter',
   'skywalk',
@@ -776,4 +788,13 @@ export const BUILTIN_RUNE_IDS = Object.freeze([
   'clock'
 ])
 
-export const isBuiltinRuneId = (runeId = '') => BUILTIN_RUNE_IDS.includes(String(runeId || '').trim())
+const isBuiltinRuneId = (runeId = '') => BUILTIN_RUNE_IDS.includes(String(runeId || '').trim())
+
+module.exports = {
+  BUILTIN_ECHO_CARDS,
+  getDefaultEchoAnnoSource,
+  isBuiltinEcho,
+  BUILTIN_RUNE_IDS,
+  isBuiltinRuneId,
+  createDefaultEchoAnnoSource
+}

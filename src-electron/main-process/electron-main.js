@@ -18,6 +18,7 @@ import CryptoJS from 'crypto-js'
 import Portkey from 'portkey-ai'
 const { DEFAULT_ROOT_CATEGORY } = require('./constants')
 const createRuneTemplateService = require('./service/rune-template-service')
+const BUILTIN_ECHO_CARDS = require('./service/builtin-echoes')
 
 // rune 预设模板服务（schema + CRUD）。仅在 initSchema 阶段真正调用 createRuneTemplateService，
 // registerDatabaseHandlers 阶段直接复用 module 级 runeTemplateService，避免重复闭包。
@@ -800,6 +801,43 @@ export default {
     }
     saveDatabase()
     log.info(`[DB] Backfilled default anno sources for ${emptyAnnoSourceEchoes.length} echo(es)`)
+  }
+
+  // === Sync 内置回响到 SQLite（idempotent） ===
+  // 11 个 __builtin_* 回响需在 SQLite 中可查（设置面板可查看；UI 不可编辑/删除）。
+  // 对每个 builtin id 做 INSERT OR IGNORE —— 如果 row 已存在则保持当前数据不变。
+  // 当 echoCard 列表与代码版 BUILTIN_ECHO_CARDS 漂移时，可手动清空对应 id 触发 reseed。
+  try {
+    const now = Date.now()
+    let seededCount = 0
+    for (const builtinEcho of BUILTIN_ECHO_CARDS) {
+      if (!builtinEcho || !builtinEcho.id) continue
+      const existing = execOne('SELECT id FROM echoes WHERE id = ?', [builtinEcho.id])
+      if (existing) continue
+      db.run(
+        `INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          builtinEcho.id,
+          builtinEcho.name,
+          builtinEcho.desc || '',
+          builtinEcho.color || '#26A69A',
+          builtinEcho.icon || 'graphic_eq',
+          builtinEcho.anno_source,
+          'anno',
+          'builtin',
+          Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
+          now,
+          now
+        ]
+      )
+      seededCount += 1
+    }
+    if (seededCount > 0) {
+      saveDatabase()
+      log.info(`[DB] Seeded ${seededCount} builtin echo(es) to SQLite`)
+    }
+  } catch (builtinEchoSeedError) {
+    log.error('[DB] Failed to seed builtin echoes:', builtinEchoSeedError)
   }
 
   // === rune 预设模板 (rune_templates) ===
@@ -2353,12 +2391,18 @@ function registerDatabaseHandlers() {
   // 删除回响
   ipcMain.handle('db:deleteEcho', async (event, id) => {
     try {
+      // 内置回响（id 以 __builtin_ 开头）不可删除：它们由 BUILTIN_ECHO_CARDS 权威定义，
+      // 若误删，下次启动 sync seed 会重新插入（保证状态可恢复），但仍拒绝显式删除操作。
+      if (typeof id === 'string' && id.startsWith('__builtin_')) {
+        log.warn(`[DB] deleteEcho blocked: builtin echo ${id} cannot be removed`)
+        return { success: false, code: 'ECHO_BUILTIN_DELETE_FORBIDDEN', message: '内置回响不可删除' }
+      }
       await db.run('DELETE FROM echoes WHERE id = ?', [id])
       saveDatabase()
-      return true
+      return { success: true }
     } catch (error) {
       log.error('[DB] deleteEcho error:', error)
-      return false
+      return { success: false, code: 'ECHO_DELETE_FAILED', message: error && error.message ? error.message : String(error) }
     }
   })
 
