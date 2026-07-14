@@ -10,25 +10,32 @@
 //   handlerAndExampleDoc(lines)  同时输出"handler + handlerExample"两个字段
 //                                （同一段函数体），让运行时直接接管 handler，
 //                                同时保留 handlerExample 作为文档备份
-//   resolveScopeContainerSource  scope 解析工具源码
-//   safeQueryAllSource           防错 querySelectorAll 工具源码
+//   resolveScopeContainerSource  scope 解析工具源码（jQuery 版）
+//   safeQueryAllSource           防错 querySelectorAll 工具源码（jQuery 版）
 //   withAttrsSource              meta.attrs 默认值合并 helper 源码
-//   handlerPrelude               上面三个 helper 源码拼成的 prelude 串
+//   handlerPrelude               上面几个 helper 源码拼成的 prelude 串
 //
 // === anno_source 约定 ===
 //   这些函数**字符串化**后塞进 anno_source 用！所以 "banner()" 之类的
 //   内部调用都用普通 JS 字符串拼接，不能用 ES module 语法。
+//
+// === jQuery 集成 ===
+//   handler 闭包内由 EchoRuntime 的 HANDLER_PRELUDE_SOURCE 先注入
+//   `const $ = window.jQuery` 与 `const __$ = $`，下面 helper 全部以
+//   jQuery 选择器 API 为前提；调用方拿到的是 jQuery 对象实例，可继续用
+//   `.addClass` / `.removeClass` / `.css` / `.attr` / `.on` / `.off` 等。
 // ============================================================================
 
 // ---- 单行注释 banner：避免 /* */ 多行注释后直接接 , 触发 "Unexpected token ','" ----
 export const banner = (lines) => lines.map(line => `//   ${line}`).join('\n  ')
 
-// ---- scope 解析工具源码 ----
+// ---- scope 解析工具源码（jQuery 版） ----
 export const resolveScopeContainerSource = `
 const __resolveScopeContainer = (node, scope) => {
-  if (!node) return null
-  const block = node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol') || node.parentElement
-  const documentRoot = node.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body
+  if (!node || typeof node.closest !== 'function') return null
+  const $node = $(node)
+  const block = $node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol').get(0) || node.parentElement
+  const documentRoot = $node.closest('[data-echo-document], .mu-editor, article, [data-doc-id]').get(0) || document.body
   switch (String(scope || 'siblings').toLowerCase()) {
     case 'prev-block': {
       let prev = block && block.previousElementSibling
@@ -44,18 +51,18 @@ const __resolveScopeContainer = (node, scope) => {
   }
 }`.trim()
 
-// ---- 防错 querySelectorAll ----
+// ---- 防错 querySelectorAll（jQuery 版：直接返回 jQuery 实例） ----
 export const safeQueryAllSource = `
 const __safeQueryAll = (root, sel) => {
-  if (!root || typeof root.querySelectorAll !== 'function') return []
-  try { return Array.from(root.querySelectorAll(sel)) } catch (error) { return [] }
+  if (!root || typeof root.querySelectorAll !== 'function') return $([])
+  try { return $(root).find(sel) } catch (error) { return $([]) }
 }`.trim()
 
-// ---- meta.attrs 合并 helper 源码 ----
+// ---- meta.attrs 合并 helper 源码（仍是纯 JS，不需要 $） ----
 export const withAttrsSource = `
 const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})`.trim()
 
-// ---- 随机抽样 helper 源码 ----
+// ---- 随机抽样 helper 源码（纯 JS） ----
 export const sampleShuffleSource = `
 const __sampleShuffle = (arr, n) => {
   if (!Array.isArray(arr) || arr.length === 0 || n <= 0) return []
@@ -84,14 +91,15 @@ export const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]*)\{([\s\S]*?)\}\(([^)]*
 // ============================================================================
 // handlerFieldSource(fieldName)
 //   返回 `${fieldName}: function (runeNode, scopeContainer, meta) {`
-//   加 3 个 helper 局部 const 声明。
+//   加 4 个 helper 局部 const 声明（jQuery 版 + __safeQueryAll 返回 jQuery）。
 //   闭合由调用方负责（写 `}` + `,`）。
 // ============================================================================
 const handlerFieldSource = (fieldName) => `${fieldName}: function (runeNode, scopeContainer, meta) {
     const __resolveScopeContainer = (node, scope) => {
-      if (!node) return null
-      const block = node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol') || node.parentElement
-      const documentRoot = node.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body
+      if (!node || typeof node.closest !== 'function') return null
+      const $node = $(node)
+      const block = $node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol').get(0) || node.parentElement
+      const documentRoot = $node.closest('[data-echo-document], .mu-editor, article, [data-doc-id]').get(0) || document.body
       switch (String(scope || 'siblings').toLowerCase()) {
         case 'prev-block': {
           let prev = block && block.previousElementSibling
@@ -107,8 +115,8 @@ const handlerFieldSource = (fieldName) => `${fieldName}: function (runeNode, sco
       }
     }
     const __safeQueryAll = (root, sel) => {
-      if (!root || typeof root.querySelectorAll !== 'function') return []
-      try { return Array.from(root.querySelectorAll(sel)) } catch (error) { return [] }
+      if (!root || typeof root.querySelectorAll !== 'function') return $([])
+      try { return $(root).find(sel) } catch (error) { return $([]) }
     }
     const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})
 
@@ -117,7 +125,7 @@ const handlerFieldSource = (fieldName) => `${fieldName}: function (runeNode, sco
 // ============================================================================
 // handlerAndExampleDoc(docLines)
 //   返回"banner + handler 字段头 + handlerExample 字段头"——
-//   模仿者写完逻辑后用 `}` 闭合函数 + `,` 闭合 handlerExample 字段。
+//   模仿者写完逻辑后用 \`}\` 闭合函数 + \`,\` 闭合 handlerExample 字段。
 //   两段代码必须**逐字一致**，由编译时复制保证。
 //
 //   完整拼接形如：
@@ -141,7 +149,7 @@ const handlerFieldSource = (fieldName) => `${fieldName}: function (runeNode, sco
 //     <模仿者写的逻辑>
 //     }       ← 闭合 handlerExample 函数体
 //
-//   然后再以 `}` 闭合 `export default { ... }`。
+//   然后再以 \`}\` 闭合 \`export default { ... }\`。
 //
 //   注意：handler 和 handlerExample 之间共享同一份函数体字符串，
 //   模仿者只需写一遍逻辑。但因为 JS 对象字面量的字段值必须是表达式，

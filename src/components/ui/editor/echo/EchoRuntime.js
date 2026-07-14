@@ -415,11 +415,21 @@ export const backfillEchoAnnotationsInMarkdown = ({ markdown = '', echoCards = [
 // HANDLER_PRELUDE_SOURCE：默认注入到 anno_source 编译环境的 helper 常量源码。
 //   所有 builtinEchoes.js 提供的 handlerExample 模板都依赖这三个 helper。
 //   用户自定义 rune 的 handlerExample 函数体也可直接使用。
+//
+//   2026-07 jQuery 化改造：在 prelude 顶部加
+//     const $ = window.jQuery || window.$
+//   + __resolveScopeContainer / __safeQueryAll / __withAttrs 一并保持 jQuery 语义
+//     （__safeQueryAll 返回 jQuery 实例，__resolveScopeContainer 返回原生 DOM 以
+//      兼容部分 .style / .dataset 直接读写的场景）。
 const HANDLER_PRELUDE_SOURCE = [
+  "const __safeDollarRuntime = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null",
+  "if (!__safeDollarRuntime) console.warn('[EchoRuntime] jQuery is missing on window; rune handlers will fall back to no-op')",
+  "const $ = __safeDollarRuntime",
   "const __resolveScopeContainer = (node, scope) => {",
-  "  if (!node) return null",
-  "  const block = node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol') || node.parentElement",
-  "  const documentRoot = node.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body",
+  "  if (!node || typeof node.closest !== 'function') return null",
+  "  const $node = $(node)",
+  "  const block = $node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol').get(0) || node.parentElement",
+  "  const documentRoot = $node.closest('[data-echo-document], .mu-editor, article, [data-doc-id]').get(0) || document.body",
   "  switch (String(scope || 'siblings').toLowerCase()) {",
   "    case 'prev-block': {",
   "      let prev = block && block.previousElementSibling",
@@ -435,8 +445,8 @@ const HANDLER_PRELUDE_SOURCE = [
   "  }",
   "}",
   "const __safeQueryAll = (root, sel) => {",
-  "  if (!root || typeof root.querySelectorAll !== 'function') return []",
-  "  try { return Array.from(root.querySelectorAll(sel)) } catch (error) { return [] }",
+  "  if (!root || typeof root.querySelectorAll !== 'function') return $([])",
+  "  try { return $(root).find(sel) } catch (error) { return $([]) }",
   "}",
   "const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})",
   ""

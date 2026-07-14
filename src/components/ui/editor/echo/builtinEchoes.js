@@ -17,10 +17,24 @@ import { banner, handlerExampleDoc, handlerAndExampleDoc, handlerPrelude } from 
 //   banner() 与 handlerExampleDoc() 都从 './builtin-echo-shared' 导入，
 //   三个工具函数（__resolveScopeContainer / __safeQueryAll / __withAttrs）
 //   自动嵌入到 handlerExample 顶部，模仿者可直接使用。
+//
+// === jQuery 集成（2026-07 改造）===
+//   apply 函数体里所有 DOM 调用都改用 jQuery 形式：$(node).addClass / .attr /
+//   .css / .removeClass / .on / .off / .clone / .append / .before 等。
+//   编译器（HANDLER_PRELUDE_SOURCE）注入 `const $ = window.jQuery`，并在
+//   handler 函数体顶部再次声明 `const $ = window.jQuery && window.jQuery || window.$`
+//   以保证 boot 时序异常（jQuery 尚未挂上 window）时仍能 fallback。
 // ============================================================================
 
 // 默认 echo 的 anno_source 直接复用 EchoRuntime 内置版本（避免双源漂移）
 const createDefaultEchoAnnoSource = (echoName = '回响') => createRuntimeDefaultAnnoSource(echoName)
+
+// ============================================================================
+// 0. shared $ 安全引用 —— 所有 rune 函数体公共摘要
+//   在每个 apply 函数体首行加入 \`const $ = window.jQuery || window.$\`，
+//   防止某些破坏式 boot 时序让 jQuery 晚到。
+// ============================================================================
+const safeDollarRef = 'const __safeDollar = (typeof window !== "undefined" && (window.jQuery || window.$)) || null\nif (!__safeDollar) console.warn("[rune] jQuery is not on window; rune handler may fail")\nconst $ = __safeDollar'
 
 // ============================================================================
 // 1. nice：纯标记，无副作用（用 createDefaultEchoAnnoSource 即可）
@@ -57,7 +71,9 @@ const createNiceAnnoSource = () => `export default {
   },
 
   afterRender (node, domElement, ancestors) {
-    if (domElement && domElement.classList) {
+    if (domElement && (window.jQuery || window.$)) {
+      $(domElement).addClass('ag-echo-default-mounted')
+    } else if (domElement && domElement.classList) {
       domElement.classList.add('ag-echo-default-mounted')
     }
   }
@@ -103,27 +119,28 @@ const createGrowthAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】apply(runeNode, scopeContainer, meta) 返回 cleanup？',
     '   __resolveScopeContainer(node, scope)  按 4 种 scope 取目标容器',
-    '   __safeQueryAll(root, sel)             容错 querySelectorAll',
+    '   __safeQueryAll(root, sel)             容错 querySelectorAll（jQuery 版）',
     '   __withAttrs(meta, defaults)           meta.attrs 默认值合并'
   ])}
+    ${safeDollarRef}
     const attrs = __withAttrs(meta, { scope: 'siblings', trigger: 'auto' })
     const targetSelector = attrs.target || '[data-block-type], p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table'
     const container = __resolveScopeContainer(runeNode, attrs.scope)
     if (!container) return () => {}
 
-    const targets = __safeQueryAll(container, targetSelector)
-    targets.forEach((node, i) => {
-      node.classList.add('ag-rune-growth-target')
+    const $targets = __safeQueryAll(container, targetSelector)
+    $targets.each((i, el) => {
+      $(el).addClass('ag-rune-growth-target')
       if (attrs.trigger === 'auto') {
-        node.style.setProperty('--ag-rune-growth-delay', (Math.min(i, 8) * 120) + 'ms')
+        $(el).css('--ag-rune-growth-delay', (Math.min(i, 8) * 120) + 'ms')
       }
     })
-    runeNode.classList.add('ag-rune-growth-active')
+    $(runeNode).addClass('ag-rune-growth-active')
 
     // 必须返回 cleanup：下一次重渲染 / 卸载时被调用，撤销副作用
     return () => {
-      targets.forEach(node => node.classList.remove('ag-rune-growth-target'))
-      runeNode.classList.remove('ag-rune-growth-active')
+      $targets.each((_i, el) => $(el).removeClass('ag-rune-growth-target'))
+      $(runeNode).removeClass('ag-rune-growth-active')
     }
   }
 }`
@@ -162,26 +179,25 @@ const createShatterAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】target=line 关闭同段其他 echo；target=block 关闭整个 block'
   ])}
+    ${safeDollarRef}
     const attrs = __withAttrs(meta, { target: 'line' })
     const useBlockScope = attrs.target === 'block'
     const container = useBlockScope
-      ? (runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement)
+      ? ($(runeNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || runeNode.parentElement)
       : __resolveScopeContainer(runeNode, 'siblings')
     if (!container) return () => {}
 
-    const echoes = __safeQueryAll(container, '[data-echo-inline="true"]').filter(n => n !== runeNode)
-    echoes.forEach(n => {
-      n.setAttribute('data-shatter-disabled', 'true')
-      n.classList.add('ag-rune-shatter-disabled')
+    const $echoes = __safeQueryAll(container, '[data-echo-inline="true"]').filter((_i, n) => n !== runeNode)
+    $echoes.each((_i, n) => {
+      $(n).attr('data-shatter-disabled', 'true').addClass('ag-rune-shatter-disabled')
     })
-    runeNode.classList.add('ag-rune-shatter-active')
+    $(runeNode).addClass('ag-rune-shatter-active')
 
     return () => {
-      echoes.forEach(n => {
-        n.removeAttribute('data-shatter-disabled')
-        n.classList.remove('ag-rune-shatter-disabled')
+      $echoes.each((_i, n) => {
+        $(n).removeAttr('data-shatter-disabled').removeClass('ag-rune-shatter-disabled')
       })
-      runeNode.classList.remove('ag-rune-shatter-active')
+      $(runeNode).removeClass('ag-rune-shatter-active')
     }
   }
 }`
@@ -219,25 +235,26 @@ const createSkywalkAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】document scope：记忆原值，cleanup 还原'
   ])}
+    ${safeDollarRef}
     const attrs = __withAttrs(meta, { theme: 'auto', layout: 'enhanced' })
-    const documentRoot = runeNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || scopeContainer || document.body
+    const documentRoot = $(runeNode).closest('[data-echo-document], .mu-editor, article, [data-doc-id]').get(0) || scopeContainer || document.body
     if (!documentRoot) return () => {}
 
     // 记忆原值，cleanup 还原
+    const $root = $(documentRoot)
     const prev = {
-      theme: documentRoot.getAttribute('data-skywalk-theme'),
-      layout: documentRoot.getAttribute('data-skywalk-layout')
+      theme: $root.attr('data-skywalk-theme') || null,
+      layout: $root.attr('data-skywalk-layout') || null
     }
-    documentRoot.setAttribute('data-skywalk-theme', attrs.theme)
-    documentRoot.setAttribute('data-skywalk-layout', attrs.layout)
-    runeNode.classList.add('ag-rune-skywalk-active')
+    $root.attr('data-skywalk-theme', attrs.theme).attr('data-skywalk-layout', attrs.layout)
+    $(runeNode).addClass('ag-rune-skywalk-active')
 
     return () => {
-      if (prev.theme === null) documentRoot.removeAttribute('data-skywalk-theme')
-      else documentRoot.setAttribute('data-skywalk-theme', prev.theme)
-      if (prev.layout === null) documentRoot.removeAttribute('data-skywalk-layout')
-      else documentRoot.setAttribute('data-skywalk-layout', prev.layout)
-      runeNode.classList.remove('ag-rune-skywalk-active')
+      if (prev.theme === null) $root.removeAttr('data-skywalk-theme')
+      else $root.attr('data-skywalk-theme', prev.theme)
+      if (prev.layout === null) $root.removeAttr('data-skywalk-layout')
+      else $root.attr('data-skywalk-layout', prev.layout)
+      $(runeNode).removeClass('ag-rune-skywalk-active')
     }
   }
 }`
@@ -289,12 +306,14 @@ const createTwinbloomAnnoSource = () => `export default {
     '  - 用 __resolveScopeContainer(., source) 直接复用 4 种 scope 的解析',
     '  - 给克隆块加 outline + 标记条，cleanup 时一并移除'
   ])}
+    ${safeDollarRef}
+    const $rune = $(runeNode)
     const attrs = __withAttrs(meta, { source: 'prev-block', placeholder: '双生节点' })
     const source = String(attrs.source || 'prev-block').toLowerCase()
     const placeholder = attrs.placeholder || '双生节点'
 
     // 拿当前 block（runeNode 所在的 paragraph / heading 等）
-    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
+    const block = $rune.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || runeNode.parentElement
     if (!block || !block.parentElement) return () => {}
 
     // 决定克隆源：
@@ -320,7 +339,7 @@ const createTwinbloomAnnoSource = () => `export default {
     }
 
     // 防重入：检查上一次插入的克隆
-    const twinId = runeNode.getAttribute('data-rune-id') || 'twinbloom'
+    const twinId = $rune.attr('data-rune-id') || 'twinbloom'
     const sentinel = 'data-twinbloom-of'
     let cloned = null
     let insertedBefore = (source === 'next-block')
@@ -333,49 +352,60 @@ const createTwinbloomAnnoSource = () => `export default {
       }
     }
     if (!cloned) {
-      cloned = sourceNode.cloneNode(true)
-      cloned.setAttribute(sentinel, twinId)
-      cloned.setAttribute('data-twinbloom-source', source)
-      cloned.classList.add('ag-rune-twinbloom-clone')
-      // ★ 关键：用 style 直接加 outline / padding，让用户**直观看到克隆**，
-      //   不会与源 block 混淆；并把段落标只读防止误编辑
-      cloned.setAttribute('contenteditable', 'false')
-      cloned.style.outline = '2px dashed #8E24AA'
-      cloned.style.outlineOffset = '2px'
-      cloned.style.position = cloned.style.position || 'relative'
-      cloned.style.padding = cloned.style.padding || '8px 12px'
-      cloned.style.borderRadius = cloned.style.borderRadius || '6px'
-      cloned.style.background = 'rgba(142,36,170,0.06)'
+      const $clone = $(sourceNode).clone(true)
+      cloned = $clone.get(0)
+      $(cloned)
+        .attr(sentinel, twinId)
+        .attr('data-twinbloom-source', source)
+        .addClass('ag-rune-twinbloom-clone')
+        .attr('contenteditable', 'false')
+        .css({
+          'outline': '2px dashed #8E24AA',
+          'outline-offset': '2px',
+          'position': cloned.style.position || 'relative',
+          'padding': cloned.style.padding || '8px 12px',
+          'border-radius': cloned.style.borderRadius || '6px',
+          'background': 'rgba(142,36,170,0.06)'
+        })
 
       // 在克隆块顶部追加一张 "🌸 双生花 · 双生节点" 标记条（仅一次）
       if (!cloned.querySelector('[data-twinbloom-badge]')) {
-        const badge = document.createElement('div')
-        badge.setAttribute('data-twinbloom-badge', twinId)
-        badge.textContent = '🌸 双生花 · ' + placeholder
-        badge.style.cssText = 'font-size:11px;color:#8E24AA;padding:2px 8px;background:rgba(142,36,170,.12);border:1px solid rgba(142,36,170,.4);border-radius:4px;display:inline-block;margin-bottom:6px;'
-        cloned.insertBefore(badge, cloned.firstChild)
+        const $badge = $('<div></div>')
+          .attr('data-twinbloom-badge', twinId)
+          .text('🌸 双生花 · ' + placeholder)
+          .css({
+            'font-size': '11px',
+            'color': '#8E24AA',
+            'padding': '2px 8px',
+            'background': 'rgba(142,36,170,.12)',
+            'border': '1px solid rgba(142,36,170,.4)',
+            'border-radius': '4px',
+            'display': 'inline-block',
+            'margin-bottom': '6px'
+          })
+        $(cloned).prepend($badge)
       }
 
       // 若克隆源是 prev-block 但 prev-block 全空，用 placeholder 文本填充
       if (source === 'prev-block' && !(cloned.textContent || '').trim()) {
-        cloned.textContent = placeholder
+        $(cloned).text(placeholder)
       }
 
       // 插入：
       //   insertedBefore=true 时插入到 insertTarget 之前；否则插入到 insertTarget 之后
       if (insertedBefore) {
-        block.parentElement.insertBefore(cloned, insertTarget)
+        $(insertTarget).before($(cloned))
       } else {
-        block.parentElement.insertBefore(cloned, insertTarget.nextSibling)
+        $(insertTarget).after($(cloned))
       }
     }
-    runeNode.classList.add('ag-rune-twinbloom-active')
+    $(runeNode).addClass('ag-rune-twinbloom-active')
 
     return () => {
       if (!existedBefore && cloned && cloned.parentElement) {
-        cloned.parentElement.removeChild(cloned)
+        $(cloned).remove()
       }
-      runeNode.classList.remove('ag-rune-twinbloom-active')
+      $(runeNode).removeClass('ag-rune-twinbloom-active')
     }
   }
 }`
@@ -412,28 +442,28 @@ const createMindstealAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】mode=disable 直接停掉动画，stack/override 由各 rune 自己解读'
   ])}
+    ${safeDollarRef}
     const attrs = __withAttrs(meta, { mode: 'override', targets: '' })
     const targetsCsv = String(attrs.targets || '').trim()
     const targets = targetsCsv ? targetsCsv.split(',').map(s => s.trim()).filter(Boolean) : null
     const container = __resolveScopeContainer(runeNode, 'siblings')
     if (!container) return () => {}
 
-    const candidates = __safeQueryAll(container, '[data-rune-id]')
-      .filter(n => n !== runeNode)
-      .filter(n => !targets || targets.includes(n.getAttribute('data-rune-id')))
+    const $candidates = __safeQueryAll(container, '[data-rune-id]')
+      .filter((_i, n) => n !== runeNode)
+      .filter((_i, n) => !targets || targets.includes($(n).attr('data-rune-id')))
 
-    candidates.forEach(n => {
-      n.setAttribute('data-mindsteal-mode', attrs.mode)
-      if (attrs.mode === 'disable') n.style.setProperty('animation', 'none', 'important')
+    $candidates.each((_i, n) => {
+      $(n).attr('data-mindsteal-mode', attrs.mode)
+      if (attrs.mode === 'disable') $(n).css('animation', 'none', 'important')
     })
-    runeNode.classList.add('ag-rune-mindsteal-active')
+    $(runeNode).addClass('ag-rune-mindsteal-active')
 
     return () => {
-      candidates.forEach(n => {
-        n.removeAttribute('data-mindsteal-mode')
-        n.style.removeProperty('animation')
+      $candidates.each((_i, n) => {
+        $(n).removeAttr('data-mindsteal-mode').css('animation', '')
       })
-      runeNode.classList.remove('ag-rune-mindsteal-active')
+      $(runeNode).removeClass('ag-rune-mindsteal-active')
     }
   }
 }`
@@ -474,16 +504,18 @@ const createLuckyAnnoSource = () => `export default {
     '   handlerExample 给节点加 role=button / tabindex=0；click 与 Enter/Space 触发',
     '   callback 走 window.__memocastRuneHandlers.lucky（应用层注册）'
   ])}
+    ${safeDollarRef}
     const attrs = __withAttrs(meta, { label: '点击触发 AI 校对' })
-    runeNode.style.cursor = 'pointer'
-    runeNode.setAttribute('role', 'button')
-    runeNode.setAttribute('tabindex', '0')
-    runeNode.setAttribute('title', attrs.label)
-    runeNode.classList.add('ag-rune-lucky-active')
+    const $rune = $(runeNode)
+    $rune.css('cursor', 'pointer')
+      .attr('role', 'button')
+      .attr('tabindex', '0')
+      .attr('title', attrs.label)
+      .addClass('ag-rune-lucky-active')
 
     const trigger = async (ev) => {
       ev.preventDefault(); ev.stopPropagation()
-      runeNode.classList.add('ag-rune-lucky-loading')
+      $rune.addClass('ag-rune-lucky-loading')
       try {
         const handler = (typeof window !== 'undefined')
           ? (window.__memocastRuneHandlers && window.__memocastRuneHandlers.lucky)
@@ -491,21 +523,17 @@ const createLuckyAnnoSource = () => `export default {
         if (typeof handler === 'function') await handler({ runeNode, meta, scopeContainer })
         else console.info('[lucky] no window.__memocastRuneHandlers.lucky registered')
       } catch (err) { console.error('[lucky] handler failed:', err) }
-      finally { runeNode.classList.remove('ag-rune-lucky-loading') }
+      finally { $rune.removeClass('ag-rune-lucky-loading') }
     }
     const onClick = (ev) => trigger(ev)
     const onKey = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') trigger(ev) }
-    runeNode.addEventListener('click', onClick)
-    runeNode.addEventListener('keydown', onKey)
+    $rune.on('click', onClick).on('keydown', onKey)
 
     return () => {
-      runeNode.removeEventListener('click', onClick)
-      runeNode.removeEventListener('keydown', onKey)
-      runeNode.classList.remove('ag-rune-lucky-active', 'ag-rune-lucky-loading')
-      runeNode.style.cursor = ''
-      runeNode.removeAttribute('role')
-      runeNode.removeAttribute('tabindex')
-      runeNode.removeAttribute('title')
+      $rune.off('click', onClick).off('keydown', onKey)
+        .removeClass('ag-rune-lucky-active ag-rune-lucky-loading')
+        .css('cursor', '')
+        .removeAttr('role').removeAttr('tabindex').removeAttr('title')
     }
   }
 }`
@@ -550,28 +578,25 @@ const createScapegoatAnnoSource = () => `export default {
     '—— 见 __resolveScopeContainer / __safeQueryAll / __withAttrs 三个 prelude helper',
     'cleanup：移除监听 + 移除 standby/injured 状态'
   ])},
+    ${safeDollarRef}
     const block = __resolveScopeContainer(runeNode, 'block')
     if (!block) return () => {}
+    const $block = $(block)
 
     const intensity = Number(meta && meta.attrs && meta.attrs.intensity) || 0
     if (intensity > 0) {
-      block.classList.add('ag-rune-scapegoat-injured')
-      block.setAttribute('data-scapegoat-error', (meta && meta.attrs && meta.attrs.error) || 'pre-injured by intensity')
+      $block.addClass('ag-rune-scapegoat-injured').attr('data-scapegoat-error', (meta && meta.attrs && meta.attrs.error) || 'pre-injured by intensity')
     } else {
-      block.classList.add('ag-rune-scapegoat-standby')
+      $block.addClass('ag-rune-scapegoat-standby')
     }
 
     const onError = (event) => {
-      block.classList.remove('ag-rune-scapegoat-standby')
-      block.classList.add('ag-rune-scapegoat-injured')
-      block.setAttribute('data-scapegoat-error', (event && event.message) || 'unknown error')
+      $block.removeClass('ag-rune-scapegoat-standby').addClass('ag-rune-scapegoat-injured').attr('data-scapegoat-error', (event && event.message) || 'unknown error')
     }
     const onRuneError = (event) => {
       const detail = event && event.detail
       if (!detail) return
-      block.classList.remove('ag-rune-scapegoat-standby')
-      block.classList.add('ag-rune-scapegoat-injured')
-      block.setAttribute('data-scapegoat-rune-error', String(detail.runeId || 'unknown'))
+      $block.removeClass('ag-rune-scapegoat-standby').addClass('ag-rune-scapegoat-injured').attr('data-scapegoat-rune-error', String(detail.runeId || 'unknown'))
     }
     if (typeof window !== 'undefined') {
       window.addEventListener('error', onError, true)
@@ -583,9 +608,9 @@ const createScapegoatAnnoSource = () => `export default {
         window.removeEventListener('error', onError, true)
         window.removeEventListener('ag:rune:error', onRuneError)
       }
-      block.classList.remove('ag-rune-scapegoat-standby', 'ag-rune-scapegoat-injured')
-      block.removeAttribute('data-scapegoat-error')
-      block.removeAttribute('data-scapegoat-rune-error')
+      $block.removeClass('ag-rune-scapegoat-standby ag-rune-scapegoat-injured')
+        .removeAttr('data-scapegoat-error')
+        .removeAttr('data-scapegoat-rune-error')
     }
   }
 }`
@@ -627,6 +652,7 @@ const createCalamityAnnoSource = () => `export default {
     '—— 见 __resolveScopeContainer / __safeQueryAll / __sampleShuffle 三个 prelude helper',
     'cleanup：取消染彩 class'
   ])},
+    ${safeDollarRef}
     const container = __resolveScopeContainer(runeNode, (meta && meta.attrs && meta.attrs.scope) || 'siblings')
     if (!container) return () => {}
 
@@ -634,13 +660,14 @@ const createCalamityAnnoSource = () => `export default {
       Number(meta && meta.attrs && meta.attrs.intensity) || 0.3))
 
     const textHosts = __safeQueryAll(container, 'p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, dd, dt')
-      .filter(el => el && el !== runeNode && (el.textContent || '').trim().length >= 2)
+      .filter((_i, el) => el && el !== runeNode && (el.textContent || '').trim().length >= 2)
+      .get()
     const targetCount = Math.max(1, Math.floor(textHosts.length * intensity))
     const picked = __sampleShuffle(textHosts, targetCount)
 
-    picked.forEach((el) => el.classList && el.classList.add('ag-rune-calamity-gothic'))
+    picked.forEach((el) => $(el).addClass('ag-rune-calamity-gothic'))
     return () => {
-      picked.forEach((el) => el.classList && el.classList.remove('ag-rune-calamity-gothic'))
+      picked.forEach((el) => $(el).removeClass('ag-rune-calamity-gothic'))
     }
   }
 }`
@@ -678,18 +705,20 @@ const createDisperseAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】block scope 写 data-disperse-density；CSS 据此调整 line-height/margin'
   ])}
+    ${safeDollarRef}
     const attrs = __withAttrs(meta, { density: 'loose' })
-    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
+    const block = $(runeNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || runeNode.parentElement
     if (!block) return () => {}
+    const $block = $(block)
 
-    const previous = block.getAttribute('data-disperse-density')
-    block.setAttribute('data-disperse-density', attrs.density)
-    runeNode.classList.add('ag-rune-disperse-active')
+    const previous = $block.attr('data-disperse-density') || null
+    $block.attr('data-disperse-density', attrs.density)
+    $(runeNode).addClass('ag-rune-disperse-active')
 
     return () => {
-      if (previous === null) block.removeAttribute('data-disperse-density')
-      else block.setAttribute('data-disperse-density', previous)
-      runeNode.classList.remove('ag-rune-disperse-active')
+      if (previous === null) $block.removeAttr('data-disperse-density')
+      else $block.attr('data-disperse-density', previous)
+      $(runeNode).removeClass('ag-rune-disperse-active')
     }
   }
 }`
@@ -727,24 +756,38 @@ const createClockAnnoSource = () => `export default {
 
   // 【已实装 handler】—— 注意：内置 RUNE_HANDLERS 没占这个 id，所以这里实装是安全的
   handler (runeNode, _container, _meta) {
-    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
+    const __safeDollarInner = (typeof window !== "undefined" && (window.jQuery || window.$)) || null
+    const $ = __safeDollarInner
+    if (!$) return () => {}
+    const $rune = $(runeNode)
+    const $block = $rune.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').addBack().first()
+    const block = $block.get(0)
     if (!block) return () => {}
-    const previous = block.getAttribute('data-clock-active')
-    block.setAttribute('data-clock-active', 'true')
-    block.style.position = block.style.position || 'relative'
-    const tag = document.createElement('span')
-    tag.className = 'ag-rune-clock-tag'
-    tag.textContent = new Date().toLocaleTimeString()
-    tag.style.cssText = 'position:absolute;top:6px;right:8px;padding:1px 6px;font-size:11px;background:rgba(57,73,171,.12);color:#3949AB;border-radius:4px;'
-    block.appendChild(tag)
+    const previous = $block.attr('data-clock-active') || null
+    $block.attr('data-clock-active', 'true')
+    if (!$block.css('position')) $block.css('position', 'relative')
+    const $tag = $('<span></span>')
+      .addClass('ag-rune-clock-tag')
+      .text(new Date().toLocaleTimeString())
+      .css({
+        'position': 'absolute',
+        'top': '6px',
+        'right': '8px',
+        'padding': '1px 6px',
+        'font-size': '11px',
+        'background': 'rgba(57,73,171,.12)',
+        'color': '#3949AB',
+        'border-radius': '4px'
+      })
+    $block.append($tag)
     const timer = setInterval(() => {
-      try { tag.textContent = new Date().toLocaleTimeString() } catch (error) { /* ignore */ }
+      try { $tag.text(new Date().toLocaleTimeString()) } catch (error) { /* ignore */ }
     }, 1000)
     return () => {
       clearInterval(timer)
-      if (tag && tag.parentElement) tag.parentElement.removeChild(tag)
-      if (previous === null) block.removeAttribute('data-clock-active')
-      else block.setAttribute('data-clock-active', previous)
+      $tag.remove()
+      if (previous === null) $block.removeAttr('data-clock-active')
+      else $block.attr('data-clock-active', previous)
     }
   }
 }`
