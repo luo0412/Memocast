@@ -460,6 +460,7 @@ export default {
       monacoReady: false,
       _monacoRo: null,
       _dialogRo: null,
+      _dialogHeightPollTimer: null,
       _windowResizeHandler: null,
       monacoEditor: null,
       monacoEditorHeight: 250,
@@ -514,15 +515,14 @@ export default {
         console.log('[EchoFormDialog] value changed =>', val, 'this.dialog=', !!this.$refs.dialog)
         if (val) {
           this.scheduleMonacoInit()
-          this.$nextTick(() => {
-            this.$nextTick(() => {
-              console.log('[EchoFormDialog] installDialogHeightListener, dialog clientHeight=', this.$refs.dialog && this.$refs.dialog.clientHeight)
-              this.installDialogHeightListener()
-            })
-          })
+          this._scheduleDialogHeightInstall()
         } else {
           this.clearMonacoInitTimer()
           this.uninstallDialogHeightListener()
+          if (this._dialogHeightPollTimer) {
+            clearTimeout(this._dialogHeightPollTimer)
+            this._dialogHeightPollTimer = null
+          }
         }
       }
     },
@@ -594,29 +594,76 @@ export default {
       this._monacoRo.disconnect()
       this._monacoRo = null
     }
+    if (this._dialogHeightPollTimer) {
+      clearTimeout(this._dialogHeightPollTimer)
+      this._dialogHeightPollTimer = null
+    }
     this.disposeMonaco()
   },
   methods: {
     installDialogHeightListener () {
       console.log('[EchoFormDialog] installDialogHeightListener enter')
       this.uninstallDialogHeightListener()
-      if (!this.$refs.dialog) {
-        console.warn('[EchoFormDialog] installDialogHeightListener: $refs.dialog missing, skip')
+      const dialogEl = this._resolveDialogElement()
+      if (!dialogEl) {
+        console.warn('[EchoFormDialog] installDialogHeightListener: dialog DOM missing, skip')
         return
       }
-      console.log('[EchoFormDialog] dialog clientHeight before recompute=', this.$refs.dialog.clientHeight)
       this.recomputeMonacoHeight()
       this._dialogRo = new ResizeObserver(() => {
         console.log('[EchoFormDialog] dialog ResizeObserver fired')
         this.recomputeMonacoHeight()
       })
-      this._dialogRo.observe(this.$refs.dialog)
+      this._dialogRo.observe(dialogEl)
       this._windowResizeHandler = () => {
         console.log('[EchoFormDialog] window resize fired')
         this.recomputeMonacoHeight()
       }
       window.addEventListener('resize', this._windowResizeHandler)
       console.log('[EchoFormDialog] installDialogHeightListener done, monacoEditorHeight=', this.monacoEditorHeight)
+    },
+    /**
+     * 解析 q-dialog 对应的真实 DOM 元素（q-dialog 是 Vue 组件，$refs.dialog 拿到的是实例，
+     * 必须 .$el 或 .$refs.content 才能给 ResizeObserver / clientHeight 使用）。
+     */
+    _resolveDialogElement () {
+      const ref = this.$refs && this.$refs.dialog
+      if (!ref) return null
+      const candidate = ref.$el || (ref.$refs && ref.$refs.content) || ref
+      if (candidate && candidate.nodeType === 1) return candidate
+      // 兜底：沿父链查找最近含 clientHeight 的 DOM
+      let node = candidate
+      while (node && node.nodeType !== 1) node = node.parentNode
+      return node || null
+    },
+    /**
+     * 等待 q-dialog 真正挂载完毕（其内部使用 QPortal，初始 render 时 $el 可能还不存在），
+     * 再去安装 ResizeObserver。最多等 ~1s，避免无限轮询。
+     */
+    _scheduleDialogHeightInstall () {
+      if (this._dialogHeightPollTimer) {
+        clearTimeout(this._dialogHeightPollTimer)
+        this._dialogHeightPollTimer = null
+      }
+      let attempt = 0
+      const maxAttempts = 20 // 20 * 50ms = 1s
+      const tryInstall = () => {
+        attempt += 1
+        if (!this.value) return
+        const el = this._resolveDialogElement()
+        if (el && el.clientHeight > 0) {
+          this.installDialogHeightListener()
+          return
+        }
+        if (attempt >= maxAttempts) {
+          // 兜底：即使 clientHeight=0 也安装，依赖 ResizeObserver 后续回调补一次
+          console.warn('[EchoFormDialog] _scheduleDialogHeightInstall: dialog 1s 内未挂载 clientHeight>0，尝试兜底安装')
+          this.installDialogHeightListener()
+          return
+        }
+        this._dialogHeightPollTimer = setTimeout(tryInstall, 50)
+      }
+      this._dialogHeightPollTimer = setTimeout(tryInstall, 0)
     },
     uninstallDialogHeightListener () {
       console.log('[EchoFormDialog] uninstallDialogHeightListener')
@@ -630,7 +677,7 @@ export default {
       }
     },
     recomputeMonacoHeight () {
-      const dialogEl = this.$refs.dialog
+      const dialogEl = this._resolveDialogElement()
       const trace = (new Error()).stack.split('\n').slice(1, 4).join(' | ')
       if (!dialogEl) {
         console.warn('[EchoFormDialog] recomputeMonacoHeight: dialogEl missing. trace=', trace)
