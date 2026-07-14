@@ -803,41 +803,77 @@ export default {
     log.info(`[DB] Backfilled default anno sources for ${emptyAnnoSourceEchoes.length} echo(es)`)
   }
 
-  // === Sync 内置回响到 SQLite（idempotent） ===
-  // 11 个 __builtin_* 回响需在 SQLite 中可查（设置面板可查看；UI 不可编辑/删除）。
-  // 对每个 builtin id 做 INSERT OR IGNORE —— 如果 row 已存在则保持当前数据不变。
-  // 当 echoCard 列表与代码版 BUILTIN_ECHO_CARDS 漂移时，可手动清空对应 id 触发 reseed。
+  // === Sync 内置回响到 SQLite（强制覆盖） ===
+  // 11 个 __builtin_* 回响以 BUILTIN_ECHO_CARDS 为权威源：每次启动都会把 DB row 的
+  // name / desc / color / icon / anno_source / render_type / category / sort_order / updated_at
+  // 强制覆盖到代码当前版本（id / created_at 保留）。
+  // 这样：
+  //   1. 升级时改动了 BUILTIN_ECHO_CARDS（例如给内置回响加上 inheritFromPrevious: false），
+  //      下次启动 DB 自动同步，不再需要手动清表；
+  //   2. 内置回响在前端 isBuiltin=true 始终只读，但代码侧的演进仍能落到 DB。
   try {
     const now = Date.now()
-    let seededCount = 0
+    let insertedCount = 0
+    let updatedCount = 0
     for (const builtinEcho of BUILTIN_ECHO_CARDS) {
       if (!builtinEcho || !builtinEcho.id) continue
-      const existing = execOne('SELECT id FROM echoes WHERE id = ?', [builtinEcho.id])
-      if (existing) continue
-      db.run(
-        `INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          builtinEcho.id,
-          builtinEcho.name,
-          builtinEcho.desc || '',
-          builtinEcho.color || '#26A69A',
-          builtinEcho.icon || 'graphic_eq',
-          builtinEcho.anno_source,
-          'anno',
-          'builtin',
-          Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
-          now,
-          now
-        ]
-      )
-      seededCount += 1
+      const builtinId = String(builtinEcho.id)
+      const existing = execOne('SELECT id, created_at FROM echoes WHERE id = ?', [builtinId])
+      if (existing) {
+        // 已存在 → 强制覆盖，保留 id / created_at
+        db.run(
+          `UPDATE echoes SET
+            name = ?,
+            "desc" = ?,
+            color = ?,
+            icon = ?,
+            anno_source = ?,
+            render_type = ?,
+            category = ?,
+            sort_order = ?,
+            updated_at = ?
+          WHERE id = ?`,
+          [
+            builtinEcho.name,
+            builtinEcho.desc || '',
+            builtinEcho.color || '#26A69A',
+            builtinEcho.icon || 'graphic_eq',
+            builtinEcho.anno_source,
+            'anno',
+            'builtin',
+            Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
+            now,
+            builtinId
+          ]
+        )
+        updatedCount += 1
+      } else {
+        // 不存在 → INSERT；created_at 一律用 now（首建时间由本机时钟决定）
+        db.run(
+          `INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            builtinId,
+            builtinEcho.name,
+            builtinEcho.desc || '',
+            builtinEcho.color || '#26A69A',
+            builtinEcho.icon || 'graphic_eq',
+            builtinEcho.anno_source,
+            'anno',
+            'builtin',
+            Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
+            now,
+            now
+          ]
+        )
+        insertedCount += 1
+      }
     }
-    if (seededCount > 0) {
+    if (insertedCount > 0 || updatedCount > 0) {
       saveDatabase()
-      log.info(`[DB] Seeded ${seededCount} builtin echo(es) to SQLite`)
+      log.info(`[DB] Synced builtin echoes (inserted=${insertedCount}, updated=${updatedCount})`)
     }
   } catch (builtinEchoSeedError) {
-    log.error('[DB] Failed to seed builtin echoes:', builtinEchoSeedError)
+    log.error('[DB] Failed to sync builtin echoes:', builtinEchoSeedError)
   }
 
   // === rune 预设模板 (rune_templates) ===

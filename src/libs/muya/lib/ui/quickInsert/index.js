@@ -537,7 +537,7 @@ class QuickInsert extends BaseScrollFloat {
 
     // If no value was provided, focus the editable value marker so user can type.
     if (!echoValue) {
-      this.muya.eventCenter.once('muya-selection-change', () => {
+      this.muya.eventCenter.subscribeOnce('muya-selection-change', () => {
         const valueMarker = this.scrollElement.querySelector('.ag-echo-placeholder-value-marker')
         if (valueMarker) {
           const range = document.createRange()

@@ -25,6 +25,43 @@ const createDefaultEchoAnnoSource = (echoName = '回响') => createRuntimeDefaul
 // ============================================================================
 // 1. nice：纯标记，无副作用（用 createDefaultEchoAnnoSource 即可）
 // ============================================================================
+//
+// nice 的卡片源不像其他 10 个内置 rune 那样有 render / handler，因此单独提供一个
+// createNiceAnnoSource：在 namespace / render(node, ancestors) / afterRender 三块结构的基础上，
+// 在 attrs 末尾显式写入 inheritFromPrevious: false，让"默认不开启上一节点继承"的语义对齐。
+const createNiceAnnoSource = () => `export default {
+  kind: 'echo',
+  version: 1,
+  name: 'nice',
+  namespace: '回响',
+
+  // === 新模板签名（TODO 提议）：node + ancestors ===
+  //   - node     : token = { type:'echo_anno', echoName, echoId, attrsParsed, prompt, raw, range, ... }
+  //   - ancestors: { echo: echoCard, block, document, parent }
+  // 默认与 createDefaultEchoAnnoSource 保持一致；attrs 末尾写入 inheritFromPrevious: false，
+  // 让该回响走「默认不继承」路径（用户在自己的 anno_source 里改 inheritFromPrevious: true 即可开启）。
+  render (node, ancestors) {
+    const attrs = (node && node.attrsParsed) || {}
+    const prompt = (node && node.prompt) || ''
+    const echoMeta = (ancestors && ancestors.echo) || {}
+    return {
+      type: 'card',
+      icon: attrs.icon || echoMeta.icon || 'thumb_up',
+      color: attrs.color || echoMeta.color || '#4CAF50',
+      title: attrs.title || echoMeta.name || 'nice',
+      description: attrs.desc || echoMeta.desc || '标记为赞的内容',
+      prompt,
+      attrs: { ...attrs, inheritFromPrevious: false },
+      html: attrs.html || ''
+    }
+  },
+
+  afterRender (node, domElement, ancestors) {
+    if (domElement && domElement.classList) {
+      domElement.classList.add('ag-echo-default-mounted')
+    }
+  }
+}`
 
 // ============================================================================
 // 2. 生生不息（growth）：自动 stagger 生长动画
@@ -58,7 +95,7 @@ const createGrowthAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '生生不息',
       description: attrs.desc || context.echo?.desc || '为附近符合条件的元素加上生长的动画特效',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'growth', scope: attrs.scope || 'siblings', trigger: attrs.trigger || 'auto' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'growth', scope: attrs.scope || 'siblings', trigger: attrs.trigger || 'auto', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--growth" data-rune-id="growth">生生不息</span>'
     }
   },
@@ -117,7 +154,7 @@ const createShatterAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '破万法',
       description: attrs.desc || context.echo?.desc || '使附近一行或一个块的回响作用都失效',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'shatter', target: attrs.target || 'line', neutraliseEchoes: true },
+      attrs: { ...attrs, kind: 'rune', runeId: 'shatter', target: attrs.target || 'line', neutraliseEchoes: true, inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--shatter" data-rune-id="shatter">破万法</span>'
     }
   },
@@ -174,7 +211,7 @@ const createSkywalkAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '天行健',
       description: attrs.desc || context.echo?.desc || '强化排版并指定某种主题',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'skywalk', theme: attrs.theme || 'auto', layout: attrs.layout || 'enhanced' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'skywalk', theme: attrs.theme || 'auto', layout: attrs.layout || 'enhanced', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--skywalk" data-rune-id="skywalk">天行健</span>'
     }
   },
@@ -242,7 +279,7 @@ const createTwinbloomAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '双生花',
       description: attrs.desc || context.echo?.desc || '复制上一个节点并占位',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'twinbloom', source: attrs.source || 'prev-block', placeholder: attrs.placeholder || '双生节点' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'twinbloom', source: attrs.source || 'prev-block', placeholder: attrs.placeholder || '双生节点', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--twinbloom" data-rune-id="twinbloom">双生花</span>'
     }
   },
@@ -367,7 +404,7 @@ const createMindstealAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '夺心魄',
       description: attrs.desc || context.echo?.desc || '使附近符合条件的符文叠加或篡改某种制定的效果',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'mindsteal', mode: attrs.mode || 'override', targets: attrs.targets || '' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'mindsteal', mode: attrs.mode || 'override', targets: attrs.targets || '', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--mindsteal" data-rune-id="mindsteal">夺心魄</span>'
     }
   },
@@ -427,7 +464,7 @@ const createLuckyAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '强运',
       description: attrs.desc || context.echo?.desc || '点击后触发 AI 识别当前 Markdown 的错别字并修正',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'lucky', action: attrs.action || 'ai-proofread', model: attrs.model || 'default' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'lucky', action: attrs.action || 'ai-proofread', model: attrs.model || 'default', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--lucky" data-rune-id="lucky">强运</span>'
     }
   },
@@ -503,7 +540,7 @@ const createScapegoatAnnoSource = () => `export default {
       title: attrs.title || echoMeta.name || '替罪',
       description: attrs.desc || echoMeta.desc || '在作用域内接住后续 rune / DOM 抛出的错误，并以受伤态提示',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'scapegoat' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'scapegoat', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--scapegoat" data-rune-id="scapegoat">替罪</span>'
     }
   },
@@ -580,7 +617,7 @@ const createCalamityAnnoSource = () => `export default {
       title: attrs.title || echoMeta.name || '招灾',
       description: attrs.desc || echoMeta.desc || '在作用域内随机给文字片段染上哥特渐变彩',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'calamity' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'calamity', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--calamity" data-rune-id="calamity">招灾</span>'
     }
   },
@@ -633,7 +670,7 @@ const createDisperseAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '离析',
       description: attrs.desc || context.echo?.desc || '使附近的元素使用更加宽松的排版',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'disperse', density: attrs.density || 'loose' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'disperse', density: attrs.density || 'loose', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--disperse" data-rune-id="disperse">离析</span>'
     }
   },
@@ -683,7 +720,7 @@ const createClockAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '报时',
       description: attrs.desc || context.echo?.desc || '在容器右上角注入当前时间',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'clock', position: attrs.position || 'top-right' },
+      attrs: { ...attrs, kind: 'rune', runeId: 'clock', position: attrs.position || 'top-right', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--clock" data-rune-id="clock">报时</span>'
     }
   },
@@ -722,7 +759,7 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '标记为赞的内容',
     icon: 'thumb_up',
     color: '#4CAF50',
-    anno_source: createDefaultEchoAnnoSource('nice'),
+    anno_source: createNiceAnnoSource(),
     isBuiltin: true
   }),
   Object.freeze({
