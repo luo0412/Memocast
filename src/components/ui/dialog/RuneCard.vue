@@ -9,7 +9,7 @@
         <q-icon v-if='hasIcon' :name='rune.icon' class='rune-card-icon-glyph' />
         <span v-else class='rune-card-icon-text'>{{ runeInitial }}</span>
       </div>
-      <div class='rune-card-power'>
+      <div v-if='!isBuiltin' class='rune-card-power'>
         <span class='power-label'>{{ resolvedPowerLabel }}</span>
         <span class='power-value'>{{ rune.power }}</span>
       </div>
@@ -19,7 +19,15 @@
       <div class='rune-card-desc'>{{ rune.desc }}</div>
     </div>
     <div class='rune-card-footer'>
-      <q-btn flat dense size='sm' :label="resolvedEditLabel" color='white' @click='$emit("edit", rune)' />
+      <q-btn
+        flat
+        dense
+        size='sm'
+        :label="isBuiltin ? resolvedViewLabel : resolvedEditLabel"
+        :icon='isBuiltin ? "visibility" : undefined'
+        :color='isBuiltin ? "teal-3" : "white"'
+        @click='$emit("edit", rune)'
+      />
       <q-btn
         v-if='!disableDelete'
         flat dense size='sm'
@@ -127,6 +135,9 @@ export default {
     },
     resolvedEditLabel () {
       return this.editLabel || this.$t('runeCardEdit')
+    },
+    resolvedViewLabel () {
+      return this.$t('echoCardView') || this.$t('runeCardView') || '查看'
     },
     resolvedDeleteLabel () {
       return this.deleteLabel || this.$t('runeCardDelete')
