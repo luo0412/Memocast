@@ -365,21 +365,23 @@ export default {
         const k = data[keyName]
         const t = data[titleName]
         const children = data[childrenName] || []
+        // 先构造不含 status 的 node，再算 status，selectable/checkable 回调收到的就是规范化节点（含 .value 指向原数据）
         const node = {
           key: k,
           title: t,
           value: data,
           parentKey,
-          status: {
-            level,
-            loading: false,
-            isWait: isWait || typeof opt.getDatas === 'function',
-            opened: false,
-            selected: false,
-            selectable: typeof opt.selectable === 'function' ? !!opt.selectable(data, level) : (data.selectable !== false),
-            checkable: typeof opt.checkable === 'function' ? !!opt.checkable(data, level) : (data.checkable !== false)
-          },
+          status: null,
           children: this._buildTree(children, k, isWait, level + 1)
+        }
+        node.status = {
+          level,
+          loading: false,
+          isWait: isWait || typeof opt.getDatas === 'function',
+          opened: false,
+          selected: false,
+          selectable: typeof opt.selectable === 'function' ? !!opt.selectable(node, level) : (data.selectable !== false),
+          checkable: typeof opt.checkable === 'function' ? !!opt.checkable(node, level) : (data.checkable !== false)
         }
         if (k != null) this.categoryObj[k] = node
         arr.push(node)
@@ -462,11 +464,14 @@ export default {
       this.$emit('change', v, this.multiple ? this.objects.slice() : this.object)
       this.$emit('input', v)
       this.valueBak = v
-      this.popoverVisible = !this._shouldKeepOpenAfterPick()
+      this.popoverVisible = this._shouldKeepOpenAfterPick()
       if (!this.popoverVisible) this.closePopover()
     },
     /**
-     * 单选选中叶子后是否关闭弹层（仿 heyui：非叶子继续展开时保持打开）
+     * 选中后是否保持弹层打开：
+     *   - 单选 + 选中节点仍有 children（分类节点）：保持打开（heyui 语义：半选）
+     *   - 单选 + 选中 leaf：关闭
+     *   - 多选：保持打开
      */
     _shouldKeepOpenAfterPick () {
       if (this.multiple) return true
