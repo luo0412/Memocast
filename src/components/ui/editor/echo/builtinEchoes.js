@@ -1,50 +1,34 @@
 import { createDefaultEchoAnnoSource as createRuntimeDefaultAnnoSource } from './EchoRuntime'
+import { banner, handlerExampleDoc } from './builtin-echo-shared'
 
 // ============================================================================
 // 内置回响（系统提供，固定不可删改）
 // 用于设置弹框展示、layout 初始化以及运行时合并 echoCards。
 //
-// === 内置语义类别 ===
-//   marker     —— 纯标记（卡片提示），无副作用，例如 nice
-//   rune       —— 符文型咒语，会对附近节点施加渲染/排版/AI 等运行时效果
-//   rune-tbd   —— 占位型咒语，规则尚未敲定，先建数据以便后续补充
+// === 内部结构 ===
+//   每个 rune anno_source 由以下几段组成：
+//     - banner 注释（描述这个 rune 做什么 / 影响谁 / 怎么传参）
+//     - render(context)         决定回响卡片外观 + 写入 attrs 默认值
+//     - handlerExample 字段     apply(runeNode, container, meta) 模板；
+//                              字段名带 Example 后缀，运行时不会自动注册为 handler。
+//                              把字段名改成 handler 即可接管运行时副作用。
 //
-// === rune 系列的运行时副作用约定 ===
-//   anno_source 的 render() 返回结构保持 { type, icon, color, title,
-//   description, prompt, attrs, html, ... }。对于 rune 系列,会在后续版本里
-//   由 EchoRuntime 识别 attrs.kind === 'rune' 时调用对应的副作用钩子（DOM
-//   扫描 / 排版调整 / AI 调用）。
-//
-// === anno_source 给模仿者的设计 ===
-//   每个 rune 示例都按以下结构组织（最大可读性）：
-//     - banner()  在顶部用 /* *​/ 行写下"这是什么 / 影响谁 / 用户怎么传参"的说明
-//     - render()  完整 render 函数：决定回响卡片外观 + 把运行时参数写入 attrs
-//     - handlerExample  完整 handler 字符串字段（不是函数！）：展示
-//       "apply(runeNode, container, meta) → cleanup" 模板，供用户复制。
-//       注意：字段名带 "Example" 后缀，**运行时不会注册它**，
-//       内置 RUNE_HANDLERS 仍由代码维护（src/components/ui/editor/echo/EchoRuntime.js）。
-//       把字段名 `handlerExample` 改成 `handler` 即可让它接管运行时副作用。
+// === 共享代码 ===
+//   banner() 与 handlerExampleDoc() 都从 './builtin-echo-shared' 导入，
+//   三个工具函数（__resolveScopeContainer / __safeQueryAll / __withAttrs）
+//   自动嵌入到 handlerExample 顶部，模仿者可直接使用。
 // ============================================================================
 
 // 默认 echo 的 anno_source 直接复用 EchoRuntime 内置版本（避免双源漂移）
 const createDefaultEchoAnnoSource = (echoName = '回响') => createRuntimeDefaultAnnoSource(echoName)
 
 // ============================================================================
-// banner() —— 一段作为 anno_source 内 banner 注释的样板
-//   rune 示例的所有"教学注释"都通过这个模板生成，开头/结尾以稳定 token 包裹，
-//   便于在编辑器或控制台里 grep。
-// ============================================================================
-const banner = (lines) => `/* ===RUNE_BANNER_START===
-${lines.map(line => ` * ${line}`).join('\n')}
- * ===RUNE_BANNER_END=== */`
-
-// ============================================================================
-// handlerExample() —— handler 字符串模板
-//   rune 模仿者只需复制 banner 下方的 handlerExample 字段、把字段名改成
-//   `handler`，即可让 EchoRuntime 自动接管运行时副作用。
+// 1. nice：纯标记，无副作用（用 createDefaultEchoAnnoSource 即可）
 // ============================================================================
 
-// ===== 1. 生生不息：给附近符合条件的元素加上"生长"的动画特效 =====
+// ============================================================================
+// 2. 生生不息（growth）：自动 stagger 生长动画
+// ============================================================================
 const createGrowthAnnoSource = () => `export default {
   ${banner([
     '【生生不息 / growth】 —— 给附近符合条件的元素加上"生长"的动画特效',
@@ -52,13 +36,12 @@ const createGrowthAnnoSource = () => `export default {
     '  - siblings(默认)   同段落或同 block 的兄弟节点（最常用）',
     '  - prev-block  前一块兄弟节点',
     '  - block       当前 block（含自身）',
-    '  - document    整篇容器（用于主题级切换，一般交给 天行健）',
-    '命中元素（target）：CSS 选择器，默认覆盖 p/pre/h1~h6/li/blockquote/table 等块级元素',
-    '触发方式（trigger）：auto=自动 stagger；manual=需要配合外部触发器',
-    '使用示例（写到 markdown）：',
+    '  - document    整篇容器（一般交给 天行健）',
+    '命中元素（target）：CSS 选择器，默认覆盖 p/pre/h1~h6/li/blockquote/table',
+    '触发方式（trigger）：auto=自动 stagger；manual=需要外部触发器',
+    '使用示例：',
     '  @生生不息{scope: "siblings", trigger: "manual", target: "p, li"}(春风吹又生)',
-    '  ↑ scope / target / trigger 会通过 meta.attrs 传给 handler，可在 handler 内按需读取',
-    '模仿提示：要把 handlerExample 字段名改成 handler 即可接管运行时'
+    '模仿提示：把 handlerExample 字段名改成 handler 即可接管运行时'
   ])},
   kind: 'rune',
   runeId: 'growth',
@@ -75,48 +58,32 @@ const createGrowthAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '生生不息',
       description: attrs.desc || context.echo?.desc || '为附近符合条件的元素加上生长的动画特效',
       prompt,
-      // 👇 关键：attrs 里同时写入 kind/runeId 与用户级配置，handler 通过 meta.attrs 读取
       attrs: { ...attrs, kind: 'rune', runeId: 'growth', scope: attrs.scope || 'siblings', trigger: attrs.trigger || 'auto' },
       html: '<span class="ag-rune ag-rune--growth" data-rune-id="growth">生生不息</span>'
     }
   },
 
-  // 【模仿模板】apply(runeNode, scopeContainer, meta) 返回 cleanup？
-  //   把下面 handlerExample 改名 handler 即可接管运行时副作用
-  handlerExample: function (runeNode, scopeContainer, meta) {
-    // ★ meta = { runeId, kind, attrs }；attrs 已聚合自 placeholder 的 {key:value} + 定义 defaults
-    const attrs = (meta && meta.attrs) || {}
-    const scope = attrs.scope || 'siblings'   // siblings | prev-block | block | document
-    const trigger = attrs.trigger || 'auto'   // auto | manual
+  ${handlerExampleDoc([
+    '【示例模式】apply(runeNode, scopeContainer, meta) 返回 cleanup？',
+    '   __resolveScopeContainer(node, scope)  按 4 种 scope 取目标容器',
+    '   __safeQueryAll(root, sel)             容错 querySelectorAll',
+    '   __withAttrs(meta, defaults)           meta.attrs 默认值合并'
+  ])}
+    const attrs = __withAttrs(meta, { scope: 'siblings', trigger: 'auto' })
     const targetSelector = attrs.target || '[data-block-type], p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table'
-
-    // ★ 工具函数（与 EchoRuntime 内置 growth 一致，便于模仿）
-    const safeQueryAll = (root, sel) => Array.from((root || document).querySelectorAll(sel))
-    const resolveScopeContainer = (node, sc) => {
-      const block = node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table') || node.parentElement
-      switch ((sc || 'siblings').toLowerCase()) {
-        case 'prev-block': return block && block.previousElementSibling || block
-        case 'block':      return block
-        case 'document':   return node.closest('[data-echo-document], .mu-editor, article') || document.body
-        case 'siblings':
-        default:           return block && block.parentElement || document.body
-      }
-    }
-
-    const container = resolveScopeContainer(runeNode, scope)
+    const container = __resolveScopeContainer(runeNode, attrs.scope)
     if (!container) return () => {}
 
-    const targets = safeQueryAll(container, targetSelector)
+    const targets = __safeQueryAll(container, targetSelector)
     targets.forEach((node, i) => {
       node.classList.add('ag-rune-growth-target')
-      if (trigger === 'auto') {
-        // 错峰生长：每个兄弟的动画延迟按 index 拉开
+      if (attrs.trigger === 'auto') {
         node.style.setProperty('--ag-rune-growth-delay', (Math.min(i, 8) * 120) + 'ms')
       }
     })
     runeNode.classList.add('ag-rune-growth-active')
 
-    // ★ 必须返回 cleanup：下一次重渲染 / 卸载时被调用，撤销副作用
+    // 必须返回 cleanup：下一次重渲染 / 卸载时被调用，撤销副作用
     return () => {
       targets.forEach(node => node.classList.remove('ag-rune-growth-target'))
       runeNode.classList.remove('ag-rune-growth-active')
@@ -124,16 +91,16 @@ const createGrowthAnnoSource = () => `export default {
   }
 }`
 
-// ===== 2. 破万法：使附近一行或一个块的回响作用都失效 =====
+// ============================================================================
+// 3. 破万法（shatter）：让 nearby echo 失效
+// ============================================================================
 const createShatterAnnoSource = () => `export default {
   ${banner([
     '【破万法 / shatter】 —— 让附近一行或一个块的回响作用都失效',
-    '影响范围（target）：',
-    '  - line(默认)  同一 paragraph 内的兄弟 echo 实例',
-    '  - block       整个当前 block（含 heading / table / quote）',
-    '使用示例（写到 markdown）：',
+    '影响范围（target）：line(默认) 同段落的兄弟 echo；block 整个当前 block',
+    '使用示例：',
     '  @破万法{target: "block"}(此段一切回响失效)',
-    '模仿提示：把 handlerExample 改名 handler 即可实装；它会改写其它 echo 实例的 data-* 属性'
+    '模仿提示：把 handlerExample 改名 handler 即可实装'
   ])},
   kind: 'rune',
   runeId: 'shatter',
@@ -155,23 +122,23 @@ const createShatterAnnoSource = () => `export default {
     }
   },
 
-  handlerExample: function (runeNode, scopeContainer, meta) {
-    const attrs = (meta && meta.attrs) || {}
-    const target = attrs.target || 'line'
-    // ★ scope 选择：line → siblings；block → 整个当前 block
-    const scope = target === 'block' ? 'block' : 'siblings'
-    const container = scope === 'block'
-      ? (runeNode.closest('[data-block-type], .mu-block, p, pre, li, blockquote') || runeNode.parentElement)
-      : (runeNode.closest('[data-block-type], .mu-block, p, pre, li, blockquote')?.parentElement || scopeContainer)
-
+  ${handlerExampleDoc([
+    '【示例模式】target=line 关闭同段其他 echo；target=block 关闭整个 block'
+  ])}
+    const attrs = __withAttrs(meta, { target: 'line' })
+    const useBlockScope = attrs.target === 'block'
+    const container = useBlockScope
+      ? (runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement)
+      : __resolveScopeContainer(runeNode, 'siblings')
     if (!container) return () => {}
-    const echoes = Array.from(container.querySelectorAll('[data-echo-inline="true"]'))
-      .filter(n => n !== runeNode)
+
+    const echoes = __safeQueryAll(container, '[data-echo-inline="true"]').filter(n => n !== runeNode)
     echoes.forEach(n => {
       n.setAttribute('data-shatter-disabled', 'true')
       n.classList.add('ag-rune-shatter-disabled')
     })
     runeNode.classList.add('ag-rune-shatter-active')
+
     return () => {
       echoes.forEach(n => {
         n.removeAttribute('data-shatter-disabled')
@@ -182,15 +149,15 @@ const createShatterAnnoSource = () => `export default {
   }
 }`
 
-// ===== 3. 天行健：强化排版并指定某种主题 =====
+// ============================================================================
+// 4. 天行健（skywalk）：document 级别排版主题
+// ============================================================================
 const createSkywalkAnnoSource = () => `export default {
   ${banner([
     '【天行健 / skywalk】 —— 强化排版并切换主题（document 级别）',
-    '影响范围：document（整篇容器）',
     '参数：theme(light/dark/sepia/auto) + layout(compact/enhanced/luxe)',
-    '使用示例：',
-    '  @天行健{theme: "sepia", layout: "luxe"}(本文走浓郁路线)',
-    'CSS 钩子：容器上会有 data-skywalk-theme / data-skywalk-layout 属性，让 CSS 切换主题'
+    'CSS 钩子：data-skywalk-theme / data-skywalk-layout',
+    '示例：@天行健{theme: "sepia", layout: "luxe"}(本文走浓郁路线)'
   ])},
   kind: 'rune',
   runeId: 'skywalk',
@@ -212,44 +179,53 @@ const createSkywalkAnnoSource = () => `export default {
     }
   },
 
-  handlerExample: function (runeNode, scopeContainer, meta) {
-    const attrs = (meta && meta.attrs) || {}
-    const theme = attrs.theme || 'auto'
-    const layout = attrs.layout || 'enhanced'
+  ${handlerExampleDoc([
+    '【示例模式】document scope：记忆原值，cleanup 还原'
+  ])}
+    const attrs = __withAttrs(meta, { theme: 'auto', layout: 'enhanced' })
     const documentRoot = runeNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || scopeContainer || document.body
     if (!documentRoot) return () => {}
 
-    // ★ 记忆"原值"，cleanup 时还原
+    // 记忆原值，cleanup 还原
     const prev = {
       theme: documentRoot.getAttribute('data-skywalk-theme'),
       layout: documentRoot.getAttribute('data-skywalk-layout')
     }
-    documentRoot.setAttribute('data-skywalk-theme', theme)
-    documentRoot.setAttribute('data-skywalk-layout', layout)
+    documentRoot.setAttribute('data-skywalk-theme', attrs.theme)
+    documentRoot.setAttribute('data-skywalk-layout', attrs.layout)
     runeNode.classList.add('ag-rune-skywalk-active')
 
     return () => {
-      prev.theme === null
-        ? documentRoot.removeAttribute('data-skywalk-theme')
-        : documentRoot.setAttribute('data-skywalk-theme', prev.theme)
-      prev.layout === null
-        ? documentRoot.removeAttribute('data-skywalk-layout')
-        : documentRoot.setAttribute('data-skywalk-layout', prev.layout)
+      if (prev.theme === null) documentRoot.removeAttribute('data-skywalk-theme')
+      else documentRoot.setAttribute('data-skywalk-theme', prev.theme)
+      if (prev.layout === null) documentRoot.removeAttribute('data-skywalk-layout')
+      else documentRoot.setAttribute('data-skywalk-layout', prev.layout)
       runeNode.classList.remove('ag-rune-skywalk-active')
     }
   }
 }`
 
-// ===== 4. 双生花：复制上一个节点并占位 =====
+// ============================================================================
+// 5. 双生花（twinbloom）：clone prev-block / next-block / current
+//    这是用户最容易看出效果的 demo，特意把可见性做明显。
+// ============================================================================
 const createTwinbloomAnnoSource = () => `export default {
   ${banner([
-    '【双生花 / twinbloom】 —— 复制上一个节点生成占位（prev-block scope）',
-    '影响范围：prev-block（前一个 block）',
-    '参数：source=prev-block|next-block|clone-self；placeholder=占位文本',
+    '【双生花 / twinbloom】 —— 复制前/后一个 block 并生成占位副本',
+    '【核心】影响范围 source：',
+    '  - prev-block(默认) 前一块 block；克隆插入到当前 block 之后',
+    '  - next-block       下一块 block；克隆插入到当前 block 之前',
+    '  - clone-self       克隆当前 block；插入到当前 block 之后',
+    '参数：placeholder=占位文本（若 prev-block 无文本则用此填充）',
+    '可见性：克隆段落会带 .ag-rune-twinbloom-clone class 与粉紫虚线 outline；',
+    '  并在段落顶部贴一张 "🌸 双生花 · 双生节点" 标记条，便于直观确认已克隆。',
     '使用示例：',
-    '  @双生花{placeholder: "请把上半段论点重述一遍"}()',
-    '效果：在当前回响下方插入一个克隆前 block、占位文本提示',
-    '注意：cleanup 会把克隆节点删除，所以反复切换主题不会残留'
+    '  双生花1:  @双生花{source: "prev-block"}()                 ← 拷贝上方段落',
+    '  双生花2:  @双生花{source: "prev-block", placeholder: "..."}() ← 带占位',
+    '  双生花3:  @双生花{source: "next-block"}()                  ← 拷贝下方段落',
+    '  双生花4:  @双生花{source: "clone-self"}()                  ← 克隆当前段落',
+    '模仿提示：双生花的克隆是 readonly 的（contenteditable=false），',
+    '  想重新编辑请双击克隆块使其解除 readonly，或直接删除重写。'
   ])},
   kind: 'rune',
   runeId: 'twinbloom',
@@ -271,43 +247,110 @@ const createTwinbloomAnnoSource = () => `export default {
     }
   },
 
-  handlerExample: function (runeNode, scopeContainer, meta) {
-    const attrs = (meta && meta.attrs) || {}
+  ${handlerExampleDoc([
+    '【示例模式】3 种 source：克隆位置 / 可见性标记',
+    '  - 用 __resolveScopeContainer(., source) 直接复用 4 种 scope 的解析',
+    '  - 给克隆块加 outline + 标记条，cleanup 时一并移除'
+  ])}
+    const attrs = __withAttrs(meta, { source: 'prev-block', placeholder: '双生节点' })
+    const source = String(attrs.source || 'prev-block').toLowerCase()
     const placeholder = attrs.placeholder || '双生节点'
-    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
-    if (!block) return () => {}
 
-    // ★ 防重入：cleanup 时检查哨兵属性，避免反复注入
-    const twinId = runeNode.getAttribute('data-rune-id') || 'twinbloom'
-    if (block.nextElementSibling && block.nextElementSibling.getAttribute('data-twinbloom-of') === twinId) {
-      return () => {}
+    // 拿当前 block（runeNode 所在的 paragraph / heading 等）
+    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
+    if (!block || !block.parentElement) return () => {}
+
+    // 决定克隆源：
+    //   prev-block / next-block：取相邻 block；clone-self：取当前 block
+    let sourceNode = block
+    let insertTarget = block
+    if (source === 'prev-block') {
+      const resolved = __resolveScopeContainer(runeNode, 'prev-block')
+      if (resolved && resolved !== block) {
+        sourceNode = resolved
+        insertTarget = block  // 插入到当前 block 之后
+      }
+    } else if (source === 'next-block') {
+      const next = block.nextElementSibling
+      if (next && next !== block) {
+        sourceNode = next
+        insertTarget = block  // 插入到当前 block 之前（= 插到 insertTarget 之前）
+      }
+    } else {
+      // clone-self：克隆当前 block，插入到当前之后
+      sourceNode = block
+      insertTarget = block
     }
 
-    const cloned = block.cloneNode(true)
-    cloned.setAttribute('data-twinbloom-of', twinId)
-    cloned.classList.add('ag-rune-twinbloom-clone')
-    cloned.setAttribute('data-twinbloom-placeholder', placeholder)
-    if (!(cloned.textContent || '').trim()) cloned.textContent = placeholder
+    // 防重入：检查上一次插入的克隆
+    const twinId = runeNode.getAttribute('data-rune-id') || 'twinbloom'
+    const sentinel = 'data-twinbloom-of'
+    let cloned = null
+    let insertedBefore = (source === 'next-block')
+    let existedBefore = false
+    {
+      const neighbor = insertedBefore ? insertTarget.previousElementSibling : insertTarget.nextElementSibling
+      if (neighbor && neighbor.getAttribute(sentinel) === twinId) {
+        cloned = neighbor
+        existedBefore = true
+      }
+    }
+    if (!cloned) {
+      cloned = sourceNode.cloneNode(true)
+      cloned.setAttribute(sentinel, twinId)
+      cloned.setAttribute('data-twinbloom-source', source)
+      cloned.classList.add('ag-rune-twinbloom-clone')
+      // ★ 关键：用 style 直接加 outline / padding，让用户**直观看到克隆**，
+      //   不会与源 block 混淆；并把段落标只读防止误编辑
+      cloned.setAttribute('contenteditable', 'false')
+      cloned.style.outline = '2px dashed #8E24AA'
+      cloned.style.outlineOffset = '2px'
+      cloned.style.position = cloned.style.position || 'relative'
+      cloned.style.padding = cloned.style.padding || '8px 12px'
+      cloned.style.borderRadius = cloned.style.borderRadius || '6px'
+      cloned.style.background = 'rgba(142,36,170,0.06)'
 
-    block.parentElement && block.parentElement.insertBefore(cloned, block.nextSibling)
+      // 在克隆块顶部追加一张 "🌸 双生花 · 双生节点" 标记条（仅一次）
+      if (!cloned.querySelector('[data-twinbloom-badge]')) {
+        const badge = document.createElement('div')
+        badge.setAttribute('data-twinbloom-badge', twinId)
+        badge.textContent = '🌸 双生花 · ' + placeholder
+        badge.style.cssText = 'font-size:11px;color:#8E24AA;padding:2px 8px;background:rgba(142,36,170,.12);border:1px solid rgba(142,36,170,.4);border-radius:4px;display:inline-block;margin-bottom:6px;'
+        cloned.insertBefore(badge, cloned.firstChild)
+      }
+
+      // 若克隆源是 prev-block 但 prev-block 全空，用 placeholder 文本填充
+      if (source === 'prev-block' && !(cloned.textContent || '').trim()) {
+        cloned.textContent = placeholder
+      }
+
+      // 插入：
+      //   insertedBefore=true 时插入到 insertTarget 之前；否则插入到 insertTarget 之后
+      if (insertedBefore) {
+        block.parentElement.insertBefore(cloned, insertTarget)
+      } else {
+        block.parentElement.insertBefore(cloned, insertTarget.nextSibling)
+      }
+    }
     runeNode.classList.add('ag-rune-twinbloom-active')
 
     return () => {
-      if (cloned.parentElement) cloned.parentElement.removeChild(cloned)
+      if (!existedBefore && cloned && cloned.parentElement) {
+        cloned.parentElement.removeChild(cloned)
+      }
       runeNode.classList.remove('ag-rune-twinbloom-active')
     }
   }
 }`
 
-// ===== 5. 夺心魄：使附近符合条件的符文叠加或篡改某种制定的效果 =====
+// ============================================================================
+// 6. 夺心魄（mindsteal）：覆写 nearby rune 效果
+// ============================================================================
 const createMindstealAnnoSource = () => `export default {
   ${banner([
     '【夺心魄 / mindsteal】 —— 篡改附近符合条件的符文效果',
-    '影响范围：siblings（相邻符文节点）',
     '参数：mode=override|stack|disable；targets=其它 runeId（逗号分隔）',
-    '使用示例：',
-    '  @夺心魄{mode: "disable", targets: "growth,skywalk"}(覆盖附近的生长与主题)',
-    '效果：把命中元素的 data-mindsteal-mode 写入；CSS/其它 handler 据此分支'
+    '示例：@夺心魄{mode: "disable", targets: "growth,skywalk"}(覆盖附近的生长与主题)'
   ])},
   kind: 'rune',
   runeId: 'mindsteal',
@@ -329,23 +372,22 @@ const createMindstealAnnoSource = () => `export default {
     }
   },
 
-  handlerExample: function (runeNode, scopeContainer, meta) {
-    const attrs = (meta && meta.attrs) || {}
-    const mode = attrs.mode || 'override'
+  ${handlerExampleDoc([
+    '【示例模式】mode=disable 直接停掉动画，stack/override 由各 rune 自己解读'
+  ])}
+    const attrs = __withAttrs(meta, { mode: 'override', targets: '' })
     const targetsCsv = String(attrs.targets || '').trim()
     const targets = targetsCsv ? targetsCsv.split(',').map(s => s.trim()).filter(Boolean) : null
-    const siblings = (runeNode.closest('[data-block-type], .mu-block, p, pre, li, blockquote')?.parentElement) || scopeContainer
-    if (!siblings) return () => {}
+    const container = __resolveScopeContainer(runeNode, 'siblings')
+    if (!container) return () => {}
 
-    // ★ 命中"附近的 rune host"：带 data-rune-id 的元素；按 targets 过滤
-    const candidates = Array.from(siblings.querySelectorAll('[data-rune-id]'))
+    const candidates = __safeQueryAll(container, '[data-rune-id]')
       .filter(n => n !== runeNode)
       .filter(n => !targets || targets.includes(n.getAttribute('data-rune-id')))
 
     candidates.forEach(n => {
-      n.setAttribute('data-mindsteal-mode', mode)
-      // ★ 覆盖式:直接关闭其它 rune 的副作用；stack 模式则由各 handler 自己解读
-      if (mode === 'disable') n.style.setProperty('animation', 'none', 'important')
+      n.setAttribute('data-mindsteal-mode', attrs.mode)
+      if (attrs.mode === 'disable') n.style.setProperty('animation', 'none', 'important')
     })
     runeNode.classList.add('ag-rune-mindsteal-active')
 
@@ -359,18 +401,15 @@ const createMindstealAnnoSource = () => `export default {
   }
 }`
 
-// ===== 6. 强运：点击后触发 AI 识别当前 MD 的错别字并修正 =====
+// ============================================================================
+// 7. 强运（lucky）：点击触发 AI 校对（事件型）
+// ============================================================================
 const createLuckyAnnoSource = () => `export default {
   ${banner([
-    '【强运 / lucky】 —— 点击触发 AI 校对，是"事件型 rune"的样板',
-    '影响范围：当前回响节点自身（不入侵其它 block）',
-    '参数：action=ai-proofread|ai-translate|...；model=default|gpt-4o-mini|...',
-    '事件流：',
-    '  1. handler 给 runeNode 加 role=button / tabindex=0 让他可键盘/鼠标激活',
-    '  2. 点击时调用 window.__memocastRuneHandlers.lucky({runeNode, meta})，由用户在应用层注册',
-    '  3. 应用层回调里执行 AI 调用，把结果通过 Muya API 写回 md',
-    '使用示例：',
-    '  @强运{model: "gpt-4o-mini", action: "ai-proofread"}(一键润色)',
+    '【强运 / lucky】 —— 点击触发 AI 校对，是"事件型 rune"样板',
+    '事件流：handler 给节点加 role=button / tabindex=0；点击时调用',
+    '  window.__memocastRuneHandlers.lucky({runeNode, meta})，由应用层注册回调',
+    '示例：@强运{model: "gpt-4o-mini", action: "ai-proofread"}(一键润色)',
     '模仿提示：把 handlerExample 改成 handler 后，再注册 window.__memocastRuneHandlers.lucky'
   ])},
   kind: 'rune',
@@ -393,39 +432,35 @@ const createLuckyAnnoSource = () => `export default {
     }
   },
 
-  handlerExample: function (runeNode, scopeContainer, meta) {
-    const attrs = (meta && meta.attrs) || {}
-    const label = attrs.label || '点击触发 AI 校对'
-
+  ${handlerExampleDoc([
+    '【示例模式】事件型 handler：cleanup 必须解绑 + 移除属性',
+    '   handlerExample 给节点加 role=button / tabindex=0；click 与 Enter/Space 触发',
+    '   callback 走 window.__memocastRuneHandlers.lucky（应用层注册）'
+  ])}
+    const attrs = __withAttrs(meta, { label: '点击触发 AI 校对' })
     runeNode.style.cursor = 'pointer'
     runeNode.setAttribute('role', 'button')
     runeNode.setAttribute('tabindex', '0')
-    runeNode.setAttribute('title', label)
+    runeNode.setAttribute('title', attrs.label)
     runeNode.classList.add('ag-rune-lucky-active')
 
-    // ★ 触发器：用户点 / 按回车 / 按空格都视为激活
     const trigger = async (ev) => {
       ev.preventDefault(); ev.stopPropagation()
       runeNode.classList.add('ag-rune-lucky-loading')
       try {
-        const handler = (typeof window !== 'undefined') ? (window.__memocastRuneHandlers && window.__memocastRuneHandlers.lucky) : null
-        if (typeof handler === 'function') {
-          await handler({ runeNode, meta, scopeContainer })
-        } else {
-          console.info('[lucky] no window.__memocastRuneHandlers.lucky registered')
-        }
-      } catch (err) {
-        console.error('[lucky] handler failed:', err)
-      } finally {
-        runeNode.classList.remove('ag-rune-lucky-loading')
-      }
+        const handler = (typeof window !== 'undefined')
+          ? (window.__memocastRuneHandlers && window.__memocastRuneHandlers.lucky)
+          : null
+        if (typeof handler === 'function') await handler({ runeNode, meta, scopeContainer })
+        else console.info('[lucky] no window.__memocastRuneHandlers.lucky registered')
+      } catch (err) { console.error('[lucky] handler failed:', err) }
+      finally { runeNode.classList.remove('ag-rune-lucky-loading') }
     }
     const onClick = (ev) => trigger(ev)
     const onKey = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') trigger(ev) }
     runeNode.addEventListener('click', onClick)
     runeNode.addEventListener('keydown', onKey)
 
-    // ★ cleanup 必须解绑事件、移除属性 —— 否则下次重渲染会重复触发
     return () => {
       runeNode.removeEventListener('click', onClick)
       runeNode.removeEventListener('keydown', onKey)
@@ -438,15 +473,14 @@ const createLuckyAnnoSource = () => `export default {
   }
 }`
 
-// ===== 7. 替罪：占位型 rune，规则待定 =====
+// ============================================================================
+// 8. 替罪（scapegoat）：rune-tbd 占位
+// ============================================================================
 const createScapegoatAnnoSource = () => `export default {
   ${banner([
-    '【替罪 / scapegoat】 —— 占位符文，规则尚未敲定（rune-tbd）',
-    '回响种类：rune-tbd（兜底 handler 仅给节点加 active 标记，无业务效果）',
-    '模仿提示：在被替换为正式实现之前，它只是"占位 + 等待被改造"的样板',
-    '  - 期望：用户写下 @替罪{key: "value"}(prompt)',
-    '  - 占位 handler 拿到 meta 后只打 console.info，便于调试',
-    '  - 实战者可把 kind 改为 rune 并补一份完整 handler'
+    '【替罪 / scapegoat】 —— 占位符文（rune-tbd）',
+    '回响种类：rune-tbd（兜底 handler 仅给节点加 active 标记）',
+    '模仿提示：把 kind 改为 rune 并补一份完整 handler 即可接管'
   ])},
   kind: 'rune-tbd',
   runeId: 'scapegoat',
@@ -468,21 +502,23 @@ const createScapegoatAnnoSource = () => `export default {
     }
   },
 
-  // 【stub 示例】仅打印、便于调试
-  handlerExample: function (runeNode, _container, meta) {
+  ${handlerExampleDoc([
+    '【stub 示例】仅打印、便于调试'
+  ])}
     runeNode.classList.add('ag-rune-scapegoat-stub')
     console.info('[scapegoat] stub invoked, attrs =', meta && meta.attrs)
     return () => runeNode.classList.remove('ag-rune-scapegoat-stub')
   }
 }`
 
-// ===== 8. 招灾：占位型 rune，规则待定 =====
+// ============================================================================
+// 9. 招灾（calamity）：rune-tbd 占位
+// ============================================================================
 const createCalamityAnnoSource = () => `export default {
   ${banner([
-    '【招灾 / calamity】 —— 占位符文，规则尚未敲定（rune-tbd）',
-    '回响种类：rune-tbd（同 scapegoat，仅 active 标记）',
-    '设计目的：保留一个"敌人触发型 / 受难型"语义位，等规则敲定再补 handler',
-    '模仿提示：把它当成"占位咒语"的样品，演示如何安全地把一个未实现的 rune 接入 runtime'
+    '【招灾 / calamity】 —— 占位符文（rune-tbd）',
+    '回响种类：rune-tbd（同 scapegoat）',
+    '模仿提示：当规则敲定时把 kind 改为 rune，补上完整 handler'
   ])},
   kind: 'rune-tbd',
   runeId: 'calamity',
@@ -504,22 +540,24 @@ const createCalamityAnnoSource = () => `export default {
     }
   },
 
-  handlerExample: function (runeNode, _container, meta) {
+  ${handlerExampleDoc([
+    '【stub 示例】仅打印、便于调试'
+  ])}
     runeNode.classList.add('ag-rune-calamity-stub')
     console.info('[calamity] stub invoked, attrs =', meta && meta.attrs)
     return () => runeNode.classList.remove('ag-rune-calamity-stub')
   }
 }`
 
-// ===== 9. 离析：使附近的元素使用更加宽松的排版 =====
+// ============================================================================
+// 10. 离析（disperse）：让附近元素排版更宽松
+// ============================================================================
 const createDisperseAnnoSource = () => `export default {
   ${banner([
-    '【离析 / disperse】 —— 让附近元素使用更宽松的排版（block 级别）',
-    '影响范围：block（当前 block）',
+    '【离析 / disperse】 —— 让附近元素使用更宽松排版（block 级别）',
     '参数：density=tight|normal|loose（loose 是默认）',
-    '使用示例：',
-    '  @离析{density: "tight"}(回归紧凑排版)',
-    'CSS 钩子：在容器上写 data-disperse-density，CSS 据此调整 line-height / margin'
+    'CSS 钩子：data-disperse-density',
+    '示例：@离析{density: "tight"}(回归紧凑排版)'
   ])},
   kind: 'rune',
   runeId: 'disperse',
@@ -541,33 +579,32 @@ const createDisperseAnnoSource = () => `export default {
     }
   },
 
-  handlerExample: function (runeNode, _scopeContainer, meta) {
-    const attrs = (meta && meta.attrs) || {}
-    const density = attrs.density || 'loose'
+  ${handlerExampleDoc([
+    '【示例模式】block scope 写 data-disperse-density；CSS 据此调整 line-height/margin'
+  ])}
+    const attrs = __withAttrs(meta, { density: 'loose' })
     const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
     if (!block) return () => {}
 
-    // ★ 记忆原值
     const previous = block.getAttribute('data-disperse-density')
-    block.setAttribute('data-disperse-density', density)
+    block.setAttribute('data-disperse-density', attrs.density)
     runeNode.classList.add('ag-rune-disperse-active')
 
     return () => {
-      previous === null
-        ? block.removeAttribute('data-disperse-density')
-        : block.setAttribute('data-disperse-density', previous)
+      if (previous === null) block.removeAttribute('data-disperse-density')
+      else block.setAttribute('data-disperse-density', previous)
       runeNode.classList.remove('ag-rune-disperse-active')
     }
   }
 }`
 
-// ===== 10. 报时（clock）：演示"用户自定义 rune handler"—— 这个内置 handler 真正实装，是样板 =====
+// ============================================================================
+// 11. 报时（clock）：真正实装 handler 的样板（事件型 + 周期型）
+// ============================================================================
 const createClockAnnoSource = () => `export default {
   ${banner([
-    '【报时 / clock】 —— 演示"内置已实装 handler"的样板',
-    '★ 这是 11 个内置回响里唯一既在 anno_source 内提供 handler、又同时被运行时的内置 handler 注册占用的',
-    '因为内置的 RUNE_HANDLERS 中没有 clock，anno_source 自己的 handler 会通过 compileDefinition 自动注册并优先命中。',
-    '模仿提示：把这一段当成"事件型 + 周期型"handler 的最小可运行示例：',
+    '【报时 / clock】 —— 11 个内置回响里唯一已实装 handler 的样板',
+    '模仿提示：把这一段当成"事件型 + 周期型"handler 的最小可运行示例',
     '  - 找到 runeNode.closest 的 block 容器',
     '  - 在容器内追加一个 span，每秒更新文本',
     '  - cleanup 必须 clearInterval + DOM 移除'
@@ -659,7 +696,7 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
   Object.freeze({
     id: '__builtin_twinbloom__',
     name: '双生花',
-    desc: '复制上一个节点并占位',
+    desc: '复制前/后一个 block 并生成占位副本',
     icon: 'local_florist',
     color: '#8E24AA',
     anno_source: createTwinbloomAnnoSource(),
