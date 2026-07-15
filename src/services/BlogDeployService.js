@@ -584,10 +584,20 @@ export default {
     const date = new Date().toISOString().split('T')[0]
     const title = (baseName || note.title).replace(/\.md$/i, '')
     const permalink = permalinkFor(dirTag, baseName || title)
+    // 把单字符串 category 转成 vuepress 默认主题识别的数组形式。
+    // - '技术/前端' 这种带斜杠的层级保留,默认主题会把 'a/b' 解析为多级侧栏。
+    // - 空 category 不写 categories 行,避免污染 frontmatter。
+    // - 内部单引号转义避免破坏 YAML 字符串;理论上 category 来源是 Memocast
+    //   内部分类,通常不夹带 '。
+    const catRaw = (note.category || '').trim()
+    const catSafe = catRaw ? catRaw.replace(/'/g, "\\'") : ''
+    const categoriesLine = catSafe
+      ? `categories: ['${catSafe}']\n`
+      : ''
     if (theme === 'vdoing') {
-      return `---\ntitle: ${title}\ndate: ${date}\npermalink: ${permalink}\nsidebar: auto\n---\n`
+      return `---\ntitle: ${title}\ndate: ${date}\npermalink: ${permalink}\nsidebar: auto\n${categoriesLine}---\n`
     }
-    return `---\ntitle: ${title}\ndate: ${date}\npermalink: ${permalink}\n---\n`
+    return `---\ntitle: ${title}\ndate: ${date}\npermalink: ${permalink}\n${categoriesLine}---\n`
   },
 
   /**

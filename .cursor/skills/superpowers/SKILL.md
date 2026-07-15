@@ -39,6 +39,7 @@ description: coolma/Memocast 项目专用复杂任务工作流指南。用于分
 | `note-layout-design` | 三栏布局、分割器、面板显隐、响应式、主题 CSS | 涉及布局与编辑器联动时的全局协调，并提醒区分分类树、标签 treemap、日历筛选三种左侧语义 |
 | `wiznote-api` | WizNote REST API、Token 认证、笔记 CRUD、文件夹、标签、资源上传 | 涉及 API 与本地数据库协同时的数据流梳理，并提醒登录会自动更新知识库 baseUrl、`updateNoteInfo()` 可能承载分类移动语义 |
 | `sync-design` | SQLite 数据库、dirty 状态模型、本地优先同步、GUID 映射、恢复/备份策略 | 涉及同步逻辑扩展或修改时的一致性校验，避免重新引入传统 conflict 状态思维 |
+| `blog-deploy-design` | Vuepress 1.x 博客部署流水线、`id-mappings.json` / `seq-manifest.json` 中间产物、permalink 平铺模式、sidebar/nav/verify builders、GitHub Actions + SFTP 推送、base 规范化 | 涉及 blog 目录结构、侧栏 / 导航分组、部署流水线、SFTP 上传、id 短链、frontmatter 注入 categories、构建产物分发等任务时直接落到本专项技能 |
 
 当任务落在单一专项技能的职责范围时，优先使用该技能；当任务跨越多个技能范围，或用户要求“先分析再改”时，使用本技能作为入口工作流。
 

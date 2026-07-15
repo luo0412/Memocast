@@ -26,6 +26,18 @@ const OUT      = path.join(VP_DIR, 'sidebar.json')
 
 function readJson (p, fb) { try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch (_) { return fb } }
 
+// 把 category 字符串清洗成 frontend 用的"分类标题"。
+// 输入 "技术/前端" → "技术/前端";空或纯空白 → "未分类"。
+function normalizeCategory (rawCategory) {
+  if (!rawCategory || typeof rawCategory !== 'string') return '未分类'
+  const t = rawCategory.replace(/\\\\/g, '/').trim().replace(/^\\/+|\\/+$/g, '')
+  return t || '未分类'
+}
+
+// 把扁平 items 按 category 聚合成二维数组形态,供 vuepress sidebar 使用:
+//   { '/': [ { title, collapsable, children }, ... ] }
+// '/ ' 前缀对应 permalink=/<id>.html 的页面路由。
+// 这样渲染时 sidebar 会按 category 自动分块,且同 category 内按 seq 排序。
 function buildSidebar () {
   const idMap = readJson(IDMAP, { mappings: [] })
   const seq   = readJson(SEQ, {})
@@ -38,10 +50,29 @@ function buildSidebar () {
   }))
   items.sort((a, b) => (a.seq - b.seq) || a.title.localeCompare(b.title))
 
-  const sidebar = { '_posts/': items.map(it => ({ title: it.title, path: it.path })) }
+  // 按 category 分组,稳定顺序(按出现次序: 先出现的分类先排)
+  const groupMap = new Map()
+  const groupOrder = []
+  for (const it of items) {
+    const cat = normalizeCategory(it.category)
+    if (!groupMap.has(cat)) {
+      groupMap.set(cat, [])
+      groupOrder.push(cat)
+    }
+    groupMap.get(cat).push({ title: it.title, path: it.path })
+  }
+
+  const groups = groupOrder.map(cat => ({
+    title: cat,
+    collapsable: true,
+    children: groupMap.get(cat)
+  }))
+
+  // vuepress 1.x 默认主题: sidebar 顶层 key '/' 对应 permalink=/<id>.html 的全部页面
+  const sidebar = { '/': groups }
 
   fs.writeFileSync(OUT, JSON.stringify(sidebar, null, 2), 'utf-8')
-  console.log('[sidebar-builder] wrote', items.length, 'entries ->', OUT)
+  console.log('[sidebar-builder] wrote', items.length, 'entries in', groups.length, 'groups ->', OUT)
   return sidebar
 }
 
