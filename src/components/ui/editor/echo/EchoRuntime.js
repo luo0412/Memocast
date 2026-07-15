@@ -487,8 +487,8 @@ const safeEvalFactory = (source = '', prelude = '') => {
 // 渲染管线：
 //   1. parseEchoAttrs / decodeEchoPayload 解析 token
 //   2. definition.render() 拿到标准化结果（包含 attrs.kind / attrs.runeId）
-//   3. EchoRuntime.render() 在 kind === 'echo-chant' | 'echo-tbd'（旧 'rune' | 'rune-tbd'）
-//      时挂 echoChantMeta（旧 runeMeta 双轨同步保留）
+//   3. EchoRuntime.render() 在 kind === 'echo-chant' | 'echo-tbd' 时挂 echoChantMeta
+//      （已重命名，旧名 'rune' / 'rune-tbd' / 'runeMeta' 全部清除，无兼容分支）
 //   4. 编辑器把 rendered HTML 插入到内容容器
 //   5. 容器完成 paint 后调用 registry.afterRender(container, runes)
 //      逐个调用对应 handler，给附近节点施加运行时副作用
@@ -747,8 +747,8 @@ const tbdHandler = {
   id: '__echo_chant_tbd__',
   match (meta) { return meta && meta.kind === 'echo-tbd' },
   apply (chantNode, _scopeContainer, _meta) {
-    addClassOnce(chantNode, 'ag-rune-tbd-active')
-    return () => removeClasses(chantNode, 'ag-rune-tbd-active')
+    addClassOnce(chantNode, 'ag-echo-tbd-active')
+    return () => removeClasses(chantNode, 'ag-echo-tbd-active')
   }
 }
 

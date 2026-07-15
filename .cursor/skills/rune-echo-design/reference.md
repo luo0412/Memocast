@@ -271,7 +271,7 @@ resolveEchoChantHandler (meta) {
 | calamity | 同段落文字节点 | 给随机文字片段加 `ag-rune-calamity-gothic` | 移除 class |
 | disperse | 当前 block | 加 `data-disperse-density` | 移除属性 |
 
-> `__echo_chant_tbd__` 是 echo-tbd 的兜底 handler，只给节点加 `ag-rune-tbd-active` class，没有真实副作用。
+> `__echo_chant_tbd__` 是 echo-tbd 的兜底 handler，只给节点加 `ag-echo-tbd-active` class，没有真实副作用。
 
 ### 4.7 scope 解析（resolveScopeContainer）
 

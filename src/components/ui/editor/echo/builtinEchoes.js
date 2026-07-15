@@ -530,8 +530,8 @@ const createLuckyAnnoSource = () => `export default {
 const createScapegoatAnnoSource = () => `export default {
   ${banner([
     '【替罪 / scapegoat】 —— 作用域内的"救场位"',
-    '回响种类：rune（替换原 rune-tbd 占位）',
-    '语义：把最近 block 标为 standby；后续 rune / DOM 抛错时把 standby 转 injured，错误写到 data-scapegoat-error',
+    '回响种类：echo-chant（影响附近元素、做防灾 / 占位 / 兜底）',
+    '语义：把最近 block 标为 standby；后续 echo / DOM 抛错时把 standby 转 injured，错误写到 data-scapegoat-error',
     '模仿提示：把 attr.intensity 改成 0.5 可以让 standby 默认变 injured（模拟"已知错误"）'
   ])},
   kind: 'echo-chant',
@@ -597,12 +597,12 @@ const createScapegoatAnnoSource = () => `export default {
 }`
 
 // ============================================================================
-// 9. 招灾（calamity）：rune-tbd 占位
+// 9. 招灾（calamity）：echo-chant（随机染色）
 // ============================================================================
 const createCalamityAnnoSource = () => `export default {
   ${banner([
     '【招灾 / calamity】 —— "随机哥德"：作用域内随机给文字片段染上哥特渐变彩',
-    '回响种类：rune（替换原 rune-tbd 占位）',
+    '回响种类：echo-chant（影响附近元素、做染色 / 炫彩 / 动效）',
     '参数：intensity = 0.1-0.8 的小数（默认 0.3，最大 0.8）',
     'CSS 钩子：.ag-rune-calamity-gothic',
     '示例：@招灾{intensity: 0.5}(周围一半文字染彩)'

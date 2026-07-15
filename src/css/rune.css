@@ -1,15 +1,15 @@
 /* ============================================================
- * 多符文运行时样式（Echo 体系的 echo-chant 子分类）
+ * 多回响运行时样式（Echo 体系的 echo-chant 子分类）
  * 配合 EchoRuntime.js 中的 ECHO_CHANT_HANDLERS 使用
  *
  * - 触发点：[data-rune-id]（由 EchoRuntime.renderToHtml 注入，与 markdown ABI 同名）
- * - kind 枚举：'echo-chant' / 'echo-tbd'（旧 'rune' / 'rune-tbd' 在 _readKindAttr 中已并入）
+ * - kind 枚举：'echo-chant' / 'echo-tbd'
  * - 副作用样式：ag-rune-<runeId>-target / -active / -disabled
  * - 容器属性：data-skywalk-theme / data-skywalk-layout / data-disperse-density
  *
  * 注意：
- *   CSS class 名（ag-rune-*）保留 'rune' 字面以减少回归风险；
- *   本文件仅在注释层与新口径（echo-chant / echo-tbd）对齐。
+ *   data-rune-id / data-rune-kind / ag-rune-* class 是历史 markdown / DOM ABI，
+ *   代码层面已重命名为 echo-chant / echo-tbd，不再保留旧名兼容分支。
  * ============================================================ */
 
 /* ====================== 共同基类 ====================== */
@@ -22,8 +22,8 @@
   padding: 0 4px;
   transition: background 0.2s ease, transform 0.2s ease;
 }
-.ag-echo-inline[data-rune-kind="rune"]::before {
-  content: "符文";
+.ag-echo-inline[data-rune-kind="echo-chant"]::before {
+  content: "回响·咏唱";
   font-size: 10px;
   color: var(--echo-color, #43A047);
   border: 1px solid currentColor;
@@ -32,8 +32,8 @@
   line-height: 1.4;
   opacity: 0.7;
 }
-.ag-echo-inline[data-rune-kind="rune-tbd"]::before {
-  content: "待定";
+.ag-echo-inline[data-rune-kind="echo-tbd"]::before {
+  content: "回响·待定";
   font-size: 10px;
   color: #9E9E9E;
   border: 1px dashed currentColor;

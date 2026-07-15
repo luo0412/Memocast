@@ -173,8 +173,8 @@ renderToHtml (token, echo) {
             data-echo-name="${echoName}"
             data-echo-id="${echoId}"
             data-echo-value="${value}"
-            data-rune-id="${runeMeta?.runeId}"  // 如果是 kind:'rune'
-            data-rune-kind="${runeMeta?.kind}"
+            data-rune-id="${echoChantMeta?.runeId}"  // 如果是 kind:'echo-chant'
+            data-rune-kind="${echoChantMeta?.kind}"
             style="--echo-color:${color}">
             <span class="ag-echo-inline__badge">
               <i class="material-icons">${icon}</i>
