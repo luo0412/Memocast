@@ -447,7 +447,7 @@ export const backfillEchoAnnotationsInMarkdown = ({ markdown = '', echoCards = [
 //      兼容部分 .style / .dataset 直接读写的场景）。
 const HANDLER_PRELUDE_SOURCE = [
   "const __safeDollarRuntime = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null",
-  "if (!__safeDollarRuntime) console.warn('[EchoRuntime] jQuery is missing on window; rune handlers will fall back to no-op')",
+  "if (!__safeDollarRuntime) console.warn('[EchoRuntime] jQuery is missing on window; echo handlers will fall back to no-op')",
   "const $ = __safeDollarRuntime",
   "const __resolveScopeContainer = (node, scope) => {",
   "  if (!node || typeof node.closest !== 'function') return null",
