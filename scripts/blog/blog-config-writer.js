@@ -238,6 +238,35 @@ function readBaseFromConfigFile (configPath) {
 }
 
 /**
+ * 把用户输入的 base 字符串规范化成 vuepress 期望的形态。
+ * 与 api.js / blog-deploy-handler 的 normalizeBase 同形态。
+ *
+ *   ''         → ''
+ *   './'       → './'
+ *   './foo'    → './foo/'
+ *   '/foo'     → '/foo/'
+ *   '/foo/'    → '/foo/'
+ *   '/'        → '/'
+ */
+function normalizeBase (raw) {
+  if (!raw || typeof raw !== 'string') return ''
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  if (trimmed === './') return './'
+  const quoted = trimmed.match(/^(['"`])(.*)\1$/)
+  const v = quoted ? quoted[2] : trimmed
+  if (v.startsWith('/')) {
+    const collapsed = '/' + v.replace(/^\/+/, '').replace(/\/+$/, '')
+    if (collapsed === '/') return '/'
+    return collapsed + '/'
+  }
+  if (v.startsWith('./') || v.startsWith('../')) {
+    return v.endsWith('/') ? v : v + '/'
+  }
+  return v
+}
+
+/**
  * 替换（或插入）config.js 里的 `base` 字段——覆盖语义。
  * 与 blog-deploy-handler.js 的 replaceBaseInConfig 同形态。
  */
@@ -292,7 +321,7 @@ async function writeVuepressConfig (blogDir, theme = 'default', opts = {}) {
   const vpDir = path.join(blogDir, '.vuepress')
   await fse.ensureDir(vpDir)
   const configPath = path.join(vpDir, 'config.js')
-  const rawBase = (opts.base && typeof opts.base === 'string') ? opts.base.trim() : ''
+  const rawBase = normalizeBase(opts.base)
   const quotedBase = rawBase
     ? ( /^['"`].*['"`]$/.test(rawBase)
         ? rawBase

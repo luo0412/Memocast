@@ -414,17 +414,59 @@ async function replaceBaseInConfig (configPath, quotedBase, rawBaseForLog) {
 }
 
 /**
- * 把传进来的 base 字符串包装成 config.js 里 `base: '...'` 字面量。
- * - 缺失/空值/纯空白 → 返回 ''
- * - 已经带引号 → 原样返回
- * - 否则用单引号包裹并转义内部单引号
+ * 把用户输入的 base 字符串规范化成 vuepress 期望的形态。
+ *
+ * 约定（与 vuepress 1.x base 文档一致: 绝对 base 必须以 / 开头和结尾）：
+ *   ''        → ''           (空 = 不强制覆盖)
+ *   './'      → './'         (相对路径保留原样,常见于 github-pages)
+ *   './foo'   → './foo/'     (相对路径补尾斜杠)
+ *   '/foo'    → '/foo/'      (绝对路径补尾斜杠)
+ *   '/foo/'   → '/foo/'      (已是规范形式)
+ *   '/'       → '/'          (整站根)
+ *   '/foo///' → '/foo/'      (多余尾斜杠折叠)
+ *
+ * 不在这里加引号、不在这里转义单引号——那是 quoteBase 的职责。
+ * 这个函数只在"裸字符串"层面规范化字面值。
+ *
+ * @param {unknown} base
+ * @returns {string}
  */
-function quoteBase (base) {
+function normalizeBase (base) {
   if (!base || typeof base !== 'string') return ''
   const trimmed = base.trim()
   if (!trimmed) return ''
-  if (/^['"`].*['"`]$/.test(trimmed)) return trimmed
-  return `'${trimmed.replace(/'/g, "\\'")}'`
+  if (trimmed === './') return './'
+
+  // 已经带引号 → 解开再规范化、再让 quoteBase 重新加引号
+  const quotedMatch = trimmed.match(/^(['"`])(.*)\1$/)
+  const raw = quotedMatch ? quotedMatch[2] : trimmed
+
+  // 绝对路径: 折叠前导/尾随多余斜杠
+  if (raw.startsWith('/')) {
+    const collapsed = '/' + raw.replace(/^\/+/, '').replace(/\/+$/, '')
+    if (collapsed === '/') return '/'           // 输入是 '/'
+    return collapsed + '/'
+  }
+  // 相对路径(./ 或 ../ 等): 补尾斜杠
+  if (raw.startsWith('./') || raw.startsWith('../')) {
+    return raw.endsWith('/') ? raw : raw + '/'
+  }
+  // 既不是绝对也不是 ./ 开头的相对 → 视为非法,直接原样返回,
+  // 不强行猜(避免给用户静默改成奇怪值)
+  return raw
+}
+
+/**
+ * 把 base 字符串包裹成可写入 JS 文件的字面量。
+ * - 缺失/空值/纯空白 → 返回 ''
+ * - 已经带引号 → 解开+规范化+重新加引号
+ * - 内部单引号用反斜杠转义
+ */
+function quoteBase (base) {
+  const normalized = normalizeBase(base)
+  if (!normalized) return ''
+  if (/^['"`].*['"`]$/.test(normalized)) return normalized
+  return `'${normalized.replace(/'/g, "\\'")}'`
 }
 
 /**

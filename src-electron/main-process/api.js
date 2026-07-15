@@ -19,6 +19,40 @@ const {
   dialog
 } = require('electron')
 const sanitize = require('sanitize-filename')
+
+/**
+ * 把 IPC 边界传入的 base 字符串规范化成 vuepress 期望的形态。
+ *
+ * 约定（与 vuepress 1.x base 文档一致：绝对 base 必须以 / 开头和结尾）：
+ *   ''         → ''
+ *   './'       → './'
+ *   './foo'    → './foo/'
+ *   '/foo'     → '/foo/'
+ *   '/foo/'    → '/foo/'
+ *   '/'        → '/'
+ *   '/foo///'  → '/foo/'
+ *
+ * 与 blog-deploy-handler 的 normalizeBase 同形态；这里在 IPC 边界先做一次,
+ * 是为了让"用户实际写入文件的值"和"日志里看到的值"一致。
+ */
+function normalizeBase (raw) {
+  if (!raw || typeof raw !== 'string') return ''
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  if (trimmed === './') return './'
+  const quoted = trimmed.match(/^(['"`])(.*)\1$/)
+  const v = quoted ? quoted[2] : trimmed
+  if (v.startsWith('/')) {
+    const collapsed = '/' + v.replace(/^\/+/, '').replace(/\/+$/, '')
+    if (collapsed === '/') return '/'
+    return collapsed + '/'
+  }
+  if (v.startsWith('./') || v.startsWith('../')) {
+    return v.endsWith('/') ? v : v + '/'
+  }
+  return v
+}
+
 /**
  * 在本地注册对应的事件句柄，用于解决对应的事件
  * @param {string} channel 频道名称
@@ -309,8 +343,9 @@ export default {
      * Blog Deploy: start build + GitHub trigger
      */
     handleApi('start-blog-deploy', async (e, { blogDir, githubConfig, theme, sftpConfig, customBuildCommand, base }) => {
+      const normalizedBase = normalizeBase(base)
       const { execBlogBuild } = require('./service/blog-deploy-handler')
-      return execBlogBuild(blogDir, githubConfig, e, theme, sftpConfig, customBuildCommand, base)
+      return execBlogBuild(blogDir, githubConfig, e, theme, sftpConfig, customBuildCommand, normalizedBase)
     }).catch(err => throw err)
 
     /**
