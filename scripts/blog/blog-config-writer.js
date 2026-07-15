@@ -238,55 +238,97 @@ function readBaseFromConfigFile (configPath) {
 }
 
 /**
- * 写/合并 .vuepress/config.js —— 不再"每次强行覆盖"。
+ * 替换（或插入）config.js 里的 `base` 字段——覆盖语义。
+ * 与 blog-deploy-handler.js 的 replaceBaseInConfig 同形态。
+ */
+async function replaceBaseInConfig (configPath, quotedBase, rawBaseForLog) {
+  const src = fse.readFileSync(configPath, 'utf-8')
+  const inner = quotedBase.slice(1, -1).replace(/\\'/g, "'")
+  // 整段替换 `base: 'x'` → `base: 'new', // memocast: base=...
+  // 这里必须重新生成尾部的 `,`,因为原 `,` 不在第一组捕获里,会落到注释后导致语法错。
+  const replaced = src.replace(
+    /(\bbase\s*:\s*)(['"`])([^'"`]*)\2(\s*,)?/,
+    (_m, head, quote, _old, trailingComma) => {
+      const tail = trailingComma || ','
+      return `${head}${quote}${inner}${quote}${tail} // memocast: base=${rawBaseForLog}`
+    }
+  )
+  if (replaced !== src) {
+    await fse.writeFile(configPath, replaced, 'utf-8')
+    return { mode: 'replaced' }
+  }
+  const marker = 'module.exports = {'
+  const idx = src.indexOf(marker)
+  if (idx >= 0) {
+    const insertAt = idx + marker.length
+    const out = src.slice(0, insertAt) + `\n  base: ${quotedBase}, // memocast: base=${rawBaseForLog}\n` + src.slice(insertAt)
+    await fse.writeFile(configPath, out, 'utf-8')
+    return { mode: 'inserted' }
+  }
+  await fse.writeFile(configPath, src + `\nmodule.exports.base = ${quotedBase} // memocast: base=${rawBaseForLog}\n`, 'utf-8')
+  return { mode: 'appended' }
+}
+
+/**
+ * 写/合并 .vuepress/config.js —— "弹框传了 base 就强制覆盖"。
  *
- * 行为：
- *   - 目标文件不存在 → 按 opts 生成默认模板
- *   - 已存在 + 含 base → 保留原值,完全跳过
- *   - 已存在 + 缺 base + 传入 opts.base → 在 `module.exports = {` 后注入 `base: ...,`
+ * 与主进程 blog-deploy-handler.js 的 ensureBlogConfig 行为对齐。
+ *
+ *   A. opts.base 非空 → 必须生效：
+ *      - 不管现存 config.js 里 base 是 './' 还是别的,都用 opts.base 替换
+ *      - 已存在的 config.js 中其它字段不破坏
+ *   B. opts.base 缺失或为空：
+ *      - config.js 不存在 → 默认模板,base 写 './'
+ *      - 已存在 → 完全保留(用户手工编辑的 config.js 不被触碰)
  *
  * @param {string} blogDir
  * @param {string} theme 'default' | 'vdoing'
  * @param {object} [opts]
  * @param {string} [opts.title]
  * @param {string} [opts.description]
- * @param {string} [opts.base] 仅在缺失时注入
+ * @param {string} [opts.base] 用户在弹框里输入的 base；空串视为"不强制"
  */
 async function writeVuepressConfig (blogDir, theme = 'default', opts = {}) {
   const vpDir = path.join(blogDir, '.vuepress')
   await fse.ensureDir(vpDir)
   const configPath = path.join(vpDir, 'config.js')
-  const baseInput = (opts.base && String(opts.base).trim()) || ''
-  const quotedBase = baseInput
-    ? ( /^['"`].*['"`]$/.test(baseInput.trim())
-        ? baseInput.trim()
-        : `'${baseInput.trim().replace(/'/g, "\\'")}'` )
+  const rawBase = (opts.base && typeof opts.base === 'string') ? opts.base.trim() : ''
+  const quotedBase = rawBase
+    ? ( /^['"`].*['"`]$/.test(rawBase)
+        ? rawBase
+        : `'${rawBase.replace(/'/g, "\\'")}'` )
     : ''
 
+  // —— A. 弹框显式传了 base → 必须生效 ——
+  if (quotedBase) {
+    if (fse.pathExistsSync(configPath)) {
+      const result = await replaceBaseInConfig(configPath, quotedBase, rawBase)
+      const written = readBaseFromConfigFile(configPath)
+      console.log('[blog-config-writer] base 由弹框覆盖 -> %s (mode=%s)', written, result.mode)
+      return {
+        action: 'base-overwritten',
+        path: configPath,
+        baseInjected: rawBase,
+        baseMode: result.mode
+      }
+    }
+    // config.js 还没有 → 落到下面 default 创建分支
+  }
+
   if (fse.pathExistsSync(configPath)) {
-    const existing = readBaseFromConfigFile(configPath)
-    if (existing) {
-      console.log('[blog-config-writer] config.js 已有 base="%s",保留原值不覆盖', existing)
+    // 弹框未传 base + 已存在 → 完全保留
+    if (!quotedBase) {
+      console.log('[blog-config-writer] config.js 已存在且弹框未传 base,保留原文件')
       return { action: 'kept', path: configPath }
     }
-    if (quotedBase) {
-      // 缺 base + 提供了 → 在 `module.exports = {` 后插入 `base: ...,`
-      const src = fse.readFileSync(configPath, 'utf-8')
-      const marker = 'module.exports = {'
-      const idx = src.indexOf(marker)
-      if (idx >= 0) {
-        const insertAt = idx + marker.length
-        const out = src.slice(0, insertAt) + ` base: ${quotedBase},\n` + src.slice(insertAt)
-        await fse.writeFile(configPath, out, 'utf-8')
-        console.log('[blog-config-writer] config.js 缺 base,已注入 base=%s', baseInput)
-        return { action: 'merged-base', path: configPath, baseInjected: baseInput }
-      }
-      // 找不到插入点 → 兜底追加
-      await fse.writeFile(configPath, src + `\nmodule.exports.base = ${quotedBase}\n`, 'utf-8')
-      return { action: 'merged-base', path: configPath, baseInjected: baseInput }
+    // 兜底：弹框传了 base 但走到这里(理论上不会发生)→ 再覆盖一次
+    const result = await replaceBaseInConfig(configPath, quotedBase, rawBase)
+    return {
+      action: 'base-overwritten',
+      path: configPath,
+      baseInjected: rawBase,
+      baseMode: result.mode
     }
-    console.log('[blog-config-writer] config.js 已存在但缺 base,弹框也未提供,跳过注入')
-    return { action: 'kept', path: configPath }
   }
 
   const content =
@@ -298,7 +340,7 @@ module.exports = {
   title: ${JSON.stringify(opts.title || 'My Blog')},
   description: ${JSON.stringify(opts.description || '')},
   theme: ${JSON.stringify(theme)},
-  base: ${quotedBase || "'./'"},
+  base: ${quotedBase || "'./'"},${quotedBase ? ` // memocast: base=${rawBase}` : ''}
   themeConfig: {
     nav: buildNav(),
     sidebar: buildSidebar(),
@@ -308,7 +350,11 @@ module.exports = {
 }
 `
   await fse.writeFile(configPath, content, 'utf-8')
-  return { action: 'created', path: configPath, baseInjected: quotedBase ? baseInput : undefined }
+  return {
+    action: 'created',
+    path: configPath,
+    baseInjected: quotedBase ? rawBase : undefined
+  }
 }
 
 // ============================================================

@@ -34,7 +34,22 @@ export async function uploadImagesByWiz (imagePaths, options) {
           }
         }
       )
-      const data = result.data.result
+
+      const responseBody = result && result.data
+      const data = responseBody && responseBody.result
+      const returnCode = responseBody && responseBody.returnCode
+
+      if (!data || !data.name) {
+        const reason = responseBody && responseBody.externMessage
+          ? `externMessage: ${responseBody.externMessage}`
+          : `unexpected response: ${JSON.stringify(responseBody)}`
+        console.error('[uploadImagesByWiz] invalid response', { returnCode, responseBody })
+        return {
+          success: false,
+          result: { message: `WizNote 上传失败（${reason}）`, failedPath: filePath }
+        }
+      }
+
       saveBuffer(fileBuffer, kbGuid, docGuid, data.name)
       results.push({
         url: `coolma://coolma.app/${kbGuid}/${docGuid}/${data.name}`,

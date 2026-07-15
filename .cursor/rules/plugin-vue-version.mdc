@@ -1,0 +1,44 @@
+---
+description: 主项目 Vue2 / _plugins 子项目 Vue2-Vue3 混合 — 编辑前必须先识别版本
+alwaysApply: true
+---
+
+# 主项目 vs `_plugins/` 子项目 的 Vue 版本差异
+
+## 1. 版本分布（实测）
+
+- **主项目**（`src/`、`src-electron/`、`package.json`）：**Vue 2.7.16**（Quasar v1 + Element-UI / ant-design-vue 1.x）。
+- **`_plugins/`** 下每个子目录是**独立 npm 项目**，各自有自己的 `package.json`、`node_modules`、构建工具。已确认至少存在两个：
+  - `_plugins/box-im-wujie/` → **Vue 2.7.16**（`main.js` + `vue.config.js`）
+  - `_plugins/doubao-input/` → **Vue 3.5.18**（`main.ts` + `vite.config.ts` + TypeScript）
+  - 其它未来新增的子项目**可能是 Vue2，也可能是 Vue3，必须先看 `package.json` 才能确定**。
+
+## 2. 编辑前的强制识别
+
+在**任何**对 `_plugins/**` 下的文件做改动前，必须：
+
+1. `Read <该子项目>/package.json`，定位 `dependencies.vue` / `devDependencies.vue` 的版本。
+2. 若为 Vue2.x → 沿用主项目约定：`new Vue({...})`、Options API、可直接 import `vue-template-compiler`、不要用 `<script setup>`、不要用 `defineProps`/`defineEmits`、不要用 `import { ref, computed } from 'vue'`。
+3. 若为 Vue3.x → 必须用 `createApp(...)`、`<script setup>` / Composition API、`ref` / `reactive` / `computed` 从 `'vue'` 显式导入；不要用 `Vue.extend`、不要用过滤器 filters、不要用 `$on`/`$off`/`$once`。
+4. 若 `package.json` 没有 `vue` 字段或读不出来 → **停下来问用户**，不要假设版本。
+
+## 3. 不能跨项目混用
+
+- 主项目里 `import X from '_plugins/xxx/...'` **默认不存在**，主项目和 `_plugins` 是两个独立工程。它们的依赖、`node_modules`、Vue 实例都互不可见。如果用户明确说"主项目要加载 `_plugins`"，那一定是通过无界（`wujie-vue2`）/ `hel-micro` / iframe / 微前端方案**运行时加载**，不要尝试 `import` 或 `require` 直接引用 `_plugins` 源码。
+- 主项目里写 Vue2 代码，**不要**照搬 `_plugins/doubao-input` 的 `<script setup lang="ts">` 写法；反之亦然。
+
+## 4. 依赖与 package.json
+
+- 给 `_plugins/<name>/package.json` 加依赖时，进入该子目录用它的包管理器跑 `yarn add` / `yarn add -D`（绝大多数子项目沿用 yarn，但 `_plugins/doubao-input` 已观察到 `pnpm-lock.yaml`，需要在动手前先 `Read` 确认）。
+- **不要**把 `_plugins/<name>` 的依赖写进根 `package.json`，也不要从主项目根目录 `yarn add` 来"代"子项目安装。
+
+## 5. 构建与运行
+
+- 每个 `_plugins/<name>` 通常自带 `dev` / `build` 脚本，进入该子目录独立运行。
+- 不要从主项目根目录触发 `_plugins` 的构建；反过来，子项目里的 dev server / watcher **不要**去碰主项目 `src/`。
+- 主项目开发时，`yarn run dev` 启动的是 Quasar dev server，与 `_plugins` 的 dev server **是并行关系**，不要把它们当成同一个进程管理。
+
+## 6. 改动的边界
+
+- 在 `_plugins/<name>` 内编辑时，**默认只动该子目录内的文件**。除非用户明确点名，不要顺手改其它子项目或主项目源码。
+- 不要在主项目根 `package.json` 里引用 `_plugins/<name>` 的名字（除非明确是做 monorepo workspaces 改造，那是另一个决定）。
