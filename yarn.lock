@@ -1212,6 +1212,138 @@
   resolved "https://mirrors.cloud.tencent.com/npm/@eslint/js/-/js-8.57.1.tgz#de633db3ec2ef6a3c89e2f19038063e8a122e2c2"
   integrity sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==
 
+"@form-create/ant-design-vue@^2.5.27":
+  version "2.6.3"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/ant-design-vue/-/ant-design-vue-2.6.3.tgz#47e96ca49973262e2ec93f93cb14eaec58559616"
+  integrity sha512-lsrUGMIWtvJNCCey4EBxrv1orkMLyBWj9/1DY8llIC5KeWfg0o4w9EULll2rOKDV1PmJ1vAJ7JWUESmg5Egzxg==
+  dependencies:
+    "@form-create/component-antdv-frame" "^2.6.3"
+    "@form-create/component-antdv-group" "^2.6.3"
+    "@form-create/component-antdv-upload" "^2.6.3"
+    "@form-create/component-subform" "^2.6.2"
+    "@form-create/core" "^2.6.3"
+    "@form-create/utils" "^2.6.3"
+
+"@form-create/component-antdv-frame@^2.6.3":
+  version "2.6.3"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-antdv-frame/-/component-antdv-frame-2.6.3.tgz#e90ab7ec3ada5b1f2d006f91b17ce28ecf99bc69"
+  integrity sha512-TIc9WkiM82O0PBO1FVkjmYHHd67UTkUWAydLDEMEPVoNNWkW3AlH7br1uYPexGpn8NPh46qDRlvQQLJFBXqrxA==
+  dependencies:
+    "@form-create/utils" "^2.6.3"
+
+"@form-create/component-antdv-group@^2.6.3":
+  version "2.6.3"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-antdv-group/-/component-antdv-group-2.6.3.tgz#51b9318c682120426cafe1f72905f570116f1ed9"
+  integrity sha512-EaTg7ta8BdFSDTKvvag4XGoSZd7IxmLpFuugIgcXo6gMtMANVZJknDoR9Df/iH2G5UkNv+3+OosUyDBfyEjrvQ==
+  dependencies:
+    "@form-create/utils" "^2.6.3"
+
+"@form-create/component-antdv-upload@^2.6.3":
+  version "2.6.3"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-antdv-upload/-/component-antdv-upload-2.6.3.tgz#3f7083cdd34ae418a42eb7ce88559164e0ab8228"
+  integrity sha512-rKL28syXFgfS+4nZ70DPNne8Xf9SbKD51VOyqj3U8hNhR2Xl9vB6qy3pc+j3qMmlbZHubZiVqPvep6tVGrEfvg==
+  dependencies:
+    "@form-create/utils" "^2.6.3"
+
+"@form-create/component-elm-checkbox@^2.7.17":
+  version "2.7.17"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-elm-checkbox/-/component-elm-checkbox-2.7.17.tgz#a100dc4f6aa094fb2492c6669b552ecbcbb86473"
+  integrity sha512-YNRKniuNtfPuUD48Teb6oqTHgyq6HY6rqcBSIwYF1T6pNvi+/it3pyATNNbitvriQpYoOkNRySrjjfzNBTJhOA==
+  dependencies:
+    "@form-create/utils" "^2.7.17"
+
+"@form-create/component-elm-frame@^2.7.17":
+  version "2.7.17"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-elm-frame/-/component-elm-frame-2.7.17.tgz#2f4d50281a1952359273900156889de60a24c9d3"
+  integrity sha512-fXW6EQ3Bp7M6teCpih8N0H2a1cbhHTWBfvnz18o7tkWZdNC/1nwi5CFq4OMoUUH94ycupkOIgmjqpWApkUkL6g==
+  dependencies:
+    "@form-create/utils" "^2.7.17"
+
+"@form-create/component-elm-group@^2.7.27":
+  version "2.7.27"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-elm-group/-/component-elm-group-2.7.27.tgz#cd94e3ef183daf046f9e6813607fbf24951fbf56"
+  integrity sha512-My6/jQbpkdasMil6QWZcPcRNxxzdq93VDVv36u9mRghO1KM39kiTQzq+kFYJwTiVGHrVGT0E8+Lef/q/d0QKNQ==
+  dependencies:
+    "@form-create/utils" "^2.7.17"
+
+"@form-create/component-elm-radio@^2.7.17":
+  version "2.7.17"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-elm-radio/-/component-elm-radio-2.7.17.tgz#c7430c70781c24bf01570063f5f7b5469e235cef"
+  integrity sha512-3vZ1vK/4cX1Xkqz2qguowyUmBrhMXRt0coIL4VleoNnCuwiA7OjtBnPHtn/kTvTv2D+Qef8NjXI5aJDryFd9hg==
+  dependencies:
+    "@form-create/utils" "^2.7.17"
+
+"@form-create/component-elm-select@^2.7.17":
+  version "2.7.17"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-elm-select/-/component-elm-select-2.7.17.tgz#00e37f330f96d3b33695133bd8f7443f776a9207"
+  integrity sha512-pdT1NqtGwknyXL8RgRascQyYP/oLoMJBidKSLqT6KkWXOg2IDOTNZcsIOcQ4nCEi7r8e/WyIlVVRtsnOv2/JFg==
+  dependencies:
+    "@form-create/utils" "^2.7.17"
+
+"@form-create/component-elm-tree@^2.7.17":
+  version "2.7.17"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-elm-tree/-/component-elm-tree-2.7.17.tgz#16985a4068e669e909f86f6af8c452ad5fcc8c55"
+  integrity sha512-Q4mtyJwQHXewN17V4KibWT0QUZx98T62+YCfzQeTWUNxUKLpnxZGMmO7UgKmqg601WePseQ9aD/874mV9exXyw==
+  dependencies:
+    "@form-create/utils" "^2.7.17"
+
+"@form-create/component-elm-upload@^2.7.17":
+  version "2.7.17"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-elm-upload/-/component-elm-upload-2.7.17.tgz#6cf8925c7d5b1bcdbcc290a0173bda1b0bd7369a"
+  integrity sha512-sYNHbn3+yfvvv0d2MUcr8dmeD/0iE8LWwfxTevYXncGXnEWwUoUudS1VTte9jqI1wyKJIZPrCjicMJh133Zgyw==
+  dependencies:
+    "@form-create/utils" "^2.7.17"
+
+"@form-create/component-subform@^2.6.2":
+  version "2.6.2"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-subform/-/component-subform-2.6.2.tgz#213e38d87643295b85f963b9ee4ceefcf3129f4a"
+  integrity sha512-Sh6dduqgbNYKNYPCt6Y8T77Prptta6SmrwGRbKhwbXuSj548w42Vyvf6/JKDo3SfFHoelvVBu4jKlUq5sQ2fdw==
+
+"@form-create/component-subform@^2.7.1":
+  version "2.7.1"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/component-subform/-/component-subform-2.7.1.tgz#fec9f27582ed5f216eac23ec127a07b94de07b36"
+  integrity sha512-qR6uZFCMnUfFyjh1A3Q6CTwHWp7piLGS0fbaS8k0MfjcQCPDuhvMt1WYBGQBJZMcNwuDx2kceHcjFtk/ZMYOjg==
+
+"@form-create/core@^2.6.3":
+  version "2.6.3"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/core/-/core-2.6.3.tgz#4e1d7f3cde12af5835a84661b20fb4b421e257d8"
+  integrity sha512-Va3Gsm85Df5VPNVmWqQiYIZeddmqa/H3gzmfD+4bPjrN9O+4iVj5C02Ybd+zBjqRWChZDKzTD1+Zd1zTpvUQxw==
+  dependencies:
+    "@form-create/utils" "^2.6.3"
+
+"@form-create/core@^2.7.28":
+  version "2.7.28"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/core/-/core-2.7.28.tgz#e5bdcd41263b1aa8d1555dacbb8ff18a5430712b"
+  integrity sha512-V9IXEPuAyIRUER/48upV4kzQiTTaJasY05VGRjyYL93s5SPjDoFJMc5EGlpMVc+TyMpfnKCGwPEKpw4LIpVUxg==
+  dependencies:
+    "@form-create/utils" "^2.7.17"
+
+"@form-create/element-ui@^2.7.28":
+  version "2.7.28"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/element-ui/-/element-ui-2.7.28.tgz#0d7ccfe29d6d84f3f9431e1cab6675f275e69733"
+  integrity sha512-Vryb9ivaVPjrnRj3OJkhXLn3JWmDlBzm5wx6yY05g2AYONPZ01Fzo4VG2C+pfqgjBS5zQhQHw5y6cj1gpPbRbw==
+  dependencies:
+    "@form-create/component-elm-checkbox" "^2.7.17"
+    "@form-create/component-elm-frame" "^2.7.17"
+    "@form-create/component-elm-group" "^2.7.27"
+    "@form-create/component-elm-radio" "^2.7.17"
+    "@form-create/component-elm-select" "^2.7.17"
+    "@form-create/component-elm-tree" "^2.7.17"
+    "@form-create/component-elm-upload" "^2.7.17"
+    "@form-create/component-subform" "^2.7.1"
+    "@form-create/core" "^2.7.28"
+    "@form-create/utils" "^2.7.17"
+
+"@form-create/utils@^2.6.3":
+  version "2.6.3"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/utils/-/utils-2.6.3.tgz#c61c7283b9a8a917ca585b9181884aa754723c26"
+  integrity sha512-SoeGCs3Dp5rn+9KdvIEslpyyclPAJUuvCz5ihUPTTwjAVsEjvp5oh0W8uh87l7ElLLauyhwCqLE9ET2U1ZH0Jw==
+
+"@form-create/utils@^2.7.17":
+  version "2.7.17"
+  resolved "https://mirrors.cloud.tencent.com/npm/@form-create/utils/-/utils-2.7.17.tgz#ba26d9b237d2468244f870d78f1cab48affa534e"
+  integrity sha512-f+QPblfmd/fmlFs7AM4TzD4DinBUpG0FV2MQ75ZDmmBC8CfUvqksCHJc3Oa/o6lBzBRtKJzSnUFscMq8qsvisA==
+
 "@gar/promisify@^1.0.1", "@gar/promisify@^1.1.3":
   version "1.1.3"
   resolved "https://mirrors.cloud.tencent.com/npm/@gar/promisify/-/promisify-1.1.3.tgz#555193ab2e3bb3b6adc3d551c9c030d9e860daf6"
@@ -4279,7 +4411,7 @@ comma-separated-tokens@^2.0.0:
   resolved "https://mirrors.cloud.tencent.com/npm/comma-separated-tokens/-/comma-separated-tokens-2.0.3.tgz#4e89c9458acb61bc8fef19f4529973b2392839ee"
   integrity sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg==
 
-commander@2, commander@^2.19.0, commander@^2.20.0:
+commander@2, commander@^2.19.0, commander@^2.20.0, commander@^2.20.3:
   version "2.20.3"
   resolved "https://mirrors.cloud.tencent.com/npm/commander/-/commander-2.20.3.tgz"
   integrity sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==
@@ -4832,6 +4964,11 @@ cssesc@^3.0.0:
   version "3.0.0"
   resolved "https://mirrors.cloud.tencent.com/npm/cssesc/-/cssesc-3.0.0.tgz"
   integrity sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==
+
+cssfilter@0.0.10:
+  version "0.0.10"
+  resolved "https://mirrors.cloud.tencent.com/npm/cssfilter/-/cssfilter-0.0.10.tgz#c6d2672632a2e5c83e013e6864a42ce8defd20ae"
+  integrity sha512-FAaLDaplstoRsDR8XGYH51znUN0UY7nMc6Z9/fvE8EXGwvJE9hu7W2vHwx1+bd6gCYnln9nLbzxFTrcO9YQDZw==
 
 cssnano-preset-default@^4.0.7, cssnano-preset-default@^4.0.8:
   version "4.0.8"
@@ -9935,6 +10072,18 @@ loose-envify@^1.0.0:
   dependencies:
     js-tokens "^3.0.0 || ^4.0.0"
 
+lottie-web-vue@^1.2.1:
+  version "1.2.1"
+  resolved "https://mirrors.cloud.tencent.com/npm/lottie-web-vue/-/lottie-web-vue-1.2.1.tgz#21327e1d1814fb2f40e0b4ad4378339835119afe"
+  integrity sha512-JwHb8x5zOBBOL4zObVgBIVmVDMBALo1zMP6/OR+gbEWDpQTpRndixjhjwiVvjUWlrZPl7ScUwiHQGwrn6qlfEw==
+  dependencies:
+    lottie-web "^5.7.4"
+
+lottie-web@^5.7.4:
+  version "5.13.0"
+  resolved "https://mirrors.cloud.tencent.com/npm/lottie-web/-/lottie-web-5.13.0.tgz#441d3df217cc8ba302338c3f168e1a3af0f221d3"
+  integrity sha512-+gfBXl6sxXMPe8tKQm7qzLnUy5DUPJPKIyRHwtpCpyUEYjHYRJC/5gjUvdkuO2c3JllrPtHXH5UJJK8LRYl5yQ==
+
 lower-case@^1.1.1:
   version "1.1.4"
   resolved "https://mirrors.cloud.tencent.com/npm/lower-case/-/lower-case-1.1.4.tgz#9a2cabd1b9e8e0ae993a4bf7d5875c39c42e8eac"
@@ -12560,6 +12709,11 @@ public-encrypt@^4.0.3:
     randombytes "^2.0.1"
     safe-buffer "^5.1.2"
 
+pubsub-js@^1.9.4:
+  version "1.9.5"
+  resolved "https://mirrors.cloud.tencent.com/npm/pubsub-js/-/pubsub-js-1.9.5.tgz#e9264ef8c7aa4c2510010ebb75bfd54cdcb7b148"
+  integrity sha512-5MZ0I9i5JWVO7SizvOviKvZU2qaBbl2KQX150FAA+fJBwYpwOUId7aNygURWSdPzlsA/xZ/InUKXqBbzM0czTA==
+
 pump@^2.0.0:
   version "2.0.1"
   resolved "https://mirrors.cloud.tencent.com/npm/pump/-/pump-2.0.1.tgz#12399add6e4cf7526d973cbc8b5ce2e2908b3909"
@@ -13005,6 +13159,11 @@ reselect@^4.0.0:
   version "4.1.8"
   resolved "https://mirrors.cloud.tencent.com/npm/reselect/-/reselect-4.1.8.tgz#3f5dc671ea168dccdeb3e141236f69f02eaec524"
   integrity sha512-ab9EmR80F/zQTMNeneUr4cv+jSwPJgIlvEmVwLerwrWVbpLlBuls9XHzIeTFy4cegU2NHBp3va0LKOzU5qFEYQ==
+
+resize-detector@^0.3.0:
+  version "0.3.0"
+  resolved "https://mirrors.cloud.tencent.com/npm/resize-detector/-/resize-detector-0.3.0.tgz#fe495112e184695500a8f51e0389f15774cb1cfc"
+  integrity sha512-R/tCuvuOHQ8o2boRP6vgx8hXCCy87H1eY9V5imBYeVNyNVpuL9ciReSccLj2gDcax9+2weXy3bc8Vv+NRXeEvQ==
 
 resize-observer-polyfill@^1.5.0, resize-observer-polyfill@^1.5.1:
   version "1.5.1"
@@ -15700,6 +15859,13 @@ vm-browserify@^1.0.1:
   resolved "https://mirrors.cloud.tencent.com/npm/vm-browserify/-/vm-browserify-1.1.2.tgz#78641c488b8e6ca91a75f511e7a3b32a86e5dda0"
   integrity sha512-2ham8XPWTONajOR0ohOKOHXkm3+gaBmGut3SRuu75xLd/RRaY6vqgh8NBYYk7+RW3u5AtzPQZG8F10LHkl0lAQ==
 
+vue-clamp@^0.4.1:
+  version "0.4.1"
+  resolved "https://mirrors.cloud.tencent.com/npm/vue-clamp/-/vue-clamp-0.4.1.tgz#cd54a47d24808b2213af36d737ad615c6ac8f252"
+  integrity sha512-Xd0TefALwjyzF/PJOyLT55pMZ9ZXsAiQ983PAqMe6VpSf7B3BQrU6VWkd4onDB3ftAqcGRkh94n8wgJFr2cljg==
+  dependencies:
+    resize-detector "^0.3.0"
+
 vue-element-ui-x@^1.2.1:
   version "1.2.1"
   resolved "https://mirrors.cloud.tencent.com/npm/vue-element-ui-x/-/vue-element-ui-x-1.2.1.tgz#c89ac78513fd5dadba5d3770252fc86778f8091c"
@@ -16305,6 +16471,14 @@ xmlchars@^2.2.0:
   version "2.2.0"
   resolved "https://mirrors.cloud.tencent.com/npm/xmlchars/-/xmlchars-2.2.0.tgz"
   integrity sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==
+
+xss@^1.0.14:
+  version "1.0.15"
+  resolved "https://mirrors.cloud.tencent.com/npm/xss/-/xss-1.0.15.tgz#96a0e13886f0661063028b410ed1b18670f4e59a"
+  integrity sha512-FVdlVVC67WOIPvfOwhoMETV72f6GbW7aOabBC3WxN/oUdoEMDyLz4OgRv5/gck2ZeNqEQu+Tb0kloovXOfpYVg==
+  dependencies:
+    commander "^2.20.3"
+    cssfilter "0.0.10"
 
 xtend@^4.0.0, xtend@~4.0.1:
   version "4.0.2"

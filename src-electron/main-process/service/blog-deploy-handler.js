@@ -338,11 +338,66 @@ function validateBlogDir (blogDir) {
 }
 
 /**
- * 生成必要的博客配置文件
+ * 读取已存在的 .vuepress/config.js 中的 `base` 字段 —— 在不解析整个 JS 的前提下。
+ *
+ * 走静态文本扫描：找形如 `base: '/something'` 或 `base: "/something"` 或 `base: './'` 的赋值。
+ * 命中不到时返回 ''（视为缺失）。
+ *
+ * 为什么不做 AST 解析：vuepress 1.x 的 config.js 内容由 memocast 生成，结构稳定；
+ * 文本扫描覆盖所有合理写法，且不需要引入额外依赖。
+ *
+ * @param {string} configPath
+ * @returns {string} 原始 base 字面量（含引号）；空串表示缺失
  */
-async function ensureBlogConfig (blogDir, theme = 'default') {
+function readBaseFromConfigFile (configPath) {
+  if (!fs.existsSync(configPath)) return ''
+  try {
+    const src = fs.readFileSync(configPath, 'utf-8')
+    // 同时匹配单引号/双引号/反引号；值里允许 / 与 ./ 等
+    const m = src.match(/base\s*:\s*(['"`])([^'"`]*)\1/)
+    return m ? m[2] : ''
+  } catch (e) {
+    console.warn('[BlogDeploy] readBaseFromConfigFile failed:', e.message)
+    return ''
+  }
+}
+
+/**
+ * 把传进来的 base 字符串包装成 config.js 里 `base: '...'` 字面量。
+ * - 缺失/空值/纯空白 → 返回 ''
+ * - 已经带引号 → 原样返回
+ * - 否则用单引号包裹并转义内部单引号
+ */
+function quoteBase (base) {
+  if (!base || typeof base !== 'string') return ''
+  const trimmed = base.trim()
+  if (!trimmed) return ''
+  if (/^['"`].*['"`]$/.test(trimmed)) return trimmed
+  return `'${trimmed.replace(/'/g, "\\'")}'`
+}
+
+/**
+ * 生成必要的博客配置文件
+ *
+ * 关键策略变更（防止 config.js 每次被强行覆盖）：
+ *   1. 当 .vuepress/config.js 已存在时:
+ *      - **不**整文件覆盖
+ *      - 仅当文件里**没有** `base` 字段时才注入 `base: <传入值>`
+ *      - 这是用户预期的"我已经手工改过 base 不要被覆盖"行为
+ *   2. 当 config.js 不存在时:
+ *      - 按主题生成默认模板
+ *      - 如果传入 base,把它作为 `base: '<value>'` 写进顶层 module.exports
+ *
+ * @param {string} blogDir
+ * @param {string} theme 'default' | 'vdoing'
+ * @param {object} [opts]
+ * @param {string} [opts.base]  VuePress `base` 配置；空串表示不强制覆盖
+ * @returns {Promise<{action: 'kept'|'merged-base'|'created', path: string, baseInjected?: string}>}
+ */
+async function ensureBlogConfig (blogDir, theme = 'default', opts = {}) {
   const configDir = path.join(blogDir, '.vuepress')
   const postsDir = path.join(blogDir, '_posts')
+  const baseInput = quoteBase(opts.base)
 
   // 创建必要的目录
   await fs.ensureDir(configDir)
@@ -354,15 +409,28 @@ async function ensureBlogConfig (blogDir, theme = 'default') {
     await fs.writeFile(pkgPath, JSON.stringify(buildBlogPackageJson(theme), null, 2))
   }
 
-  // 生成 vdoing 主题配置
+  const configPath = path.join(configDir, 'config.js')
+
+  // —— vdoing 主题: 用户通常自带主题包,保留其 config.js;只在完全没有 config.js 时生成 ——
   if (theme === 'vdoing') {
-    const configPath = path.join(configDir, 'config.js')
+    if (fs.existsSync(configPath)) {
+      // 已存在:尝试补 base（缺失时注入）
+      const existingBase = readBaseFromConfigFile(configPath)
+      if (existingBase) {
+        return { action: 'kept', path: configPath }
+      }
+      if (baseInput) {
+        await injectBaseIntoConfig(configPath, baseInput)
+        return { action: 'merged-base', path: configPath, baseInjected: opts.base }
+      }
+      return { action: 'kept', path: configPath }
+    }
     const vdoingConfigContent = `// vdoing 主题配置
 const { defineUserConfig } = require('vuepress')
 const { vdoingTheme } = require('vuepress-theme-vdoing')
 
 module.exports = defineUserConfig({
-  base: '/',
+  base: ${baseInput || "'/'"},
   dest: '.vuepress/dist',
   head: [
     ['link', { rel: 'icon', href: '/favicon.ico' }],
@@ -374,11 +442,26 @@ module.exports = defineUserConfig({
 `
     await fs.writeFile(configPath, vdoingConfigContent)
     console.log('[BlogDeploy] Generated vdoing theme config.js')
-    return
+    return { action: 'created', path: configPath }
   }
 
-  // 默认主题配置
-  const configPath = path.join(configDir, 'config.js')
+  // —— 默认主题 ——
+  if (fs.existsSync(configPath)) {
+    const existingBase = readBaseFromConfigFile(configPath)
+    if (existingBase) {
+      console.log('[BlogDeploy] config.js 已存在且含 base="%s",保留原值', existingBase)
+      return { action: 'kept', path: configPath }
+    }
+    if (baseInput) {
+      await injectBaseIntoConfig(configPath, baseInput)
+      console.log('[BlogDeploy] config.js 已存在但缺 base,已注入 base=%s', opts.base)
+      return { action: 'merged-base', path: configPath, baseInjected: opts.base }
+    }
+    console.log('[BlogDeploy] config.js 已存在且无 base 字段,弹框也未提供,跳过注入')
+    return { action: 'kept', path: configPath }
+  }
+
+  // 全新生成 default config.js
   const defaultConfigContent = `// 修复高版本 Node.js 下 VuePress 1.x 编译时 lodash 各种未定义 (assignWith, arrayEach 等) 的 Bug
 if (typeof global !== 'undefined') {
   const lodashInternal = ['assignWith', 'arrayEach', 'baseAssignValue', 'baseEach']
@@ -404,7 +487,7 @@ const fs = require('fs')
 module.exports = {
   title: 'My Blog',
   description: 'Blog powered by Memocast',
-  base: './',
+  base: ${baseInput || "'./'"},
   dest: '.vuepress/dist',
   head: [
     ['link', { rel: 'icon', href: './favicon.ico' }],
@@ -424,7 +507,36 @@ module.exports = {
 }
 `
   await fs.writeFile(configPath, defaultConfigContent)
-  console.log('[BlogDeploy] Generated default config.js with lodash patch')
+  console.log('[BlogDeploy] Generated default config.js (base=%s)', baseInput ? opts.base : './')
+  return { action: 'created', path: configPath }
+}
+
+/**
+ * 把 `base: <quotedValue>` 注入到一个已存在的 config.js 顶层 module.exports。
+ *
+ * 简化策略：找到第一个 `module.exports = {` 后，在 `{` 后立即插入 `base: ...,`。
+ * 不解析整个 JS（避免依赖 babel/acorn）。
+ *
+ * 如果找不到 `module.exports = {`（少见，比如用户写的是 `module.exports = defineUserConfig({...})`），
+ * 则降级为在文件最末追加一行 `module.exports.base = <base>` 兜底。
+ *
+ * @param {string} configPath
+ * @param {string} quotedBase 已经过 quoteBase 处理
+ */
+async function injectBaseIntoConfig (configPath, quotedBase) {
+  const src = await fs.readFile(configPath, 'utf-8')
+  const marker = 'module.exports = {'
+  const idx = src.indexOf(marker)
+  if (idx >= 0) {
+    const insertAt = idx + marker.length
+    const head = src.slice(0, insertAt)
+    const tail = src.slice(insertAt)
+    const next = ` base: ${quotedBase},\n`
+    await fs.writeFile(configPath, head + next + tail, 'utf-8')
+    return
+  }
+  // 兜底：在文件末追加 module.exports.base = ...
+  await fs.writeFile(configPath, src + `\nmodule.exports.base = ${quotedBase}\n`, 'utf-8')
 }
 
 /**
@@ -484,7 +596,7 @@ function detectBlogTheme (blogDir) {
   return 'default'
 }
 
-async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpConfig, customBuildCommand) {
+async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpConfig, customBuildCommand, baseOverride) {
   cancelled = false
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win) return { error: 'No window' }
@@ -527,8 +639,12 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
 
     // 0.6 生成必要的配置文件（package.json, config.js 等）
     sendProgress(webContents, 'config', 'Setting up blog config...', 4)
-    await ensureBlogConfig(blogDir, theme)
-    console.log('[BlogDeploy] Blog config ensured')
+    const configResult = await ensureBlogConfig(blogDir, theme, { base: baseOverride })
+    console.log('[BlogDeploy] Blog config ensured:', configResult)
+    event.sender.send('blog-deploy-warn',
+      `[config.js] ${configResult.action}` +
+      (configResult.baseInjected ? ` (base=${configResult.baseInjected})` : '')
+    )
 
     // 0.7 防 404: 写 .vuepress/utils/*.js (sidebar/nav/verify builders) 并跑一次 verify-paths
     //         - 若 id-mappings.json 或 _posts/<id>.md 不全,verify 会抛错,这里仅 warning 不阻断构建

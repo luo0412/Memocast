@@ -57,6 +57,24 @@
           </div>
         </div>
 
+        <!-- 部署 base 路径（VuePress publicPath） -->
+        <div class="config-section q-mt-md">
+          <div class="text-body2 text-weight-medium q-mb-xs config-label">
+            {{ $t('blogBasePath') }}
+          </div>
+          <q-input
+            v-model="localConfig.base"
+            dense
+            outlined
+            :placeholder="$t('blogBasePathPlaceholder')"
+            lazy-rules
+            :rules="baseRules"
+          />
+          <div class="text-caption text-grey-6 q-mt-xs">
+            {{ $t('blogBasePathHint') }}
+          </div>
+        </div>
+
         <!-- 自定义构建命令（可选） -->
         <div class="config-section q-mt-md">
           <div class="text-body2 text-weight-medium q-mb-xs config-label">
@@ -312,6 +330,7 @@ export default {
       localConfig: {
         blogDir: '',
         theme: 'default',
+        base: './',
         customBuildCommand: 'npm run build',
         github: {
           owner: '',
@@ -341,6 +360,16 @@ export default {
       exportingCI: false
     }
   },
+  computed: {
+    baseRules () {
+      // 留空 = 不强制覆盖,允许主进程"已有 base 时保留、缺失时跳过"
+      // 非空必须以 / 开头或为 ./ 或 ../
+      return [
+        v => !v || v.trim() === '' || /^(?:\.\/|\.\.\/|\/)/.test(v.trim()) ||
+          this.$t('blogBasePathInvalid')
+      ]
+    }
+  },
   async mounted () {
     await this.loadConfig()
   },
@@ -352,6 +381,7 @@ export default {
           this.localConfig = {
             blogDir: config.blogDir || '',
             theme: config.theme || 'default',
+            base: typeof config.base === 'string' ? config.base : './',
             customBuildCommand: config.customBuildCommand || 'npm run build',
             github: {
               owner: config.github?.owner || '',

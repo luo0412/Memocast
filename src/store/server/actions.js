@@ -2552,7 +2552,8 @@ export default {
         theme: config.theme,
         githubConfig: config.github,
         sftpConfig: config.sftp,
-        customBuildCommand: config.customBuildCommand
+        customBuildCommand: config.customBuildCommand,
+        base: config.base
       })
 
       if (result.error) {

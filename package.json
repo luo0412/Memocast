@@ -56,6 +56,8 @@
     "@babel/preset-env": "^7.29.2",
     "@electron/packager": "^19.1.0",
     "@electron/rebuild": "^4.0.3",
+    "@form-create/ant-design-vue": "^2.5.27",
+    "@form-create/element-ui": "^2.7.28",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@quasar/app": "^2.0.0",
     "ant-design-vue": "^1.7.8",
@@ -91,6 +93,7 @@
     "joplin-turndown-plugin-gfm": "^1.0.12",
     "jsxgraph": "1.10.1",
     "katex": "^0.11.1",
+    "lottie-web-vue": "^1.2.1",
     "markdown-it": "^12.3.2",
     "markdown-it-pangu": "^1.0.2",
     "markmap-lib": "^0.11.6",
@@ -100,6 +103,7 @@
     "monaco-editor": "0.38.0",
     "monaco-editor-webpack-plugin": "7.0.1",
     "popper.js": "^1.16.1",
+    "pubsub-js": "^1.9.4",
     "remark": "^13.0.0",
     "remark-pangu": "^2.2.0",
     "reveal.js": "4.6.1",
@@ -116,6 +120,7 @@
     "vega-embed": "^6.4.0",
     "vega-lite": "^4.7.0",
     "vue": "2.7.16",
+    "vue-clamp": "^0.4.1",
     "vue-element-ui-x": "^1.2.1",
     "vue-i18n": "^8.0.0",
     "vue-router": "^3.6.5",
@@ -124,7 +129,8 @@
     "vuedraggable": "2.24.3",
     "vuex": "^3.6.2",
     "webfontloader": "^1.6.28",
-    "wujie-vue2": "^1.0.29"
+    "wujie-vue2": "^1.0.29",
+    "xss": "^1.0.14"
   },
   "browserslist": [
     "last 10 Chrome versions",

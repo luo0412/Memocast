@@ -104,6 +104,12 @@ export default {
   blogThemeVdoing: 'Vdoing Theme',
   blogThemeAutoDetectHint: 'Auto-detects theme type, or manually switch',
 
+  // Deploy base path (VuePress publicPath)
+  blogBasePath: 'Deploy Base Path (publicPath)',
+  blogBasePathPlaceholder: 'e.g. /, ./, /blog/, https://cdn.example.com/blog/',
+  blogBasePathHint: 'Maps to VuePress `base`. If the blog directory already has a config.js with `base`, it is preserved and NOT overwritten; the value here is only injected when missing.',
+  blogBasePathInvalid: 'Must start with /, or be ./ or ../',
+
   // SFTP Deploy
   sftpDeployOptional: '(Optional) SFTP Upload to Server',
   sftpEnabled: 'Enable SFTP Upload',

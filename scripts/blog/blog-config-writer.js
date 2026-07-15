@@ -222,9 +222,73 @@ async function writeBlogUtilities (blogDir) {
   return utilsDir
 }
 
+/**
+ * 读取已存在 config.js 中的 base —— 不引入 AST 解析,走静态文本扫描。
+ * 与主进程 blog-deploy-handler.js 的 readBaseFromConfigFile 同形态。
+ */
+function readBaseFromConfigFile (configPath) {
+  if (!fse.pathExistsSync(configPath)) return ''
+  try {
+    const src = fse.readFileSync(configPath, 'utf-8')
+    const m = src.match(/base\s*:\s*(['"`])([^'"`]*)\1/)
+    return m ? m[2] : ''
+  } catch (_) {
+    return ''
+  }
+}
+
+/**
+ * 写/合并 .vuepress/config.js —— 不再"每次强行覆盖"。
+ *
+ * 行为：
+ *   - 目标文件不存在 → 按 opts 生成默认模板
+ *   - 已存在 + 含 base → 保留原值,完全跳过
+ *   - 已存在 + 缺 base + 传入 opts.base → 在 `module.exports = {` 后注入 `base: ...,`
+ *
+ * @param {string} blogDir
+ * @param {string} theme 'default' | 'vdoing'
+ * @param {object} [opts]
+ * @param {string} [opts.title]
+ * @param {string} [opts.description]
+ * @param {string} [opts.base] 仅在缺失时注入
+ */
 async function writeVuepressConfig (blogDir, theme = 'default', opts = {}) {
   const vpDir = path.join(blogDir, '.vuepress')
   await fse.ensureDir(vpDir)
+  const configPath = path.join(vpDir, 'config.js')
+  const baseInput = (opts.base && String(opts.base).trim()) || ''
+  const quotedBase = baseInput
+    ? ( /^['"`].*['"`]$/.test(baseInput.trim())
+        ? baseInput.trim()
+        : `'${baseInput.trim().replace(/'/g, "\\'")}'` )
+    : ''
+
+  if (fse.pathExistsSync(configPath)) {
+    const existing = readBaseFromConfigFile(configPath)
+    if (existing) {
+      console.log('[blog-config-writer] config.js 已有 base="%s",保留原值不覆盖', existing)
+      return { action: 'kept', path: configPath }
+    }
+    if (quotedBase) {
+      // 缺 base + 提供了 → 在 `module.exports = {` 后插入 `base: ...,`
+      const src = fse.readFileSync(configPath, 'utf-8')
+      const marker = 'module.exports = {'
+      const idx = src.indexOf(marker)
+      if (idx >= 0) {
+        const insertAt = idx + marker.length
+        const out = src.slice(0, insertAt) + ` base: ${quotedBase},\n` + src.slice(insertAt)
+        await fse.writeFile(configPath, out, 'utf-8')
+        console.log('[blog-config-writer] config.js 缺 base,已注入 base=%s', baseInput)
+        return { action: 'merged-base', path: configPath, baseInjected: baseInput }
+      }
+      // 找不到插入点 → 兜底追加
+      await fse.writeFile(configPath, src + `\nmodule.exports.base = ${quotedBase}\n`, 'utf-8')
+      return { action: 'merged-base', path: configPath, baseInjected: baseInput }
+    }
+    console.log('[blog-config-writer] config.js 已存在但缺 base,弹框也未提供,跳过注入')
+    return { action: 'kept', path: configPath }
+  }
+
   const content =
 `const path = require('path')
 const { buildSidebar } = require(path.join(__dirname, 'utils', 'sidebar-builder.js'))
@@ -234,6 +298,7 @@ module.exports = {
   title: ${JSON.stringify(opts.title || 'My Blog')},
   description: ${JSON.stringify(opts.description || '')},
   theme: ${JSON.stringify(theme)},
+  base: ${quotedBase || "'./'"},
   themeConfig: {
     nav: buildNav(),
     sidebar: buildSidebar(),
@@ -242,8 +307,8 @@ module.exports = {
   }
 }
 `
-  await fse.writeFile(path.join(vpDir, 'config.js'), content, 'utf-8')
-  return path.join(vpDir, 'config.js')
+  await fse.writeFile(configPath, content, 'utf-8')
+  return { action: 'created', path: configPath, baseInjected: quotedBase ? baseInput : undefined }
 }
 
 // ============================================================

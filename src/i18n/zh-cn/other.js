@@ -102,6 +102,12 @@ export default {
   blogThemeVdoing: 'Vdoing 主题',
   blogThemeAutoDetectHint: '自动检测目录主题类型，也可手动切换',
 
+  // 部署 base 路径（VuePress publicPath）
+  blogBasePath: '部署 Base 路径（publicPath）',
+  blogBasePathPlaceholder: '例如 /、./、/blog/、https://cdn.example.com/blog/',
+  blogBasePathHint: '对应 VuePress 的 `base` 字段。若博客目录已有 config.js 且已含 base,则保留原值不会被覆盖;只有缺失时才会用此值注入。',
+  blogBasePathInvalid: '必须以 / 开头,或为 ./ 或 ../',
+
   // 自定义构建命令
   customBuildCommand: '自定义构建命令',
   customBuildCommandPlaceholder: 'node "node_modules/vuepress/cli.js" build',
