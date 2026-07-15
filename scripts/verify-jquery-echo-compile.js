@@ -92,7 +92,7 @@ const sampleShuffleSource = ''
 
 const HANDLER_PRELUDE_SOURCE = [
   "const __safeDollarRuntime = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null",
-  "if (!__safeDollarRuntime) console.warn('[EchoRuntime] jQuery is missing on window; rune handlers will fall back to no-op')",
+  "if (!__safeDollarRuntime) console.warn('[EchoRuntime] jQuery is missing on window; echo handlers will fall back to no-op')",
   "const $ = __safeDollarRuntime",
   "const __resolveScopeContainer = (node, scope) => {",
   "  if (!node || typeof node.closest !== 'function') return null",
@@ -154,11 +154,11 @@ function main () {
       if (!rendered || typeof rendered !== 'object') throw new Error('render() 没返回对象')
       if (!rendered.type || !rendered.title) throw new Error('render() 返回对象缺少 type/title')
 
-      // kind=rune 必须有 handler / handlerExample;kind=echo (如 nice) 可以都没有
+      // kind=echo-chant 必须有 handler / handlerExample;kind=echo (如 nice) 可以都没有
       const hasHandler = typeof def.handler === 'function'
       const hasExample = typeof def.handlerExample === 'function'
-      if (def.kind === 'rune' && !hasHandler && !hasExample) {
-        throw new Error('rune 缺少 handler 与 handlerExample')
+      if (def.kind === 'echo-chant' && !hasHandler && !hasExample) {
+        throw new Error('echo-chant 缺少 handler 与 handlerExample')
       }
 
       pass += 1

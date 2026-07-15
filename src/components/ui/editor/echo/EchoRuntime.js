@@ -856,9 +856,9 @@ export default class EchoRuntime {
    * 查找 handler（custom 优先于内置）。
    * 提供给内部 afterRender() 使用，外部也可直接调用。
    */
-  resolveEchoChantHandler (runeMeta = {}) {
-    const id = String(runeMeta?.runeId || '').trim()
-    const kind = String(runeMeta?.kind || 'echo-chant').trim()
+  resolveEchoChantHandler (echoChantMeta = {}) {
+    const id = String(echoChantMeta?.runeId || '').trim()
+    const kind = String(echoChantMeta?.kind || 'echo-chant').trim()
     // 1) 自定义 handler（精确按 id）
     if (id && this.echoChantHandlers.has(id)) {
       return this.echoChantHandlers.get(id)
@@ -866,7 +866,7 @@ export default class EchoRuntime {
     // 2) 自定义 handler（按 match 探测）
     for (const handler of this.echoChantHandlers.values()) {
       try {
-        if (typeof handler.match === 'function' && handler.match(runeMeta)) {
+        if (typeof handler.match === 'function' && handler.match(echoChantMeta)) {
           return handler
         }
       } catch (error) {
