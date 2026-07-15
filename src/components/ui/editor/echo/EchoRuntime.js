@@ -133,46 +133,38 @@ export const createDefaultEchoAnnoSource = (echoName = '回响') => `export defa
 }`
 
 // ============================================================================
-// KIND 别名表（v2026-07-15 重命名）
+// Echo 体系 enum 与运行时命名（v2026-07-15 起固定）
 //
-// 重命名历史：
-//   'rune'        → 'echo-chant'      影响附近元素的 echo（咏唱派发）
-//   'rune-tbd'    → 'echo-tbd'        兜底 echo（占位）
+//   kind              取值：'echo' / 'echo-chant' / 'echo-tbd'
+//   echo-chant        影响附近元素的 echo（咏唱派发）
+//   echo-tbd          兜底 echo（占位）
 //
-// 同时迁移的名字：
-//   RUNE_HANDLERS        → ECHO_CHANT_HANDLERS
-//   RUNE_KINDS           → ECHO_CHANT_KINDS
-//   customHandlers       → echoChantHandlers
-//   findRuneHandler      → findEchoChantHandler
-//   registerRuneHandler  → registerEchoChantHandler
-//   unregisterRuneHandler→ unregisterEchoChantHandler
-//   listCustomRuneHandlers→ listCustomEchoChantHandlers
-//   resolveRuneHandler   → resolveEchoChantHandler
-//   extractRuneMeta      → extractEchoChantMeta
-//   runeMeta             → echoChantMeta
-//   _readRuneAttrs       → _readChantAttrs（method 名）
+// 函数 / Map / 常量名：
+//   ECHO_CHANT_HANDLERS         // 9 个内置 handler 表
+//   ECHO_CHANT_KINDS            // ['echo-chant', 'echo-tbd'] Set
+//   echoChantHandlers           // this.echoChantHandlers 用户动态注册 Map
+//   findEchoChantHandler        // 按 id 查找内置 handler
+//   registerEchoChantHandler    // 注册用户动态 handler
+//   unregisterEchoChantHandler  // 注销用户动态 handler
+//   listCustomEchoChantHandlers // 列出所有用户动态 handler
+//   resolveEchoChantHandler     // custom 优先于内置的派发
+//   extractEchoChantMeta        // 从 rendered.attrs 提取 echo-chant 元数据
+//   echoChantMeta               // 渲染结果上的字段名
+//   _readChantAttrs             // 从 DOM 读 echo 实例参数
 //
-// DOM ABI（保留不改名）：
-//   data-rune-id / data-rune-kind / data-rune-attrs / data-rune-attr-*
-//   —— 已写入 markdown 源 ABI 中，迁移会破坏既有笔记。
+// DOM ABI（字面保留）：data-rune-id / data-rune-kind / data-rune-attrs / data-rune-attr-*
+//   —— 历史 markdown 源 ABI，迁移会破坏既有笔记。
+//   字段值（runeId / kind）是 echo 体系的内容；属性名本身属于历史稳定 ABI。
 //
-// CSS class 名（保留不改名）：
-//   ag-rune-*（避免触发视觉回归，仅在注释中写明：ag-rune-* 是 echo 体系的"咏唱样式"）
+// CSS class（字面保留）：ag-rune-*（视觉样式锚点；避免触发回归）。
 // ============================================================================
-export const KIND_ALIASES = Object.freeze({
-  'echo-chant': 'echo-chant',
-  'echo-tbd': 'echo-tbd',
-  rune: 'echo-chant',
-  'rune-tbd': 'echo-tbd'
-})
-
-export const normalizeKindAlias = (raw = '') => KIND_ALIASES[String(raw || '').trim()] || ''
 
 // 默认的 echo-chant（"咏唱派发 / 影响附近元素"）模板。
 // 关键点：
 //  - kind: 'echo-chant'，render() 仍然返回标准的 { type, icon, color, title, ... }
-//  - handler(chantNode, scopeContainer, meta) 是副作用钩子，编译时被自动注册到 EchoRuntime.echoChantHandlers
-//    meta = { runeId, kind, attrs }，kind 已经过 normalizeKindAlias 转译
+//  - handler(chantNode, scopeContainer, meta) 是副作用钩子，
+//    编译时被自动注册到 EchoRuntime.echoChantHandlers
+//    meta = { runeId, kind, attrs }
 export const createDefaultChantAnnoSource = (echoName = '回响') => `export default {
   kind: 'echo-chant',
   version: 1,
@@ -509,13 +501,8 @@ const safeEvalFactory = (source = '', prelude = '') => {
 // ============================================================================
 
 const ECHO_CHANT_KINDS = new Set(['echo-chant', 'echo-tbd'])
-// 历史 ABI 兼容说明：
-//   旧 'rune' / 'rune-tbd' 通过 normalizeKindAlias() 一次性映射成新名，
-//   本文件不再单独维护 Set 兼容表，统一归口到 KIND_ALIASES。
-const isChantKind = (kind = '') => {
-  const normalized = normalizeKindAlias(kind)
-  return normalized === 'echo-chant' || normalized === 'echo-tbd'
-}
+
+const isChantKind = (kind = '') => ECHO_CHANT_KINDS.has(String(kind || '').trim())
 
 const safeQueryAll = (root, selector) => {
   if (!root || typeof root.querySelectorAll !== 'function') return []
@@ -706,11 +693,11 @@ const luckyHandler = {
       event.stopPropagation()
       chantNode.classList.add('ag-rune-lucky-loading')
       try {
-        const handler = (typeof window !== 'undefined') ? window.__memocastRuneHandlers?.lucky : null
+        const handler = (typeof window !== 'undefined') ? window.__memocastEchoChantHandlers?.lucky : null
         if (typeof handler === 'function') {
           await handler({ chantNode, meta })
         } else {
-          console.info('[EchoRuntime] lucky: no global handler registered (window.__memocastRuneHandlers.lucky)')
+          console.info('[EchoRuntime] lucky: no global handler registered (window.__memocastEchoChantHandlers.lucky)')
         }
       } catch (error) {
         console.error('[EchoRuntime] lucky handler failed:', error)
@@ -758,7 +745,7 @@ const disperseHandler = {
 
 const tbdHandler = {
   id: '__echo_chant_tbd__',
-  match (meta) { return normalizeKindAlias(meta && meta.kind) === 'echo-tbd' },
+  match (meta) { return meta && meta.kind === 'echo-tbd' },
   apply (chantNode, _scopeContainer, _meta) {
     addClassOnce(chantNode, 'ag-rune-tbd-active')
     return () => removeClasses(chantNode, 'ag-rune-tbd-active')
@@ -781,14 +768,10 @@ export const findEchoChantHandler = (chantId = '') => {
   return ECHO_CHANT_HANDLERS.find(handler => handler.id === target) || null
 }
 
-// 兼容旧导出名（外部若直接 import {RUNE_HANDLERS, findRuneHandler}）
-export const RUNE_HANDLERS = ECHO_CHANT_HANDLERS
-export const findRuneHandler = findEchoChantHandler
-
-// 让运行时能挂载"由 echo anno_source 内置 handler 字段动态声明"的 rune handler
+// 让运行时能挂载"由 echo anno_source 内置 handler 字段动态声明"的 echo-chant handler
 // - id 必须唯一（建议用 `echo:${definitionId}` 或自定义 runeId）
-// - match(runeMeta) -> boolean，决定该 handler 是否对该 rune 起作用
-// - apply(chantNode, scopeContainer, runeMeta) -> cleanupFn? 与内置 handler 同样语义
+// - match(meta) -> boolean，决定该 handler 是否对该 echo 起作用
+// - apply(chantNode, scopeContainer, meta) -> cleanupFn? 与内置 handler 同样语义
 export const normalizeCustomHandler = (raw = {}, fallbackId = '') => {
   if (!raw || typeof raw !== 'object') return null
   const id = String(raw.id || raw.runeId || fallbackId || '').trim()
@@ -815,9 +798,8 @@ export const normalizeCustomHandler = (raw = {}, fallbackId = '') => {
 
 export const extractEchoChantMeta = (rendered = {}) => {
   const attrs = (rendered && rendered.attrs && typeof rendered.attrs === 'object') ? rendered.attrs : {}
-  const rawKind = String(attrs.kind || '').trim()
-  const kind = normalizeKindAlias(rawKind)
-  if (!kind) return null
+  const kind = String(attrs.kind || '').trim()
+  if (!isChantKind(kind)) return null
   return {
     runeId: String(attrs.runeId || '').trim(),
     kind,
@@ -827,17 +809,12 @@ export const extractEchoChantMeta = (rendered = {}) => {
   }
 }
 
-// 兼容旧导出名
-export const extractRuneMeta = extractEchoChantMeta
-
 export default class EchoRuntime {
   constructor ({ registry } = {}) {
     this.registry = registry
     this.definitionCache = new Map()
     // 用户/动态注册 echo-chant handler，id -> { id, match, apply, cleanup, ... }
     this.echoChantHandlers = new Map()
-    // 同步旧字段，供老 import 链读
-    this.customHandlers = this.echoChantHandlers
   }
 
   invalidate (echoId) {
@@ -875,18 +852,13 @@ export default class EchoRuntime {
     return Array.from(this.echoChantHandlers.values())
   }
 
-  // 兼容旧方法名
-  registerRuneHandler (raw = {}, fallbackId = '') { return this.registerEchoChantHandler(raw, fallbackId) }
-  unregisterRuneHandler (id = '') { return this.unregisterEchoChantHandler(id) }
-  listCustomRuneHandlers () { return this.listCustomEchoChantHandlers() }
-
   /**
    * 查找 handler（custom 优先于内置）。
    * 提供给内部 afterRender() 使用，外部也可直接调用。
    */
   resolveEchoChantHandler (runeMeta = {}) {
     const id = String(runeMeta?.runeId || '').trim()
-    const kind = normalizeKindAlias(runeMeta?.kind) || 'echo-chant'
+    const kind = String(runeMeta?.kind || 'echo-chant').trim()
     // 1) 自定义 handler（精确按 id）
     if (id && this.echoChantHandlers.has(id)) {
       return this.echoChantHandlers.get(id)
@@ -904,13 +876,10 @@ export default class EchoRuntime {
     // 3) 内置 echo-chant handler
     const builtIn = findEchoChantHandler(id)
     if (builtIn) return builtIn
-    // 4) echo-tbd 兜底（兼容旧 'rune-tbd' 也已经过 normalizeKindAlias 转译）
+    // 4) echo-tbd 兜底
     if (kind === 'echo-tbd') return findEchoChantHandler('__echo_chant_tbd__')
     return null
   }
-
-  // 兼容旧方法名
-  resolveRuneHandler (runeMeta = {}) { return this.resolveEchoChantHandler(runeMeta) }
 
   compileDefinition (echo = {}) {
     const cacheKey = String(echo.id || echo.name || '')
@@ -948,18 +917,18 @@ export default class EchoRuntime {
     }
 
     // === 自动注册 anno_source 内置的 echo-chant handler ===
-    // 约定：definition.handler = function (chantNode, scopeContainer, runeMeta) { ... }
-    // （函数参数名历史 ABI 仍用 'runeNode' / 'runeMeta'，本注释用新名字解释）
-    // 同时 definition.kind === 'echo-chant' | 'echo-tbd'（旧 'rune' | 'rune-tbd'）且
+    // 约定：definition.handler = function (chantNode, scopeContainer, meta) { ... }
+    // （'runeMeta' 是 anno_source 字符串里 meta 参数名，handler 函数体内也可以这么写；
+    //   注释里为了与运行时的 echoChantMeta 区分，写成 chantNode / meta。）
+    // 同时 definition.kind === 'echo-chant' | 'echo-tbd' 且
     // definition.runeId / definition.id 已声明。
     try {
-      const rawKind = String(definition.kind || definition?.attrs?.kind || '').trim()
-      const kind = normalizeKindAlias(rawKind)
-      if (kind === 'echo-chant' || kind === 'echo-tbd') {
+      const kind = String(definition.kind || definition?.attrs?.kind || '').trim()
+      if (isChantKind(kind)) {
         const handlerSpec = definition.handler || definition
         const fallbackId = String(definition.runeId || definition.id || cacheKey || '').trim()
         if (typeof handlerSpec?.apply === 'function' || typeof handlerSpec === 'function' || typeof handlerSpec?.match === 'function') {
-          const normalized = normalizeCustomHandler({
+          const normalizedHandler = normalizeCustomHandler({
             ...(typeof handlerSpec === 'object' ? handlerSpec : {}),
             // 函数形式：apply(chantNode, container, meta)
             apply: (typeof handlerSpec === 'function')
@@ -968,8 +937,8 @@ export default class EchoRuntime {
             id: String(definition.runeId || definition.id || fallbackId || '').trim(),
             source: `definition:${cacheKey}`
           }, fallbackId)
-          if (normalized) {
-            this.echoChantHandlers.set(normalized.id, normalized)
+          if (normalizedHandler) {
+            this.echoChantHandlers.set(normalizedHandler.id, normalizedHandler)
           }
         }
       }
@@ -1084,9 +1053,7 @@ export default class EchoRuntime {
 
     const echoChantMeta = extractEchoChantMeta(normalized)
     if (echoChantMeta) {
-      // 双轨：旧字段 normalized.runeMeta 仍同步一份，供外部老 import 链读
       normalized.echoChantMeta = echoChantMeta
-      normalized.runeMeta = echoChantMeta
     }
 
     return normalized
@@ -1104,9 +1071,9 @@ export default class EchoRuntime {
     const promptHtml = prompt ? `<div class="ag-echo-inline__prompt">${prompt}</div>` : ''
     const customHtml = bodyHtml ? `<div class="ag-echo-inline__html">${bodyHtml}</div>` : ''
 
-    // DOM 属性 ABI：data-rune-id / data-rune-kind —— 不改名（写进 markdown 源 ABI）
-    const echoChantAttr = rendered.echoChantMeta || rendered.runeMeta
-      ? ` data-rune-id="${escapeHtml((rendered.echoChantMeta || rendered.runeMeta)?.runeId || 'unknown')}" data-rune-kind="${escapeHtml((rendered.echoChantMeta || rendered.runeMeta)?.kind || 'echo-chant')}"`
+    // DOM 属性 ABI：data-rune-id / data-rune-kind 字面（已写进 markdown 源 ABI）。
+    const echoChantAttr = rendered.echoChantMeta
+      ? ` data-rune-id="${escapeHtml(rendered.echoChantMeta.runeId || 'unknown')}" data-rune-kind="${escapeHtml(rendered.echoChantMeta.kind || 'echo-chant')}"`
       : ''
 
     return `<span class="ag-echo-inline" data-echo-inline="true" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}"${echoChantAttr} style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}${customHtml}</span></span>`
@@ -1161,7 +1128,7 @@ export default class EchoRuntime {
       const runeId = node.getAttribute('data-rune-id') || ''
       const meta = {
         runeId,
-        // DOM 里的 data-rune-kind 仍是 ABI，旧值 'rune' / 'rune-tbd' 在 normalizeKindAlias 转译
+        // DOM 里的 data-rune-kind 仍是历史 ABI（值域：'echo-chant' | 'echo-tbd'）
         kind: node.getAttribute('data-rune-kind') || 'echo-chant',
         attrs: this._readChantAttrs(node)
       }
@@ -1251,7 +1218,4 @@ export default class EchoRuntime {
     } catch (error) { /* ignore */ }
     return result
   }
-
-  // 兼容旧方法名（_readRuneAttrs）—— 外部可能直接调 EchoRuntime 实例的 _readRuneAttrs
-  _readRuneAttrs (node) { return this._readChantAttrs(node) }
 }

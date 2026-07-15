@@ -64,11 +64,11 @@ src = src.replace(old, inlinedImpl)
 src = src.replace(/^export const BUILTIN_ECHO_CARDS = /m, 'const BUILTIN_ECHO_CARDS = ')
 src = src.replace(/^export const getDefaultEchoAnnoSource = /m, 'const getDefaultEchoAnnoSource = ')
 src = src.replace(/^export const isBuiltinEcho = /m, 'const isBuiltinEcho = ')
-src = src.replace(/^export const BUILTIN_RUNE_IDS = /m, 'const BUILTIN_RUNE_IDS = ')
-src = src.replace(/^export const isBuiltinRuneId = /m, 'const isBuiltinRuneId = ')
+src = src.replace(/^export const BUILTIN_ECHO_CHANT_IDS = /m, 'const BUILTIN_ECHO_CHANT_IDS = ')
+src = src.replace(/^export const isBuiltinEchoChantId = /m, 'const isBuiltinEchoChantId = ')
 
 // 5. 末尾追加 module.exports
-src = src.trimEnd() + '\n\nmodule.exports = {\n  BUILTIN_ECHO_CARDS,\n  getDefaultEchoAnnoSource,\n  isBuiltinEcho,\n  BUILTIN_RUNE_IDS,\n  isBuiltinRuneId,\n  createDefaultEchoAnnoSource\n}\n'
+src = src.trimEnd() + '\n\nmodule.exports = {\n  BUILTIN_ECHO_CARDS,\n  getDefaultEchoAnnoSource,\n  isBuiltinEcho,\n  BUILTIN_ECHO_CHANT_IDS,\n  isBuiltinEchoChantId,\n  createDefaultEchoAnnoSource\n}\n'
 
 fs.writeFileSync(DST, src)
 console.log('OK:', DST, 'bytes:', src.length)

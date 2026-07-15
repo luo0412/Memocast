@@ -263,16 +263,15 @@ class StateRender {
       // For anonymous echo with only attrs, use echoId or echoName for lookup
       const lookupKey = echoId ? `id:${echoId}` : echoName
       const echo = echoMap.get(lookupKey) || (echoId ? echoMap.get(echoName) : null) || null
-      // 解析出当前实例的 attrs，决定是否走 rune 副作用链路
+      // 解析出当前实例的 attrs，决定是否走 echo-chant 副作用链路
       const instanceAttrs = (() => {
         try {
           // 来源 1：attrsRaw 已经写在 token；这里暂用 definition 的 anno_source 默认空对象
           // 来源 2：从 echo 定义里推断 kind（多数 echo-chant 类的 kind 由 anno_source.render() 注入）
-          // v2026-07-15 重命名后，'rune' / 'rune-tbd' 是历史值；新值为 'echo-chant' / 'echo-tbd'
           return {}
         } catch (error) { return {} }
       })()
-      const isRuneLike = (() => {
+      const isChantLike = (() => {
         if (!echo) return false
         const kindFromAnno = (() => {
           try {
@@ -281,16 +280,10 @@ class StateRender {
             return m ? m[1] : ''
           } catch (error) { return '' }
         })()
-        // 兼容新名 + 历史 ABI：'echo-chant' / 'echo-tbd' / 'rune' / 'rune-tbd'
-        const normalized = ({
-          'echo-chant': 'echo-chant', 'echo-tbd': 'echo-tbd',
-          rune: 'echo-chant', 'rune-tbd': 'echo-tbd'
-        })[kindFromAnno] || ''
-        if (normalized === 'echo-chant' || normalized === 'echo-tbd') return true
+        if (kindFromAnno === 'echo-chant' || kindFromAnno === 'echo-tbd') return true
         // 兜底：attrs 已经写在 host dataset（如果有 echoHighlight 等场景）
         const dsKind = String(dataset.kind || '')
         return dsKind === 'echo-chant' || dsKind === 'echo-tbd'
-          || dsKind === 'rune' || dsKind === 'rune-tbd'
       })()
       const cacheKey = JSON.stringify({
         echoName,
@@ -306,7 +299,7 @@ class StateRender {
         hasExplicitHeight,
         width,
         height,
-        runeLike: isRuneLike
+        runeLike: isChantLike
       })
 
       if (this.echoPlaceholderCache.get(host) === cacheKey) {
@@ -316,18 +309,19 @@ class StateRender {
       host.classList.add(ECHO_HOST_CLASS)
       host.setAttribute('contenteditable', 'false')
 
-      // === 回响可以"影响附近元素"的真正接线点 ===
-      // 对于 kind === 'echo-chant' | 'echo-tbd'（旧 'rune' / 'rune-tbd'）的 echo 定义
-      // （生生不息 / 破万法 / 天行健 / 双生花 / 夺心魄 / 强运 / 离析 / 替罪 / 招灾），
-      // 调用 EchoRuntime.renderToHtml 输出包含 data-rune-id / data-rune-kind 的 span；
-      // 随后在 renderRunes() 末由 afterRender() 接管，让对应 handler 改兄弟 / 容器节点的 CSS / 动画 / 边距。
-      // 其它（普通的 nice / 自定义 echo / 找不到定义的 echo）继续走卡片 markup。
-      // 数据结构：
-      //   数据结构字面在代码层面叫 echoChant，但 DOM 端保留 data-rune-id / data-rune-kind 以兼容既有 markdown ABI。
-      //
-      // === 配套桥接：把 echo 实例的 attrsParsed 序列化到 host 的 dataset，
-      // 让 EchoRuntime._readRuneAttrs() 在 afterRender() 时能够读到具体参数
-      // （比如 @离析{density:'very-loose'} 中的 density 会改变排版密度）。
+// === 回响可以"影响附近元素"的真正接线点 ===
+// 对于 kind === 'echo-chant' | 'echo-tbd' 的 echo 定义
+// （生生不息 / 破万法 / 天行健 / 双生花 / 夺心魄 / 强运 / 离析 / 替罪 / 招灾），
+// 调用 EchoRuntime.renderToHtml 输出包含 data-rune-id / data-rune-kind 的 span；
+// 随后在 renderRunes() 末由 afterRender() 接管，让对应 handler 改兄弟 / 容器节点的 CSS / 动画 / 边距。
+// 其它（普通的 nice / 自定义 echo / 找不到定义的 echo）继续走卡片 markup。
+//
+// DOM 端保留 data-rune-id / data-rune-kind 字面属性名（不是 echo-chant-*）——
+// 因为历史 markdown ABI 就是这样写的；新代码内部一律走 echo-chant 前缀。
+//
+// === 配套桥接：把 echo 实例的 attrsParsed 序列化到 host 的 dataset，
+// 让 EchoRuntime._readChantAttrs() 在 afterRender() 时能够读到具体参数
+// （比如 @离析{density:'very-loose'} 中的 density 会改变排版密度）。
       const echoAttrsJson = (() => {
         try { return JSON.stringify(echo?.anno_source || '') } catch (error) { return '' }
       })()
@@ -335,7 +329,7 @@ class StateRender {
         host.dataset.echoAttrsJson = echoAttrsJson
       }
       let innerHtml = ''
-      if (isRuneLike && runtime && typeof runtime.renderToHtml === 'function') {
+      if (isChantLike && runtime && typeof runtime.renderToHtml === 'function') {
         try {
           // 1) 用 editor 默认的 *当前* echo 定义做一次 sim-text render，拿 attrs 上下文
           //    （因为快捷插入/迁移进来的 token 可能没把 attrsParsed 写到 host dataset 上，
@@ -367,7 +361,7 @@ class StateRender {
           const matchedEcho = echo || null
           innerHtml = runtime.renderToHtml(token, matchedEcho)
           // 2) 把内层 span 的 data-rune-attrs 直接补成"当前 echoCard 渲染结果 + id/definitionId"
-          //    —— 这样 EchoRuntime._readRuneAttrs() 走 node.querySelector('[data-rune-attrs]')
+          //    —— 这样 EchoRuntime._readChantAttrs() 走 node.querySelector('[data-rune-attrs]')
           //    或者回退读 data-rune-attr-* 时都能拿到 baseline。
           try {
             const baselineAttrs = Object.assign({}, simAttrs, {
@@ -677,7 +671,7 @@ class StateRender {
       this.cleanupDetachedRuneVms(true)
       this.cleanupDetachedEchoVms(true)
     }
-    // === 让回响（rune 类）真正影响附近节点的排版/动画/边距 ===
+    // === 让 echo-chant 类回响真正影响附近节点的排版/动画/边距 ===
     // 上面 renderEchoPlaceholderNodes 已经把包含 data-rune-id 的 span 写进了 host.innerHTML，
     // 这里再让 EchoRuntime 派发对应 handler（growth / shatter / skywalk / twinbloom /
     // mindsteal / lucky / disperse / tbd）。

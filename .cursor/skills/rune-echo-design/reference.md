@@ -14,10 +14,10 @@
 | kind 值 | 所属体系 | 含义 |
 |--------|---------|------|
 | `'echo'` | echo | 普通 echo，纯标记卡片（nice 等） |
-| `'echo-chant'` | echo | **改名为原本的 `kind: 'rune'`**，表示"echo 的回响作用派发" |
+| `'echo-chant'` | echo | "echo 的回响作用派发"，由 10 个内置 echo + 用户自定义 handler 组成 |
 | `'echo-tbd'` | echo | 兜底 echo，无真实 handler |
 
-**改名的动机**：原 `kind: 'rune'`、原 `kind: 'rune-tbd'`、原 `RUNE_KINDS`、`RUNE_HANDLERS` 等字段属于 echo 体系，但历史命名与 rune（符文）重名。本次统一改成 `echo-chant`、`echo-tbd`，让 `RUNE_*` 仅出现在 rune 体系（用户自定义 Vue SFC 卡片）。
+**改名的动机**：原 `kind: 'rune'`、原 `kind: 'rune-tbd'`、原 `RUNE_KINDS`、`RUNE_HANDLERS` 等字段属于 echo 体系，但历史命名与 rune（符文）字面重名。v2026-07-15 起统一改名 `echo-chant` / `echo-tbd`，代码内**已全面替换**，**不保留任何 `kind: 'rune'` 兼容分支**（项目尚未对外发版）。
 
 > **真正走 Vue SFC + Vue.extend 路径的 rune，只有用户通过 RuneFormDialog 自定义的那些**。
 
@@ -164,13 +164,13 @@ echo_anno: /^@([^\s\{\(\)@]+)?(?:\{([\s\S]*?)\})?\(([\s\S]*?)\)$/
 ```javascript
 // 用户在 EchoFormDialog 写的 anno_source 字符串
 const source = `export default {
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'growth',
   render (context) {
     return { type: 'card', icon: 'park', color: '#43A047', ... }
   },
   // handler 是关键：改附近元素的入口
-  handler (runeNode, container, meta) {
+  handler (chantNode, container, meta) {
     const targets = container.querySelectorAll('p, h1, ...')
     targets.forEach(node => node.classList.add('ag-rune-growth-target'))
     return () => targets.forEach(node => node.classList.remove('ag-rune-growth-target'))
@@ -217,10 +217,10 @@ afterRender (container, options) {
   })
 
   // 2. 对每个 [data-rune-id] 派发到对应 handler（关键路径）
-  const runeNodes = safeQueryAll(container, '[data-rune-id]')
-  runeNodes.forEach(node => {
+  const chantNodes = safeQueryAll(container, '[data-rune-id]')
+  chantNodes.forEach(node => {
     const meta = { runeId, kind, attrs }
-    const handler = this.resolveRuneHandler(meta)
+    const handler = this.resolveEchoChantHandler(meta)
     const cleanup = handler.apply(node, container, meta)
     if (typeof cleanup === 'function') {
       this._installed.push({ node, runeId, cleanup })
@@ -233,26 +233,26 @@ afterRender (container, options) {
 ### 4.5 handler 解析优先级
 
 ```javascript
-// EchoRuntime.resolveRuneHandler(runeMeta)
-resolveRuneHandler (runeMeta) {
-  const { runeId, kind } = runeMeta
+// EchoRuntime.resolveEchoChantHandler(meta)
+resolveEchoChantHandler (meta) {
+  const { runeId, kind } = meta
 
   // 1. 用户动态注册的自定义 handler（按 id 精确匹配）
-  if (runeId && this.customHandlers.has(runeId)) {
-    return this.customHandlers.get(runeId)
+  if (runeId && this.echoChantHandlers.has(runeId)) {
+    return this.echoChantHandlers.get(runeId)
   }
 
   // 2. 用户动态注册的自定义 handler（按 match 探测）
-  for (const handler of this.customHandlers.values()) {
-    if (handler.match(runeMeta)) return handler
+  for (const handler of this.echoChantHandlers.values()) {
+    if (handler.match(meta)) return handler
   }
 
-  // 3. 9 个内置 handler
-  const builtIn = findRuneHandler(runeId)
+  // 3. 10 个内置 handler
+  const builtIn = findEchoChantHandler(runeId)
   if (builtIn) return builtIn
 
-  // 4. rune-tbd 兜底
-  if (kind === 'rune-tbd') return findRuneHandler('__tbd__')
+  // 4. echo-tbd 兜底
+  if (kind === 'echo-tbd') return findEchoChantHandler('__echo_chant_tbd__')
   return null
 }
 ```
@@ -271,14 +271,14 @@ resolveRuneHandler (runeMeta) {
 | calamity | 同段落文字节点 | 给随机文字片段加 `ag-rune-calamity-gothic` | 移除 class |
 | disperse | 当前 block | 加 `data-disperse-density` | 移除属性 |
 
-> `__tbd__` 是 rune-tbd 的兜底 handler，只给节点加 `ag-rune-tbd-active` class，没有真实副作用。
+> `__echo_chant_tbd__` 是 echo-tbd 的兜底 handler，只给节点加 `ag-rune-tbd-active` class，没有真实副作用。
 
 ### 4.7 scope 解析（resolveScopeContainer）
 
 ```javascript
-const resolveScopeContainer = (runeNode, scope = 'siblings') => {
-  const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1~h6, blockquote, table, ul, ol')
-  const documentRoot = runeNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body
+const resolveScopeContainer = (chantNode, scope = 'siblings') => {
+    const block = chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1~h6, blockquote, table, ul, ol')
+    const documentRoot = chantNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body
 
   switch (String(scope).toLowerCase()) {
     case 'prev-block': {
@@ -372,14 +372,16 @@ const BUILTIN_ECHO_CHANT_IDS = [
 
 ## 11. 重命名记录（2026-07-15）
 
-将 echo 体系内的 `kind: 'rune'` → `kind: 'echo-chant'`，`kind: 'rune-tbd'` → `kind: 'echo-tbd'`，`RUNE_KINDS` → `ECHO_CHANT_KINDS`，`RUNE_HANDLERS` → `ECHO_CHANT_HANDLERS`，`BUILTIN_ECHO_CARDS` 内 `kind: 'rune'` 们改名为 `kind: 'echo-chant'`。
+将 echo 体系内的 `kind: 'rune'` → `kind: 'echo-chant'`，`kind: 'rune-tbd'` → `kind: 'echo-tbd'`，`RUNE_KINDS` → `ECHO_CHANT_KINDS`，`RUNE_HANDLERS` → `ECHO_CHANT_HANDLERS`，`BUILTIN_ECHO_CARDS` 内 `kind: 'rune'` 们改名为 `kind: 'echo-chant'`，`BUILTIN_RUNE_IDS` → `BUILTIN_ECHO_CHANT_IDS`，`isBuiltinRuneId` → `isBuiltinEchoChantId`，anno_source 函数参数名 `runeNode` → `chantNode`，`resolveRuneHandler` / `findRuneHandler` / `registerRuneHandler` / `unregisterRuneHandler` / `listCustomRuneHandlers` / `extractRuneMeta` 全部改名，全局注册点 `window.__memocastRuneHandlers` → `window.__memocastEchoChantHandlers`，`KIND_ALIASES` / `normalizeKindAlias` / `customHandlers` / `_readRuneAttrs` 等兼容层全部移除（项目未对外发版，不需要保留旧名 fallback）。
 
 理由：
-- `RUNE_*` 这个名字过去在 echo 体系里被滥用（`kind`、`RUNE_HANDLERS`、`RUNE_KINDS`、表里属性 `data-rune-id`），与 rune（Vue SFC 卡片）字面重名，**给人阅读造成严重混淆**。
+- `RUNE_*` 这个名字过去在 echo 体系里被滥用（`kind`、`RUNE_HANDLERS`、`RUNE_KINDS`、表里属性 `data-rune-id`、`runeNode` 函数参数名、`__memocastRuneHandlers` 全局点），与 rune（Vue SFC 卡片）字面重名，**给人阅读造成严重混淆**。
 - `echo-chant`（echo 的咏唱 / 回响触发）+ `echo-tbd` 直接表明它们都属于 echo 体系，与 rune 彻底断开字面联系。
 - 维护者后续在做改动时，看到 `echo-*` 就归 echo，看到 `rune-*`（指 `data-rune-name`、`data-rune-id` 等元素标签属性、`Vue.extend` 的构造器、`RuneFormDialog` 表单）才算 rune，两套视觉上一刀切开。
+- 项目尚未对外发版，没有历史用户笔记需要兼容，趁机做彻底改名。
 
-> 注意：渲染产物上的 `data-rune-id="growth"` 属性名**未改名**，因为它是 DOM 属性名 + 历史稳定 ABI，改名会破坏 Markdown 源里已存的写法。Skills 里以后看到 `data-rune-id`，按值找到的逻辑实体是 echo-chant，不是 rune。
+> 注意：渲染产物上的 `data-rune-id="growth"` / `data-rune-kind="echo-chant"` 等**DOM 属性名未改名**，因为它们是 markdown 源 ABI，写到了历史笔记里；这是字面值的稳定。Skills 里以后看到 `data-rune-id`，**按值找到的逻辑实体是 echo-chant，不是 rune**。
+> 注意：`ag-rune-*` CSS class 名也未改名（视觉样式锚点，避免回归）。
 
 ## 12. 何时用 Rune、何时用 Echo（决策树）
 

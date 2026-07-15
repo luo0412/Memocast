@@ -8,7 +8,7 @@ const { banner, handlerExampleDoc, handlerAndExampleDoc, handlerPrelude } = requ
 //   每个 rune anno_source 由以下几段组成：
 //     - banner 注释（描述这个 rune 做什么 / 影响谁 / 怎么传参）
 //     - render(context)         决定回响卡片外观 + 写入 attrs 默认值
-//     - handlerExample 字段     apply(runeNode, container, meta) 模板；
+//     - handlerExample 字段     apply(chantNode, container, meta) 模板；
 //                              字段名带 Example 后缀，运行时不会自动注册为 handler。
 //                              把字段名改成 handler 即可接管运行时副作用。
 //
@@ -107,7 +107,7 @@ const createGrowthAnnoSource = () => `export default {
     '  @生生不息{scope: "siblings", trigger: "manual", target: "p, li"}(春风吹又生)',
     '模仿提示：把 handlerExample 字段名改成 handler 即可接管运行时'
   ])},
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'growth',
   version: 1,
   name: '生生不息',
@@ -122,20 +122,20 @@ const createGrowthAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '生生不息',
       description: attrs.desc || context.echo?.desc || '为附近符合条件的元素加上生长的动画特效',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'growth', scope: attrs.scope || 'siblings', trigger: attrs.trigger || 'auto', inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'growth', scope: attrs.scope || 'siblings', trigger: attrs.trigger || 'auto', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--growth" data-rune-id="growth">生生不息</span>'
     }
   },
 
   ${handlerExampleDoc([
-    '【示例模式】apply(runeNode, scopeContainer, meta) 返回 cleanup？',
+    '【示例模式】apply(chantNode, scopeContainer, meta) 返回 cleanup？',
     '   __resolveScopeContainer(node, scope)  按 4 种 scope 取目标容器',
     '   __safeQueryAll(root, sel)             容错 querySelectorAll',
     '   __withAttrs(meta, defaults)           meta.attrs 默认值合并'
   ])}
     const attrs = __withAttrs(meta, { scope: 'siblings', trigger: 'auto' })
     const targetSelector = attrs.target || '[data-block-type], p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table'
-    const container = __resolveScopeContainer(runeNode, attrs.scope)
+    const container = __resolveScopeContainer(chantNode, attrs.scope)
     if (!container) return () => {}
 
     const targets = __safeQueryAll(container, targetSelector)
@@ -145,12 +145,12 @@ const createGrowthAnnoSource = () => `export default {
         node.style.setProperty('--ag-rune-growth-delay', (Math.min(i, 8) * 120) + 'ms')
       }
     })
-    runeNode.classList.add('ag-rune-growth-active')
+    chantNode.classList.add('ag-rune-growth-active')
 
     // 必须返回 cleanup：下一次重渲染 / 卸载时被调用，撤销副作用
     return () => {
       targets.forEach(node => node.classList.remove('ag-rune-growth-target'))
-      runeNode.classList.remove('ag-rune-growth-active')
+      chantNode.classList.remove('ag-rune-growth-active')
     }
   }
 }`
@@ -166,7 +166,7 @@ const createShatterAnnoSource = () => `export default {
     '  @破万法{target: "block"}(此段一切回响失效)',
     '模仿提示：把 handlerExample 改名 handler 即可实装'
   ])},
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'shatter',
   version: 1,
   name: '破万法',
@@ -181,7 +181,7 @@ const createShatterAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '破万法',
       description: attrs.desc || context.echo?.desc || '使附近一行或一个块的回响作用都失效',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'shatter', target: attrs.target || 'line', neutraliseEchoes: true, inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'shatter', target: attrs.target || 'line', neutraliseEchoes: true, inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--shatter" data-rune-id="shatter">破万法</span>'
     }
   },
@@ -192,23 +192,23 @@ const createShatterAnnoSource = () => `export default {
     const attrs = __withAttrs(meta, { target: 'line' })
     const useBlockScope = attrs.target === 'block'
     const container = useBlockScope
-      ? (runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement)
-      : __resolveScopeContainer(runeNode, 'siblings')
+      ? (chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || chantNode.parentElement)
+      : __resolveScopeContainer(chantNode, 'siblings')
     if (!container) return () => {}
 
-    const echoes = __safeQueryAll(container, '[data-echo-inline="true"]').filter(n => n !== runeNode)
+    const echoes = __safeQueryAll(container, '[data-echo-inline="true"]').filter(n => n !== chantNode)
     echoes.forEach(n => {
       n.setAttribute('data-shatter-disabled', 'true')
       n.classList.add('ag-rune-shatter-disabled')
     })
-    runeNode.classList.add('ag-rune-shatter-active')
+    chantNode.classList.add('ag-rune-shatter-active')
 
     return () => {
       echoes.forEach(n => {
         n.removeAttribute('data-shatter-disabled')
         n.classList.remove('ag-rune-shatter-disabled')
       })
-      runeNode.classList.remove('ag-rune-shatter-active')
+      chantNode.classList.remove('ag-rune-shatter-active')
     }
   }
 }`
@@ -223,7 +223,7 @@ const createSkywalkAnnoSource = () => `export default {
     'CSS 钩子：data-skywalk-theme / data-skywalk-layout',
     '示例：@天行健{theme: "sepia", layout: "luxe"}(本文走浓郁路线)'
   ])},
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'skywalk',
   version: 1,
   name: '天行健',
@@ -238,7 +238,7 @@ const createSkywalkAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '天行健',
       description: attrs.desc || context.echo?.desc || '强化排版并指定某种主题',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'skywalk', theme: attrs.theme || 'auto', layout: attrs.layout || 'enhanced', inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'skywalk', theme: attrs.theme || 'auto', layout: attrs.layout || 'enhanced', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--skywalk" data-rune-id="skywalk">天行健</span>'
     }
   },
@@ -247,7 +247,7 @@ const createSkywalkAnnoSource = () => `export default {
     '【示例模式】document scope：记忆原值，cleanup 还原'
   ])}
     const attrs = __withAttrs(meta, { theme: 'auto', layout: 'enhanced' })
-    const documentRoot = runeNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || scopeContainer || document.body
+    const documentRoot = chantNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || scopeContainer || document.body
     if (!documentRoot) return () => {}
 
     // 记忆原值，cleanup 还原
@@ -257,14 +257,14 @@ const createSkywalkAnnoSource = () => `export default {
     }
     documentRoot.setAttribute('data-skywalk-theme', attrs.theme)
     documentRoot.setAttribute('data-skywalk-layout', attrs.layout)
-    runeNode.classList.add('ag-rune-skywalk-active')
+    chantNode.classList.add('ag-rune-skywalk-active')
 
     return () => {
       if (prev.theme === null) documentRoot.removeAttribute('data-skywalk-theme')
       else documentRoot.setAttribute('data-skywalk-theme', prev.theme)
       if (prev.layout === null) documentRoot.removeAttribute('data-skywalk-layout')
       else documentRoot.setAttribute('data-skywalk-layout', prev.layout)
-      runeNode.classList.remove('ag-rune-skywalk-active')
+      chantNode.classList.remove('ag-rune-skywalk-active')
     }
   }
 }`
@@ -291,7 +291,7 @@ const createTwinbloomAnnoSource = () => `export default {
     '模仿提示：双生花的克隆是 readonly 的（contenteditable=false），',
     '  想重新编辑请双击克隆块使其解除 readonly，或直接删除重写。'
   ])},
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'twinbloom',
   version: 1,
   name: '双生花',
@@ -306,7 +306,7 @@ const createTwinbloomAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '双生花',
       description: attrs.desc || context.echo?.desc || '复制上一个节点并占位',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'twinbloom', source: attrs.source || 'prev-block', placeholder: attrs.placeholder || '双生节点', inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'twinbloom', source: attrs.source || 'prev-block', placeholder: attrs.placeholder || '双生节点', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--twinbloom" data-rune-id="twinbloom">双生花</span>'
     }
   },
@@ -320,8 +320,8 @@ const createTwinbloomAnnoSource = () => `export default {
     const source = String(attrs.source || 'prev-block').toLowerCase()
     const placeholder = attrs.placeholder || '双生节点'
 
-    // 拿当前 block（runeNode 所在的 paragraph / heading 等）
-    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
+    // 拿当前 block（chantNode 所在的 paragraph / heading 等）
+    const block = chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || chantNode.parentElement
     if (!block || !block.parentElement) return () => {}
 
     // 决定克隆源：
@@ -329,7 +329,7 @@ const createTwinbloomAnnoSource = () => `export default {
     let sourceNode = block
     let insertTarget = block
     if (source === 'prev-block') {
-      const resolved = __resolveScopeContainer(runeNode, 'prev-block')
+      const resolved = __resolveScopeContainer(chantNode, 'prev-block')
       if (resolved && resolved !== block) {
         sourceNode = resolved
         insertTarget = block  // 插入到当前 block 之后
@@ -347,7 +347,7 @@ const createTwinbloomAnnoSource = () => `export default {
     }
 
     // 防重入：检查上一次插入的克隆
-    const twinId = runeNode.getAttribute('data-rune-id') || 'twinbloom'
+    const twinId = chantNode.getAttribute('data-rune-id') || 'twinbloom'
     const sentinel = 'data-twinbloom-of'
     let cloned = null
     let insertedBefore = (source === 'next-block')
@@ -396,13 +396,13 @@ const createTwinbloomAnnoSource = () => `export default {
         block.parentElement.insertBefore(cloned, insertTarget.nextSibling)
       }
     }
-    runeNode.classList.add('ag-rune-twinbloom-active')
+    chantNode.classList.add('ag-rune-twinbloom-active')
 
     return () => {
       if (!existedBefore && cloned && cloned.parentElement) {
         cloned.parentElement.removeChild(cloned)
       }
-      runeNode.classList.remove('ag-rune-twinbloom-active')
+      chantNode.classList.remove('ag-rune-twinbloom-active')
     }
   }
 }`
@@ -416,7 +416,7 @@ const createMindstealAnnoSource = () => `export default {
     '参数：mode=override|stack|disable；targets=其它 runeId（逗号分隔）',
     '示例：@夺心魄{mode: "disable", targets: "growth,skywalk"}(覆盖附近的生长与主题)'
   ])},
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'mindsteal',
   version: 1,
   name: '夺心魄',
@@ -431,7 +431,7 @@ const createMindstealAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '夺心魄',
       description: attrs.desc || context.echo?.desc || '使附近符合条件的符文叠加或篡改某种制定的效果',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'mindsteal', mode: attrs.mode || 'override', targets: attrs.targets || '', inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'mindsteal', mode: attrs.mode || 'override', targets: attrs.targets || '', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--mindsteal" data-rune-id="mindsteal">夺心魄</span>'
     }
   },
@@ -442,25 +442,25 @@ const createMindstealAnnoSource = () => `export default {
     const attrs = __withAttrs(meta, { mode: 'override', targets: '' })
     const targetsCsv = String(attrs.targets || '').trim()
     const targets = targetsCsv ? targetsCsv.split(',').map(s => s.trim()).filter(Boolean) : null
-    const container = __resolveScopeContainer(runeNode, 'siblings')
+    const container = __resolveScopeContainer(chantNode, 'siblings')
     if (!container) return () => {}
 
     const candidates = __safeQueryAll(container, '[data-rune-id]')
-      .filter(n => n !== runeNode)
+      .filter(n => n !== chantNode)
       .filter(n => !targets || targets.includes(n.getAttribute('data-rune-id')))
 
     candidates.forEach(n => {
       n.setAttribute('data-mindsteal-mode', attrs.mode)
       if (attrs.mode === 'disable') n.style.setProperty('animation', 'none', 'important')
     })
-    runeNode.classList.add('ag-rune-mindsteal-active')
+    chantNode.classList.add('ag-rune-mindsteal-active')
 
     return () => {
       candidates.forEach(n => {
         n.removeAttribute('data-mindsteal-mode')
         n.style.removeProperty('animation')
       })
-      runeNode.classList.remove('ag-rune-mindsteal-active')
+      chantNode.classList.remove('ag-rune-mindsteal-active')
     }
   }
 }`
@@ -472,11 +472,11 @@ const createLuckyAnnoSource = () => `export default {
   ${banner([
     '【强运 / lucky】 —— 点击触发 AI 校对，是"事件型 rune"样板',
     '事件流：handler 给节点加 role=button / tabindex=0；点击时调用',
-    '  window.__memocastRuneHandlers.lucky({runeNode, meta})，由应用层注册回调',
+    '  window.__memocastEchoChantHandlers.lucky({chantNode, meta})，由应用层注册回调',
     '示例：@强运{model: "gpt-4o-mini", action: "ai-proofread"}(一键润色)',
-    '模仿提示：把 handlerExample 改成 handler 后，再注册 window.__memocastRuneHandlers.lucky'
+    '模仿提示：把 handlerExample 改成 handler 后，再注册 window.__memocastEchoChantHandlers.lucky'
   ])},
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'lucky',
   version: 1,
   name: '强运',
@@ -491,7 +491,7 @@ const createLuckyAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '强运',
       description: attrs.desc || context.echo?.desc || '点击后触发 AI 识别当前 Markdown 的错别字并修正',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'lucky', action: attrs.action || 'ai-proofread', model: attrs.model || 'default', inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'lucky', action: attrs.action || 'ai-proofread', model: attrs.model || 'default', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--lucky" data-rune-id="lucky">强运</span>'
     }
   },
@@ -499,40 +499,40 @@ const createLuckyAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】事件型 handler：cleanup 必须解绑 + 移除属性',
     '   handlerExample 给节点加 role=button / tabindex=0；click 与 Enter/Space 触发',
-    '   callback 走 window.__memocastRuneHandlers.lucky（应用层注册）'
+    '   callback 走 window.__memocastEchoChantHandlers.lucky（应用层注册）'
   ])}
     const attrs = __withAttrs(meta, { label: '点击触发 AI 校对' })
-    runeNode.style.cursor = 'pointer'
-    runeNode.setAttribute('role', 'button')
-    runeNode.setAttribute('tabindex', '0')
-    runeNode.setAttribute('title', attrs.label)
-    runeNode.classList.add('ag-rune-lucky-active')
+    chantNode.style.cursor = 'pointer'
+    chantNode.setAttribute('role', 'button')
+    chantNode.setAttribute('tabindex', '0')
+    chantNode.setAttribute('title', attrs.label)
+    chantNode.classList.add('ag-rune-lucky-active')
 
     const trigger = async (ev) => {
       ev.preventDefault(); ev.stopPropagation()
-      runeNode.classList.add('ag-rune-lucky-loading')
+      chantNode.classList.add('ag-rune-lucky-loading')
       try {
         const handler = (typeof window !== 'undefined')
-          ? (window.__memocastRuneHandlers && window.__memocastRuneHandlers.lucky)
+          ? (window.__memocastEchoChantHandlers && window.__memocastEchoChantHandlers.lucky)
           : null
-        if (typeof handler === 'function') await handler({ runeNode, meta, scopeContainer })
-        else console.info('[lucky] no window.__memocastRuneHandlers.lucky registered')
+        if (typeof handler === 'function') await handler({ chantNode, meta, scopeContainer })
+        else console.info('[lucky] no window.__memocastEchoChantHandlers.lucky registered')
       } catch (err) { console.error('[lucky] handler failed:', err) }
-      finally { runeNode.classList.remove('ag-rune-lucky-loading') }
+      finally { chantNode.classList.remove('ag-rune-lucky-loading') }
     }
     const onClick = (ev) => trigger(ev)
     const onKey = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') trigger(ev) }
-    runeNode.addEventListener('click', onClick)
-    runeNode.addEventListener('keydown', onKey)
+    chantNode.addEventListener('click', onClick)
+    chantNode.addEventListener('keydown', onKey)
 
     return () => {
-      runeNode.removeEventListener('click', onClick)
-      runeNode.removeEventListener('keydown', onKey)
-      runeNode.classList.remove('ag-rune-lucky-active', 'ag-rune-lucky-loading')
-      runeNode.style.cursor = ''
-      runeNode.removeAttribute('role')
-      runeNode.removeAttribute('tabindex')
-      runeNode.removeAttribute('title')
+      chantNode.removeEventListener('click', onClick)
+      chantNode.removeEventListener('keydown', onKey)
+      chantNode.classList.remove('ag-rune-lucky-active', 'ag-rune-lucky-loading')
+      chantNode.style.cursor = ''
+      chantNode.removeAttribute('role')
+      chantNode.removeAttribute('tabindex')
+      chantNode.removeAttribute('title')
     }
   }
 }`
@@ -544,14 +544,16 @@ const createLuckyAnnoSource = () => `export default {
 //     一旦后续 rune 抛错 / DOM 异常，把它转成 ag-rune-scapegoat-injured（红边 + 错误描述）
 //   - handler 清理时移除监听并清掉 standby/injured 状态。
 // ============================================================================
+// 8. 替罪（scapegoat）：echo-chant（防灾）
+// ============================================================================
 const createScapegoatAnnoSource = () => `export default {
   ${banner([
     '【替罪 / scapegoat】 —— 作用域内的"救场位"',
-    '回响种类：rune（替换原 rune-tbd 占位）',
-    '语义：把最近 block 标为 standby；后续 rune / DOM 抛错时把 standby 转 injured，错误写到 data-scapegoat-error',
+    '回响种类：echo-chant（影响附近元素、做防灾 / 占位 / 兜底）',
+    '语义：把最近 block 标为 standby；后续 echo / DOM 抛错时把 standby 转 injured，错误写到 data-scapegoat-error',
     '模仿提示：把 attr.intensity 改成 0.5 可以让 standby 默认变 injured（模拟"已知错误"）'
   ])},
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'scapegoat',
   version: 1,
   name: '替罪',
@@ -567,7 +569,7 @@ const createScapegoatAnnoSource = () => `export default {
       title: attrs.title || echoMeta.name || '替罪',
       description: attrs.desc || echoMeta.desc || '在作用域内接住后续 rune / DOM 抛出的错误，并以受伤态提示',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'scapegoat', inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'scapegoat', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--scapegoat" data-rune-id="scapegoat">替罪</span>'
     }
   },
@@ -577,7 +579,7 @@ const createScapegoatAnnoSource = () => `export default {
     '—— 见 __resolveScopeContainer / __safeQueryAll / __withAttrs 三个 prelude helper',
     'cleanup：移除监听 + 移除 standby/injured 状态'
   ])},
-    const block = __resolveScopeContainer(runeNode, 'block')
+    const block = __resolveScopeContainer(chantNode, 'block')
     if (!block) return () => {}
 
     const intensity = Number(meta && meta.attrs && meta.attrs.intensity) || 0
@@ -618,17 +620,17 @@ const createScapegoatAnnoSource = () => `export default {
 }`
 
 // ============================================================================
-// 9. 招灾（calamity）：rune-tbd 占位
+// 9. 招灾（calamity）：echo-chant（随机染色）
 // ============================================================================
 const createCalamityAnnoSource = () => `export default {
   ${banner([
     '【招灾 / calamity】 —— "随机哥德"：作用域内随机给文字片段染上哥特渐变彩',
-    '回响种类：rune（替换原 rune-tbd 占位）',
+    '回响种类：echo-chant（影响附近元素、做染色 / 炫彩 / 动效）',
     '参数：intensity = 0.1-0.8 的小数（默认 0.3，最大 0.8）',
     'CSS 钩子：.ag-rune-calamity-gothic',
     '示例：@招灾{intensity: 0.5}(周围一半文字染彩)'
   ])},
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'calamity',
   version: 1,
   name: '招灾',
@@ -644,7 +646,7 @@ const createCalamityAnnoSource = () => `export default {
       title: attrs.title || echoMeta.name || '招灾',
       description: attrs.desc || echoMeta.desc || '在作用域内随机给文字片段染上哥特渐变彩',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'calamity', inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'calamity', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--calamity" data-rune-id="calamity">招灾</span>'
     }
   },
@@ -654,14 +656,14 @@ const createCalamityAnnoSource = () => `export default {
     '—— 见 __resolveScopeContainer / __safeQueryAll / __sampleShuffle 三个 prelude helper',
     'cleanup：取消染彩 class'
   ])},
-    const container = __resolveScopeContainer(runeNode, (meta && meta.attrs && meta.attrs.scope) || 'siblings')
+    const container = __resolveScopeContainer(chantNode, (meta && meta.attrs && meta.attrs.scope) || 'siblings')
     if (!container) return () => {}
 
     const intensity = Math.max(0.05, Math.min(0.8,
       Number(meta && meta.attrs && meta.attrs.intensity) || 0.3))
 
     const textHosts = __safeQueryAll(container, 'p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, dd, dt')
-      .filter(el => el && el !== runeNode && (el.textContent || '').trim().length >= 2)
+      .filter(el => el && el !== chantNode && (el.textContent || '').trim().length >= 2)
     const targetCount = Math.max(1, Math.floor(textHosts.length * intensity))
     const picked = __sampleShuffle(textHosts, targetCount)
 
@@ -682,7 +684,7 @@ const createDisperseAnnoSource = () => `export default {
     'CSS 钩子：data-disperse-density',
     '示例：@离析{density: "tight"}(回归紧凑排版)'
   ])},
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'disperse',
   version: 1,
   name: '离析',
@@ -697,7 +699,7 @@ const createDisperseAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '离析',
       description: attrs.desc || context.echo?.desc || '使附近的元素使用更加宽松的排版',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'disperse', density: attrs.density || 'loose', inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'disperse', density: attrs.density || 'loose', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--disperse" data-rune-id="disperse">离析</span>'
     }
   },
@@ -706,17 +708,17 @@ const createDisperseAnnoSource = () => `export default {
     '【示例模式】block scope 写 data-disperse-density；CSS 据此调整 line-height/margin'
   ])}
     const attrs = __withAttrs(meta, { density: 'loose' })
-    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
+    const block = chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || chantNode.parentElement
     if (!block) return () => {}
 
     const previous = block.getAttribute('data-disperse-density')
     block.setAttribute('data-disperse-density', attrs.density)
-    runeNode.classList.add('ag-rune-disperse-active')
+    chantNode.classList.add('ag-rune-disperse-active')
 
     return () => {
       if (previous === null) block.removeAttribute('data-disperse-density')
       else block.setAttribute('data-disperse-density', previous)
-      runeNode.classList.remove('ag-rune-disperse-active')
+      chantNode.classList.remove('ag-rune-disperse-active')
     }
   }
 }`
@@ -728,11 +730,11 @@ const createClockAnnoSource = () => `export default {
   ${banner([
     '【报时 / clock】 —— 11 个内置回响里唯一已实装 handler 的样板',
     '模仿提示：把这一段当成"事件型 + 周期型"handler 的最小可运行示例',
-    '  - 找到 runeNode.closest 的 block 容器',
+    '  - 找到 chantNode.closest 的 block 容器',
     '  - 在容器内追加一个 span，每秒更新文本',
     '  - cleanup 必须 clearInterval + DOM 移除'
   ])},
-  kind: 'rune',
+  kind: 'echo-chant',
   runeId: 'clock',
   version: 1,
   name: '报时',
@@ -747,14 +749,14 @@ const createClockAnnoSource = () => `export default {
       title: attrs.title || context.echo?.name || '报时',
       description: attrs.desc || context.echo?.desc || '在容器右上角注入当前时间',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: 'clock', position: attrs.position || 'top-right', inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'clock', position: attrs.position || 'top-right', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--clock" data-rune-id="clock">报时</span>'
     }
   },
 
-  // 【已实装 handler】—— 注意：内置 RUNE_HANDLERS 没占这个 id，所以这里实装是安全的
-  handler (runeNode, _container, _meta) {
-    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
+  // 【已实装 handler】—— 注意：内置 ECHO_CHANT_HANDLERS 没占这个 id，所以这里实装是安全的
+  handler (chantNode, _container, _meta) {
+    const block = chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || chantNode.parentElement
     if (!block) return () => {}
     const previous = block.getAttribute('data-clock-active')
     block.setAttribute('data-clock-active', 'true')
@@ -886,7 +888,7 @@ const getDefaultEchoAnnoSource = createDefaultEchoAnnoSource
 const isBuiltinEcho = (echo = {}) => Boolean(echo && echo.isBuiltin)
 
 // 11 个符文元信息集中导出，方便外部按 runeId 查找
-const BUILTIN_RUNE_IDS = Object.freeze([
+const BUILTIN_ECHO_CHANT_IDS = Object.freeze([
   'growth',
   'shatter',
   'skywalk',
@@ -899,13 +901,13 @@ const BUILTIN_RUNE_IDS = Object.freeze([
   'clock'
 ])
 
-const isBuiltinRuneId = (runeId = '') => BUILTIN_RUNE_IDS.includes(String(runeId || '').trim())
+const isBuiltinEchoChantId = (runeId = '') => BUILTIN_ECHO_CHANT_IDS.includes(String(runeId || '').trim())
 
 module.exports = {
   BUILTIN_ECHO_CARDS,
   getDefaultEchoAnnoSource,
   isBuiltinEcho,
-  BUILTIN_RUNE_IDS,
-  isBuiltinRuneId,
+  BUILTIN_ECHO_CHANT_IDS,
+  isBuiltinEchoChantId,
   createDefaultEchoAnnoSource
 }

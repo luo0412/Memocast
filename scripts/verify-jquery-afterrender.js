@@ -31,10 +31,10 @@ for (const c of checks) {
 // EchoRuntime.js 检查
 const runtimeSrc = fs.readFileSync(path.join(ROOT, 'EchoRuntime.js'), 'utf8')
 const runtimeChecks = [
-  { name: 'createDefaultEchoAnnoSource afterRender 直接 $()', re: /afterRender\s*\(node,\s*domElement,\s*ancestors\)\s*\{\s*\$\(domElement\)\.addClass/, shouldMatch: true },
-  { name: 'createDefaultEchoAnnoSource 不再 fallback classList', re: /domElement\.classList\.add\('ag-echo-default-mounted'\)/, shouldMatch: false },
-  { name: 'createDefaultRuneAnnoSource handler 直接 $(runeNode)', re: /const \$rune = \$\(runeNode\)/, shouldMatch: true },
-  { name: 'createDefaultRuneAnnoSource 不再用 target\.style\.outline', re: /target\.style\.outline/, shouldMatch: false }
+  { name: 'createDefaultChantAnnoSource afterRender 直接 $()', re: /afterRender\s*\(node,\s*domElement,\s*ancestors\)\s*\{\s*\$\(domElement\)\.addClass/, shouldMatch: true },
+  { name: 'createDefaultChantAnnoSource 不再 fallback classList', re: /domElement\.classList\.add\('ag-echo-default-mounted'\)/, shouldMatch: false },
+  { name: 'createDefaultChantAnnoSource handler 直接 $(chantNode)', re: /const \$rune = \$\(chantNode\)/, shouldMatch: true },
+  { name: 'createDefaultChantAnnoSource 不再用 target\.style\.outline', re: /target\.style\.outline/, shouldMatch: false }
 ]
 for (const c of runtimeChecks) {
   const match = c.re.test(runtimeSrc)

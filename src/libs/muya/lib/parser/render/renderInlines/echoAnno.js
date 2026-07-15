@@ -58,7 +58,7 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
   if (hasExplicitWidth) dataset.echoWidth = width
   if (hasExplicitHeight) dataset.echoHeight = height
   // 把 token 的 attrsParsed（@离析{density:'very-loose'} 这种）原样写到 host.dataset，
-  // 让 EchoRuntime._readRuneAttrs() 在 afterRender() 时能拿到实例参数。
+  // 让 EchoRuntime._readChantAttrs() 在 afterRender() 时能拿到实例参数。
   const parsedAttrs = (token && token.attrsParsed && typeof token.attrsParsed === 'object')
     ? token.attrsParsed
     : null

@@ -1015,8 +1015,7 @@ export default {
 
       // 注册全局 lucky 回调：@强运 点击后真正调 AI 校对。
       if (typeof window !== 'undefined') {
-        // 全局 key 保留 'lucky' 不变（外部或文档可能仍在引用 __memocastRuneHandlers.lucky）
-        window.__memocastRuneHandlers = Object.assign(window.__memocastRuneHandlers || {}, {
+        window.__memocastEchoChantHandlers = Object.assign(window.__memocastEchoChantHandlers || {}, {
           lucky: this.handleLuckyChantTrigger.bind(this)
         })
       }
@@ -1222,8 +1221,8 @@ export default {
     if (this.contentEditor && typeof this.contentEditor.destroy === 'function') {
       this.contentEditor.destroy()
     }
-    if (typeof window !== 'undefined' && window.__memocastRuneHandlers) {
-      delete window.__memocastRuneHandlers.lucky
+    if (typeof window !== 'undefined' && window.__memocastEchoChantHandlers) {
+      delete window.__memocastEchoChantHandlers.lucky
     }
     appBus.$off(appEvents.PARAGRAPH_SHORTCUT_CALL)
     appBus.$off(appEvents.FORMAT_SHORTCUT_CALL)

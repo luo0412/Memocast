@@ -44,7 +44,7 @@ const __sampleShuffle = (arr, n) => {
   }
   return copy.slice(0, Math.min(n, copy.length))
 }
-const handlerFieldSource = (fieldName) => fieldName + ': function (runeNode, scopeContainer, meta) {\\n    const __resolveScopeContainer = ' + __resolveScopeContainer.toString() + '\\n    const __safeQueryAll = ' + __safeQueryAll.toString() + '\\n    const __withAttrs = ' + __withAttrs.toString() + '\\n    // === handler logic ==='
+const handlerFieldSource = (fieldName) => fieldName + ': function (chantNode, scopeContainer, meta) {\\n    const __resolveScopeContainer = ' + __resolveScopeContainer.toString() + '\\n    const __safeQueryAll = ' + __safeQueryAll.toString() + '\\n    const __withAttrs = ' + __withAttrs.toString() + '\\n    // === handler logic ==='
 const handlerAndExampleDoc = (docLines) => {
   const b = banner(docLines)
   return b + '\\n\\n  ' + handlerFieldSource('handler') + '\\n\\n    // === handler logic ===\\n  },\\n  ' + b + '\\n\\n  ' + handlerFieldSource('handlerExample') + '\\n\\n    // === handler logic ==='
@@ -58,7 +58,7 @@ const sampleShuffleSource = ''
 `
 
   // 把 EchoRuntime.js 跑出来,但需要 strip 掉 export default class,因为我们不要 EchoRuntime 类本身。
-  // 只要其中的 createDefaultEchoAnnoSource / createDefaultRuneAnnoSource。
+  // 只要其中的 createDefaultEchoAnnoSource / createDefaultChantAnnoSource。
   const runtimeRaw = fs.readFileSync(path.join(ROOT, 'EchoRuntime.js'), 'utf8')
   const runtimeStripped = runtimeRaw
     .replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]+['"];?\s*$/gm, '')

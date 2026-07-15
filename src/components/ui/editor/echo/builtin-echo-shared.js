@@ -4,8 +4,6 @@
 // 提供 10 个 echo-chant 内置 + nice 共用的辅助函数 + 共享代码片段。
 // 消除 builtinEchoes.js 里 11 份重复的 banner 注释、scope 工具、
 // 数据属性读 helper、cleanup 写法。
-// （注：函数参数沿用 'runeNode' 命名是历史 ABI，写入用户数据库的 anno_source
-//   字符串里会出现这个名字。新代码与文档请用 'chantNode' 表达。）
 //
 // === 主要导出 ===
 //   banner(lines)                把多行教学注释格式化进 anno_source 顶部
@@ -92,11 +90,11 @@ export const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]*)\{([\s\S]*?)\}\(([^)]*
 
 // ============================================================================
 // handlerFieldSource(fieldName)
-//   返回 `${fieldName}: function (runeNode, scopeContainer, meta) {`
+//   返回 `${fieldName}: function (chantNode, scopeContainer, meta) {`
 //   加 4 个 helper 局部 const 声明（jQuery 版 + __safeQueryAll 返回 jQuery）。
 //   闭合由调用方负责（写 `}` + `,`）。
 // ============================================================================
-const handlerFieldSource = (fieldName) => `${fieldName}: function (runeNode, scopeContainer, meta) {
+const handlerFieldSource = (fieldName) => `${fieldName}: function (chantNode, scopeContainer, meta) {
     const __resolveScopeContainer = (node, scope) => {
       if (!node || typeof node.closest !== 'function') return null
       const $node = $(node)
@@ -133,14 +131,14 @@ const handlerFieldSource = (fieldName) => `${fieldName}: function (runeNode, sco
 //   完整拼接形如：
 //     // banner 注释
 //
-//     handler: function (runeNode, scopeContainer, meta) {
+//     handler: function (chantNode, scopeContainer, meta) {
 //       const __resolveScopeContainer = ...
 //       const __safeQueryAll = ...
 //       const __withAttrs = ...
 //
 //       // === 模仿者写的逻辑 ===
 //     },
-//     handlerExample: function (runeNode, scopeContainer, meta) {
+//     handlerExample: function (chantNode, scopeContainer, meta) {
 //       const __resolveScopeContainer = ...
 //       const __safeQueryAll = ...
 //       const __withAttrs = ...

@@ -65,7 +65,7 @@ const handlerPrelude = [
 // ---- handlerFieldSource(fieldName) ----
 //   返回 `${fieldName}: function (...) {` + 3 个 helper 局部 const 声明。
 //   闭合由调用方负责。
-const handlerFieldSource = (fieldName) => `${fieldName}: function (runeNode, scopeContainer, meta) {
+const handlerFieldSource = (fieldName) => `${fieldName}: function (chantNode, scopeContainer, meta) {
     const __resolveScopeContainer = (node, scope) => {
       if (!node) return null
       const block = node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol') || node.parentElement

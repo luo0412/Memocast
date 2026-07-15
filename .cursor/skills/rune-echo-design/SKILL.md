@@ -16,47 +16,47 @@ description: Memocast Muya 编辑器中 rune（符文）与 echo（回响）的�
 
 ## 代码命名上的坑（务必读这段）
 
-代码里有一个内部枚举值叫 **`kind: 'rune'`**（出现在 `builtinEchoes.js` 的 10 个内置 echo 上，比如 `kind: 'rune', runeId: 'growth'`），名字像 rune 但**它们全是 echo**——属于 echo 体系里"需要 handler 改附近元素"的子分类。
-
-`RUNE_HANDLERS` 数组、`customHandlers` Map、`@xxx{}(prompt)` 占位符、`data-rune-id="growth"` 属性，这些**都属于 echo 体系**，不要被"rune"字样误导。
+代码里曾经有个内部枚举值叫 `kind: 'rune'`（出现在 `builtinEchoes.js` 的 10 个内置 echo 上），名字像 rune 但**它们全是 echo**——属于 echo 体系里"需要 handler 改附近元素"的子分类。该分类已于 v2026-07-15 重命名为 `kind: 'echo-chant'`，代码层面已全部替换为新名，**不再保留 `kind: 'rune'` 兼容分支**。
 
 - `kind: 'echo'` —— 普通 echo（只是静态卡片，handler 不改附近元素），比如 nice
-- `kind: 'rune'` —— echo 的子分类（有 handler，会改附近元素），比如生生不息、双生花
-- `kind: 'rune-tbd'` —— 兜底 rune（占位但还没定义 handler）
+- `kind: 'echo-chant'` —— echo 的咏唱派发分类（有 handler，会改附近元素），比如生生不息、双生花
+- `kind: 'echo-tbd'` —— 兜底 echo（占位但还没定义 handler），实现就是 `__echo_chant_tbd__` handler
+
+`ECHO_CHANT_HANDLERS` 数组、`echoChantHandlers` Map、`@xxx{}(prompt)` 占位符、`data-rune-id="growth"` 属性，这些**都属于 echo 体系**，不要被"rune"字样误导。
 
 > **真正走 Vue SFC + Vue.extend 路径的 rune，只有用户通过 RuneFormDialog 自定义的那些**。
 
-## 内置 echo 一览（10 个 rune-kind + 1 个普通 echo）
+## 内置 echo 一览（10 个 echo-chant + 1 个普通 echo）
 
 | 名称 | id | kind | main 功能（影响附近元素的什么） |
 |------|-----|------|-------------------------------|
-| nice | `__builtin_nice__` | `echo` | 纯标记赞（不改附近元素） |
-| 生生不息 | `__builtin_growth__` | `rune` | 给附近段落/块元素加生长动画 + 错峰 delay |
-| 破万法 | `__builtin_shatter__` | `rune` | 禁用附近 echo 的作用 |
-| 天行健 | `__builtin_skywalk__` | `rune` | 改 document 根容器的主题/排版属性 |
-| 双生花 | `__builtin_twinbloom__` | `rune` | 克隆 prev/next block 插入副本 |
-| 夺心魄 | `__builtin_mindsteal__` | `rune` | 篡改其他 rune 的 mode/animation |
-| 强运 | `__builtin_lucky__` | `rune` | 给节点加 click/keydown 事件触发 AI 校对 |
-| 替罪 | `__builtin_scapegoat__` | `rune` | 监听 error，标 standby/injured |
-| 招灾 | `__builtin_calamity__` | `rune` | 随机给附近文字片段染哥特彩 |
-| 离析 | `__builtin_disperse__` | `rune` | 改 block 的 `data-disperse-density` |
-| 报时 | `__builtin_clock__` | `rune` | 在 block 内注入定时更新的时间标签 |
+| nice | `nice` | `echo` | 纯标记赞（不改附近元素） |
+| 生生不息 | `growth` | `echo-chant` | 给附近段落/块元素加生长动画 + 错峰 delay |
+| 破万法 | `shatter` | `echo-chant` | 禁用附近 echo 的作用 |
+| 天行健 | `skywalk` | `echo-chant` | 改 document 根容器的主题/排版属性 |
+| 双生花 | `twinbloom` | `echo-chant` | 克隆 prev/next block 插入副本 |
+| 夺心魄 | `mindsteal` | `echo-chant` | 篡改其他 rune 的 mode/animation |
+| 强运 | `lucky` | `echo-chant` | 给节点加 click/keydown 事件触发 AI 校对 |
+| 替罪 | `scapegoat` | `echo-chant` | 监听 error，标 standby/injured |
+| 招灾 | `calamity` | `echo-chant` | 随机给附近文字片段染哥特彩 |
+| 离析 | `disperse` | `echo-chant` | 改 block 的 `data-disperse-density` |
+| 报时 | `clock` | `echo-chant` | 在 block 内注入定时更新的时间标签 |
 
-> 它们的 `BUILTIN_ECHO_CARDS` 数组、`__builtin_*__` id、`@xxx{}(prompt)` 占位符、`data-rune-id` 属性都是 echo 体系。不要被字面"rune"误导。
+> 它们的 `BUILTIN_ECHO_CARDS` 数组、`@xxx{}(prompt)` 占位符、`data-rune-id` 属性都是 echo 体系。
 
 ## 两条管线对比
 
-| 维度 | rune（符文，**用户自定义**） | echo（回响，**包括所有"rune-kind"**） |
+| 维度 | rune（符文，**用户自定义**） | echo（回响，**包括所有 "echo-chant"**） |
 |------|--------------------------|--------------------------------------|
 | **存储形态** | `<div data-rune-name="..." data-rune-id="..." data-rune-node-id="..." data-rune-value="...">innerText</div>` | `@echoName{attrs}(prompt)` |
 | **解析层** | Muya HTML parser（当作普通 `<div>`） | Muya 自定义 `echo_anno` token |
 | **核心技术** | `vue-template-compiler.parseComponent()` + `compileToFunctions()` + `Vue.extend()` | `safeEvalFactory()` 编译 anno_source |
 | **渲染产物** | `Vue.extend()` 构造器 → `$mount` 到占位符 | `renderToHtml()` → `<span class="ag-echo-inline">` |
-| **副作用机制** | Vue 生命周期（mounted/beforeDestroy）+ SFC 内 `$emit('input')` | `handler(runeNode, scopeContainer, meta) → cleanup` |
+| **副作用机制** | Vue 生命周期（mounted/beforeDestroy）+ SFC 内 `$emit('input')` | `handler(chantNode, scopeContainer, meta) → cleanup` |
 | **作用域隔离** | 每个 rune 用独立 `data-rune-scope-${runeId}` 注入到顶层标签 | 全局样式 `ag-echo-inline` |
 | **数据回写** | `updateRunePlaceholderValue({runeId, nodeId, value})` 改 Markdown 源里的 `data-rune-value` 和 innerText | echo 内容直接编辑 Markdown 源里的 `@xxx{}()` |
 | **典型功能** | 表单输入、图表、复杂交互（el-input、jsxgraph、萤火虫动画） | 改附近元素：动画、布局、克隆、事件响应 |
-| **典型示例** | 用户在 RuneFormDialog 创建的 rune | nice、10 个内置 rune-kind、用户用 EchoFormDialog 创建的 echo |
+| **典型示例** | 用户在 RuneFormDialog 创建的 rune | nice、10 个内置 echo-chant、用户用 EchoFormDialog 创建的 echo |
 
 ## Rune 路径详解（Vue SFC + Vue.extend）
 
@@ -201,10 +201,10 @@ afterRender (container, options) {
   })
 
   // 2. 对每个 [data-rune-id] 派发到对应 handler（关键路径）
-  const runeNodes = safeQueryAll(container, '[data-rune-id]')
-  runeNodes.forEach(node => {
+  const chantNodes = safeQueryAll(container, '[data-rune-id]')
+  chantNodes.forEach(node => {
     const meta = { runeId, kind, attrs }
-    const handler = this.resolveRuneHandler(meta)
+    const handler = this.resolveEchoChantHandler(meta)
     const cleanup = handler.apply(node, scopeContainer, meta)
     if (typeof cleanup === 'function') {
       this._installed.push({ node, runeId, cleanup })
@@ -217,26 +217,26 @@ afterRender (container, options) {
 ### 5. handler 解析优先级
 
 ```javascript
-// EchoRuntime.resolveRuneHandler(runeMeta)
-resolveRuneHandler (runeMeta) {
-  const { runeId, kind } = runeMeta
+// EchoRuntime.resolveEchoChantHandler(meta)
+resolveEchoChantHandler (meta) {
+  const { runeId, kind } = meta
 
   // 1. 用户动态注册的自定义 handler（按 id 精确匹配）
-  if (runeId && this.customHandlers.has(runeId)) {
-    return this.customHandlers.get(runeId)
+  if (runeId && this.echoChantHandlers.has(runeId)) {
+    return this.echoChantHandlers.get(runeId)
   }
 
   // 2. 用户动态注册的自定义 handler（按 match 探测）
-  for (const handler of this.customHandlers.values()) {
-    if (handler.match(runeMeta)) return handler
+  for (const handler of this.echoChantHandlers.values()) {
+    if (handler.match(meta)) return handler
   }
 
-  // 3. 内置 RUNE_HANDLERS（9 个）
-  const builtIn = findRuneHandler(runeId)
+  // 3. 内置 ECHO_CHANT_HANDLERS（10 个）
+  const builtIn = findEchoChantHandler(runeId)
   if (builtIn) return builtIn
 
-  // 4. rune-tbd 兜底
-  if (kind === 'rune-tbd') return findRuneHandler('__tbd__')
+  // 4. echo-tbd 兜底
+  if (kind === 'echo-tbd') return findEchoChantHandler('__echo_chant_tbd__')
   return null
 }
 ```
@@ -245,7 +245,7 @@ resolveRuneHandler (runeMeta) {
 
 ```javascript
 // growthHandler：给附近元素加生长动画
-apply (runeNode, scopeContainer, meta) {
+apply (chantNode, scopeContainer, meta) {
   const targets = safeQueryAll(scopeContainer, 'p, h1, h2, ..., table')
   targets.forEach((node, index) => {
     addClassOnce(node, 'ag-rune-growth-target')
@@ -257,7 +257,7 @@ apply (runeNode, scopeContainer, meta) {
 }
 
 // skywalkHandler：改 document 根容器属性
-apply (runeNode, scopeContainer, meta) {
+apply (chantNode, scopeContainer, meta) {
   scopeContainer.setAttribute('data-skywalk-theme', attrs.theme)
   scopeContainer.setAttribute('data-skywalk-layout', attrs.layout)
   return () => {
@@ -267,7 +267,7 @@ apply (runeNode, scopeContainer, meta) {
 }
 
 // twinbloomHandler：克隆附近 block
-apply (runeNode, scopeContainer, meta) {
+apply (chantNode, scopeContainer, meta) {
   const cloned = block.cloneNode(true)
   block.parentElement.insertBefore(cloned, block.nextSibling)
   return () => cloned.parentElement.removeChild(cloned)
@@ -301,21 +301,21 @@ handler 影响附近元素的范围（resolveScopeContainer）：
 | `src/components/ui/dialog/RuneCard.vue` | 全文件 | rune 卡片组件 |
 | `src/boot/rune-deps.js` | 全文件 | jQuery 全局挂载（用于 rune SFC 内部） |
 
-### Echo 路径（@xxx{}()）—— 包括所有"rune-kind"内置
+### Echo 路径（@xxx{}()）—— 包括所有 "echo-chant" 内置
 
 | 文件 | 职责 |
 |------|------|
 | `src/libs/muya/lib/parser/render/renderInlines/echoAnno.js` | Muya 行内渲染器 |
 | `src/components/ui/editor/echo/EchoRegistry.js` | echo 注册表 |
-| `src/components/ui/editor/echo/EchoRuntime.js` | anno_source 编译 + handler 派发 + `RUNE_HANDLERS` |
-| `src/components/ui/editor/echo/builtinEchoes.js` | **11 个内置 echo 定义（含 10 个 kind:'rune' 子分类）** |
+| `src/components/ui/editor/echo/EchoRuntime.js` | anno_source 编译 + handler 派发 + `ECHO_CHANT_HANDLERS` |
+| `src/components/ui/editor/echo/builtinEchoes.js` | **11 个内置 echo 定义（含 10 个 kind:'echo-chant' 子分类）** |
 | `src/components/ui/editor/echo/builtin-echo-shared.js` | anno_source 共享工具 |
 | `src/components/ui/dialog/EchoFormDialog.vue` | echo 创建/编辑表单 |
 | `src/constants/runeEchoCategories.js` | 分类定义 |
 
 ## 易混淆点（再次强调）
 
-1. **`kind: 'rune'` 不是 rune 类型**——它是 echo 体系内的子分类（"需要 handler 改附近元素"）。所有用 `kind: 'rune'` 的卡片都在 `BUILTIN_ECHO_CARDS` 数组里，都是 echo。
+1. **`kind: 'echo-chant'` 不是 rune 类型**——它是 echo 体系内的子分类（"咏唱派发 / 需要 handler 改附近元素"）。所有用 `kind: 'echo-chant'` 的卡片都在 `BUILTIN_ECHO_CARDS` 数组里，都是 echo。
 2. **真正的 rune 只有用户自定义的**——通过 `RuneFormDialog` 创建，存 `template`（Vue SFC 字符串）。
 3. **handler 概念属于 EchoRuntime**——Vue SFC 的 rune 走 Vue 生命周期（mounted/beforeDestroy），不走 handler。
 4. **`data-rune-id` 属性会出现在两种 echo 上**——10 个内置 rune-kind 的渲染产物 `<span>` 上有（`renderToHtml` 里加 `data-rune-id`），用于派发 handler；用户自定义 rune 的 `<div>` 占位符上也有（quickInsert 插入时加），用于找到 Vue 组件构造器。**同名不同义**，根据上下文区分。
