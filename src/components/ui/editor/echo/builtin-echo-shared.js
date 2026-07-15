@@ -1,9 +1,11 @@
 // ============================================================================
 // 内置回响共享样板（renderer 端）
 //
-// 提供 11 个内置 rune anno_source 共用的辅助函数 + 共享代码片段。
+// 提供 10 个 echo-chant 内置 + nice 共用的辅助函数 + 共享代码片段。
 // 消除 builtinEchoes.js 里 11 份重复的 banner 注释、scope 工具、
 // 数据属性读 helper、cleanup 写法。
+// （注：函数参数沿用 'runeNode' 命名是历史 ABI，写入用户数据库的 anno_source
+//   字符串里会出现这个名字。新代码与文档请用 'chantNode' 表达。）
 //
 // === 主要导出 ===
 //   banner(lines)                把多行教学注释格式化进 anno_source 顶部

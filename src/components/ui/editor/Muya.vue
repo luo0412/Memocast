@@ -727,8 +727,8 @@ export default {
       return true
     },
     // lucky 全局回调：@强运() 点击后真正调 AI 校对。
-    // 入参由 EchoRuntime / RUNE_HANDLERS.lucky 在 handler 内传 {runeNode, meta, scopeContainer}
-    async handleLuckyRuneTrigger ({ runeNode, meta = {}, scopeContainer } = {}) {
+    // 入参由 EchoRuntime 在 handler 内传 {chantNode, meta, scopeContainer}
+    async handleLuckyChantTrigger ({ chantNode, meta = {}, scopeContainer } = {}) {
       try {
         if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return
         const markdown = this.contentEditor.getMarkdown() || ''
@@ -737,7 +737,7 @@ export default {
           return
         }
         const loadingClass = 'ag-rune-lucky-loading'
-        if (runeNode && runeNode.classList) runeNode.classList.add(loadingClass)
+        if (chantNode && chantNode.classList) chantNode.classList.add(loadingClass)
         try {
           const result = await AiProofreadService.proofread(markdown, { model: meta?.attrs?.model || undefined })
           if (!result || !result.corrected) {
@@ -759,7 +759,7 @@ export default {
             position: 'top'
           })
         } finally {
-          if (runeNode && runeNode.classList) runeNode.classList.remove(loadingClass)
+          if (chantNode && chantNode.classList) chantNode.classList.remove(loadingClass)
         }
       } catch (error) {
         console.error('[lucky] handler failed:', error)
@@ -1015,8 +1015,9 @@ export default {
 
       // 注册全局 lucky 回调：@强运 点击后真正调 AI 校对。
       if (typeof window !== 'undefined') {
+        // 全局 key 保留 'lucky' 不变（外部或文档可能仍在引用 __memocastRuneHandlers.lucky）
         window.__memocastRuneHandlers = Object.assign(window.__memocastRuneHandlers || {}, {
-          lucky: this.handleLuckyRuneTrigger.bind(this)
+          lucky: this.handleLuckyChantTrigger.bind(this)
         })
       }
 

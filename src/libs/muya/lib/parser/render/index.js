@@ -267,7 +267,8 @@ class StateRender {
       const instanceAttrs = (() => {
         try {
           // 来源 1：attrsRaw 已经写在 token；这里暂用 definition 的 anno_source 默认空对象
-          // 来源 2：从 echo 定义里推断 kind（多数 rune 类的 kind 由 anno_source.render() 注入）
+          // 来源 2：从 echo 定义里推断 kind（多数 echo-chant 类的 kind 由 anno_source.render() 注入）
+          // v2026-07-15 重命名后，'rune' / 'rune-tbd' 是历史值；新值为 'echo-chant' / 'echo-tbd'
           return {}
         } catch (error) { return {} }
       })()
@@ -280,10 +281,16 @@ class StateRender {
             return m ? m[1] : ''
           } catch (error) { return '' }
         })()
-        if (kindFromAnno === 'rune' || kindFromAnno === 'rune-tbd') return true
+        // 兼容新名 + 历史 ABI：'echo-chant' / 'echo-tbd' / 'rune' / 'rune-tbd'
+        const normalized = ({
+          'echo-chant': 'echo-chant', 'echo-tbd': 'echo-tbd',
+          rune: 'echo-chant', 'rune-tbd': 'echo-tbd'
+        })[kindFromAnno] || ''
+        if (normalized === 'echo-chant' || normalized === 'echo-tbd') return true
         // 兜底：attrs 已经写在 host dataset（如果有 echoHighlight 等场景）
         const dsKind = String(dataset.kind || '')
-        return dsKind === 'rune' || dsKind === 'rune-tbd'
+        return dsKind === 'echo-chant' || dsKind === 'echo-tbd'
+          || dsKind === 'rune' || dsKind === 'rune-tbd'
       })()
       const cacheKey = JSON.stringify({
         echoName,
@@ -310,11 +317,13 @@ class StateRender {
       host.setAttribute('contenteditable', 'false')
 
       // === 回响可以"影响附近元素"的真正接线点 ===
-      // 对于 kind === 'rune' | 'rune-tbd' 的 echo 定义（生生不息 / 破万法 / 天行健 / 双生花 /
-      // 夺心魄 / 强运 / 离析 / 替罪 / 招灾），调用 EchoRuntime.renderToHtml 输出包含
-      // data-rune-id / data-rune-kind 的 span；随后在 renderRunes() 末由 afterRender()
-      // 接管，让对应 handler 改兄弟 / 容器节点的 CSS / 动画 / 边距。
+      // 对于 kind === 'echo-chant' | 'echo-tbd'（旧 'rune' / 'rune-tbd'）的 echo 定义
+      // （生生不息 / 破万法 / 天行健 / 双生花 / 夺心魄 / 强运 / 离析 / 替罪 / 招灾），
+      // 调用 EchoRuntime.renderToHtml 输出包含 data-rune-id / data-rune-kind 的 span；
+      // 随后在 renderRunes() 末由 afterRender() 接管，让对应 handler 改兄弟 / 容器节点的 CSS / 动画 / 边距。
       // 其它（普通的 nice / 自定义 echo / 找不到定义的 echo）继续走卡片 markup。
+      // 数据结构：
+      //   数据结构字面在代码层面叫 echoChant，但 DOM 端保留 data-rune-id / data-rune-kind 以兼容既有 markdown ABI。
       //
       // === 配套桥接：把 echo 实例的 attrsParsed 序列化到 host 的 dataset，
       // 让 EchoRuntime._readRuneAttrs() 在 afterRender() 时能够读到具体参数

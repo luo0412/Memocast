@@ -1,10 +1,15 @@
 /* ============================================================
- * 多符文运行时样式
- * 配合 EchoRuntime.js 中的 RUNE_HANDLERS 使用
+ * 多符文运行时样式（Echo 体系的 echo-chant 子分类）
+ * 配合 EchoRuntime.js 中的 ECHO_CHANT_HANDLERS 使用
  *
- * - 触发点：[data-rune-id]（由 EchoRuntime.renderToHtml 注入）
+ * - 触发点：[data-rune-id]（由 EchoRuntime.renderToHtml 注入，与 markdown ABI 同名）
+ * - kind 枚举：'echo-chant' / 'echo-tbd'（旧 'rune' / 'rune-tbd' 在 _readKindAttr 中已并入）
  * - 副作用样式：ag-rune-<runeId>-target / -active / -disabled
  * - 容器属性：data-skywalk-theme / data-skywalk-layout / data-disperse-density
+ *
+ * 注意：
+ *   CSS class 名（ag-rune-*）保留 'rune' 字面以减少回归风险；
+ *   本文件仅在注释层与新口径（echo-chant / echo-tbd）对齐。
  * ============================================================ */
 
 /* ====================== 共同基类 ====================== */

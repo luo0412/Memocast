@@ -132,18 +132,52 @@ export const createDefaultEchoAnnoSource = (echoName = '回响') => `export defa
   }
 }`
 
-// 默认的 rune 类（"影响附近元素/符文排版"）模板。
+// ============================================================================
+// KIND 别名表（v2026-07-15 重命名）
+//
+// 重命名历史：
+//   'rune'        → 'echo-chant'      影响附近元素的 echo（咏唱派发）
+//   'rune-tbd'    → 'echo-tbd'        兜底 echo（占位）
+//
+// 同时迁移的名字：
+//   RUNE_HANDLERS        → ECHO_CHANT_HANDLERS
+//   RUNE_KINDS           → ECHO_CHANT_KINDS
+//   customHandlers       → echoChantHandlers
+//   findRuneHandler      → findEchoChantHandler
+//   registerRuneHandler  → registerEchoChantHandler
+//   unregisterRuneHandler→ unregisterEchoChantHandler
+//   listCustomRuneHandlers→ listCustomEchoChantHandlers
+//   resolveRuneHandler   → resolveEchoChantHandler
+//   extractRuneMeta      → extractEchoChantMeta
+//   runeMeta             → echoChantMeta
+//   _readRuneAttrs       → _readChantAttrs（method 名）
+//
+// DOM ABI（保留不改名）：
+//   data-rune-id / data-rune-kind / data-rune-attrs / data-rune-attr-*
+//   —— 已写入 markdown 源 ABI 中，迁移会破坏既有笔记。
+//
+// CSS class 名（保留不改名）：
+//   ag-rune-*（避免触发视觉回归，仅在注释中写明：ag-rune-* 是 echo 体系的"咏唱样式"）
+// ============================================================================
+export const KIND_ALIASES = Object.freeze({
+  'echo-chant': 'echo-chant',
+  'echo-tbd': 'echo-tbd',
+  rune: 'echo-chant',
+  'rune-tbd': 'echo-tbd'
+})
+
+export const normalizeKindAlias = (raw = '') => KIND_ALIASES[String(raw || '').trim()] || ''
+
+// 默认的 echo-chant（"咏唱派发 / 影响附近元素"）模板。
 // 关键点：
-//  - kind: 'rune'，render() 仍然返回标准的 { type, icon, color, title, ... }，用于卡片/host 外观
-//  - handler(runeNode, scopeContainer, meta) 是副作用钩子，编译时被自动注册到 EchoRuntime.customHandlers
-//    meta = { runeId, kind, attrs }，attrs 已经从 host 的 data-echo-attrs-json / data-rune-attrs / dataset 里聚合
-//    可选地返回 cleanup 函数，在卸载/重渲染时被调用
-//  - renderToHtml 输出的 <span> 会带上 data-rune-id / data-rune-kind，所以 afterRender() 会派发到这个 handler
-export const createDefaultRuneAnnoSource = (echoName = '回响') => `export default {
-  kind: 'rune',
+//  - kind: 'echo-chant'，render() 仍然返回标准的 { type, icon, color, title, ... }
+//  - handler(chantNode, scopeContainer, meta) 是副作用钩子，编译时被自动注册到 EchoRuntime.echoChantHandlers
+//    meta = { runeId, kind, attrs }，kind 已经过 normalizeKindAlias 转译
+export const createDefaultChantAnnoSource = (echoName = '回响') => `export default {
+  kind: 'echo-chant',
   version: 1,
   name: '${String(echoName || '回响').replace(/'/g, "\\'")}',
-  runeId: 'my-rune',
+  runeId: 'my-chant',
 
   render (context = {}) {
     const attrs = context.attrs || {}
@@ -153,30 +187,30 @@ export const createDefaultRuneAnnoSource = (echoName = '回响') => `export defa
       icon: attrs.icon || context.echo?.icon || 'auto_awesome',
       color: attrs.color || context.echo?.color || '${DEFAULT_ECHO_COLOR}',
       title: attrs.title || context.echo?.name || '${String(echoName || '回响').replace(/'/g, "\\'")}',
-      description: attrs.desc || context.echo?.desc || '影响附近元素或符文',
+      description: attrs.desc || context.echo?.desc || '影响附近元素或排版',
       prompt,
-      attrs: { ...attrs, kind: 'rune', runeId: this.runeId },
+      attrs: { ...attrs, kind: 'echo-chant', runeId: this.runeId },
       html: ''
     }
   },
 
   // 副作用钩子 —— 在容器 paint 完成时由 EchoRuntime.afterRender() 调用
-  //   runeNode      当前 echo 对应的 <span data-rune-id="...">
+  //   chantNode      当前 echo 对应的 <span data-rune-id="...">
   //   container     编辑器根 DOM 容器
   //   meta          { runeId, kind, attrs }，attrs 已经聚合自 data-echo-attrs-json / data-rune-attrs / dataset
   // 返回值可选：返回 cleanup 函数，将在编辑器下次重渲染/卸载时被调用
   // 直接用 jQuery 写，简洁明了。
-  handler (runeNode, container, meta) {
-    const $rune = $(runeNode)
-    const $target = $rune.closest('[data-block-type], .mu-block, p, pre, h1, h2, h3, h4, h5, h6, li, blockquote').parent()
+  handler (chantNode, container, meta) {
+    const $chant = $(chantNode)
+    const $target = $chant.closest('[data-block-type], .mu-block, p, pre, h1, h2, h3, h4, h5, h6, li, blockquote').parent()
     const target = $target.length ? $target.get(0) : container
     if (!target) return () => {}
     const $targetEl = $(target)
-    const previous = $targetEl.attr('data-my-rune-active') || null
-    $targetEl.attr('data-my-rune-active', 'true').css('outline', '1px dashed #9C27B0')
+    const previous = $targetEl.attr('data-my-chant-active') || null
+    $targetEl.attr('data-my-chant-active', 'true').css('outline', '1px dashed #9C27B0')
     return () => {
-      if (previous === null) $targetEl.removeAttr('data-my-rune-active')
-      else $targetEl.attr('data-my-rune-active', previous)
+      if (previous === null) $targetEl.removeAttr('data-my-chant-active')
+      else $targetEl.attr('data-my-chant-active', previous)
       $targetEl.css('outline', '')
     }
   }
@@ -456,12 +490,13 @@ const safeEvalFactory = (source = '', prelude = '') => {
 }
 
 // ============================================================================
-// 多符文运行时（EchoRuntime + rune handlers）
+// 多符文运行时（EchoRuntime + echo-chant handlers）
 // ============================================================================
 // 渲染管线：
 //   1. parseEchoAttrs / decodeEchoPayload 解析 token
 //   2. definition.render() 拿到标准化结果（包含 attrs.kind / attrs.runeId）
-//   3. EchoRuntime.render() 在 kind === 'rune' | 'rune-tbd' 时挂 runeMeta
+//   3. EchoRuntime.render() 在 kind === 'echo-chant' | 'echo-tbd'（旧 'rune' | 'rune-tbd'）
+//      时挂 echoChantMeta（旧 runeMeta 双轨同步保留）
 //   4. 编辑器把 rendered HTML 插入到内容容器
 //   5. 容器完成 paint 后调用 registry.afterRender(container, runes)
 //      逐个调用对应 handler，给附近节点施加运行时副作用
@@ -473,7 +508,14 @@ const safeEvalFactory = (source = '', prelude = '') => {
 //   document   —— 整篇容器
 // ============================================================================
 
-const RUNE_KINDS = new Set(['rune', 'rune-tbd'])
+const ECHO_CHANT_KINDS = new Set(['echo-chant', 'echo-tbd'])
+// 历史 ABI 兼容说明：
+//   旧 'rune' / 'rune-tbd' 通过 normalizeKindAlias() 一次性映射成新名，
+//   本文件不再单独维护 Set 兼容表，统一归口到 KIND_ALIASES。
+const isChantKind = (kind = '') => {
+  const normalized = normalizeKindAlias(kind)
+  return normalized === 'echo-chant' || normalized === 'echo-tbd'
+}
 
 const safeQueryAll = (root, selector) => {
   if (!root || typeof root.querySelectorAll !== 'function') return []
@@ -485,10 +527,10 @@ const safeQueryAll = (root, selector) => {
   }
 }
 
-const resolveScopeContainer = (runeNode, scope = 'siblings') => {
-  if (!runeNode) return null
-  const block = runeNode.closest('[data-block-type], .mu-block, p, pre, h1, h2, h3, h4, h5, h6, li, blockquote, table, ul, ol') || runeNode.parentElement
-  const documentRoot = runeNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body
+const resolveScopeContainer = (chantNode, scope = 'siblings') => {
+  if (!chantNode) return null
+  const block = chantNode.closest('[data-block-type], .mu-block, p, pre, h1, h2, h3, h4, h5, h6, li, blockquote, table, ul, ol') || chantNode.parentElement
+  const documentRoot = chantNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body
 
   switch (String(scope || 'siblings').toLowerCase()) {
     case 'prev-block': {
@@ -523,9 +565,9 @@ const removeClasses = (el, classNames = []) => {
 const growthHandler = {
   id: 'growth',
   match (meta) { return meta && meta.runeId === 'growth' },
-  apply (runeNode, _scopeContainer, meta) {
+  apply (chantNode, _scopeContainer, meta) {
     const scope = (meta && meta.attrs && meta.attrs.scope) || 'siblings'
-    const container = resolveScopeContainer(runeNode, scope)
+    const container = resolveScopeContainer(chantNode, scope)
     if (!container) return () => {}
     const trigger = (meta && meta.attrs && meta.attrs.trigger) || 'auto'
     const targetSelector = (meta && meta.attrs && meta.attrs.target) || '[data-block-type], p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table'
@@ -536,10 +578,10 @@ const growthHandler = {
         node.style.setProperty('--ag-rune-growth-delay', `${Math.min(index, 8) * 120}ms`)
       }
     })
-    addClassOnce(runeNode, 'ag-rune-growth-active')
+    addClassOnce(chantNode, 'ag-rune-growth-active')
     return () => {
       targets.forEach(node => removeClasses(node, 'ag-rune-growth-target'))
-      removeClasses(runeNode, 'ag-rune-growth-active')
+      removeClasses(chantNode, 'ag-rune-growth-active')
     }
   }
 }
@@ -547,24 +589,24 @@ const growthHandler = {
 const shatterHandler = {
   id: 'shatter',
   match (meta) { return meta && meta.runeId === 'shatter' },
-  apply (runeNode, _scopeContainer, meta) {
+  apply (chantNode, _scopeContainer, meta) {
     const target = (meta && meta.attrs && meta.attrs.target) || 'line'
-    const container = resolveScopeContainer(runeNode, target === 'block' ? 'block' : 'siblings')
+    const container = resolveScopeContainer(chantNode, target === 'block' ? 'block' : 'siblings')
     if (!container) return () => {}
     const echoNodes = safeQueryAll(container, '[data-echo-inline="true"]')
     echoNodes.forEach(node => {
-      if (node === runeNode) return
+      if (node === chantNode) return
       node.setAttribute('data-shatter-disabled', 'true')
       node.classList.add('ag-rune-shatter-disabled')
     })
-    addClassOnce(runeNode, 'ag-rune-shatter-active')
+    addClassOnce(chantNode, 'ag-rune-shatter-active')
     return () => {
       echoNodes.forEach(node => {
-        if (node === runeNode) return
+        if (node === chantNode) return
         node.removeAttribute('data-shatter-disabled')
         removeClasses(node, 'ag-rune-shatter-disabled')
       })
-      removeClasses(runeNode, 'ag-rune-shatter-active')
+      removeClasses(chantNode, 'ag-rune-shatter-active')
     }
   }
 }
@@ -572,10 +614,10 @@ const shatterHandler = {
 const skywalkHandler = {
   id: 'skywalk',
   match (meta) { return meta && meta.runeId === 'skywalk' },
-  apply (runeNode, _scopeContainer, meta) {
+  apply (chantNode, _scopeContainer, meta) {
     const theme = (meta && meta.attrs && meta.attrs.theme) || 'auto'
     const layout = (meta && meta.attrs && meta.attrs.layout) || 'enhanced'
-    const container = resolveScopeContainer(runeNode, 'document')
+    const container = resolveScopeContainer(chantNode, 'document')
     if (!container) return () => {}
     const previous = {
       theme: container.getAttribute('data-skywalk-theme'),
@@ -583,13 +625,13 @@ const skywalkHandler = {
     }
     container.setAttribute('data-skywalk-theme', theme)
     container.setAttribute('data-skywalk-layout', layout)
-    addClassOnce(runeNode, 'ag-rune-skywalk-active')
+    addClassOnce(chantNode, 'ag-rune-skywalk-active')
     return () => {
       if (previous.theme === null) container.removeAttribute('data-skywalk-theme')
       else container.setAttribute('data-skywalk-theme', previous.theme)
       if (previous.layout === null) container.removeAttribute('data-skywalk-layout')
       else container.setAttribute('data-skywalk-layout', previous.layout)
-      removeClasses(runeNode, 'ag-rune-skywalk-active')
+      removeClasses(chantNode, 'ag-rune-skywalk-active')
     }
   }
 }
@@ -597,16 +639,16 @@ const skywalkHandler = {
 const twinbloomHandler = {
   id: 'twinbloom',
   match (meta) { return meta && meta.runeId === 'twinbloom' },
-  apply (runeNode, _scopeContainer, meta) {
+  apply (chantNode, _scopeContainer, meta) {
     const placeholder = (meta && meta.attrs && meta.attrs.placeholder) || '双生节点'
-    const block = runeNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || runeNode.parentElement
+    const block = chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || chantNode.parentElement
     if (!block) return () => {}
     const previous = block.nextElementSibling
-    if (previous && previous.getAttribute('data-twinbloom-of') === runeNode.getAttribute('data-rune-id')) {
+    if (previous && previous.getAttribute('data-twinbloom-of') === chantNode.getAttribute('data-rune-id')) {
       return () => {}
     }
     const cloned = block.cloneNode(true)
-    cloned.setAttribute('data-twinbloom-of', runeNode.getAttribute('data-rune-id') || 'twinbloom')
+    cloned.setAttribute('data-twinbloom-of', chantNode.getAttribute('data-rune-id') || 'twinbloom')
     cloned.classList.add('ag-rune-twinbloom-clone')
     cloned.setAttribute('data-twinbloom-placeholder', placeholder)
     const originalText = (cloned.textContent || '').trim()
@@ -616,10 +658,10 @@ const twinbloomHandler = {
     if (block.parentElement) {
       block.parentElement.insertBefore(cloned, block.nextSibling)
     }
-    addClassOnce(runeNode, 'ag-rune-twinbloom-active')
+    addClassOnce(chantNode, 'ag-rune-twinbloom-active')
     return () => {
       if (cloned.parentElement) cloned.parentElement.removeChild(cloned)
-      removeClasses(runeNode, 'ag-rune-twinbloom-active')
+      removeClasses(chantNode, 'ag-rune-twinbloom-active')
     }
   }
 }
@@ -627,24 +669,24 @@ const twinbloomHandler = {
 const mindstealHandler = {
   id: 'mindsteal',
   match (meta) { return meta && meta.runeId === 'mindsteal' },
-  apply (runeNode, _scopeContainer, meta) {
+  apply (chantNode, _scopeContainer, meta) {
     const mode = (meta && meta.attrs && meta.attrs.mode) || 'override'
-    const container = resolveScopeContainer(runeNode, 'siblings')
+    const container = resolveScopeContainer(chantNode, 'siblings')
     if (!container) return () => {}
     const runeTargets = safeQueryAll(container, '[data-rune-id]')
     runeTargets.forEach(node => {
-      if (node === runeNode) return
+      if (node === chantNode) return
       node.setAttribute('data-mindsteal-mode', mode)
       node.style.setProperty('animation', 'none', 'important')
     })
-    addClassOnce(runeNode, 'ag-rune-mindsteal-active')
+    addClassOnce(chantNode, 'ag-rune-mindsteal-active')
     return () => {
       runeTargets.forEach(node => {
-        if (node === runeNode) return
+        if (node === chantNode) return
         node.removeAttribute('data-mindsteal-mode')
         node.style.removeProperty('animation')
       })
-      removeClasses(runeNode, 'ag-rune-mindsteal-active')
+      removeClasses(chantNode, 'ag-rune-mindsteal-active')
     }
   }
 }
@@ -652,28 +694,28 @@ const mindstealHandler = {
 const luckyHandler = {
   id: 'lucky',
   match (meta) { return meta && meta.runeId === 'lucky' },
-  apply (runeNode, _scopeContainer, meta) {
-    addClassOnce(runeNode, 'ag-rune-lucky-active')
-    runeNode.style.cursor = 'pointer'
-    runeNode.setAttribute('role', 'button')
-    runeNode.setAttribute('tabindex', '0')
-    runeNode.setAttribute('title', (meta && meta.attrs && meta.attrs.label) || '点击触发 AI 校对')
+  apply (chantNode, _scopeContainer, meta) {
+    addClassOnce(chantNode, 'ag-rune-lucky-active')
+    chantNode.style.cursor = 'pointer'
+    chantNode.setAttribute('role', 'button')
+    chantNode.setAttribute('tabindex', '0')
+    chantNode.setAttribute('title', (meta && meta.attrs && meta.attrs.label) || '点击触发 AI 校对')
 
     const trigger = async (event) => {
       event.preventDefault()
       event.stopPropagation()
-      runeNode.classList.add('ag-rune-lucky-loading')
+      chantNode.classList.add('ag-rune-lucky-loading')
       try {
         const handler = (typeof window !== 'undefined') ? window.__memocastRuneHandlers?.lucky : null
         if (typeof handler === 'function') {
-          await handler({ runeNode, meta })
+          await handler({ chantNode, meta })
         } else {
           console.info('[EchoRuntime] lucky: no global handler registered (window.__memocastRuneHandlers.lucky)')
         }
       } catch (error) {
         console.error('[EchoRuntime] lucky handler failed:', error)
       } finally {
-        runeNode.classList.remove('ag-rune-lucky-loading')
+        chantNode.classList.remove('ag-rune-lucky-loading')
       }
     }
 
@@ -681,17 +723,17 @@ const luckyHandler = {
     const onKey = (event) => {
       if (event.key === 'Enter' || event.key === ' ') trigger(event)
     }
-    runeNode.addEventListener('click', onClick)
-    runeNode.addEventListener('keydown', onKey)
+    chantNode.addEventListener('click', onClick)
+    chantNode.addEventListener('keydown', onKey)
 
     return () => {
-      runeNode.removeEventListener('click', onClick)
-      runeNode.removeEventListener('keydown', onKey)
-      removeClasses(runeNode, 'ag-rune-lucky-active ag-rune-lucky-loading')
-      runeNode.style.cursor = ''
-      runeNode.removeAttribute('role')
-      runeNode.removeAttribute('tabindex')
-      runeNode.removeAttribute('title')
+      chantNode.removeEventListener('click', onClick)
+      chantNode.removeEventListener('keydown', onKey)
+      removeClasses(chantNode, 'ag-rune-lucky-active ag-rune-lucky-loading')
+      chantNode.style.cursor = ''
+      chantNode.removeAttribute('role')
+      chantNode.removeAttribute('tabindex')
+      chantNode.removeAttribute('title')
     }
   }
 }
@@ -699,31 +741,31 @@ const luckyHandler = {
 const disperseHandler = {
   id: 'disperse',
   match (meta) { return meta && meta.runeId === 'disperse' },
-  apply (runeNode, _scopeContainer, meta) {
+  apply (chantNode, _scopeContainer, meta) {
     const density = (meta && meta.attrs && meta.attrs.density) || 'loose'
-    const container = resolveScopeContainer(runeNode, 'block')
+    const container = resolveScopeContainer(chantNode, 'block')
     if (!container) return () => {}
     const previous = container.getAttribute('data-disperse-density')
     container.setAttribute('data-disperse-density', density)
-    addClassOnce(runeNode, 'ag-rune-disperse-active')
+    addClassOnce(chantNode, 'ag-rune-disperse-active')
     return () => {
       if (previous === null) container.removeAttribute('data-disperse-density')
       else container.setAttribute('data-disperse-density', previous)
-      removeClasses(runeNode, 'ag-rune-disperse-active')
+      removeClasses(chantNode, 'ag-rune-disperse-active')
     }
   }
 }
 
 const tbdHandler = {
-  id: '__tbd__',
-  match (meta) { return meta && meta.kind === 'rune-tbd' },
-  apply (runeNode, _scopeContainer, _meta) {
-    addClassOnce(runeNode, 'ag-rune-tbd-active')
-    return () => removeClasses(runeNode, 'ag-rune-tbd-active')
+  id: '__echo_chant_tbd__',
+  match (meta) { return normalizeKindAlias(meta && meta.kind) === 'echo-tbd' },
+  apply (chantNode, _scopeContainer, _meta) {
+    addClassOnce(chantNode, 'ag-rune-tbd-active')
+    return () => removeClasses(chantNode, 'ag-rune-tbd-active')
   }
 }
 
-export const RUNE_HANDLERS = [
+export const ECHO_CHANT_HANDLERS = [
   growthHandler,
   shatterHandler,
   skywalkHandler,
@@ -734,15 +776,19 @@ export const RUNE_HANDLERS = [
   tbdHandler
 ]
 
-export const findRuneHandler = (runeId = '') => {
-  const target = String(runeId || '').trim()
-  return RUNE_HANDLERS.find(handler => handler.id === target) || null
+export const findEchoChantHandler = (chantId = '') => {
+  const target = String(chantId || '').trim()
+  return ECHO_CHANT_HANDLERS.find(handler => handler.id === target) || null
 }
+
+// 兼容旧导出名（外部若直接 import {RUNE_HANDLERS, findRuneHandler}）
+export const RUNE_HANDLERS = ECHO_CHANT_HANDLERS
+export const findRuneHandler = findEchoChantHandler
 
 // 让运行时能挂载"由 echo anno_source 内置 handler 字段动态声明"的 rune handler
 // - id 必须唯一（建议用 `echo:${definitionId}` 或自定义 runeId）
 // - match(runeMeta) -> boolean，决定该 handler 是否对该 rune 起作用
-// - apply(runeNode, scopeContainer, runeMeta) -> cleanupFn? 与内置 handler 同样语义
+// - apply(chantNode, scopeContainer, runeMeta) -> cleanupFn? 与内置 handler 同样语义
 export const normalizeCustomHandler = (raw = {}, fallbackId = '') => {
   if (!raw || typeof raw !== 'object') return null
   const id = String(raw.id || raw.runeId || fallbackId || '').trim()
@@ -767,25 +813,31 @@ export const normalizeCustomHandler = (raw = {}, fallbackId = '') => {
   }
 }
 
-export const extractRuneMeta = (rendered = {}) => {
+export const extractEchoChantMeta = (rendered = {}) => {
   const attrs = (rendered && rendered.attrs && typeof rendered.attrs === 'object') ? rendered.attrs : {}
-  const kind = String(attrs.kind || '').trim()
-  if (!RUNE_KINDS.has(kind)) return null
+  const rawKind = String(attrs.kind || '').trim()
+  const kind = normalizeKindAlias(rawKind)
+  if (!kind) return null
   return {
     runeId: String(attrs.runeId || '').trim(),
     kind,
-    attrs: { ...attrs },
+    attrs: { ...attrs, kind },
     title: rendered.title || '',
     description: rendered.description || ''
   }
 }
 
+// 兼容旧导出名
+export const extractRuneMeta = extractEchoChantMeta
+
 export default class EchoRuntime {
   constructor ({ registry } = {}) {
     this.registry = registry
     this.definitionCache = new Map()
-    // 用户/动态注册 rune handler，id -> { id, match, apply, cleanup, ... }
-    this.customHandlers = new Map()
+    // 用户/动态注册 echo-chant handler，id -> { id, match, apply, cleanup, ... }
+    this.echoChantHandlers = new Map()
+    // 同步旧字段，供老 import 链读
+    this.customHandlers = this.echoChantHandlers
   }
 
   invalidate (echoId) {
@@ -797,60 +849,68 @@ export default class EchoRuntime {
   }
 
   /**
-   * 动态注册一个 rune handler。
+   * 动态注册一个 echo-chant handler。
    *  - raw 可以是已规整的 { id, match, apply } 或 anno_source 里的 handler 字段。
-   *  - 注册后，afterRender() 派发时会优先命中 custom handler；找不到再退到 RUNE_HANDLERS。
+   *  - 注册后，afterRender() 派发时会优先命中 echoChant handler；找不到再退到 ECHO_CHANT_HANDLERS。
    *  - 同一 id 重复 register 会覆盖。
    *  - 返回注册的 id，失败返回空串。
    */
-  registerRuneHandler (raw = {}, fallbackId = '') {
+  registerEchoChantHandler (raw = {}, fallbackId = '') {
     const normalized = normalizeCustomHandler(raw, fallbackId)
     if (!normalized) {
-      console.warn('[EchoRuntime] registerRuneHandler: invalid handler', raw)
+      console.warn('[EchoRuntime] registerEchoChantHandler: invalid handler', raw)
       return ''
     }
-    this.customHandlers.set(normalized.id, normalized)
+    this.echoChantHandlers.set(normalized.id, normalized)
     return normalized.id
   }
 
-  unregisterRuneHandler (id = '') {
+  unregisterEchoChantHandler (id = '') {
     const target = String(id || '').trim()
     if (!target) return false
-    return this.customHandlers.delete(target)
+    return this.echoChantHandlers.delete(target)
   }
 
-  listCustomRuneHandlers () {
-    return Array.from(this.customHandlers.values())
+  listCustomEchoChantHandlers () {
+    return Array.from(this.echoChantHandlers.values())
   }
+
+  // 兼容旧方法名
+  registerRuneHandler (raw = {}, fallbackId = '') { return this.registerEchoChantHandler(raw, fallbackId) }
+  unregisterRuneHandler (id = '') { return this.unregisterEchoChantHandler(id) }
+  listCustomRuneHandlers () { return this.listCustomEchoChantHandlers() }
 
   /**
    * 查找 handler（custom 优先于内置）。
    * 提供给内部 afterRender() 使用，外部也可直接调用。
    */
-  resolveRuneHandler (runeMeta = {}) {
+  resolveEchoChantHandler (runeMeta = {}) {
     const id = String(runeMeta?.runeId || '').trim()
-    const kind = String(runeMeta?.kind || 'rune')
+    const kind = normalizeKindAlias(runeMeta?.kind) || 'echo-chant'
     // 1) 自定义 handler（精确按 id）
-    if (id && this.customHandlers.has(id)) {
-      return this.customHandlers.get(id)
+    if (id && this.echoChantHandlers.has(id)) {
+      return this.echoChantHandlers.get(id)
     }
     // 2) 自定义 handler（按 match 探测）
-    for (const handler of this.customHandlers.values()) {
+    for (const handler of this.echoChantHandlers.values()) {
       try {
         if (typeof handler.match === 'function' && handler.match(runeMeta)) {
           return handler
         }
       } catch (error) {
-        console.warn('[EchoRuntime] custom handler.match failed:', handler.id, error)
+        console.warn('[EchoRuntime] echoChant handler.match failed:', handler.id, error)
       }
     }
-    // 3) 内置 rune handler
-    const builtIn = findRuneHandler(id)
+    // 3) 内置 echo-chant handler
+    const builtIn = findEchoChantHandler(id)
     if (builtIn) return builtIn
-    // 4) rune-tbd 兜底
-    if (kind === 'rune-tbd') return findRuneHandler('__tbd__')
+    // 4) echo-tbd 兜底（兼容旧 'rune-tbd' 也已经过 normalizeKindAlias 转译）
+    if (kind === 'echo-tbd') return findEchoChantHandler('__echo_chant_tbd__')
     return null
   }
+
+  // 兼容旧方法名
+  resolveRuneHandler (runeMeta = {}) { return this.resolveEchoChantHandler(runeMeta) }
 
   compileDefinition (echo = {}) {
     const cacheKey = String(echo.id || echo.name || '')
@@ -887,18 +947,21 @@ export default class EchoRuntime {
       definition.handler = definition.handlerExample
     }
 
-    // === 自动注册 anno_source 内置的 rune handler ===
-    // 约定：definition.handler = function (runeNode, scopeContainer, runeMeta) { ... }
-    // 同时 definition.kind === 'rune' | 'rune-tbd' 且 definition.runeId / definition.id 已声明。
+    // === 自动注册 anno_source 内置的 echo-chant handler ===
+    // 约定：definition.handler = function (chantNode, scopeContainer, runeMeta) { ... }
+    // （函数参数名历史 ABI 仍用 'runeNode' / 'runeMeta'，本注释用新名字解释）
+    // 同时 definition.kind === 'echo-chant' | 'echo-tbd'（旧 'rune' | 'rune-tbd'）且
+    // definition.runeId / definition.id 已声明。
     try {
-      const kind = String(definition.kind || definition?.attrs?.kind || '').trim()
-      if (kind === 'rune' || kind === 'rune-tbd') {
+      const rawKind = String(definition.kind || definition?.attrs?.kind || '').trim()
+      const kind = normalizeKindAlias(rawKind)
+      if (kind === 'echo-chant' || kind === 'echo-tbd') {
         const handlerSpec = definition.handler || definition
         const fallbackId = String(definition.runeId || definition.id || cacheKey || '').trim()
         if (typeof handlerSpec?.apply === 'function' || typeof handlerSpec === 'function' || typeof handlerSpec?.match === 'function') {
           const normalized = normalizeCustomHandler({
             ...(typeof handlerSpec === 'object' ? handlerSpec : {}),
-            // 函数形式：apply(runeNode, container, meta)
+            // 函数形式：apply(chantNode, container, meta)
             apply: (typeof handlerSpec === 'function')
               ? handlerSpec
               : (typeof handlerSpec?.apply === 'function' ? handlerSpec.apply : undefined),
@@ -906,7 +969,7 @@ export default class EchoRuntime {
             source: `definition:${cacheKey}`
           }, fallbackId)
           if (normalized) {
-            this.customHandlers.set(normalized.id, normalized)
+            this.echoChantHandlers.set(normalized.id, normalized)
           }
         }
       }
@@ -1019,9 +1082,11 @@ export default class EchoRuntime {
     normalized.attrs = normalized.attrs && typeof normalized.attrs === 'object' ? normalized.attrs : context.attrs
     normalized.echo = matchedEcho
 
-    const runeMeta = extractRuneMeta(normalized)
-    if (runeMeta) {
-      normalized.runeMeta = runeMeta
+    const echoChantMeta = extractEchoChantMeta(normalized)
+    if (echoChantMeta) {
+      // 双轨：旧字段 normalized.runeMeta 仍同步一份，供外部老 import 链读
+      normalized.echoChantMeta = echoChantMeta
+      normalized.runeMeta = echoChantMeta
     }
 
     return normalized
@@ -1039,11 +1104,12 @@ export default class EchoRuntime {
     const promptHtml = prompt ? `<div class="ag-echo-inline__prompt">${prompt}</div>` : ''
     const customHtml = bodyHtml ? `<div class="ag-echo-inline__html">${bodyHtml}</div>` : ''
 
-    const runeAttr = rendered.runeMeta
-      ? ` data-rune-id="${escapeHtml(rendered.runeMeta.runeId || 'unknown')}" data-rune-kind="${escapeHtml(rendered.runeMeta.kind || 'rune')}"`
+    // DOM 属性 ABI：data-rune-id / data-rune-kind —— 不改名（写进 markdown 源 ABI）
+    const echoChantAttr = rendered.echoChantMeta || rendered.runeMeta
+      ? ` data-rune-id="${escapeHtml((rendered.echoChantMeta || rendered.runeMeta)?.runeId || 'unknown')}" data-rune-kind="${escapeHtml((rendered.echoChantMeta || rendered.runeMeta)?.kind || 'echo-chant')}"`
       : ''
 
-    return `<span class="ag-echo-inline" data-echo-inline="true" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}"${runeAttr} style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}${customHtml}</span></span>`
+    return `<span class="ag-echo-inline" data-echo-inline="true" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}"${echoChantAttr} style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}${customHtml}</span></span>`
   }
 
   // 渲染完成后的副作用入口。
@@ -1059,8 +1125,7 @@ export default class EchoRuntime {
     const echoNodes = safeQueryAll(container, '[data-echo-inline="true"]')
     const installed = []
 
-    // === 新模板签名：definition.afterRender(node, domElement, ancestors) ===
-    // 对每个 echo host 调一次（无论是否有 runeId）；hook 可访问 domElement 与 neighbors。
+    //   对每个 echo host 调一次（无论是否有 runeId）；hook 可访问 domElement 与 neighbors。
     echoNodes.forEach(node => {
       const echoName = node.getAttribute('data-echo-name') || ''
       const echoId = node.getAttribute('data-echo-id') || ''
@@ -1077,7 +1142,7 @@ export default class EchoRuntime {
           echoName,
           echoId,
           definitionId,
-          attrsParsed: this._readRuneAttrs(node),
+          attrsParsed: this._readChantAttrs(node),
           prompt: node.getAttribute('data-echo-value') || ''
         }
         const ancestors = { echo: matchedEcho, document: container }
@@ -1091,15 +1156,16 @@ export default class EchoRuntime {
       }
     })
 
-    const runeNodes = safeQueryAll(container, '[data-rune-id]')
-    runeNodes.forEach(node => {
+    const chantNodes = safeQueryAll(container, '[data-rune-id]')
+    chantNodes.forEach(node => {
       const runeId = node.getAttribute('data-rune-id') || ''
       const meta = {
         runeId,
-        kind: node.getAttribute('data-rune-kind') || 'rune',
-        attrs: this._readRuneAttrs(node)
+        // DOM 里的 data-rune-kind 仍是 ABI，旧值 'rune' / 'rune-tbd' 在 normalizeKindAlias 转译
+        kind: node.getAttribute('data-rune-kind') || 'echo-chant',
+        attrs: this._readChantAttrs(node)
       }
-      const handler = this.resolveRuneHandler(meta)
+      const handler = this.resolveEchoChantHandler(meta)
       if (!handler) return
       let cleanup = null
       try {
@@ -1135,15 +1201,17 @@ export default class EchoRuntime {
     }
   }
 
-  _readRuneAttrs (node) {
-    // 优先从兄弟/回响容器读 payload；fallback 从 DOM data-* 上读
+  // === _readChantAttrs：从 <span data-rune-attrs> 读 echo 实例参数（kind/scope/density 等） ===
+  // DOM 属性名 [data-rune-attrs] 是 markdown 源 ABI，所以读它没错；
+  // 方法名与 'rune' 解耦成 _readChantAttrs 以统一口径。
+  _readChantAttrs (node) {
     const card = node.querySelector('[data-rune-attrs]') || node
     if (!card) return {}
     try {
       const raw = card.getAttribute('data-rune-attrs')
       if (raw) return JSON.parse(raw)
     } catch (error) { /* ignore */ }
-    // 再回退：直接从当前 rune host（node 自身）读 data-echo-attrs-json，
+    // 再回退：直接从当前 echo host（node 自身）读 data-echo-attrs-json，
     // 这样 Muya 端如果把 echo 实例属性只挂在 host.dataset 上也能命中。
     try {
       const ownerHost = (typeof node.closest === 'function')
@@ -1183,4 +1251,7 @@ export default class EchoRuntime {
     } catch (error) { /* ignore */ }
     return result
   }
+
+  // 兼容旧方法名（_readRuneAttrs）—— 外部可能直接调 EchoRuntime 实例的 _readRuneAttrs
+  _readRuneAttrs (node) { return this._readChantAttrs(node) }
 }
