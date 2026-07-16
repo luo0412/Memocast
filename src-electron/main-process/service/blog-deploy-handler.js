@@ -1013,45 +1013,62 @@ function runVuepressBuild (blogDir, vuepressBin, onProgress) {
  */
 function runNpmInstall (blogDir, onProgress) {
   return new Promise((resolve) => {
-    console.log('[BlogDeploy] Running npm install in:', blogDir)
+    console.log('[BlogDeploy] Cleaning npm cache and running npm install in:', blogDir)
 
-    const child = spawn('cmd.exe', ['/c', 'npm install'], {
+    // 先清理 npm cache（避免 cache 污染导致包解压损坏）
+    const cleanChild = spawn('cmd.exe', ['/c', 'npm cache clean --force'], {
       cwd: blogDir,
       shell: false,
       windowsHide: true,
       env: { ...process.env }
     })
 
-    currentProcess = child
     let stderr = ''
 
-    child.stderr.on('data', (data) => {
-      stderr += data.toString()
-      console.error('[NpmInstall stderr]:', data.toString())
+    cleanChild.on('close', (code) => {
+      console.log('[BlogDeploy] npm cache clean exited with code:', code)
+
+      // cache 清理完成后执行 install
+      const installChild = spawn('cmd.exe', ['/c', 'npm install'], {
+        cwd: blogDir,
+        shell: false,
+        windowsHide: true,
+        env: { ...process.env }
+      })
+
+      currentProcess = installChild
+
+      installChild.stderr.on('data', (data) => {
+        stderr += data.toString()
+        console.error('[NpmInstall stderr]:', data.toString())
+      })
+
+      installChild.stdout.on('data', (data) => {
+        const msg = data.toString().trim()
+        if (msg) {
+          onProgress(msg)
+        }
+      })
+
+      installChild.on('close', (code) => {
+        if (cancelled) {
+          resolve({ error: 'cancelled' })
+        } else if (code === 0) {
+          resolve({ success: true })
+        } else {
+          const errorMsg = stderr.trim() || `Exit code: ${code}`
+          resolve({ error: errorMsg })
+        }
+      })
+
+      installChild.on('error', (err) => {
+        currentProcess = null
+        resolve({ error: err.message })
+      })
     })
 
-    child.stdout.on('data', (data) => {
-      const msg = data.toString().trim()
-      if (msg) {
-        onProgress(msg)
-      }
-    })
-
-    child.on('close', (code) => {
-      currentProcess = null
-      if (cancelled) {
-        resolve({ error: 'cancelled' })
-      } else if (code === 0) {
-        resolve({ success: true })
-      } else {
-        const errorMsg = stderr.trim() || `Exit code: ${code}`
-        resolve({ error: errorMsg })
-      }
-    })
-
-    child.on('error', (err) => {
-      currentProcess = null
-      resolve({ error: err.message })
+    cleanChild.on('error', (err) => {
+      resolve({ error: 'npm cache clean failed: ' + err.message })
     })
   })
 }

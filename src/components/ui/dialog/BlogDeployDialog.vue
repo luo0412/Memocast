@@ -9,7 +9,7 @@
         <q-btn flat round dense icon="close" size="sm" v-close-popup @click="onCancel" />
       </q-toolbar>
 
-      <q-card-section class="scroll q-pa-md">
+      <q-card-section class="blog-deploy-content">
         <!-- 博客目录 -->
         <div class="config-section">
           <div class="text-body2 text-weight-medium q-mb-xs config-label">
@@ -299,7 +299,7 @@
 
       <q-separator />
 
-      <q-card-actions align="right" class="q-pa-md">
+      <q-card-actions align="right" class="blog-deploy-actions">
         <q-btn flat :label="$t('cancelDeploy')" color="grey" v-close-popup @click="onCancel" />
         <q-btn
           flat
@@ -558,11 +558,25 @@ export default {
   width: 520px;
   max-width: 90vw;
   height: 70vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .blog-deploy-toolbar {
+  flex: 0 0 auto;
   min-height: 48px;
   padding: 4px 8px;
+}
+
+.blog-deploy-content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.blog-deploy-actions {
+  flex: 0 0 auto;
+  padding: 12px 16px;
 }
 
 .config-section {
