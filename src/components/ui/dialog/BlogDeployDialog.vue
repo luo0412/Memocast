@@ -1,16 +1,15 @@
 <template>
   <q-dialog ref="dialog" transition-show="fade" transition-hide="fade" persistent>
     <q-card class="blog-deploy-dialog-card">
-      <q-card-section class="row items-center q-pb-sm">
+      <q-toolbar class="blog-deploy-toolbar">
         <q-icon name="cloud_upload" class="text-primary q-mr-sm" size="1.5rem" />
-        <div class="text-subtitle1 text-weight-medium">{{ $t('blogDeployConfig') }}</div>
-        <q-space />
-        <q-btn flat round dense icon="close" v-close-popup @click="onCancel" />
-      </q-card-section>
+        <q-toolbar-title class="text-subtitle1 text-weight-medium">
+          {{ $t('blogDeployConfig') }}
+        </q-toolbar-title>
+        <q-btn flat round dense icon="close" size="sm" v-close-popup @click="onCancel" />
+      </q-toolbar>
 
-      <q-separator />
-
-      <q-card-section class="q-pa-md">
+      <q-card-section class="scroll q-pa-md">
         <!-- 博客目录 -->
         <div class="config-section">
           <div class="text-body2 text-weight-medium q-mb-xs config-label">
@@ -95,205 +94,207 @@
 
         <q-separator class="q-my-md" />
 
-        <!-- GitHub 部署（可选） -->
-        <div class="config-section">
-          <div class="text-body2 text-weight-medium q-mb-xs config-label">
-            {{ $t('githubDeployOptional') }}
-          </div>
+        <!-- 部署方式 Tab 切换 -->
+        <q-tabs
+          v-model="activeDeployTab"
+          dense
+          align="left"
+          class="deploy-tabs q-mb-sm"
+          active-color="primary"
+          indicator-color="primary"
+          narrow-indicator
+        >
+          <q-tab name="github" :label="$t('githubDeploy')" icon="code" />
+          <q-tab name="ci" :label="$t('exportBlogCi')" icon="build" />
+          <q-tab name="sftp" :label="$t('sftpDeploy')" icon="cloud_upload" />
+        </q-tabs>
 
-          <q-input
-            v-model="localConfig.github.owner"
-            dense
-            outlined
-            class="q-mb-sm"
-            :label="$t('githubRepo')"
-            placeholder="owner/repo"
-          />
+        <q-tab-panels v-model="activeDeployTab" animated class="deploy-tab-panels">
+          <!-- GitHub 部署 -->
+          <q-tab-panel name="github" class="q-pa-none">
+            <q-input
+              v-model="localConfig.github.owner"
+              dense
+              outlined
+              class="q-mb-sm"
+              :label="$t('githubRepo')"
+              placeholder="owner/repo"
+            />
 
-          <q-input
-            v-model="localConfig.github.workflowId"
-            dense
-            outlined
-            class="q-mb-sm"
-            :label="$t('githubWorkflowId')"
-            placeholder="deploy.yml"
-          />
+            <q-input
+              v-model="localConfig.github.workflowId"
+              dense
+              outlined
+              class="q-mb-sm"
+              :label="$t('githubWorkflowId')"
+              placeholder="deploy.yml"
+            />
 
-          <q-input
-            v-model="localConfig.github.branch"
-            dense
-            outlined
-            class="q-mb-sm"
-            :label="$t('githubBranch')"
-            placeholder="main"
-          />
+            <q-input
+              v-model="localConfig.github.branch"
+              dense
+              outlined
+              class="q-mb-sm"
+              :label="$t('githubBranch')"
+              placeholder="main"
+            />
 
-          <q-input
-            v-model="localConfig.github.token"
-            dense
-            outlined
-            class="q-mb-xs"
-            :label="$t('githubToken')"
-            :type="showToken ? 'text' : 'password'"
-          >
-            <template v-slot:append>
-              <q-btn flat round dense :icon="showToken ? 'visibility_off' : 'visibility'" @click="showToken = !showToken" />
-            </template>
-          </q-input>
-          <div class="text-caption text-grey-6 q-mb-sm">
-            {{ $t('githubToken') }}: 需要 <code>workflow</code> 范围。
-            <a href="#" @click.prevent="openGithubTokenGuide">生成 Token</a>
-          </div>
-        </div>
-
-        <q-separator class="q-my-md" />
-
-        <!-- 导出 GitHub Actions CI 配置（可选） -->
-        <div class="config-section">
-          <div class="text-body2 text-weight-medium q-mb-xs config-label">
-            {{ $t('exportBlogCiOptional') }}
-          </div>
-          <div class="text-caption text-grey-6 q-mb-sm">
-            {{ $t('exportBlogCiHint') }}
-          </div>
-          <q-btn
-            flat
-            color="primary"
-            icon="code"
-            :label="$t('exportBlogCi')"
-            :disable="!localConfig.blogDir"
-            :loading="exportingCI"
-            @click="exportCI"
-          >
-            <q-tooltip v-if="!localConfig.blogDir">
-              {{ $t('blogDeployConfigRequired') }}
-            </q-tooltip>
-          </q-btn>
-        </div>
-
-        <q-separator class="q-my-md" />
-
-        <!-- SFTP 部署（可选） -->
-        <div class="config-section">
-          <div class="text-body2 text-weight-medium q-mb-xs config-label">
-            {{ $t('sftpDeployOptional') }}
-          </div>
-
-          <q-toggle
-            v-model="localConfig.sftp.enabled"
-            :label="$t('sftpEnabled')"
-            class="q-mb-sm"
-          />
-
-          <template v-if="localConfig.sftp.enabled">
-            <div class="row q-gutter-sm">
-              <q-input
-                v-model="localConfig.sftp.host"
-                dense
-                outlined
-                class="col-8"
-                :label="$t('sftpHost')"
-                placeholder="example.com"
-              />
-              <q-input
-                v-model.number="localConfig.sftp.port"
-                dense
-                outlined
-                class="col-4"
-                :label="$t('sftpPort')"
-                type="number"
-              />
+            <q-input
+              v-model="localConfig.github.token"
+              dense
+              outlined
+              class="q-mb-xs"
+              :label="$t('githubToken')"
+              :type="showToken ? 'text' : 'password'"
+            >
+              <template v-slot:append>
+                <q-btn flat round dense :icon="showToken ? 'visibility_off' : 'visibility'" @click="showToken = !showToken" />
+              </template>
+            </q-input>
+            <div class="text-caption text-grey-6">
+              {{ $t('githubToken') }}: 需要 <code>workflow</code> 范围。
+              <a href="#" @click.prevent="openGithubTokenGuide">生成 Token</a>
             </div>
+          </q-tab-panel>
 
-            <q-input
-              v-model="localConfig.sftp.username"
-              dense
-              outlined
-              class="q-mb-sm q-mt-sm"
-              :label="$t('sftpUsername')"
-            />
-
-            <div class="text-caption text-grey-6 q-mb-xs">{{ $t('sftpAuthType') }}</div>
-            <q-btn-toggle
-              v-model="localConfig.sftp.authType"
-              toggle-color="primary"
-              :options="[
-                { label: $t('sftpAuthPassword'), value: 'password' },
-                { label: $t('sftpAuthKey'), value: 'key' }
-              ]"
-              unelevated
-              no-caps
-              class="q-mb-sm"
-            />
-
-            <template v-if="localConfig.sftp.authType === 'password'">
-              <q-input
-                v-model="localConfig.sftp.password"
-                dense
-                outlined
-                class="q-mb-sm"
-                :label="$t('sftpPassword')"
-                :type="showSftpPassword ? 'text' : 'password'"
-              >
-                <template v-slot:append>
-                  <q-btn flat round dense :icon="showSftpPassword ? 'visibility_off' : 'visibility'" @click="showSftpPassword = !showSftpPassword" />
-                </template>
-              </q-input>
-            </template>
-
-            <template v-else>
-              <div class="row items-center no-wrap q-gutter-xs q-mb-sm">
-                <q-input
-                  v-model="localConfig.sftp.privateKeyPath"
-                  dense
-                  outlined
-                  class="col"
-                  :label="$t('sftpPrivateKeyPath')"
-                  readonly
-                />
-                <q-btn
-                  unelevated
-                  color="primary"
-                  icon="attach_file"
-                  :label="$t('sftpSelectKeyFile')"
-                  @click="selectPrivateKey"
-                />
-              </div>
-              <q-input
-                v-model="localConfig.sftp.passphrase"
-                dense
-                outlined
-                class="q-mb-sm"
-                :label="$t('sftpPassphrase')"
-                type="password"
-              />
-            </template>
-
-            <q-input
-              v-model="localConfig.sftp.remotePath"
-              dense
-              outlined
-              class="q-mb-sm"
-              :label="$t('sftpRemotePath')"
-              placeholder="/var/www/blog"
-            />
-
-            <q-toggle
-              v-model="localConfig.sftp.backupEnabled"
-              :label="$t('sftpBackupEnabled')"
-              class="q-mb-sm"
-            />
-
+          <!-- 导出 CI 配置 -->
+          <q-tab-panel name="ci" class="q-pa-none">
+            <div class="text-caption text-grey-6 q-mb-sm">
+              {{ $t('exportBlogCiHint') }}
+            </div>
             <q-btn
               flat
-              :label="$t('sftpTestConnection')"
               color="primary"
-              icon="wifi"
-              :loading="testingConnection"
-              @click="testSftpConnection"
+              icon="code"
+              :label="$t('exportBlogCi')"
+              :disable="!localConfig.blogDir"
+              :loading="exportingCI"
+              @click="exportCI"
+            >
+              <q-tooltip v-if="!localConfig.blogDir">
+                {{ $t('blogDeployConfigRequired') }}
+              </q-tooltip>
+            </q-btn>
+          </q-tab-panel>
+
+          <!-- SFTP 部署 -->
+          <q-tab-panel name="sftp" class="q-pa-none">
+            <q-toggle
+              v-model="localConfig.sftp.enabled"
+              :label="$t('sftpEnabled')"
+              class="q-mb-sm"
             />
-          </template>
-        </div>
+
+            <template v-if="localConfig.sftp.enabled">
+              <div class="row q-gutter-sm">
+                <q-input
+                  v-model="localConfig.sftp.host"
+                  dense
+                  outlined
+                  class="col-8"
+                  :label="$t('sftpHost')"
+                  placeholder="example.com"
+                />
+                <q-input
+                  v-model.number="localConfig.sftp.port"
+                  dense
+                  outlined
+                  class="col-4"
+                  :label="$t('sftpPort')"
+                  type="number"
+                />
+              </div>
+
+              <q-input
+                v-model="localConfig.sftp.username"
+                dense
+                outlined
+                class="q-mb-sm q-mt-sm"
+                :label="$t('sftpUsername')"
+              />
+
+              <div class="text-caption text-grey-6 q-mb-xs">{{ $t('sftpAuthType') }}</div>
+              <q-btn-toggle
+                v-model="localConfig.sftp.authType"
+                toggle-color="primary"
+                :options="[
+                  { label: $t('sftpAuthPassword'), value: 'password' },
+                  { label: $t('sftpAuthKey'), value: 'key' }
+                ]"
+                unelevated
+                no-caps
+                class="q-mb-sm"
+              />
+
+              <template v-if="localConfig.sftp.authType === 'password'">
+                <q-input
+                  v-model="localConfig.sftp.password"
+                  dense
+                  outlined
+                  class="q-mb-sm"
+                  :label="$t('sftpPassword')"
+                  :type="showSftpPassword ? 'text' : 'password'"
+                >
+                  <template v-slot:append>
+                    <q-btn flat round dense :icon="showSftpPassword ? 'visibility_off' : 'visibility'" @click="showSftpPassword = !showSftpPassword" />
+                  </template>
+                </q-input>
+              </template>
+
+              <template v-else>
+                <div class="row items-center no-wrap q-gutter-xs q-mb-sm">
+                  <q-input
+                    v-model="localConfig.sftp.privateKeyPath"
+                    dense
+                    outlined
+                    class="col"
+                    :label="$t('sftpPrivateKeyPath')"
+                    readonly
+                  />
+                  <q-btn
+                    unelevated
+                    color="primary"
+                    icon="attach_file"
+                    :label="$t('sftpSelectKeyFile')"
+                    @click="selectPrivateKey"
+                  />
+                </div>
+                <q-input
+                  v-model="localConfig.sftp.passphrase"
+                  dense
+                  outlined
+                  class="q-mb-sm"
+                  :label="$t('sftpPassphrase')"
+                  type="password"
+                />
+              </template>
+
+              <q-input
+                v-model="localConfig.sftp.remotePath"
+                dense
+                outlined
+                class="q-mb-sm"
+                :label="$t('sftpRemotePath')"
+                placeholder="/var/www/blog"
+              />
+
+              <q-toggle
+                v-model="localConfig.sftp.backupEnabled"
+                :label="$t('sftpBackupEnabled')"
+                class="q-mb-sm"
+              />
+
+              <q-btn
+                flat
+                :label="$t('sftpTestConnection')"
+                color="primary"
+                icon="wifi"
+                :loading="testingConnection"
+                @click="testSftpConnection"
+              />
+            </template>
+          </q-tab-panel>
+        </q-tab-panels>
       </q-card-section>
 
       <q-separator />
@@ -329,6 +330,7 @@ export default {
   name: 'BlogDeployDialog',
   data () {
     return {
+      activeDeployTab: 'github',
       localConfig: {
         blogDir: '',
         theme: 'default',
@@ -555,6 +557,12 @@ export default {
 .blog-deploy-dialog-card {
   width: 520px;
   max-width: 90vw;
+  height: 70vh;
+}
+
+.blog-deploy-toolbar {
+  min-height: 48px;
+  padding: 4px 8px;
 }
 
 .config-section {
@@ -591,6 +599,22 @@ code {
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 6px;
   overflow: hidden;
+}
+
+.deploy-tabs {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.body--dark .deploy-tabs {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.deploy-tab-panels {
+  background: transparent;
+}
+
+.deploy-tab-panels .q-tab-panel {
+  padding: 12px 0;
 }
 
 .body--dark .theme-toggle {

@@ -91,6 +91,7 @@ export default {
   blogDeployConfigSaved: '博客部署配置已保存',
   blogDeployConfigRequired: '请先配置博客目录',
   githubDeployOptional: '（可选）GitHub 自动部署',
+  githubDeploy: 'GitHub 部署',
   blogDeployConfig: '博客部署配置',
   saveAndDeploy: '保存并部署',
   saveConfig: '保存配置',
@@ -117,6 +118,7 @@ export default {
 
   // SFTP 部署
   sftpDeployOptional: '（可选）SFTP 上传到服务器',
+  sftpDeploy: 'SFTP 部署',
   sftpEnabled: '启用 SFTP 上传',
   sftpHost: '服务器地址',
   sftpPort: '端口',

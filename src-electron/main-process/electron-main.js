@@ -18,7 +18,7 @@ import CryptoJS from 'crypto-js'
 import Portkey from 'portkey-ai'
 const { DEFAULT_ROOT_CATEGORY } = require('./constants')
 const createRuneTemplateService = require('./service/rune-template-service')
-const BUILTIN_ECHO_CARDS = require('./service/builtin-echoes')
+const { BUILTIN_ECHO_CARDS } = require('./service/builtin-echoes')
 
 // rune 预设模板服务（schema + CRUD）。仅在 initSchema 阶段真正调用 createRuneTemplateService，
 // registerDatabaseHandlers 阶段直接复用 module 级 runeTemplateService，避免重复闭包。

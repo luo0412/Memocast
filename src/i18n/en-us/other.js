@@ -93,6 +93,7 @@ export default {
   blogDeployConfigSaved: 'Blog deploy config saved',
   blogDeployConfigRequired: 'Please configure blog directory first',
   githubDeployOptional: '(Optional) GitHub Auto Deploy',
+  githubDeploy: 'GitHub Deploy',
   blogDeployConfig: 'Blog Deploy Config',
   saveAndDeploy: 'Save & Deploy',
   saveConfig: 'Save Config',
@@ -114,6 +115,7 @@ export default {
 
   // SFTP Deploy
   sftpDeployOptional: '(Optional) SFTP Upload to Server',
+  sftpDeploy: 'SFTP Deploy',
   sftpEnabled: 'Enable SFTP Upload',
   sftpHost: 'Server Address',
   sftpPort: 'Port',
