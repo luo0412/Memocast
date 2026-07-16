@@ -346,7 +346,7 @@ function quoteBase (base) {
  * @param {string} theme 'default' | 'vdoing'
  * @param {object} [opts]
  * @param {string} [opts.base] 用户在弹框里输入的 base；空串视为"不强制"
- * @returns {Promise<{action: 'kept'|'created'|'base-overwritten'|'base-injected', path: string, baseInjected?: string, baseMode?: string}>}
+ * @returns {Promise<{action: 'kept'|'created'|'base-overwritten'|'base-injected'|'theme-changed', path: string, baseInjected?: string, baseMode?: string, themeAction?: string}>}
  */
 async function ensureBlogConfig (blogDir, theme = 'default', opts = {}) {
   const configDir = path.join(blogDir, '.vuepress')
@@ -385,8 +385,12 @@ async function ensureBlogConfig (blogDir, theme = 'default', opts = {}) {
   // —— B. vdoing 主题 ——
   if (theme === 'vdoing') {
     if (fs.existsSync(configPath)) {
-      // 弹框未传 base + 已存在 → 保留原文件
-      return { action: 'kept', path: configPath }
+      // 同主题时保留；主题变化则强制覆盖
+      const currentTheme = detectCurrentTheme(configPath)
+      if (currentTheme === 'vdoing') {
+        return { action: 'kept', path: configPath }
+      }
+      console.log('[BlogDeploy] Theme changed (%s → vdoing), overriding config.js', currentTheme || 'unknown')
     }
     const vdoingConfigContent = `// vdoing 主题配置
 // vuepress-theme-vdoing@1.x 直接使用 theme: 'vdoing'
@@ -414,7 +418,11 @@ module.exports = {
   // —— C. Hope 主题 (vuepress-themeHope, vuepress 1.x) ——
   if (theme === 'hope') {
     if (fs.existsSync(configPath)) {
-      return { action: 'kept', path: configPath }
+      const currentTheme = detectCurrentTheme(configPath)
+      if (currentTheme === 'hope') {
+        return { action: 'kept', path: configPath }
+      }
+      console.log('[BlogDeploy] Theme changed (%s → hope), overriding config.js', currentTheme || 'unknown')
     }
     const hopeConfigContent = `// VuePress Theme Hope 配置
 const { config } = require('vuepress-theme-hope')
@@ -451,7 +459,11 @@ module.exports = config({
   // —— D. Reco 主题 (vuepress-theme-reco, vuepress 1.x) ——
   if (theme === 'reco') {
     if (fs.existsSync(configPath)) {
-      return { action: 'kept', path: configPath }
+      const currentTheme = detectCurrentTheme(configPath)
+      if (currentTheme === 'reco') {
+        return { action: 'kept', path: configPath }
+      }
+      console.log('[BlogDeploy] Theme changed (%s → reco), overriding config.js', currentTheme || 'unknown')
     }
     const recoConfigContent = `// VuePress Theme Reco 配置
 // vuepress-theme-reco@1.x 直接使用 theme: 'reco'，无需 require
@@ -487,19 +499,28 @@ module.exports = {
   }
 
   // —— E. 默认主题 (兜底) ——
+  let forceOverwrite = false
   if (fs.existsSync(configPath)) {
-    // 弹框未传 base + 已存在 → 完全保留原文件(包括用户手工编辑的 base)
     if (!baseInput) {
-      return { action: 'kept', path: configPath }
+      const currentTheme = detectCurrentTheme(configPath)
+      if (currentTheme && currentTheme !== 'default') {
+        forceOverwrite = true
+        console.log('[BlogDeploy] Theme changed (%s → default), overriding config.js', currentTheme)
+      } else {
+        return { action: 'kept', path: configPath }
+      }
     }
-    // 弹框传了 base 但走到了这里(理论上分支 A 应已覆盖,兜底)→ 再覆盖一次
-    const result = await replaceBaseInConfig(configPath, baseInput, rawBase)
-    return {
-      action: 'base-overwritten',
-      path: configPath,
-      baseInjected: rawBase,
-      baseMode: result.mode
+    if (!forceOverwrite) {
+      // 弹框传了 base 但走到了这里(理论上分支 A 应已覆盖,兜底)→ 再覆盖一次
+      const result = await replaceBaseInConfig(configPath, baseInput, rawBase)
+      return {
+        action: 'base-overwritten',
+        path: configPath,
+        baseInjected: rawBase,
+        baseMode: result.mode
+      }
     }
+    // forceOverwrite = true → fall through 到 rewrite below
   }
 
   // —— D. 全新生成 default config.js ——
@@ -553,6 +574,37 @@ module.exports = {
     action: 'created',
     path: configPath,
     baseInjected: baseInput ? rawBase : undefined
+  }
+}
+
+/**
+ * 从已存在的 config.js 内容中检测当前使用的主题。
+ * 检测策略：
+ *   - theme: 'vdoing'              → 'vdoing'
+ *   - theme: 'reco'                → 'reco'
+ *   - require('vuepress-theme-hope') 或 require('vuepress-theme-hope/../lib')
+ *                                       → 'hope'  (module.exports = config({...}) 形态)
+ *   - 无 theme 字段，或 require('vuepress')（默认主题）→ 'default'
+ *   - 找不到任何线索                                       → null
+ *
+ * @param {string} configPath
+ * @returns {'vdoing'|'hope'|'reco'|'default'|null}
+ */
+function detectCurrentTheme (configPath) {
+  try {
+    const src = fs.readFileSync(configPath, 'utf-8')
+    // vdoing: theme: 'vdoing'
+    if (/\btheme\s*:\s*['"]vdoing['"]/.test(src)) return 'vdoing'
+    // reco: theme: 'reco'
+    if (/\btheme\s*:\s*['"]reco['"]/.test(src)) return 'reco'
+    // hope: require('vuepress-theme-hope') + module.exports = config({
+    if (/\brequire\s*\(\s*['"]vuepress-theme-hope/.test(src) &&
+        /module\.exports\s*=\s*config\s*\(/.test(src)) return 'hope'
+    // default: 无 theme 字段，或只有默认主题的 require('vuepress')
+    // （用户自己写的内容暂时认作 default）
+    return 'default'
+  } catch {
+    return null
   }
 }
 
@@ -828,19 +880,6 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
       console.log('[BlogDeploy] Generated package.json with theme:', theme)
     }
 
-    // 清理 vuepress 在 build 期间产生的 cache（dist 已在上面彻底重建）
-    const cacheDir = path.join(vuepressDir, 'cache')
-    const distDir = path.join(vuepressDir, 'dist')
-
-    if (fs.existsSync(cacheDir)) {
-      await fs.remove(cacheDir)
-      console.log('[BlogDeploy] Cleaned .vuepress/cache directory')
-    }
-    if (fs.existsSync(distDir)) {
-      await fs.remove(distDir)
-      console.log('[BlogDeploy] Cleaned .vuepress/dist directory')
-    }
-
     // 4. 处理 node_modules（首次需要 install，或 node_modules 里 vuepress 不存在时也重新 install）
     sendProgress(webContents, 'build', 'Checking node_modules...', 15)
     const blogNodeModules = path.join(blogDir, 'node_modules')
@@ -871,6 +910,22 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
       }
     } else {
       console.log('[BlogDeploy] node_modules exists and vuepress found, skipping install')
+    }
+
+    // 5. 执行构建前：彻底清理所有可能的缓存，避免 webpack manifest/client.json 残留报错
+    sendProgress(webContents, 'build', 'Cleaning build cache...', 48)
+    const cachePaths = [
+      path.join(vuepressDir, 'cache'),
+      path.join(vuepressDir, '.cache'),
+      path.join(vuepressDir, 'dist'),
+      path.join(blogDir, 'node_modules', '.cache'),
+      path.join(blogDir, '.cache'),
+    ]
+    for (const cp of cachePaths) {
+      if (fs.existsSync(cp)) {
+        await fs.remove(cp)
+        console.log('[BlogDeploy] Cleaned cache:', cp)
+      }
     }
 
     // 5. 执行构建
