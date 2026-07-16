@@ -323,7 +323,7 @@ export default {
    *
    * @param {string} blogDir  博客源目录
    * @param {Array<{title:string, content:string, docGuid?:string}>} notes
-   * @param {string} theme    'default' | 'vdoing'
+   * @param {string} theme    'default' | 'vdoing' | 'hope' | 'reco'
    * @param {string} category 当前分类名（可选，写进 shortlink-map.json）
    */
   async writeBlogPosts (blogDir, notes, theme = 'default', category = '') {
@@ -573,10 +573,10 @@ export default {
   },
 
   /**
-   * 构造 front-matter —— 在默认/vdoing 两个主题都注入 permalink。
+   * 构造 front-matter —— 在默认/vdoing/hope/reco 四个主题都注入 permalink。
    *
    * @param {object} note    笔记（含 title）
-   * @param {string} theme   'default' | 'vdoing'
+   * @param {string} theme   'default' | 'vdoing' | 'hope' | 'reco'
    * @param {string} dirTag  blogDir 最后一段（用于 hash）
    * @param {string} baseName 文件 basename
    */

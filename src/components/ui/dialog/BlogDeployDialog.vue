@@ -45,7 +45,9 @@
               toggle-color="primary"
               :options="[
                 { label: $t('blogThemeDefault'), value: 'default' },
-                { label: $t('blogThemeVdoing'), value: 'vdoing' }
+                { label: $t('blogThemeVdoing'), value: 'vdoing' },
+                { label: $t('blogThemeHope'), value: 'hope' },
+                { label: $t('blogThemeReco'), value: 'reco' }
               ]"
               unelevated
               no-caps

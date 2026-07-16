@@ -557,7 +557,83 @@ module.exports = defineUserConfig({
     }
   }
 
-  // —— C. 默认主题 ——
+  // —— C. Hope 主题 (vuepress-themeHope, vuepress 1.x) ——
+  if (theme === 'hope') {
+    if (fs.existsSync(configPath)) {
+      return { action: 'kept', path: configPath }
+    }
+    const hopeConfigContent = `// VuePress Theme Hope 配置
+const { defineUserConfig } = require('vuepress')
+const { hopeTheme } = require('vuepress-theme-hope')
+
+module.exports = defineUserConfig({
+  base: ${baseInput || "'/'"},${baseInput ? ` // memocast: base=${rawBase}` : ''}
+  dest: '.vuepress/dist',
+  head: [
+    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+  ],
+  theme: hopeTheme({
+    logo: '/logo.png',
+    darkMode: true,
+    socialLinks: { github: 'https://github.com' },
+    navbar: require('./utils/nav-builder.js').buildNav(),
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar()
+  }),
+  markdown: {
+    lineNumbers: true,
+    extractTitleLevel: [2, 3, 4]
+  }
+})
+`
+    await fs.writeFile(configPath, hopeConfigContent)
+    console.log('[BlogDeploy] Generated hope theme config.js (base=%s)', baseInput ? rawBase : '/')
+    return {
+      action: 'created',
+      path: configPath,
+      baseInjected: baseInput ? rawBase : undefined
+    }
+  }
+
+  // —— D. Reco 主题 (vuepress-theme-reco, vuepress 1.x) ——
+  if (theme === 'reco') {
+    if (fs.existsSync(configPath)) {
+      return { action: 'kept', path: configPath }
+    }
+    const recoConfigContent = `// VuePress Theme Reco 配置
+const { defineUserConfig } = require('vuepress')
+const { recoTheme } = require('vuepress-theme-reco')
+
+module.exports = defineUserConfig({
+  base: ${baseInput || "'/'"},${baseInput ? ` // memocast: base=${rawBase}` : ''}
+  dest: '.vuepress/dist',
+  head: [
+    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+  ],
+  theme: recoTheme({
+    logo: '/logo.png',
+    darkmode: 'auto',
+    author: 'Author',
+    authorAvatar: '/avatar.png',
+    navbar: require('./utils/nav-builder.js').buildNav(),
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar()
+  }),
+  markdown: {
+    lineNumbers: true
+  }
+})
+`
+    await fs.writeFile(configPath, recoConfigContent)
+    console.log('[BlogDeploy] Generated reco theme config.js (base=%s)', baseInput ? rawBase : '/')
+    return {
+      action: 'created',
+      path: configPath,
+      baseInjected: baseInput ? rawBase : undefined
+    }
+  }
+
+  // —— E. 默认主题 (兜底) ——
   if (fs.existsSync(configPath)) {
     // 弹框未传 base + 已存在 → 完全保留原文件(包括用户手工编辑的 base)
     if (!baseInput) {
@@ -657,11 +733,13 @@ async function injectBaseIntoConfig (configPath, quotedBase) {
 
 /**
  * 生成博客 package.json
- * @param {string} theme - 主题类型 'default' | 'vdoing'
+ * @param {string} theme - 主题类型 'default' | 'vdoing' | 'hope' | 'reco'
  * @returns {object} package.json 内容
  */
 function buildBlogPackageJson (theme = 'default') {
   const isVdoing = theme === 'vdoing'
+  const isHope   = theme === 'hope'
+  const isReco   = theme === 'reco'
 
   const packageJson = {
     name: 'blog',
@@ -682,6 +760,10 @@ function buildBlogPackageJson (theme = 'default') {
 
   if (isVdoing) {
     packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
+  } else if (isHope) {
+    packageJson.dependencies['vuepress-theme-hope'] = '^2.0.0'
+  } else if (isReco) {
+    packageJson.dependencies['vuepress-theme-reco'] = '^1.6.0'
   }
 
   return packageJson
@@ -689,7 +771,7 @@ function buildBlogPackageJson (theme = 'default') {
 
 /**
  * 检测目标博客目录的主题类型
- * 返回: 'vdoing' | 'default'
+ * 返回: 'vdoing' | 'hope' | 'reco' | 'default'
  */
 function detectBlogTheme (blogDir) {
   const pkgPath = path.join(blogDir, 'package.json')
@@ -697,17 +779,17 @@ function detectBlogTheme (blogDir) {
     try {
       const pkg = fs.readJsonSync(pkgPath)
       const deps = { ...pkg.dependencies, ...pkg.devDependencies }
-      if (deps['vuepress-theme-vdoing']) {
-        return 'vdoing'
-      }
+      if (deps['vuepress-theme-vdoing']) return 'vdoing'
+      if (deps['vuepress-theme-hope'])  return 'hope'
+      if (deps['vuepress-theme-reco'])   return 'reco'
     } catch (_) {}
   }
 
-  // 回退：检查 node_modules 中是否有 vdoing 主题
-  const vdoingPath = path.join(blogDir, 'node_modules', 'vuepress-theme-vdoing')
-  if (fs.existsSync(vdoingPath)) {
-    return 'vdoing'
-  }
+  // 回退：检查 node_modules
+  const check = name => fs.existsSync(path.join(blogDir, 'node_modules', name))
+  if (check('vuepress-theme-vdoing')) return 'vdoing'
+  if (check('vuepress-theme-hope'))  return 'hope'
+  if (check('vuepress-theme-reco'))  return 'reco'
 
   return 'default'
 }
@@ -749,7 +831,7 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     }
 
     // 决定主题：优先使用前端传来的 themeOverride，否则自动检测
-    const theme = themeOverride && ['default', 'vdoing'].includes(themeOverride)
+    const theme = themeOverride && ['default', 'vdoing', 'hope', 'reco'].includes(themeOverride)
       ? themeOverride
       : detectBlogTheme(blogDir)
 
@@ -799,6 +881,15 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     await fs.ensureDir(vuepressDir)
 
     const isVdoing = theme === 'vdoing'
+    const isHope   = theme === 'hope'
+    const isReco   = theme === 'reco'
+
+    const themeDepMap = {
+      vdoing: 'vuepress-theme-vdoing',
+      hope: 'vuepress-theme-hope',
+      reco: 'vuepress-theme-reco'
+    }
+    const targetThemeDep = themeDepMap[theme]
 
     // 读取现有 package.json
     let existingPkg = null
@@ -814,7 +905,13 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     const vuepressVersion = existingPkg?.dependencies?.vuepress || ''
     const hasOldV2 = vuepressVersion.startsWith('^2.') || vuepressVersion.startsWith('2.')
     const hasVdoingDep = existingPkg?.dependencies?.['vuepress-theme-vdoing']
-    const needRebuild = hasOldV2 || (isVdoing && !hasVdoingDep) || (!isVdoing && hasVdoingDep)
+    const hasHopeDep  = existingPkg?.dependencies?.['vuepress-theme-hope']
+    const hasRecoDep  = existingPkg?.dependencies?.['vuepress-theme-reco']
+    const currentThemeDep = existingPkg?.dependencies?.[targetThemeDep]
+    const depMismatch = targetThemeDep
+      ? !currentThemeDep
+      : (hasVdoingDep || hasHopeDep || hasRecoDep)
+    const needRebuild = hasOldV2 || depMismatch
 
     if (needRebuild) {
       console.log('[BlogDeploy] Rebuilding package.json, theme:', theme, 'reason:', hasOldV2 ? 'old v2' : 'theme mismatch')
@@ -838,6 +935,10 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
       }
       if (isVdoing) {
         packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
+      } else if (isHope) {
+        packageJson.dependencies['vuepress-theme-hope'] = '^2.0.0'
+      } else if (isReco) {
+        packageJson.dependencies['vuepress-theme-reco'] = '^1.6.0'
       }
       fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))
     } else if (!existingPkg) {
@@ -862,6 +963,10 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
       }
       if (isVdoing) {
         packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
+      } else if (isHope) {
+        packageJson.dependencies['vuepress-theme-hope'] = '^2.0.0'
+      } else if (isReco) {
+        packageJson.dependencies['vuepress-theme-reco'] = '^1.6.0'
       }
 
       fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))

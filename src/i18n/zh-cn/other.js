@@ -100,6 +100,8 @@ export default {
   blogTheme: '博客主题',
   blogThemeDefault: 'VuePress 原生',
   blogThemeVdoing: 'Vdoing 主题',
+  blogThemeHope: 'VuePress Theme Hope',
+  blogThemeReco: 'VuePress Theme Reco',
   blogThemeAutoDetectHint: '自动检测目录主题类型，也可手动切换',
 
   // 部署 base 路径（VuePress publicPath）

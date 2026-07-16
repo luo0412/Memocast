@@ -174,3 +174,36 @@ Memocast/
 - [ ] `BLOG_BASE=/blog/ yarn blog:preview` 本地可访问 `http://localhost:port/blog/<id>.html`
 - [ ] CI workflow 跑通并上传 artifact
 - [ ] README "博客构建" 章节补全
+
+---
+
+## 7. 主题支持扩展（2026-07-16）
+
+### 已完成
+
+支持 4 种 VuePress 主题：`default` / `vdoing` / `hope` / `reco`。
+
+修改文件：
+
+| 文件 | 改动 |
+|------|------|
+| `src/components/ui/dialog/BlogDeployDialog.vue` | q-btn-toggle 选项加 hope / reco |
+| `src/i18n/zh-cn/other.js` | 加 blogThemeHope / blogThemeReco 翻译 |
+| `src/i18n/en-us/other.js` | 同上英译 |
+| `src-electron/main-process/service/blog-deploy-handler.js` | ensureBlogConfig 加 hope/reco 模板；buildBlogPackageJson 加主题依赖；detectBlogTheme 检测 hope/reco；依赖检测逻辑支持 4 主题 |
+| `src-electron/main-process/service/blog-config-writer.js` | writeVuepressConfig 加 hope/reco/vdoing 分支 |
+| `scripts/blog/blog-config-writer.js` | writeVuepressConfig 同上 |
+| `.cursor/skills/blog-deploy-design/SKILL.md` | 文档更新 §3.5 主题支持表格 |
+
+### 各主题 config.js 风格
+
+- **default**: `module.exports = {}` + `themeConfig.sidebar/nav`
+- **vdoing**: `defineUserConfig` + `vdoingTheme({})`
+- **hope**: `defineUserConfig` + `hopeTheme({ navbar, sidebar })` — sidebar/nav 需传入主题构造
+- **reco**: `defineUserConfig` + `recoTheme({ darkmode, author, navbar, sidebar })`
+
+### 待验证
+
+- [ ] hope/reco 主题的 `yarn install` 在博客目录能正常拉取依赖
+- [ ] `vuepress build` 在 hope/reco 主题下能正常输出 dist
+- [ ] sidebar/nav 在 hope/reco 的主题样式下正确渲染

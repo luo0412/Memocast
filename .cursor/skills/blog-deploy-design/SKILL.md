@@ -25,7 +25,7 @@ Memocast 提供"笔记 → blog 部署"功能：用户在 Memocast 里写笔记�
 | `scripts/blog/blog-config-writer.js` | 渲染端直接 require 的等价实现（与主进程版本同源） |
 | `src-electron/main-process/service/sftp-service.js` | `uploadDirectory` / `backupRemoteDir` / `testConnection` |
 | `src-electron/main-process/api.js` | IPC 入口：所有 `handleApi('start-blog-deploy' / 'export-blog-ci' / ...)` 都在这里 |
-| `src/components/ui/dialog/BlogDeployDialog.vue` | 部署弹框（Quasar），集合 github + sftp + theme + custom-build + base |
+| `src/components/ui/dialog/BlogDeployDialog.vue` | 部署弹框（Quasar），集合 github + sftp + **theme（default/vdoing/hope/reco）** + custom-build + base |
 | `src/store/server/actions.js` | 触发入口：`blogDeploy({ blogDir, githubConfig, theme, sftpConfig, customBuildCommand, base, notes, category })` |
 
 ## 2. 中间产物（在 `.vuepress/` 下）
@@ -122,7 +122,7 @@ Memocast 提供"笔记 → blog 部署"功能：用户在 Memocast 里写笔记�
 module.exports = {
   title: '<opts.title>',
   description: '<opts.description>',
-  theme: '<theme>',               // 'default' | 'vdoing'
+  theme: '<theme>',               // 'default' | 'vdoing' | 'hope' | 'reco'
   base: '<base>',                  // 含注释: `// memocast: base=<rawBase>`
   themeConfig: {
     nav: buildNav(),               // 而不是 require(nav.json)
@@ -135,6 +135,17 @@ module.exports = {
 
 **为什么** `nav = buildNav()` 而非 `require('./nav.json')`?
 答：vuepress 构建时 `require()` 会缓存,第一次 build 后 sidebar/nav.json 改了不会重读。即时执行确保每次构建拿到最新值。
+
+### 3.5 主题支持（default / vdoing / hope / reco）
+
+| 主题 | 包名 | VuePress 版本 | config.js 风格 | 特有字段 |
+|------|------|---------------|----------------|---------|
+| `default` | 无（内置） | vuepress@1.x | `module.exports = {}` | sidebar/nav 在 themeConfig |
+| `vdoing` | `vuepress-theme-vdoing@^1.5.0` | vuepress@1.x | `defineUserConfig` + `vdoingTheme({})` | 无额外配置 |
+| `hope` | `vuepress-theme-hope@^2.0.0` | vuepress@1.x | `defineUserConfig` + `hopeTheme({})` | navbar/sidebar 在主题配置内 |
+| `reco` | `vuepress-theme-reco@^1.6.0` | vuepress@1.x | `defineUserConfig` + `recoTheme({})` | darkmode/author |
+
+**注意**：hope/reco 主题的 `navbar`/`sidebar` 需要在主题构造函数内传入，而非 `themeConfig`。`sidebar-builder.js` / `nav-builder.js` 生成的 JSON 同样被 `require` 进 config.js 中使用。
 
 ## 4. base 规范化（用户容易踩的坑）
 

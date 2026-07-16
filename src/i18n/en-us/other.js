@@ -102,6 +102,8 @@ export default {
   blogTheme: 'Blog Theme',
   blogThemeDefault: 'VuePress Default',
   blogThemeVdoing: 'Vdoing Theme',
+  blogThemeHope: 'VuePress Theme Hope',
+  blogThemeReco: 'VuePress Theme Reco',
   blogThemeAutoDetectHint: 'Auto-detects theme type, or manually switch',
 
   // Deploy base path (VuePress publicPath)

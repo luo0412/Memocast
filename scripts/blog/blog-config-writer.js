@@ -342,7 +342,7 @@ async function replaceBaseInConfig (configPath, quotedBase, rawBaseForLog) {
  *      - 已存在 → 完全保留(用户手工编辑的 config.js 不被触碰)
  *
  * @param {string} blogDir
- * @param {string} theme 'default' | 'vdoing'
+ * @param {string} theme 'default' | 'vdoing' | 'hope' | 'reco'
  * @param {object} [opts]
  * @param {string} [opts.title]
  * @param {string} [opts.description]
@@ -372,7 +372,7 @@ async function writeVuepressConfig (blogDir, theme = 'default', opts = {}) {
         baseMode: result.mode
       }
     }
-    // config.js 还没有 → 落到下面 default 创建分支
+    // config.js 还没有 → 落到下面 theme 分支创建
   }
 
   if (fse.pathExistsSync(configPath)) {
@@ -381,7 +381,7 @@ async function writeVuepressConfig (blogDir, theme = 'default', opts = {}) {
       console.log('[blog-config-writer] config.js 已存在且弹框未传 base,保留原文件')
       return { action: 'kept', path: configPath }
     }
-    // 兜底：弹框传了 base 但走到这里(理论上不会发生)→ 再覆盖一次
+    // 兜底：弹框传了 base 但走到这里 → 再覆盖一次
     const result = await replaceBaseInConfig(configPath, quotedBase, rawBase)
     return {
       action: 'base-overwritten',
@@ -391,6 +391,81 @@ async function writeVuepressConfig (blogDir, theme = 'default', opts = {}) {
     }
   }
 
+  // —— theme 分支：hope / reco / vdoing / default ——
+  const baseLine = `${quotedBase || "'./'"}${quotedBase ? ` // memocast: base=${rawBase}` : ''}`
+
+  if (theme === 'hope') {
+    const content =
+`const { defineUserConfig } = require('vuepress')
+const { hopeTheme } = require('vuepress-theme-hope')
+
+module.exports = defineUserConfig({
+  base: ${baseLine}
+  dest: '.vuepress/dist',
+  head: [
+    ['link', { rel: 'icon', href: '/logo.png' }],
+    ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+  ],
+  theme: hopeTheme({
+    logo: '/logo.png',
+    darkMode: true,
+    navbar: require('./utils/nav-builder.js').buildNav(),
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar()
+  }),
+  markdown: { lineNumbers: true }
+})
+`
+    await fse.writeFile(configPath, content, 'utf-8')
+    return { action: 'created', path: configPath, baseInjected: quotedBase ? rawBase : undefined }
+  }
+
+  if (theme === 'reco') {
+    const content =
+`const { defineUserConfig } = require('vuepress')
+const { recoTheme } = require('vuepress-theme-reco')
+
+module.exports = defineUserConfig({
+  base: ${baseLine}
+  dest: '.vuepress/dist',
+  head: [
+    ['link', { rel: 'icon', href: '/logo.png' }],
+    ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+  ],
+  theme: recoTheme({
+    logo: '/logo.png',
+    darkmode: 'auto',
+    author: 'Author',
+    navbar: require('./utils/nav-builder.js').buildNav(),
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar()
+  }),
+  markdown: { lineNumbers: true }
+})
+`
+    await fse.writeFile(configPath, content, 'utf-8')
+    return { action: 'created', path: configPath, baseInjected: quotedBase ? rawBase : undefined }
+  }
+
+  if (theme === 'vdoing') {
+    const content =
+`const { defineUserConfig } = require('vuepress')
+const { vdoingTheme } = require('vuepress-theme-vdoing')
+
+module.exports = defineUserConfig({
+  base: ${baseLine}
+  dest: '.vuepress/dist',
+  head: [
+    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+  ],
+  theme: vdoingTheme({}),
+  markdown: { lineNumbers: true }
+})
+`
+    await fse.writeFile(configPath, content, 'utf-8')
+    return { action: 'created', path: configPath, baseInjected: quotedBase ? rawBase : undefined }
+  }
+
+  // default
   const content =
 `const path = require('path')
 const { buildSidebar } = require(path.join(__dirname, 'utils', 'sidebar-builder.js'))
@@ -399,8 +474,7 @@ const { buildNav }     = require(path.join(__dirname, 'utils', 'nav-builder.js')
 module.exports = {
   title: ${JSON.stringify(opts.title || 'My Blog')},
   description: ${JSON.stringify(opts.description || '')},
-  theme: ${JSON.stringify(theme)},
-  base: ${quotedBase || "'./'"},${quotedBase ? ` // memocast: base=${rawBase}` : ''}
+  base: ${baseLine}
   themeConfig: {
     nav: buildNav(),
     sidebar: buildSidebar(),

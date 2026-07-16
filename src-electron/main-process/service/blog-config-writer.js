@@ -255,6 +255,83 @@ async function writeVuepressConfig (blogDir, theme = 'default', opts = {}) {
   //  - lodash patch: 修复高版本 Node.js 下 VuePress 1.x 编译时 lodash 各种未定义
   //  - base: './': 相对路径, github-pages 不需要 repo 子路径
   //  - 即时调用 buildSidebar()/buildNav(): 第一次构建就能拿到值
+
+  // hope/reco 主题用 defineUserConfig 风格
+  if (theme === 'hope') {
+    const content =
+`const { defineUserConfig } = require('vuepress')
+const { hopeTheme } = require('vuepress-theme-hope')
+
+module.exports = defineUserConfig({
+  base: './',
+  dest: '.vuepress/dist',
+  head: [
+    ['link', { rel: 'icon', href: './favicon.ico' }],
+    ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+  ],
+  theme: hopeTheme({
+    logo: '/logo.png',
+    darkMode: true,
+    navbar: require('./utils/nav-builder.js').buildNav(),
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar()
+  }),
+  markdown: { lineNumbers: true }
+})
+`
+    await fse.writeFile(dest, content, 'utf-8')
+    console.log('[blog-config-writer] wrote hope config.js ->', dest)
+    return dest
+  }
+
+  if (theme === 'reco') {
+    const content =
+`const { defineUserConfig } = require('vuepress')
+const { recoTheme } = require('vuepress-theme-reco')
+
+module.exports = defineUserConfig({
+  base: './',
+  dest: '.vuepress/dist',
+  head: [
+    ['link', { rel: 'icon', href: './favicon.ico' }],
+    ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+  ],
+  theme: recoTheme({
+    logo: '/logo.png',
+    darkmode: 'auto',
+    author: 'Author',
+    navbar: require('./utils/nav-builder.js').buildNav(),
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar()
+  }),
+  markdown: { lineNumbers: true }
+})
+`
+    await fse.writeFile(dest, content, 'utf-8')
+    console.log('[blog-config-writer] wrote reco config.js ->', dest)
+    return dest
+  }
+
+  if (theme === 'vdoing') {
+    const content =
+`const { defineUserConfig } = require('vuepress')
+const { vdoingTheme } = require('vuepress-theme-vdoing')
+
+module.exports = defineUserConfig({
+  base: './',
+  dest: '.vuepress/dist',
+  head: [
+    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
+  ],
+  theme: vdoingTheme({}),
+  markdown: { lineNumbers: true }
+})
+`
+    await fse.writeFile(dest, content, 'utf-8')
+    console.log('[blog-config-writer] wrote vdoing config.js ->', dest)
+    return dest
+  }
+
+  // default 主题
   const content =
 `// 修复高版本 Node.js 下 VuePress 1.x 编译时 lodash 各种未定义 (assignWith, arrayEach 等) 的 Bug
 if (typeof global !== 'undefined') {
