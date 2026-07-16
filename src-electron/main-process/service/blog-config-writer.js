@@ -256,25 +256,24 @@ async function writeVuepressConfig (blogDir, theme = 'default', opts = {}) {
   //  - base: './': 相对路径, github-pages 不需要 repo 子路径
   //  - 即时调用 buildSidebar()/buildNav(): 第一次构建就能拿到值
 
-  // hope/reco 主题用 defineUserConfig 风格
+  // vuepress-theme-hope@1.x 用 config()
   if (theme === 'hope') {
     const content =
-`const { defineUserConfig } = require('vuepress')
-const { hopeTheme } = require('vuepress-theme-hope')
+`const { config } = require('vuepress-theme-hope')
 
-module.exports = defineUserConfig({
+module.exports = config({
   base: './',
   dest: '.vuepress/dist',
   head: [
     ['link', { rel: 'icon', href: './favicon.ico' }],
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
-  theme: hopeTheme({
+  themeConfig: {
     logo: '/logo.png',
     darkMode: true,
     navbar: require('./utils/nav-builder.js').buildNav(),
     sidebar: require('./utils/sidebar-builder.js').buildSidebar()
-  }),
+  },
   markdown: { lineNumbers: true }
 })
 `
@@ -283,48 +282,45 @@ module.exports = defineUserConfig({
     return dest
   }
 
+  // vuepress-theme-reco@1.x 直接用 theme: 'reco'
   if (theme === 'reco') {
     const content =
-`const { defineUserConfig } = require('vuepress')
-const { recoTheme } = require('vuepress-theme-reco')
-
-module.exports = defineUserConfig({
+`module.exports = {
   base: './',
   dest: '.vuepress/dist',
   head: [
     ['link', { rel: 'icon', href: './favicon.ico' }],
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
-  theme: recoTheme({
+  theme: 'reco',
+  themeConfig: {
     logo: '/logo.png',
     darkmode: 'auto',
     author: 'Author',
     navbar: require('./utils/nav-builder.js').buildNav(),
     sidebar: require('./utils/sidebar-builder.js').buildSidebar()
-  }),
+  },
   markdown: { lineNumbers: true }
-})
+}
 `
     await fse.writeFile(dest, content, 'utf-8')
     console.log('[blog-config-writer] wrote reco config.js ->', dest)
     return dest
   }
 
+  // vuepress-theme-vdoing@1.x 直接用 theme: 'vdoing'
   if (theme === 'vdoing') {
     const content =
-`const { defineUserConfig } = require('vuepress')
-const { vdoingTheme } = require('vuepress-theme-vdoing')
-
-module.exports = defineUserConfig({
+`module.exports = {
   base: './',
   dest: '.vuepress/dist',
   head: [
     ['link', { rel: 'icon', href: '/favicon.ico' }],
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
-  theme: vdoingTheme({}),
+  theme: 'vdoing',
   markdown: { lineNumbers: true }
-})
+}
 `
     await fse.writeFile(dest, content, 'utf-8')
     console.log('[blog-config-writer] wrote vdoing config.js ->', dest)

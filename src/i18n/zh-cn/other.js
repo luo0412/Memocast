@@ -112,9 +112,13 @@ export default {
   blogBasePathInvalid: '必须以 / 开头,或为 ./ 或 ../',
 
   // 自定义构建命令
-  customBuildCommand: '自定义构建命令',
-  customBuildCommandPlaceholder: 'node "node_modules/vuepress/cli.js" build',
-  customBuildCommandHint: '留空则使用默认命令，设置了则优先使用此命令构建',
+  customBuildCommand: '构建命令',
+  customBuildCommandPlaceholder: 'npm run build',
+  customBuildCommandHint: '根据包管理器自动生成，也可手动修改',
+
+  // 包管理器
+  packageManager: '包管理器',
+  packageManagerHint: '用于安装依赖和运行构建命令。yarn 在 Windows 上通常更快',
 
   // SFTP 部署
   sftpDeployOptional: '（可选）SFTP 上传到服务器',

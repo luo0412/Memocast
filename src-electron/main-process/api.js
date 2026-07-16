@@ -342,10 +342,10 @@ export default {
     /**
      * Blog Deploy: start build + GitHub trigger
      */
-    handleApi('start-blog-deploy', async (e, { blogDir, githubConfig, theme, sftpConfig, customBuildCommand, base }) => {
+    handleApi('start-blog-deploy', async (e, { blogDir, githubConfig, theme, sftpConfig, customBuildCommand, base, packageManager }) => {
       const normalizedBase = normalizeBase(base)
       const { execBlogBuild } = require('./service/blog-deploy-handler')
-      return execBlogBuild(blogDir, githubConfig, e, theme, sftpConfig, customBuildCommand, normalizedBase)
+      return execBlogBuild(blogDir, githubConfig, e, theme, sftpConfig, customBuildCommand, normalizedBase, packageManager)
     }).catch(err => throw err)
 
     /**

@@ -2553,7 +2553,8 @@ export default {
         githubConfig: config.github,
         sftpConfig: config.sftp,
         customBuildCommand: config.customBuildCommand,
-        base: config.base
+        base: config.base,
+        packageManager: config.packageManager
       })
 
       if (result.error) {

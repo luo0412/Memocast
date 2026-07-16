@@ -113,7 +113,9 @@ export default {
   blogBasePathHint: 'Maps to VuePress `base`. If the blog directory already has a config.js with `base`, it is preserved and NOT overwritten; the value here is only injected when missing.',
   blogBasePathInvalid: 'Must start with /, or be ./ or ../',
 
-  // SFTP Deploy
+  // Package manager
+  packageManager: 'Package Manager',
+  packageManagerHint: 'Used to install dependencies and run build commands. yarn is usually faster on Windows.',
   sftpDeployOptional: '(Optional) SFTP Upload to Server',
   sftpDeploy: 'SFTP Deploy',
   sftpEnabled: 'Enable SFTP Upload',

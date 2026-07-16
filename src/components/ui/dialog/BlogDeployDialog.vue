@@ -76,7 +76,29 @@
           </div>
         </div>
 
-        <!-- 自定义构建命令（可选） -->
+        <!-- 包管理器 -->
+        <div class="config-section q-mt-md">
+          <div class="text-body2 text-weight-medium q-mb-xs config-label">
+            {{ $t('packageManager') }}
+          </div>
+          <q-btn-toggle
+            v-model="localConfig.packageManager"
+            toggle-color="primary"
+            :options="[
+              { label: 'npm', value: 'npm' },
+              { label: 'yarn', value: 'yarn' },
+              { label: 'pnpm', value: 'pnpm' }
+            ]"
+            unelevated
+            no-caps
+            class="package-manager-toggle"
+          />
+          <div class="text-caption text-grey-6 q-mt-xs">
+            {{ $t('packageManagerHint') }}
+          </div>
+        </div>
+
+        <!-- 自定义构建命令（基于包管理器自动生成，可手动调整） -->
         <div class="config-section q-mt-md">
           <div class="text-body2 text-weight-medium q-mb-xs config-label">
             {{ $t('customBuildCommand') }}
@@ -335,6 +357,7 @@ export default {
         blogDir: '',
         theme: 'default',
         base: './',
+        packageManager: 'npm',
         customBuildCommand: 'npm run build',
         github: {
           owner: '',
@@ -374,6 +397,16 @@ export default {
       ]
     }
   },
+  watch: {
+    'localConfig.packageManager' (pm) {
+      // 自动把 customBuildCommand 从旧 pm 前缀改成新前缀（仅当用户还没改过时）
+      const oldPms = ['npm', 'yarn', 'pnpm']
+      const oldPrefix = oldPms.find(p => this.localConfig.customBuildCommand.startsWith(p + ' run'))
+      if (oldPrefix && oldPrefix !== pm) {
+        this.localConfig.customBuildCommand = pm + this.localConfig.customBuildCommand.slice(oldPrefix.length)
+      }
+    }
+  },
   async mounted () {
     await this.loadConfig()
   },
@@ -382,12 +415,14 @@ export default {
       try {
         const config = await getBlogDeployConfig()
         if (config) {
-          this.localConfig = {
-            blogDir: config.blogDir || '',
-            theme: config.theme || 'default',
-            base: typeof config.base === 'string' ? config.base : './',
-            customBuildCommand: config.customBuildCommand || 'npm run build',
-            github: {
+        const defaultCmd = (config.packageManager || 'npm') + ' run build'
+        this.localConfig = {
+          blogDir: config.blogDir || '',
+          theme: config.theme || 'default',
+          base: typeof config.base === 'string' ? config.base : './',
+          packageManager: config.packageManager || 'npm',
+          customBuildCommand: config.customBuildCommand || defaultCmd,
+          github: {
               owner: config.github?.owner || '',
               repo: config.github?.repo || '',
               workflowId: config.github?.workflowId || '',
@@ -609,6 +644,12 @@ code {
   margin-top: 4px;
 }
 
+.package-manager-toggle {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
 .theme-toggle {
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 6px;
@@ -631,7 +672,8 @@ code {
   padding: 12px 0;
 }
 
-.body--dark .theme-toggle {
+.body--dark .theme-toggle,
+.body--dark .package-manager-toggle {
   border-color: rgba(255, 255, 255, 0.12);
 }
 

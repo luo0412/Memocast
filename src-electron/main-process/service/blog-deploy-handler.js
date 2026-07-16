@@ -389,19 +389,18 @@ async function ensureBlogConfig (blogDir, theme = 'default', opts = {}) {
       return { action: 'kept', path: configPath }
     }
     const vdoingConfigContent = `// vdoing 主题配置
-const { defineUserConfig } = require('vuepress')
-const { vdoingTheme } = require('vuepress-theme-vdoing')
+// vuepress-theme-vdoing@1.x 直接使用 theme: 'vdoing'
 
-module.exports = defineUserConfig({
+module.exports = {
   base: ${baseInput || "'./'"},${baseInput ? ` // memocast: base=${rawBase}` : ''}
   dest: '.vuepress/dist',
   head: [
     ['link', { rel: 'icon', href: './favicon.ico' }],
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
-  theme: vdoingTheme({}),
+  theme: 'vdoing',
   markdown: { lineNumbers: true }
-})
+}
 `
     await fs.writeFile(configPath, vdoingConfigContent)
     console.log('[BlogDeploy] Generated vdoing theme config.js (base=%s)', baseInput ? rawBase : './')
@@ -418,23 +417,22 @@ module.exports = defineUserConfig({
       return { action: 'kept', path: configPath }
     }
     const hopeConfigContent = `// VuePress Theme Hope 配置
-const { defineUserConfig } = require('vuepress')
-const { hopeTheme } = require('vuepress-theme-hope')
+const { config } = require('vuepress-theme-hope')
 
-module.exports = defineUserConfig({
+module.exports = config({
   base: ${baseInput || "'./'"},${baseInput ? ` // memocast: base=${rawBase}` : ''}
   dest: '.vuepress/dist',
   head: [
     ['link', { rel: 'icon', href: './favicon.ico' }],
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
-  theme: hopeTheme({
+  themeConfig: {
     logo: './logo.png',
     darkMode: true,
     socialLinks: { github: 'https://github.com' },
     navbar: require('./utils/nav-builder.js').buildNav(),
     sidebar: require('./utils/sidebar-builder.js').buildSidebar()
-  }),
+  },
   markdown: {
     lineNumbers: true,
     extractTitleLevel: [2, 3, 4]
@@ -456,28 +454,28 @@ module.exports = defineUserConfig({
       return { action: 'kept', path: configPath }
     }
     const recoConfigContent = `// VuePress Theme Reco 配置
-const { defineUserConfig } = require('vuepress')
-const { recoTheme } = require('vuepress-theme-reco')
+// vuepress-theme-reco@1.x 直接使用 theme: 'reco'，无需 require
 
-module.exports = defineUserConfig({
+module.exports = {
   base: ${baseInput || "'./'"},${baseInput ? ` // memocast: base=${rawBase}` : ''}
   dest: '.vuepress/dist',
   head: [
     ['link', { rel: 'icon', href: './favicon.ico' }],
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
-  theme: recoTheme({
+  theme: 'reco',
+  themeConfig: {
     logo: './logo.png',
     darkmode: 'auto',
     author: 'Author',
     authorAvatar: './avatar.png',
     navbar: require('./utils/nav-builder.js').buildNav(),
     sidebar: require('./utils/sidebar-builder.js').buildSidebar()
-  }),
+  },
   markdown: {
     lineNumbers: true
   }
-})
+}
 `
     await fs.writeFile(configPath, recoConfigContent)
     console.log('[BlogDeploy] Generated reco theme config.js (base=%s)', baseInput ? rawBase : './')
@@ -649,7 +647,7 @@ function detectBlogTheme (blogDir) {
   return 'default'
 }
 
-async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpConfig, customBuildCommand, baseOverride) {
+async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpConfig, customBuildCommand, baseOverride, packageManager) {
   cancelled = false
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win) return { error: 'No window' }
@@ -843,18 +841,19 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     const vuepressBinCmd = path.join(blogDir, 'node_modules', '.bin', isWin ? 'vuepress.cmd' : 'vuepress')
     const vuepressBinCmdExists = fs.existsSync(vuepressBinCmd)
     const needInstall = !fs.existsSync(blogNodeModules) || (!vuepressBinExists && !vuepressBinCmdExists)
+    const pm = packageManager || 'npm'
 
     if (needInstall || customBuildCommand) {
-      sendProgress(webContents, 'build', 'Installing dependencies...', 40)
-      const installResult = await runNpmInstall(blogDir, (msg) => {
+      sendProgress(webContents, 'build', `Installing dependencies (${pm})...`, 40)
+      const installResult = await runNpmInstall(blogDir, pm, (msg) => {
         sendProgress(webContents, 'build', msg, 45)
       })
 
       if (installResult.error) {
-        console.error('[BlogDeploy] npm install failed:', installResult.error)
+        console.error(`[BlogDeploy] ${pm} install failed:`, installResult.error)
         return { error: installResult.error }
       }
-      console.log('[BlogDeploy] npm install completed')
+      console.log(`[BlogDeploy] ${pm} install completed`)
 
       // install 完成后再次确认 vuepress 可用
       const afterBin = path.join(blogDir, 'node_modules', 'vuepress', 'cli.js')
@@ -887,7 +886,7 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
         return { error: errorMsg }
       }
       
-      buildResult = await runVuepressBuild(blogDir, vuepressBin, (msg) => {
+      buildResult = await runVuepressBuild(blogDir, vuepressBin, pm, (msg) => {
         sendProgress(webContents, 'build', msg, 60)
       })
     }
@@ -956,13 +955,14 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
   }
 }
 
-function runVuepressBuild (blogDir, vuepressBin, onProgress) {
+function runVuepressBuild (blogDir, vuepressBin, packageManager, onProgress) {
   return new Promise((resolve) => {
-    // 使用 npm run build 来利用 package.json 中的 NODE_OPTIONS 设置
-    const cmd = `npm run build`
-    console.log('[BlogDeploy] Running via cmd.exe:', cmd)
+    // 根据用户选择的包管理器执行构建命令
+    const pm = packageManager || 'npm'
+    const buildScript = pm === 'npm' ? 'npm run build' : `${pm} run build`
+    console.log(`[BlogDeploy] Running via ${pm}:`, buildScript)
 
-    const child = spawn('cmd.exe', ['/c', cmd], {
+    const child = spawn('cmd.exe', ['/c', buildScript], {
       cwd: blogDir,
       shell: false,
       windowsHide: true,
@@ -1007,29 +1007,45 @@ function runVuepressBuild (blogDir, vuepressBin, onProgress) {
 }
 
 /**
- * 执行 npm install
+ * 执行包安装（支持 npm / yarn / pnpm）
  * @param {string} blogDir - 博客目录
+ * @param {string} packageManager - 'npm' | 'yarn' | 'pnpm'
  * @param {function} onProgress - 进度回调
  */
-function runNpmInstall (blogDir, onProgress) {
+function runNpmInstall (blogDir, packageManager, onProgress) {
   return new Promise((resolve) => {
-    console.log('[BlogDeploy] Cleaning npm cache and running npm install in:', blogDir)
+    const pm = packageManager || 'npm'
+    console.log(`[BlogDeploy] Installing dependencies with ${pm} in:`, blogDir)
 
-    // 先清理 npm cache（避免 cache 污染导致包解压损坏）
-    const cleanChild = spawn('cmd.exe', ['/c', 'npm cache clean --force'], {
-      cwd: blogDir,
-      shell: false,
-      windowsHide: true,
-      env: { ...process.env }
-    })
+    // yarn / pnpm 不需要 --include=dev，默认行为一致；npm 需要显式覆盖全局 --omit=dev
+    const installCmd = pm === 'npm'
+      ? 'npm install --include=dev --loglevel=info'
+      : `${pm} install --loglevel=info`
 
-    let stderr = ''
+    // npm cache clean 仅 npm 需要；yarn / pnpm 用各自缓存机制
+    if (pm === 'npm') {
+      const cleanChild = spawn('cmd.exe', ['/c', 'npm cache clean --force'], {
+        cwd: blogDir,
+        shell: false,
+        windowsHide: true,
+        env: { ...process.env }
+      })
 
-    cleanChild.on('close', (code) => {
-      console.log('[BlogDeploy] npm cache clean exited with code:', code)
+      cleanChild.on('close', (code) => {
+        console.log('[BlogDeploy] npm cache clean exited with code:', code)
+        doInstall()
+      })
 
-      // cache 清理完成后执行 install
-      const installChild = spawn('cmd.exe', ['/c', 'npm install'], {
+      cleanChild.on('error', (err) => {
+        console.warn('[BlogDeploy] npm cache clean failed, continuing anyway:', err.message)
+        doInstall()
+      })
+    } else {
+      doInstall()
+    }
+
+    function doInstall () {
+      const installChild = spawn('cmd.exe', ['/c', installCmd], {
         cwd: blogDir,
         shell: false,
         windowsHide: true,
@@ -1037,10 +1053,11 @@ function runNpmInstall (blogDir, onProgress) {
       })
 
       currentProcess = installChild
+      let stderr = ''
 
       installChild.stderr.on('data', (data) => {
         stderr += data.toString()
-        console.error('[NpmInstall stderr]:', data.toString())
+        console.error(`[${pm}Install stderr]:`, data.toString())
       })
 
       installChild.stdout.on('data', (data) => {
@@ -1051,6 +1068,7 @@ function runNpmInstall (blogDir, onProgress) {
       })
 
       installChild.on('close', (code) => {
+        currentProcess = null
         if (cancelled) {
           resolve({ error: 'cancelled' })
         } else if (code === 0) {
@@ -1065,11 +1083,7 @@ function runNpmInstall (blogDir, onProgress) {
         currentProcess = null
         resolve({ error: err.message })
       })
-    })
-
-    cleanChild.on('error', (err) => {
-      resolve({ error: 'npm cache clean failed: ' + err.message })
-    })
+    }
   })
 }
 
