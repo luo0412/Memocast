@@ -761,9 +761,9 @@ function buildBlogPackageJson (theme = 'default') {
   if (isVdoing) {
     packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
   } else if (isHope) {
-    packageJson.dependencies['vuepress-theme-hope'] = '^2.0.0'
+    packageJson.dependencies['vuepress-theme-hope'] = '^1.31.0'
   } else if (isReco) {
-    packageJson.dependencies['vuepress-theme-reco'] = '^1.6.0'
+    packageJson.dependencies['vuepress-theme-reco'] = '^1.6.17'
   }
 
   return packageJson
@@ -936,9 +936,9 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
       if (isVdoing) {
         packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
       } else if (isHope) {
-        packageJson.dependencies['vuepress-theme-hope'] = '^2.0.0'
+        packageJson.dependencies['vuepress-theme-hope'] = '^1.31.0'
       } else if (isReco) {
-        packageJson.dependencies['vuepress-theme-reco'] = '^1.6.0'
+        packageJson.dependencies['vuepress-theme-reco'] = '^1.6.17'
       }
       fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))
     } else if (!existingPkg) {
@@ -964,9 +964,9 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
       if (isVdoing) {
         packageJson.dependencies['vuepress-theme-vdoing'] = '^1.5.0'
       } else if (isHope) {
-        packageJson.dependencies['vuepress-theme-hope'] = '^2.0.0'
+        packageJson.dependencies['vuepress-theme-hope'] = '^1.31.0'
       } else if (isReco) {
-        packageJson.dependencies['vuepress-theme-reco'] = '^1.6.0'
+        packageJson.dependencies['vuepress-theme-reco'] = '^1.6.17'
       }
 
       fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))

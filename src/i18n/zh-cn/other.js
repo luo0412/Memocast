@@ -98,10 +98,10 @@ export default {
   rebuild: '重新打包',
   deployNow: '立即部署',
   blogTheme: '博客主题',
-  blogThemeDefault: 'VuePress 原生',
-  blogThemeVdoing: 'Vdoing 主题',
-  blogThemeHope: 'VuePress Theme Hope',
-  blogThemeReco: 'VuePress Theme Reco',
+  blogThemeDefault: '默认',
+  blogThemeVdoing: 'Vdoing',
+  blogThemeHope: 'Hope',
+  blogThemeReco: 'Reco',
   blogThemeAutoDetectHint: '自动检测目录主题类型，也可手动切换',
 
   // 部署 base 路径（VuePress publicPath）
