@@ -269,12 +269,29 @@ module.exports = config({
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
   themeConfig: {
-    logo: '/logo.png',
-    darkMode: true,
+    logo: './logo.png',
+    hostname: 'https://example.com',
+    author: 'Author',
+    darkmode: 'auto',
     navbar: require('./utils/nav-builder.js').buildNav(),
-    sidebar: require('./utils/sidebar-builder.js').buildSidebar()
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar(),
+    sidebarDepth: 2,
+    blog: {
+      name: 'Author',
+      avatar: './avatar.png',
+      links: { github: 'https://github.com' },
+      roundAvatar: true,
+      sidebarDisplay: 'always',
+      perPage: 10,
+      autoExcerpt: true
+    }
   },
-  markdown: { lineNumbers: true }
+  markdown: { lineNumbers: true, extractTitleLevel: [2, 3, 4] },
+  plugins: {
+    readingTime: true,
+    copyCode: true,
+    photoSwipe: true
+  }
 })
 `
     await fse.writeFile(dest, content, 'utf-8')
@@ -294,11 +311,19 @@ module.exports = config({
   ],
   theme: 'reco',
   themeConfig: {
-    logo: '/logo.png',
-    darkmode: 'auto',
+    type: 'blog',
+    logo: './logo.png',
     author: 'Author',
+    authorAvatar: './avatar.png',
+    darkmode: 'auto',
     navbar: require('./utils/nav-builder.js').buildNav(),
-    sidebar: require('./utils/sidebar-builder.js').buildSidebar()
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar(),
+    blogConfig: {
+      category: { location: 2, text: '分类' },
+      tag: { location: 3, text: '标签' },
+      socialLinks: [{ icon: 'reco-github', link: 'https://github.com' }]
+    },
+    socialLinks: { github: 'https://github.com' }
   },
   markdown: { lineNumbers: true }
 }
@@ -315,11 +340,30 @@ module.exports = config({
   base: './',
   dest: '.vuepress/dist',
   head: [
-    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['link', { rel: 'icon', href: './favicon.ico' }],
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
   theme: 'vdoing',
-  markdown: { lineNumbers: true }
+  themeConfig: {
+    logo: './logo.png',
+    authorAvatar: './avatar.png',
+    darkmode: 'auto',
+    defaultMode: 'auto',
+    pageStyle: 'card',
+    updateBar: { showToArticle: true, moreArticle: '/archives' },
+    rightMenuBar: true,
+    sidebarOpen: true,
+    pageButton: true,
+    category: true,
+    tag: true,
+    archive: true,
+    categoryText: '随笔',
+    socialLinks: { github: 'https://github.com' },
+    nav: require('./utils/nav-builder.js').buildNav(),
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar(),
+    sidebarDepth: 2
+  },
+  markdown: { lineNumbers: true, extractTitleLevel: [2, 3, 4] }
 }
 `
     await fse.writeFile(dest, content, 'utf-8')

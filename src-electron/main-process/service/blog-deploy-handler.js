@@ -343,7 +343,7 @@ function quoteBase (base) {
  * 注释同步：替换/插入时附加 `// memocast: base=<值>`,便于用户在编辑器里看到是谁改的。
  *
  * @param {string} blogDir
- * @param {string} theme 'default' | 'vdoing'
+ * @param {string} theme 'default' | 'vdoing' | 'hope' | 'reco'
  * @param {object} [opts]
  * @param {string} [opts.base] 用户在弹框里输入的 base；空串视为"不强制"
  * @returns {Promise<{action: 'kept'|'created'|'base-overwritten'|'base-injected'|'theme-changed', path: string, baseInjected?: string, baseMode?: string, themeAction?: string}>}
@@ -392,8 +392,9 @@ async function ensureBlogConfig (blogDir, theme = 'default', opts = {}) {
       }
       console.log('[BlogDeploy] Theme changed (%s → vdoing), overriding config.js', currentTheme || 'unknown')
     }
-    const vdoingConfigContent = `// vdoing 主题配置
-// vuepress-theme-vdoing@1.x 直接使用 theme: 'vdoing'
+    const vdoingConfigContent = `// vuepress-theme-vdoing 配置 —— 知识库+博客主题
+// https://github.com/xugaoyi/vuepress-theme-vdoing
+// 本文件由 Memocast 自动生成，重新选择主题时会覆盖
 
 module.exports = {
   base: ${baseInput || "'./'"},${baseInput ? ` // memocast: base=${rawBase}` : ''}
@@ -403,7 +404,57 @@ module.exports = {
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
   theme: 'vdoing',
-  markdown: { lineNumbers: true }
+  themeConfig: {
+    // 导航栏
+    nav: require('./utils/nav-builder.js').buildNav(),
+    // 侧边栏（自动从笔记目录生成）
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar(),
+    sidebarDepth: 2,
+
+    // —— 博客功能（vdoing 特色）——
+    // 打开分类功能（默认 true，可不写）
+    category: true,
+    // 打开标签功能（默认 true，可不写）
+    tag: true,
+    // 打开归档功能（默认 true，可不写）
+    archive: true,
+    // 分类页预设生成的分类值（_posts 文件夹文章默认分类）
+    categoryText: '随笔',
+
+    // 深色模式：'auto' 跟随系统 | 'light' | 'dark' | 'read' 阅读模式
+    darkmode: 'auto',
+    // 默认外观模式（用户未手动修改过才生效）
+    defaultMode: 'auto',
+
+    // 页面风格：'card' 卡片 | 'line' 线条
+    pageStyle: 'card',
+
+    // 最近更新栏
+    updateBar: {
+      showToArticle: true,
+      moreArticle: '/archives'
+    },
+    // 右侧文章大纲栏（屏宽 < 1300px 自动隐藏）
+    rightMenuBar: true,
+    // 初始状态是否打开左侧边栏
+    sidebarOpen: true,
+    // 是否显示快捷翻页按钮
+    pageButton: true,
+
+    // logo 与头像
+    logo: './logo.png',
+    // 博主信息（可填 GitHub 主页）
+    authorAvatar: './avatar.png',
+
+    // 社交链接
+    socialLinks: { github: 'https://github.com' }
+  },
+  markdown: {
+    lineNumbers: true,
+    // 支持官方 Markdown 增强插件语法
+    extractTitleLevel: [2, 3, 4]
+  },
+  // vdoing 内置代码复制按钮，无需额外插件
 }
 `
     await fs.writeFile(configPath, vdoingConfigContent)
@@ -424,7 +475,10 @@ module.exports = {
       }
       console.log('[BlogDeploy] Theme changed (%s → hope), overriding config.js', currentTheme || 'unknown')
     }
-    const hopeConfigContent = `// VuePress Theme Hope 配置
+    const hopeConfigContent = `// vuepress-theme-hope 配置 —— 功能丰富的文档+博客主题
+// https://github.com/vuepress-theme-hope/vuepress-theme-hope
+// 本文件由 Memocast 自动生成，重新选择主题时会覆盖
+
 const { config } = require('vuepress-theme-hope')
 
 module.exports = config({
@@ -435,15 +489,57 @@ module.exports = config({
     ['meta', { name: 'viewport', content: 'width=device-width,initial-scale=1' }]
   ],
   themeConfig: {
+    // 基本信息
     logo: './logo.png',
-    darkMode: true,
-    socialLinks: { github: 'https://github.com' },
+    // 站点域名（SEO 和 sitemap 必需）
+    hostname: 'https://example.com',
+    author: 'Author',
+
+    // 深色模式：'auto' 跟随系统 | 'switch' 用户手动切换
+    darkmode: 'auto',
+
+    // 导航栏
     navbar: require('./utils/nav-builder.js').buildNav(),
-    sidebar: require('./utils/sidebar-builder.js').buildSidebar()
+    // 侧边栏
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar(),
+    sidebarDepth: 2,
+
+    // —— 博客功能（hope 特色）——
+    blog: {
+      // 博主名称（默认取 author）
+      name: 'Author',
+      // 头像（默认取 logo）
+      avatar: './avatar.png',
+      // 个人介绍页地址
+      intro: '/about.html',
+      // 社交链接
+      links: {
+        github: 'https://github.com'
+      },
+      // 头像是否圆形裁剪
+      roundAvatar: true,
+      // 博客信息侧栏显示策略：'mobile' | 'none' | 'always'
+      sidebarDisplay: 'always',
+      // 时间线页顶部文案
+      timeline: 'Yesterday once more',
+      // 每页文章数
+      perPage: 10,
+      // 自动生成摘要
+      autoExcerpt: true
+    }
   },
   markdown: {
     lineNumbers: true,
     extractTitleLevel: [2, 3, 4]
+  },
+  // 插件配置（hope 内置大量插件，可按需启用）
+  plugins: {
+    // 阅读时间统计
+    readingTime: true,
+    // 代码复制按钮
+    copyCode: true,
+    // 图片预览（点击图片放大）
+    photoSwipe: true
   }
 })
 `
@@ -465,8 +561,9 @@ module.exports = config({
       }
       console.log('[BlogDeploy] Theme changed (%s → reco), overriding config.js', currentTheme || 'unknown')
     }
-    const recoConfigContent = `// VuePress Theme Reco 配置
-// vuepress-theme-reco@1.x 直接使用 theme: 'reco'，无需 require
+    const recoConfigContent = `// vuepress-theme-reco 配置 —— 简洁博客主题
+// https://github.com/vuepress-reco/vuepress-theme-reco-1.x
+// 本文件由 Memocast 自动生成，重新选择主题时会覆盖
 
 module.exports = {
   base: ${baseInput || "'./'"},${baseInput ? ` // memocast: base=${rawBase}` : ''}
@@ -477,16 +574,62 @@ module.exports = {
   ],
   theme: 'reco',
   themeConfig: {
+    // 博客模式主页（带文章列表）
+    type: 'blog',
+
+    // 导航栏
     logo: './logo.png',
-    darkmode: 'auto',
+    // 博主昵称（可配合 Valine 评论显示作者）
     author: 'Author',
+    // 博主头像（右侧信息栏）
     authorAvatar: './avatar.png',
+    // 深色模式：'auto' | 'light' | 'dark'
+    darkmode: 'auto',
+    // 导航栏
     navbar: require('./utils/nav-builder.js').buildNav(),
-    sidebar: require('./utils/sidebar-builder.js').buildSidebar()
+    // 侧边栏
+    sidebar: require('./utils/sidebar-builder.js').buildSidebar(),
+
+    // —— 博客配置（reco 特色）——
+    blogConfig: {
+      category: {
+        location: 2,     // 在导航栏菜单中所占的位置
+        text: '分类'     // 导航栏文字
+      },
+      tag: {
+        location: 3,     // 在导航栏菜单中所占的位置
+        text: '标签'     // 导航栏文字
+      },
+      // 社交信息（显示在右侧信息栏）
+      socialLinks: [
+        { icon: 'reco-github', link: 'https://github.com' }
+      ]
+    },
+
+    // 友链（可选）
+    // friendLink: [
+    //   {
+    //     title: '博客名称',
+    //     desc: '博客描述',
+    //     avatar: 'http://example.com/avatar.png',
+    //     link: 'https://example.com'
+    //   }
+    // ],
+
+    // 社交链接（顶部）
+    socialLinks: { github: 'https://github.com' }
   },
   markdown: {
     lineNumbers: true
-  }
+  },
+  // reco 内置代码复制按钮，无需额外插件
+  plugins: [
+    // Valine 评论（需自行注册 https://valine.js.org）
+    // ['vuepress-plugin-valine', {
+    //   appId: 'YOUR_APP_ID',
+    //   appKey: 'YOUR_APP_KEY'
+    // }]
+  ]
 }
 `
     await fs.writeFile(configPath, recoConfigContent)
