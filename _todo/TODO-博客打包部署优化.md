@@ -195,12 +195,12 @@ Memocast/
 | `scripts/blog/blog-config-writer.js` | writeVuepressConfig 同上 |
 | `.cursor/skills/blog-deploy-design/SKILL.md` | 文档更新 §3.5 主题支持表格 |
 
-### 各主题 config.js 风格
+### 各主题 config.js 风格（2026-07-16 修正：v1 API 与 v2 完全不兼容）
 
 - **default**: `module.exports = {}` + `themeConfig.sidebar/nav`
-- **vdoing**: `defineUserConfig` + `vdoingTheme({})`
-- **hope**: `defineUserConfig` + `hopeTheme({ navbar, sidebar })` — sidebar/nav 需传入主题构造
-- **reco**: `defineUserConfig` + `recoTheme({ darkmode, author, navbar, sidebar })`
+- **vdoing**: `module.exports = { theme: 'vdoing' }`（不要用 `vdoingTheme({})`）
+- **hope**: `const { config } = require('vuepress-theme-hope'); config({ ... themeConfig: { navbar, sidebar } })`（不要用 `defineUserConfig` + `hopeTheme`）
+- **reco**: `module.exports = { theme: 'reco', themeConfig: { ... } }`（不要用 `defineUserConfig` + `recoTheme`）
 
 ### 待验证
 

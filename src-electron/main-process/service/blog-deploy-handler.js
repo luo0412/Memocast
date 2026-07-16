@@ -648,6 +648,14 @@ function detectBlogTheme (blogDir) {
 }
 
 async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpConfig, customBuildCommand, baseOverride, packageManager) {
+  // —— 防御性守卫 —— 
+  if (!blogDir || typeof blogDir !== 'string') {
+    console.error('[BlogDeploy] blogDir is missing or invalid:', blogDir)
+    return { error: 'blogDir is required' }
+  }
+  const validPms = ['npm', 'yarn', 'pnpm']
+  const pm = validPms.includes(packageManager) ? packageManager : 'npm'
+
   cancelled = false
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win) return { error: 'No window' }
@@ -841,7 +849,6 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
     const vuepressBinCmd = path.join(blogDir, 'node_modules', '.bin', isWin ? 'vuepress.cmd' : 'vuepress')
     const vuepressBinCmdExists = fs.existsSync(vuepressBinCmd)
     const needInstall = !fs.existsSync(blogNodeModules) || (!vuepressBinExists && !vuepressBinCmdExists)
-    const pm = packageManager || 'npm'
 
     if (needInstall || customBuildCommand) {
       sendProgress(webContents, 'build', `Installing dependencies (${pm})...`, 40)

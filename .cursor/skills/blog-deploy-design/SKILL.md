@@ -37,7 +37,7 @@ Memocast 提供"笔记 → blog 部署"功能：用户在 Memocast 里写笔记�
 ├── seq-manifest.json                      # { '<id>': <seq:int> }
 ├── shortlink-map.json                     # permalink 反向索引
 ├── nav.json                               # buildNav() 写入(诊断用,实际用 config.js 里的 nav)
-├── sidebar.json                           # 同上
+├── sidebar.json                           # 同上（诊断用，实际 sidebar 在 config.js 内存态生成）
 └── utils/
     ├── sidebar-builder.js                 # buildSidebar(): m.category 分组 → { '/': [group,...] }
     ├── nav-builder.js                     # buildNav(): m.category 分组 → [{text,link,items}]
@@ -141,11 +141,15 @@ module.exports = {
 | 主题 | 包名 | VuePress 版本 | config.js 风格 | 特有字段 |
 |------|------|---------------|----------------|---------|
 | `default` | 无（内置） | vuepress@1.x | `module.exports = {}` | sidebar/nav 在 themeConfig |
-| `vdoing` | `vuepress-theme-vdoing@^1.5.0` | vuepress@1.x | `defineUserConfig` + `vdoingTheme({})` | 无额外配置 |
-| `hope` | `vuepress-theme-hope@^2.0.0` | vuepress@1.x | `defineUserConfig` + `hopeTheme({})` | navbar/sidebar 在主题配置内 |
-| `reco` | `vuepress-theme-reco@^1.6.0` | vuepress@1.x | `defineUserConfig` + `recoTheme({})` | darkmode/author |
+| `vdoing` | `vuepress-theme-vdoing@^1.5.0` | vuepress@1.x | `module.exports = { theme: 'vdoing' }` | 无额外配置 |
+| `hope` | `vuepress-theme-hope@^1.30.0` | vuepress@1.x | `const { config } = require('vuepress-theme-hope'); config({ ... themeConfig: { navbar, sidebar } })` | navbar/sidebar 在 themeConfig |
+| `reco` | `vuepress-theme-reco@^1.6.0` | vuepress@1.x | `module.exports = { theme: 'reco', themeConfig: { ... } }` | darkmode/author |
 
-**注意**：hope/reco 主题的 `navbar`/`sidebar` 需要在主题构造函数内传入，而非 `themeConfig`。`sidebar-builder.js` / `nav-builder.js` 生成的 JSON 同样被 `require` 进 config.js 中使用。
+**关键注意事项（v1 API 与 v2 的区别）：**
+- `vdoing` v1：**不要**用 `vdoingTheme({})`，直接 `theme: 'vdoing'` 字符串
+- `hope` v1：**不要**用 `defineUserConfig` + `hopeTheme({...})`，用 `const { config } = require('vuepress-theme-hope')` + `config({...})`
+- `reco` v1：**不要**用 `defineUserConfig` + `recoTheme({...})`，直接 `theme: 'reco'` 字符串
+- 以上错误常见于直接复制 VuePress V2 文档示例，v1 与 v2 API 完全不兼容
 
 ## 4. base 规范化（用户容易踩的坑）
 
@@ -196,7 +200,8 @@ sftp.rename(config.remotePath, backupPath)   // 旧目录改名
 
 1. **`.vuepress/sidebar.json` / `config.js` 里的 `themeConfig.sidebar` 是否按 category 分组?**
    - 旧版: `{ '_posts/': [...] }` 单 key —— 是这个 bug 就是它,改用 `{ '/': [...] }` 多 group 形态。
-   - 新版: `{ '/': [{ title: '技术', collapsable, children }, ...] }`。
+   - 新版: `{ '/': [{ title: '技术', children: [{ title, path: '/<id>.html' }, ...] }, ...] }`。
+   - **当前代码实际输出 `'/': groups`**（groups 为 category 分组数组），不是 `'_posts/'`。
 2. **frontmatter 是否带 `categories`?**
    - 缺则 vuepress 不知道这是分组子项。
    - `BlogDeployService.buildFrontmatter` 默认会用 `note.category` 注入 `categories: ['<cat>']`。
