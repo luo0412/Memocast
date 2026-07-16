@@ -79,9 +79,12 @@ splitterLimits: [300, Infinity],  // 最小/最大限制
 ### 内部分割器
 
 ```javascript
-leftInnerSplitterValue: 240,      // 当前高度 (px)
+leftInnerSplitterValue: 240,             // 运行时高度 (px), 由 v-show 流程动态写入
+leftInnerSplitterRatio: 280,            // 状态层偏好值 (px), 分类树重新可见时回填
 leftInnerSplitterLimits: [120, Infinity],
 ```
+
+> 说明：`Value` 是 UI 当前值（隐藏时归 0），`Ratio` 是用户在显示态下保存的偏好；切换显隐时由 Vuex action 互相同步这两个字段。
 
 ### 分割器控制逻辑
 

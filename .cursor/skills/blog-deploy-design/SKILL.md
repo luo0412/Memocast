@@ -184,9 +184,9 @@ sftp.rename(config.remotePath, backupPath)   // 旧目录改名
 
 失败 `console.warn` 不阻断上传(避免"备份失败导致什么都不发布")。UI 在 `BlogDeployDialog.vue` 的 SFTP 区块内部嵌了 `<q-toggle v-model="localConfig.sftp.backupEnabled">`,开关与"是否启用 SFTP"互斥(不开 SFTP 时不显示)。
 
-### 5.3 别名踩坑
+### 5.3 通道别名
 
-`start-blog-deploy` 与 `start-cblog-deploy`(`cblog` 模式走 GitHub)是两条独立链路,但 IPC 都是 `handleApi('start-blog-deploy', ...)`。参见 `src-electron/main-process/api.js`。
+当前仓库只有一条 IPC 通道 `handleApi('start-blog-deploy', ...)`，承载 github / sftp / cblog 写入等所有部署形态。早期设计中提到的 `start-cblog-deploy` 别名不再保留——如需复用，请直接走 `start-blog-deploy`，并在调用方传 `githubConfig` / `sftpConfig` 区分。参见 `src-electron/main-process/api.js`。
 
 ## 6. GitHub Actions / CI 触发
 

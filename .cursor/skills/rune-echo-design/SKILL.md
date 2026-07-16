@@ -16,7 +16,7 @@ description: Memocast Muya 编辑器中 rune（符文）与 echo（回响）的�
 
 ## 代码命名上的坑（务必读这段）
 
-代码里曾经有个内部枚举值叫 `kind: 'rune'`（出现在 `builtinEchoes.js` 的 10 个内置 echo 上），名字像 rune 但**它们全是 echo**——属于 echo 体系里"需要 handler 改附近元素"的子分类。该分类已于 v2026-07-15 重命名为 `kind: 'echo-chant'`，代码层面已全部替换为新名，**不再保留 `kind: 'rune'` 兼容分支**。
+代码里曾经有个内部枚举值叫 `kind: 'rune'`（出现在 `builtinEchoes.js` 的 10 个内置 echo 上），名字像 rune 但**它们全是 echo**——属于 echo 体系里"需要 handler 改附近元素"的子分类。该分类在 v2026-07-15（即当前 `package.json` 版本号同步）重命名为 `kind: 'echo-chant'`，代码层面已全部替换为新名，**不再保留 `kind: 'rune'` 兼容分支**。
 
 - `kind: 'echo'` —— 普通 echo（只是静态卡片，handler 不改附近元素），比如 nice
 - `kind: 'echo-chant'` —— echo 的咏唱派发分类（有 handler，会改附近元素），比如生生不息、双生花
