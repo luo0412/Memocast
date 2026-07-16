@@ -207,3 +207,72 @@ Memocast/
 - [ ] hope/reco 主题的 `yarn install` 在博客目录能正常拉取依赖
 - [ ] `vuepress build` 在 hope/reco 主题下能正常输出 dist
 - [ ] sidebar/nav 在 hope/reco 的主题样式下正确渲染
+
+---
+
+## 8. 各主题 config.js 特性对比（2026-07-16 落地）
+
+### 8.1 主题特色配置一览
+
+| 特性 | vdoing | reco | hope |
+|------|--------|------|------|
+| 博客模式主页 | — | `type: 'blog'` | `blog: {}` |
+| 分类页 | `category: true` | `blogConfig.category` | via `@vuepress/plugin-blog` |
+| 标签页 | `tag: true` | `blogConfig.tag` | via `@vuepress/plugin-blog` |
+| 归档页 | `archive: true` | — | `blog.timeline` |
+| 深色模式 | `darkmode: 'auto'` | `darkmode: 'auto'` | `darkmode: 'auto'` |
+| 默认外观模式 | `defaultMode: 'auto'` | — | — |
+| 页面风格 | `pageStyle: 'card'` | — | — |
+| 最近更新栏 | `updateBar: {...}` | — | — |
+| 右侧大纲栏 | `rightMenuBar: true` | — | — |
+| 阅读时间 | — | — | `plugins.readingTime: true` |
+| 代码复制 | 内置 | 内置 | `plugins.copyCode: true` |
+| 图片预览 | — | — | `plugins.photoSwipe: true` |
+| 博客信息侧栏 | — | — | `blog.sidebarDisplay: 'always'` |
+| 导航/侧栏 | `nav + sidebar` | `nav + sidebar` | `nav + sidebar` |
+| 评论插件 | — | Valine（可配） | — |
+
+### 8.2 主题切换覆盖逻辑（2026-07-16 新增）
+
+`ensureBlogConfig` 中新增 `detectCurrentTheme(configPath)` 辅助函数，通过正则检测 config.js 内容判断当前主题：
+
+```
+config.js 内容                          → 识别结果
+─────────────────────────────────────────────────────────
+theme: 'vdoing'                        → 'vdoing'
+theme: 'reco'                          → 'reco'
+require('vuepress-theme-hope')
+  + module.exports = config({...})      → 'hope'
+无 theme 字段 / 用户自定义              → 'default'
+读取失败                                 → null
+```
+
+**切换策略**：
+
+- 同主题 → `kept`（保留原文件，用户手工编辑不丢失）
+- 主题变化 → 强制覆盖为新主题模板
+- 用户切换主题重新部署时，旧 config.js 会被正确替换
+
+### 8.3 构建缓存清理修复（2026-07-16 新增）
+
+**问题**：上次构建中断或 dist 被部分删除时，webpack cache（`.vuepress/.cache`、`node_modules/.cache`）残留旧路径，导致 `Cannot find module ... manifest/client.json` 报错。
+
+**修复**：在 `execBlogBuild` 中，将缓存清理从 "package.json 处理后" 移至 "**构建前一刻**"，同时扩大清理范围：
+
+```js
+const cachePaths = [
+  path.join(vuepressDir, 'cache'),
+  path.join(vuepressDir, '.cache'),      // 新增
+  path.join(vuepressDir, 'dist'),
+  path.join(blogDir, 'node_modules', '.cache'),  // 新增
+  path.join(blogDir, '.cache'),          // 新增
+]
+for (const cp of cachePaths) {
+  if (fs.existsSync(cp)) {
+    await fs.remove(cp)
+    console.log('[BlogDeploy] Cleaned cache:', cp)
+  }
+}
+```
+
+**效果**：每次构建从干净状态出发，不受上一次失败/中断的残留影响。
