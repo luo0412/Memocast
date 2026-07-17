@@ -1,8 +1,7 @@
 # TODO-Skill 管理机制
 
 > 创建日期: 2026-07-04
-> 关联 TODO: `TODO-多符文渲染机制-202606.md`（rune 占位符机制）
-> 关联 TODO: `TODO-回响改动计划-202605.md`（echo 占位符机制）
+> 关联 TODO: `TODO-回响与符文-现状-202607.md`（回响 / 符文体系现状，合并自 echo 改动 / 收口 / 多符文渲染 / rune demo 4 份）
 > 关联 TODO: `TODO-存储机制切换-202607.md`（runes 表 schema）
 
 ---
