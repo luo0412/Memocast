@@ -28,6 +28,8 @@ export default function () {
     rightClickCategoryItem: '',
     theme: 'Default-Light',
     themes: [],
+    // 头部皮肤: 'baiyang'(白羊/默认白) / 'nezha'(哪吒/莫兰迪红) / 'infp'(INFP/莫兰迪绿)
+    skin: 'baiyang',
     autoSaveGap: 0,
     quickInsertColumns: 6,
     splitterWidth: 580,

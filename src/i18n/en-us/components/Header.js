@@ -64,5 +64,10 @@ export default {
   noteMethod: 'Note Method',
   noteMethodTooltip: 'Note Method',
   tagTooltip: 'Tag',
-  calendarTooltip: 'Calendar'
+  calendarTooltip: 'Calendar',
+  // Header skin
+  skin_baiyang: 'Aries (Default)',
+  skin_nezha: 'Nezha',
+  skin_infp: 'INFP',
+  skinSwitched: 'Skin switched: {name}'
 }

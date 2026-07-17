@@ -64,5 +64,10 @@ export default {
   noteMethod: '笔记方法',
   noteMethodTooltip: '神引',
   tagTooltip: '超脱',
-  calendarTooltip: '终极'
+  calendarTooltip: '终极',
+  // 头部皮肤
+  skin_baiyang: '白羊',
+  skin_nezha: '哪吒',
+  skin_infp: 'INFP',
+  skinSwitched: '已切换皮肤：{name}'
 }

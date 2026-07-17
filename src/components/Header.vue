@@ -1,6 +1,7 @@
 <template>
   <q-bar
     class="q-electron-drag header text-grey"
+    :class="['header--skin-' + skin]"
     @dblclick="macDoubleClickHandler"
   >
     <!-- Mac: 左侧标题 -->
@@ -210,9 +211,9 @@
           <a-icon type="skin" class="icon-custom" />
         </div>
           <el-dropdown-menu slot="dropdown">
-          <el-dropdown-item command="nezha">哪吒</el-dropdown-item>
-          <el-dropdown-item command="baiyang">白羊</el-dropdown-item>
-          <el-dropdown-item command="infp">INFP</el-dropdown-item>
+          <el-dropdown-item command="nezha">{{ $t('skin_nezha') }}</el-dropdown-item>
+          <el-dropdown-item command="baiyang">{{ $t('skin_baiyang') }}</el-dropdown-item>
+          <el-dropdown-item command="infp">{{ $t('skin_infp') }}</el-dropdown-item>
         </el-dropdown-menu>
       </el-dropdown>
 
@@ -223,7 +224,7 @@
         @click="handleAiAssistantClick"
         :title="$t('aiAssistant')"
       >
-        <i :class="aiAssistantIconClass" />
+        <q-icon :name="aiAssistantIconName" class="icon-custom" />
         <span v-if="aiAssistantProvider === 'doubao'" class="ai-entry-badge">{{ $t('aiAssistantProviderDoubao') }}</span>
         <q-tooltip
           transition-show="fade"
@@ -331,7 +332,8 @@ export default {
       'sidebarTreeType',
       'syncStatus',
       'noteMethod',
-      'aiAssistantProvider'
+      'aiAssistantProvider',
+      'skin'
     ]),
 
     pendingCount() {
@@ -399,10 +401,8 @@ export default {
         return false
       }) || null
     },
-    aiAssistantIconClass () {
-      return this.aiAssistantProvider === 'doubao'
-        ? 'el-icon-microphone icon-custom'
-        : 'el-icon-magic-stick icon-custom'
+    aiAssistantIconName () {
+      return this.aiAssistantProvider === 'doubao' ? 'mic' : 'auto_awesome'
     },
     aiAssistantTooltip () {
       return this.aiAssistantProvider === 'doubao'
@@ -463,10 +463,22 @@ export default {
     },
 
     handleSkinCommand (command) {
+      const supportedSkins = ['baiyang', 'nezha', 'infp']
+      const nextSkin = supportedSkins.includes(command) ? command : 'baiyang'
+      if (nextSkin === this.skin) {
+        this.$q.notify({
+          message: this.$t('skinSwitched', { name: this.$t(`skin_${nextSkin}`) }),
+          type: 'info',
+          position: 'top'
+        })
+        return
+      }
+      this.toggleChanged({ key: 'skin', value: nextSkin })
       this.$q.notify({
-        message: `已切换皮肤：${command}`,
-        type: 'info',
-        position: 'top'
+        message: this.$t('skinSwitched', { name: this.$t(`skin_${nextSkin}`) }),
+        type: 'positive',
+        position: 'top',
+        icon: 'check'
       })
     },
 
@@ -958,6 +970,7 @@ export default {
 
 .header-avatar-wrapper {
   margin-left: 4px;
+  margin-right: 5px;
   display: flex;
   align-items: center;
 }
@@ -1062,5 +1075,58 @@ export default {
   background-color: #f56c6c;
   border-radius: 8px;
   transform: translate(25%, -25%);
+}
+
+/* === 头部皮肤(基于莫兰迪色系,饱和度低、不刺眼) ===
+ * baiyang: 默认白,沿用 quasar q-bar 默认色,不施加样式
+ * nezha:   莫兰迪砖红,文字反色为浅米白
+ * infp:    莫兰迪灰绿,文字反色为浅米白
+ */
+.header--skin-baiyang {
+  /* 默认白: 保持 q-bar 原始配色,这里故意留空 */
+}
+
+.header--skin-nezha {
+  background-color: #b5817d !important;  /* 莫兰迪砖红(muted dusty rose) */
+  color: #f4ece6 !important;             /* 浅米白(柔和反色) */
+}
+
+.header--skin-nezha .header-icon-btn .icon-custom,
+.header--skin-nezha .header-note-title > span,
+.header--skin-nezha .header-category-name {
+  color: #f4ece6;
+}
+
+.header--skin-nezha .header-icon-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.header--skin-nezha .note-method-btn {
+  color: #f4ece6;
+}
+
+.header--skin-infp {
+  background-color: #a3b5a6 !important;  /* 莫兰迪灰绿(sage green) */
+  color: #f4f0e6 !important;             /* 浅米白(柔和反色) */
+}
+
+.header--skin-infp .header-icon-btn .icon-custom,
+.header--skin-infp .header-note-title > span,
+.header--skin-infp .header-category-name {
+  color: #f4f0e6;
+}
+
+.header--skin-infp .header-icon-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.header--skin-infp .note-method-btn {
+  color: #f4f0e6;
+}
+
+/* 暗黑模式下:无论哪种皮肤,头部都要保持反色文字 */
+.body--dark .header--skin-nezha,
+.body--dark .header--skin-infp {
+  color: #f4ece6 !important;
 }
 </style>

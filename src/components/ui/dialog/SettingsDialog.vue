@@ -16,25 +16,19 @@
                 name='general'
                 icon='tune'
                 :label="$t('general')"
-                class='text-primary'
+                class='text-red-7'
               />
               <q-tab
                 name='editor'
                 icon='edit_attributes'
                 :label="$t('editor')"
-                class='text-amber-10'
+                class='text-orange-8'
               />
               <q-tab
-                name='rune'
-                icon='star'
-                :label="$t('rune')"
-                class='text-purple-5'
-              />
-              <q-tab
-                name='echo'
-                icon='graphic_eq'
-                :label="$t('echo')"
-                class='text-teal-5'
+                name='ai'
+                icon='auto_awesome'
+                :label="$t('ai')"
+                class='text-yellow-9'
               />
               <q-tab
                 name='server'
@@ -43,16 +37,22 @@
                 class='text-green-7'
               />
               <q-tab
+                name='echo'
+                icon='graphic_eq'
+                :label="$t('echo')"
+                class='text-cyan-7'
+              />
+              <q-tab
                 name='cloudFn'
                 icon='cloud_circle'
                 :label="$t('cloudFunction')"
-                class='text-pink-7'
+                class='text-blue-7'
               />
               <q-tab
-                name='ai'
-                icon='auto_awesome'
-                :label="$t('ai')"
-                class='text-yellow-9'
+                name='rune'
+                icon='star'
+                :label="$t('rune')"
+                class='text-purple-7'
               />
             </q-tabs>
           </div>
@@ -68,7 +68,7 @@
             >
               <q-tab-panel name='general' class='q-pa-sm'>
                 <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-primary' />
+                  <div class='panel-title-bar bg-red-7' />
                   <span class='text-subtitle2 text-weight-medium'>{{ $t('general') }}</span>
                 </div>
                 <q-separator class='q-my-xs' />
@@ -112,10 +112,28 @@
                       round
                       dense
                       size='sm'
-                      color='primary'
+                      color='red-7'
                       icon='open_in_new'
                       @click='openLogFilesHandler'
                     />
+                  </div>
+                </div>
+                <q-separator class='q-my-xs' />
+                <div>
+                  <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
+                    <span>{{ $t('resetSqlite') }}</span>
+                    <q-btn
+                      class='fab-btn reset-sqlite-btn'
+                      flat
+                      no-caps
+                      color='negative'
+                      icon='delete_forever'
+                      :label="$t('resetSqlite')"
+                      @click='resetSqliteHandler'
+                    />
+                  </div>
+                  <div class='text-caption text-grey-6'>
+                    {{ $t('resetSqliteHint') }}
                   </div>
                 </div>
                 <q-separator class='q-my-xs' />
@@ -128,7 +146,7 @@
                       round
                       dense
                       size='sm'
-                      color='primary'
+                      color='red-7'
                       icon='cached'
                       @click='checkUpdateHandler'
                     />
@@ -138,7 +156,7 @@
 
               <q-tab-panel name='editor' class='q-pa-sm'>
                 <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-amber-10' />
+                  <div class='panel-title-bar bg-orange-8' />
                   <span class='text-subtitle2 text-weight-medium'>{{ $t('editor') }}</span>
                 </div>
                 <q-separator class='q-my-xs' />
@@ -147,7 +165,7 @@
                     <span>{{ $t('markdownOnly') }}</span>
                     <q-toggle
                       :value='markdownOnly'
-                      color='amber-10'
+                      color='orange-8'
                       @input="
                         v => toggleChanged({ key: 'markdownOnly', value: v })
                       "
@@ -159,7 +177,7 @@
                     <span>{{ $t('noteListDenseMode') }}</span>
                     <q-toggle
                       :value='noteListDenseMode'
-                      color='amber-10'
+                      color='orange-8'
                       @input="
                         v => toggleChanged({ key: 'noteListDenseMode', value: v })
                       "
@@ -172,7 +190,7 @@
                     <div class='row items-center no-wrap justify-between q-mb-xs'>
                       <span>{{ $t('quickInsertColumns') }}</span>
                       <div class='row items-center no-wrap q-gutter-xs'>
-                        <q-badge color='primary' align='middle'>{{ quickInsertColumns }}</q-badge>
+                        <q-badge color='orange-8' align='middle'>{{ quickInsertColumns }}</q-badge>
                         <span class='text-caption text-grey-6'>默认 6</span>
                       </div>
                     </div>
@@ -183,7 +201,7 @@
                       :step='1'
                       label
                       snap
-                      color='amber-10'
+                      color='orange-8'
                       markers
                       @input="value => updateStateAndStore({ quickInsertColumns: value })"
                     />
@@ -249,7 +267,7 @@
                     <div class='text-caption text-grey-5 q-mt-xs'>{{ $t('cloudSyncNotLoggedInHint') }}</div>
                     <q-btn
                       class='q-mt-md'
-                      color='primary'
+                      color='green-7'
                       :label="$t('cloudSyncLogin')"
                       icon='login'
                       unelevated
@@ -318,24 +336,6 @@
                         />
                       </div>
                     </div>
-                  </div>
-                </div>
-                <q-separator class='q-my-xs' />
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
-                    <span>{{ $t('resetSqlite') }}</span>
-                    <q-btn
-                      class='fab-btn reset-sqlite-btn'
-                      flat
-                      no-caps
-                      color='negative'
-                      icon='delete_forever'
-                      :label="$t('resetSqlite')"
-                      @click='resetSqliteHandler'
-                    />
-                  </div>
-                  <div class='text-caption text-grey-6'>
-                    {{ $t('resetSqliteHint') }}
                   </div>
                 </div>
               </q-tab-panel>
@@ -545,7 +545,7 @@
                       v-model='runeCategory'
                       vertical
                       dense
-                      class='text-purple-5 no-border rune-or-echo-category-tabs'
+                      class='text-purple-7 no-border rune-or-echo-category-tabs'
                     >
                       <q-tab
                         v-for='opt in runeCategoryOptions'
@@ -557,7 +557,7 @@
                         <span class='rune-or-echo-category-tab-label'>{{ opt.label }}</span>
                         <q-badge
                           v-if='opt.count > 0'
-                          color='purple-5'
+                          color='purple-7'
                           align='middle'
                           class='q-ml-xs'
                         >
@@ -569,7 +569,7 @@
                   <q-separator vertical class='rune-or-echo-category-sep' />
                   <div class='rune-or-echo-category-panel'>
                     <div class='row items-center no-wrap q-mb-xs panel-title'>
-                      <div class='panel-title-bar bg-purple-5' />
+                      <div class='panel-title-bar bg-purple-7' />
                       <span class='text-subtitle2 text-weight-medium'>
                         {{ currentRuneCategoryLabel }}
                       </span>
@@ -577,7 +577,7 @@
                       <q-btn
                         dense flat no-caps
                         :label="$t('runeCardAdd')"
-                        color='purple-5'
+                        color='purple-7'
                         icon='add'
                         size='sm'
                         @click='openAddRune'
@@ -624,7 +624,7 @@
                       v-model='echoCategory'
                       vertical
                       dense
-                      class='text-teal-5 no-border rune-or-echo-category-tabs'
+                      class='text-cyan-7 no-border rune-or-echo-category-tabs'
                     >
                       <q-tab
                         v-for='opt in echoCategoryOptions'
@@ -636,7 +636,7 @@
                         <span class='rune-or-echo-category-tab-label'>{{ opt.label }}</span>
                         <q-badge
                           v-if='opt.count > 0'
-                          color='teal-5'
+                          color='cyan-7'
                           align='middle'
                           class='q-ml-xs'
                         >
@@ -648,7 +648,7 @@
                   <q-separator vertical class='rune-or-echo-category-sep' />
                   <div class='rune-or-echo-category-panel'>
                     <div class='row items-center no-wrap q-mb-xs panel-title'>
-                      <div class='panel-title-bar bg-teal-5' />
+                      <div class='panel-title-bar bg-cyan-7' />
                       <span class='text-subtitle2 text-weight-medium'>
                         {{ currentEchoCategoryLabel }}
                       </span>
@@ -657,7 +657,7 @@
                         v-if='!isCurrentEchoCategoryBuiltin'
                         dense flat no-caps
                         :label='$t("echoCardAdd")'
-                        color='teal-5'
+                        color='cyan-7'
                         icon='add'
                         size='sm'
                         @click='openAddEcho'

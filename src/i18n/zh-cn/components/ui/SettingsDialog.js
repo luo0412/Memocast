@@ -1,7 +1,7 @@
 export default {
   general: '通用',
   editor: '编辑器',
-  server: '服务',
+  server: '云服务',
   ai: 'AI',
   rune: '符文',
   echo: '回响',
