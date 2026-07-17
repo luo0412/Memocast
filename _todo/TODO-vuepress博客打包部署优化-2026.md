@@ -1,278 +1,295 @@
-# TODO — 博客打包部署优化
+# Memocast 博客打包部署
 
-> 参考项目：`E:\work-前端\note\`（vuepress 1.x + gulp 流水线）
-> 目标产物：纯静态博客站点
-> 源数据：Memocast 本地 SQLite 笔记库导出
-> 落地位置：本文档先定义 **打包/部署规则 + 流水线骨架**，实现按里程碑拆分。
+> 项目：Memocast (coolma)
+> 最后更新：2026-07-17
+> 当前状态：**核心功能已全部落地并稳定运行**，本文件为现状维护文档，不再跟踪已完成的工时。
 
 ---
 
-## 0. 背景 & 关键参考规则
+## 0. 项目背景与核心约束
 
-从参考项目 `E:\work-前端\note\` 提炼出三条本项目必须复用的核心规则（也是本次优化的关键点）：
+从参考项目 `E:\work-前端\note\`（vuepress 1.x + gulp 流水线）提炼的核心规则：
 
 | 关键点 | 参考实现 | 本项目复用形式 |
 | --- | --- | --- |
-| **侧边导航自动生成** | `_docs\.vuepress\utils\utils.js` 用目录前缀（`nav.`, `ch.`）扫描生成 `nav` + 多 `sidebar`；再由 `utils-shortlink.js` 二次转换为 `/<id>.html` 短链 | 新建 `scripts/blog/build-sidebar.js`，根据 SQLite 导出的 `_docs` 目录结构生成 `nav` + `sidebar` JSON |
-| **publicPath / base 路径** | `_docs\.vuepress\config.js`：`base: IS_VERCEL ? '/' :  '/${CURRENT_SYS}/'` | Vite/Quasar `build.baseUrl` / `vue.config.js publicPath` 支持按 `BLOG_BASE` 环境变量切换；CDN 子路径与根域部署共用同一份 dist |
-| **路径 hash / 短链 ID** | `gulpfile.js` 的 `cyrb53 + base36` 生成 ~26 字符确定性 ID，文件名剥离序号，序号单独存 `seq-manifest.json` 供排序 | 同算法迁移到 `scripts/blog/hash-id.js`；序号写入 `seq-manifest.json`；最终输出 `<base36-id>.html` |
+| **侧边导航自动生成** | `_docs\.vuepress\utils\utils.js` 用目录前缀扫描生成 `nav` + 多 `sidebar`；`utils-shortlink.js` 转短链 | `src-electron/main-process/service/blog-config-writer.js` 在博客目录运行时生成 `sidebar.json` / `nav.json` |
+| **publicPath / base 路径** | `_docs\.vuepress\config.js` 按环境变量切换 | `BlogDeployDialog.vue` 输入 → `replaceBaseInConfig` 注入 `config.js` |
+| **路径 hash / 短链 ID** | `gulpfile.js` 的 `cyrb53 + base36` 生成 ~26 字符 ID | `src/services/BlogDeployService.js` 极简 cyrb53 + `scripts/blog/cyrb53.js` 完整版 |
+
+**强约束（永久）：**
+
+- **Memocast 主项目本身不安装 VuePress 依赖**——所有 vuepress / 主题 / lodash 依赖都写到**导出博客目录自动生成的 `package.json`** 中。
+- 不要 `yarn add vuepress` 到主项目根目录的 `package.json`。
+- `_posts/` 不应作为可点击 path；sidebar/nav 中所有 URL 必须是 `_<id>.html` 短链形式。
 
 ---
 
-## 1. 总体目标
+## 1. 总体目标（全部 ✅ 已完成）
 
-1. **从 SQLite 导出 markdown**：构建期读取本地 `note.db`，把"已发布"分类下的笔记导出成 markdown + 资源。
-2. **目录即导航**：用 `nav.` / `ch.` / `sec.` 前缀的目录约定，配合脚本生成 `nav.json` / `sidebar.json`，与 vuepress-bar 行为对齐。
-3. **hash 短链 + 稳定排序**：导出文件以 `cyrb53+base36` 命名，原序号进 `seq-manifest.json`，UI 排序与文件解耦，重命名不破坏链接。
-4. **publicPath 双模**：根域部署与子路径（如 `/blog/`）部署通过环境变量切换，不改源码。
-5. **CI/CD 一条命令**：单条 `yarn blog:build` 串起"导出→整理→打包→上传"，与 quasar 应用构建解耦，可独立触发。
-
----
-
-## 2. 阶段拆分
-
-### M1. 规则对齐与目录约定（关键点：侧边导航）
-
-- [ ] 新增 `scripts/blog/` 子目录，统一放博客构建脚本
-- [ ] 实现 `scripts/blog/scan-nav.js`
-  - 输入：`_docs/`（导出的 markdown 根目录）
-  - 输出：`nav.json`、`sidebar.json`
-  - 约定：目录名匹配 `^(nav|ch|sec)[\d.\-_]` 才进导航；否则只进 sidebar 子项
-  - 参考 `_docs\.vuepress\utils\utils.js` 的 `nav()` / `side()` / `multiSide()` 思路
-- [ ] 实现 `scripts/blog/hash-id.js`
-  - 算法：`cyrb53(str,0) ^ cyrb53(str,1)` → Base36 拼接，~26 字符
-  - 输入：原始 basename（去扩展名）+ 目录
-  - 输出：`{ id, seq }`
-- [ ] 输出 `seq-manifest.json`（id → seq），供 sidebar 排序
-- [ ] 解析 markdown front-matter 中的 `order:` 字段，作为排序兜底（参考 `utils.js` `getChildren`）
-
-### M2. SQLite 导出（关键点：源数据）
-
-- [ ] 新增 `scripts/blog/export-from-sqlite.js`
-  - 复用 Memocast 的 `sql.js` 加载本地 `note.db`（不引入新依赖）
-  - 过滤条件：
-    - 分类标记 = `published`
-    - 排除 `@private` / `@draft` / `@archive` 命名前缀的笔记
-  - 导出物：
-    - markdown 正文（含 front-matter：title / order / date / tags）
-    - 资源（图片/附件）→ `_docs/.vuepress/public/assets/<note-id>/`
-    - 内嵌的 base64 图片 → 落地为文件，markdown 引用替换为相对路径
-  - 目录映射：Memocast 分类树 → `nav.<seq>-<slug>` / `ch.<seq>-<slug>` / `sec.<seq>-<slug>`
-- [ ] 提供 `--dry-run` 模式，仅打印将要导出的文件清单
-- [ ] 提供 `--source <path-to-note.db>` 与 `--out <dir>` 参数，默认值指向 `~/Documents/coolma/note.db`
-
-### M3. 文件整理与短链（关键点：路径 hash）
-
-- [ ] 实现 `scripts/blog/stage-docs.js`
-  - 输入：M2 导出的 `_docs/`
-  - 处理：
-    1. 解析目录名 `nav.<seq>-<slug>` → 删除 `nav.` 与序号
-    2. 解析文件名 `<seq>-<title>.md` → 计算 hash → 输出 `<hash>.md`
-    3. 写入 `seq-manifest.json`
-    4. 把 emoji `❤ / ❤️ / ❤️️` 统一替换为长爱心字符串（拷贝输出展示用，hash 计算时忽略）
-- [ ] 实现 `scripts/blog/shortlink.js`
-  - 参考 `utils-shortlink.js`，在 sidebar JSON 落地前把 `nav.7-9.【日记】diary/ch.1996-.../41-1643052995065308` 转成 `/<hash>.html`
-  - 找不到映射时保留原 path 并打印 warning（不静默丢链接）
-
-### M4. publicPath / base 路径（关键点：部署路径）
-
-- [ ] 选定静态站点生成器（候选见 §5 决策点）
-- [ ] 配置 `base`
-  - 环境变量：`BLOG_BASE`
-  - 默认：`'/'`（根域部署）
-  - 子路径：`'/blog/'`（CDN 子路径、GitHub Pages project page）
-- [ ] 资源路径：所有静态资源走 `public/assets/`，由 `base` 自动前缀化
-- [ ] 文档站首页跳转：`<domain><BLOG_BASE>` 与 `<domain>/` 之间通过 `index.html` 内 `<meta http-equiv="refresh">` 或构建期生成的 `redirect.html` 处理
-
-### M5. 流水线串联
-
-- [ ] 在 `package.json` 新增脚本：
-  - `blog:export` — 跑 M2 导出
-  - `blog:stage` — 跑 M3 整理
-  - `blog:build` — `blog:export && blog:stage && <static-site-build>`
-  - `blog:preview` — 本地预览（`<static-site> dev --base=$BLOG_BASE`）
-  - `blog:deploy` — 跑完 `blog:build` 后用 `sftp` / `rsync` / `gh-pages` 上传（参考 `gulpfile.js` 的 `sftp:doc` 任务）
-- [ ] CI workflow（`.github/workflows/blog.yml`）：
-  - 触发：`push tags: blog-v*` 或手动 `workflow_dispatch`
-  - 步骤：install → blog:build → upload artifact / push `gh-pages`
-- [ ] 与现有 electron 构建解耦：不进 `quasar build` 链路，独立产物目录 `dist-blog/`
-
-### M6. 增量与缓存（优化项）
-
-- [ ] 导出层加 `manifest.json` 记录 `(noteId → outPath, mtime, hash)`
-- [ ] `blog:stage` 检测到源文件未变 → 跳过 hash 计算与文件写入
-- [ ] `blog:build` 全量时打印统计：导出 X 篇、改写 Y 篇、未变 Z 篇
-
-### M7. 验证 & 文档
-
-- [ ] 准备 fixture：`tests/fixtures/note.db`（含 1 篇已发布 + 1 篇草稿 + 1 个分类）
-- [ ] `yarn test` 增加博客构建的快照测试：
-  - `seq-manifest.json`
-  - `nav.json` / `sidebar.json`
-  - 输出文件名（hash 确定性）
-- [ ] README 增补"博客构建"章节：环境变量、命令、目录约定、与 sqlite 同步策略
+1. ✅ **从 SQLite 导出 markdown**：右键分类 → 批量导出 MD 到 `_posts/<id>.md`
+2. ✅ **目录即导航**：脚本运行时生成 `nav.json` / `sidebar.json`
+3. ✅ **hash 短链 + 稳定排序**：`cyrb53+base36` 命名，序号写入 `seq-manifest.json`
+4. ✅ **publicPath 双模**：`base` 字段可由弹框注入，覆盖既有或新建 `config.js`
+5. ✅ **CI/CD 一条命令**：本地 `BlogDeployDialog` 一键触发；远端 `.github/workflows/blog-*.yml` 三件套
 
 ---
 
-## 3. 关键文件 / 产物清单
+## 2. 现状（架构 & 数据流）
 
 ```
-Memocast/
-├── scripts/
-│   └── blog/
-│       ├── export-from-sqlite.js   # M2
-│       ├── scan-nav.js             # M1
-│       ├── hash-id.js              # M1
-│       ├── stage-docs.js           # M3
-│       ├── shortlink.js            # M3
-│       ├── build-sidebar.js        # M1：串起 scan + shortlink
-│       └── pipeline.js             # M5：串联 export→stage→build
-├── _docs/                          # 导出 + 整理后的中间产物（.gitignore）
-│   └── .vuepress/
-│       ├── config.js               # base / nav / sidebar
-│       └── seq-manifest.json
-├── dist-blog/                      # 最终静态产物（.gitignore）
-└── .github/workflows/blog.yml      # CI
+Renderer (Vue2 + Quasar)
+  └─ BlogDeployDialog.vue / BlogDeployProgressDialog.vue
+       │ Bus: blogDeployStart / blog-deploy-progress / blog-deploy-done
+       ▼
+Vuex Action (server/blogDeploy)
+  └─ 调用 ApiInvoker → ipcRenderer.invoke('start-blog-deploy', ...)
+                              │
+                              ▼
+Main Process (blog-deploy-handler.js)
+  ├─ checkNodeJSInstalled           ← 缺失则引导用户安装
+  ├─ validateBlogDir                ← 校验目录合法性
+  ├─ ensureBlogConfig               ← 生成/保留 config.js + package.json + utils/
+  ├─ blog-config-writer.writeBlogUtilities + runVerifyPaths (防 404)
+  ├─ runNpmInstall (npm/yarn/pnpm)  ← 缺 vuepress 时触发
+  ├─ 清理构建缓存 (cachePaths 5 项)
+  ├─ runVuepressBuild               ← child_process.spawn('cmd.exe', ['/c', 'npm run build'])
+  ├─ dispatchWorkflow (GitHub API)  ← 条件触发
+  └─ sftpUpload (ssh2)              ← 条件触发
+                              │
+                              ▼
+导出博客目录（独立 package.json / node_modules）
+  .vuepress/
+    config.js                ← 4 主题模板自动切换
+    sidebar.json / nav.json  ← 每次部署前重新生成
+    id-mappings.json / seq-manifest.json / shortlink-map.json
+    utils/ (sidebar-builder.js / nav-builder.js / verify-paths.js)
+  _posts/<id>.md             ← permalink frontmatter + 内容
+  package.json               ← vuepress@1.x + lodash + 主题依赖
 ```
 
-参考实现关键路径（仅供查阅，不引入依赖）：
-
-- `E:\work-前端\note\gulpfile.js` — `renamePath` / `genId` / `seqMap`
-- `E:\work-前端\note\_docs\.vuepress\config.js` — `base` 环境变量切换
-- `E:\work-前端\note\_docs\.vuepress\utils\utils.js` — `nav()` / `side()` / `getName()` / `compareSidebarEntries()`
-- `E:\work-前端\note\_docs\.vuepress\utils\utils-shortlink.js` — ID 扫描 + 短链转换 + seq 排序
-
 ---
 
-## 4. 风险 & 决策点
+## 3. 核心实现要点
 
-- [ ] **静态站点生成器选型**：vuepress 1.x / vitepress / 自研 minimal renderer？
-  - vuepress 1.x：与参考项目一致，但 Vue 2 兼容性问题需评估
-  - vitepress：生态新，但要求 Vue 3
-  - 自研：仅渲染 markdown 为 html + 一份 `sidebar.json` 注入脚本，最小依赖
-  - **建议默认 vuepress 1.x**（迁移成本最低），待 M1 完成时验证兼容性
-- [ ] **SQLite 导出时区**：笔记 `createdAt` / `updatedAt` 用本地时区还是 UTC？需与前端 i18n 协同
-- [ ] **资源去重**：同一张图片被多篇笔记引用时是否合并？建议先按笔记隔离，M6 再优化
-- [ ] **大库性能**：千篇笔记量级下，hash 计算与 fs 操作是否需要并发？`p-limit` 限流是够用
+### 3.1 短链 ID 算法（已完成，与参考项目一致）
 
----
+实现位置：`src/services/BlogDeployService.js:11-38`、`scripts/blog/cyrb53.js`
 
-## 5. 与现有 TODO.md 的关系
+```js
+function cyrb53 (str, seed = 0) { /* 双重 hash，返回 base36 字符串 */ }
+function shortlinkId (dir, base) {
+  const basename = String(base || '').replace(/^\d+[a-zA-Z]*[-_]/, '')
+  return cyrb53((basename || 'index') + (dir ? '/' + dir : ''))
+}
+function permalinkFor (dir, base)  { return `/${shortlinkId(dir, base)}.html` }
+function sidebarPathFor (dir, base) { return `_posts/${shortlinkId(dir, base)}.md` }
+```
 
-`TODO.md` 2026-05 已有 `[x] 提供vdoing打包功能`，本次属于其延伸与升级：
+**关键不变量**：sidebar `item.path` 与 frontmatter `permalink` 必须用**同一个** `shortlinkId()` 计算 → 物理上指向同一份 `.md` 文件 → 永远不 404。
 
-- 不替换旧的 vdoing 脚本（保留兼容）
-- 新增 `scripts/blog/` 作为长期维护入口
-- 流水线改造后，`vdoing` 入口可标记为 `@deprecated`，统一收口到 `yarn blog:*`
+### 3.2 三大主题（default / vdoing / hope / reco）模板生成（已完成）
 
----
+实现位置：`src-electron/main-process/service/blog-deploy-handler.js:351-721`
 
-## 6. 完成定义（DoD）
+| 主题 | config.js 风格 | 依赖 |
+| --- | --- | --- |
+| `default` | `module.exports = { themeConfig: { nav, sidebar } }` | `vuepress ^1.9.0` + `lodash` |
+| `vdoing` | `module.exports = { theme: 'vdoing', themeConfig: { ... } }` | + `vuepress-theme-vdoing ^1.5.0` |
+| `hope` | `const { config } = require('vuepress-theme-hope'); module.exports = config({ ... })` | + `vuepress-theme-hope ^1.30.0` |
+| `reco` | `module.exports = { theme: 'reco', themeConfig: { type: 'blog', ... } }` | + `vuepress-theme-reco ^1.6.17` |
 
-- [ ] `yarn blog:build` 在 fixture 上端到端跑通，产出 `dist-blog/` + `seq-manifest.json` + `sidebar.json`
-- [ ] 同一份 SQLite 二次构建产物 **byte-identical**（验证 hash 算法确定性）
-- [ ] `BLOG_BASE=/blog/ yarn blog:preview` 本地可访问 `http://localhost:port/blog/<id>.html`
-- [ ] CI workflow 跑通并上传 artifact
-- [ ] README "博客构建" 章节补全
+**注意**：v1 API 与 v2 完全不兼容。hope 主题**不要**用 `defineUserConfig + hopeTheme`；reco 主题**不要**用 `defineUserConfig + recoTheme`。
 
----
+### 3.3 主题自动检测与切换（已完成）
 
-## 7. 主题支持扩展（2026-07-16）
-
-### 已完成
-
-支持 4 种 VuePress 主题：`default` / `vdoing` / `hope` / `reco`。
-
-修改文件：
-
-| 文件 | 改动 |
-|------|------|
-| `src/components/ui/dialog/BlogDeployDialog.vue` | q-btn-toggle 选项加 hope / reco |
-| `src/i18n/zh-cn/other.js` | 加 blogThemeHope / blogThemeReco 翻译 |
-| `src/i18n/en-us/other.js` | 同上英译 |
-| `src-electron/main-process/service/blog-deploy-handler.js` | ensureBlogConfig 加 hope/reco 模板；buildBlogPackageJson 加主题依赖；detectBlogTheme 检测 hope/reco；依赖检测逻辑支持 4 主题 |
-| `src-electron/main-process/service/blog-config-writer.js` | writeVuepressConfig 加 hope/reco/vdoing 分支 |
-| `scripts/blog/blog-config-writer.js` | writeVuepressConfig 同上 |
-| `.cursor/skills/blog-deploy-design/SKILL.md` | 文档更新 §3.5 主题支持表格 |
-
-### 各主题 config.js 风格（2026-07-16 修正：v1 API 与 v2 完全不兼容）
-
-- **default**: `module.exports = {}` + `themeConfig.sidebar/nav`
-- **vdoing**: `module.exports = { theme: 'vdoing' }`（不要用 `vdoingTheme({})`）
-- **hope**: `const { config } = require('vuepress-theme-hope'); config({ ... themeConfig: { navbar, sidebar } })`（不要用 `defineUserConfig` + `hopeTheme`）
-- **reco**: `module.exports = { theme: 'reco', themeConfig: { ... } }`（不要用 `defineUserConfig` + `recoTheme`）
-
-### 待验证
-
-- [ ] hope/reco 主题的 `yarn install` 在博客目录能正常拉取依赖
-- [ ] `vuepress build` 在 hope/reco 主题下能正常输出 dist
-- [ ] sidebar/nav 在 hope/reco 的主题样式下正确渲染
-
----
-
-## 8. 各主题 config.js 特性对比（2026-07-16 落地）
-
-### 8.1 主题特色配置一览
-
-| 特性 | vdoing | reco | hope |
-|------|--------|------|------|
-| 博客模式主页 | — | `type: 'blog'` | `blog: {}` |
-| 分类页 | `category: true` | `blogConfig.category` | via `@vuepress/plugin-blog` |
-| 标签页 | `tag: true` | `blogConfig.tag` | via `@vuepress/plugin-blog` |
-| 归档页 | `archive: true` | — | `blog.timeline` |
-| 深色模式 | `darkmode: 'auto'` | `darkmode: 'auto'` | `darkmode: 'auto'` |
-| 默认外观模式 | `defaultMode: 'auto'` | — | — |
-| 页面风格 | `pageStyle: 'card'` | — | — |
-| 最近更新栏 | `updateBar: {...}` | — | — |
-| 右侧大纲栏 | `rightMenuBar: true` | — | — |
-| 阅读时间 | — | — | `plugins.readingTime: true` |
-| 代码复制 | 内置 | 内置 | `plugins.copyCode: true` |
-| 图片预览 | — | — | `plugins.photoSwipe: true` |
-| 博客信息侧栏 | — | — | `blog.sidebarDisplay: 'always'` |
-| 导航/侧栏 | `nav + sidebar` | `nav + sidebar` | `nav + sidebar` |
-| 评论插件 | — | Valine（可配） | — |
-
-### 8.2 主题切换覆盖逻辑（2026-07-16 新增）
-
-`ensureBlogConfig` 中新增 `detectCurrentTheme(configPath)` 辅助函数，通过正则检测 config.js 内容判断当前主题：
+`detectCurrentTheme(configPath)` 通过正则扫描 `config.js` 文本：
 
 ```
-config.js 内容                          → 识别结果
-─────────────────────────────────────────────────────────
 theme: 'vdoing'                        → 'vdoing'
 theme: 'reco'                          → 'reco'
-require('vuepress-theme-hope')
-  + module.exports = config({...})      → 'hope'
+require('vuepress-theme-hope') + config({...}) → 'hope'
 无 theme 字段 / 用户自定义              → 'default'
-读取失败                                 → null
+读取失败                                → null
 ```
 
-**切换策略**：
+**切换策略**：同主题 → `kept`（保留原文件，用户手工编辑不丢失）；主题变化 → 强制覆盖为新主题模板。
 
-- 同主题 → `kept`（保留原文件，用户手工编辑不丢失）
-- 主题变化 → 强制覆盖为新主题模板
-- 用户切换主题重新部署时，旧 config.js 会被正确替换
+### 3.4 base 路径注入（已完成，远超早期设计）
 
-### 8.3 构建缓存清理修复（2026-07-16 新增）
+实现位置：`src-electron/main-process/service/blog-deploy-handler.js:207-325`
 
-**问题**：上次构建中断或 dist 被部分删除时，webpack cache（`.vuepress/.cache`、`node_modules/.cache`）残留旧路径，导致 `Cannot find module ... manifest/client.json` 报错。
+`replaceBaseInConfig` + `quoteBase` + `normalizeBase` 三件套：
 
-**修复**：在 `execBlogBuild` 中，将缓存清理从 "package.json 处理后" 移至 "**构建前一刻**"，同时扩大清理范围：
+- 命中已有 `base: 'x'` → 整段替换，注释同步 `// memocast: base=<值>`
+- 命中 `module.exports = {` 但缺 base → 在 `{` 后插入
+- 兜底 → 文件末追加 `module.exports.base = ...`
+- 用户手工编辑过的 config.js **不**被覆盖（除非显式传 base）
+
+路径规范化：`'/foo///'` → `'/foo/'`、`'./foo'` → `'./foo/'`、`'/'` → `'/'`、`''` → `''`（不强制）
+
+### 3.5 防 404 verify-paths（已完成）
+
+实现位置：`src-electron/main-process/service/blog-config-writer.js`
+
+- 三个 `.vuepress/utils/*.js` 源码以字符串常量内联在主进程，写入时同步到博客目录
+- `verify-paths.js` 扫描 `sidebar.json` + `nav.json` 中的所有 URL：
+  - 短链 `/<id>.html` → 必须 `_posts/<id>.md` 物理存在
+  - 分类路径 → 必须 `_posts/<category>/<basename>.md` 物理存在
+  - 兜底 → 查 `dist/`（已构建过的情况）
+- verify 失败时 `blog-deploy-handler` 仅发送 `blog-deploy-warn`，**不阻断**构建（因为首次部署时可能尚无 md 文件）
+
+### 3.6 构建缓存清理（已完成，2026-07-16 修复）
+
+实现位置：`src-electron/main-process/service/blog-deploy-handler.js:1058-1072`
 
 ```js
 const cachePaths = [
   path.join(vuepressDir, 'cache'),
-  path.join(vuepressDir, '.cache'),      // 新增
+  path.join(vuepressDir, '.cache'),      // 新增：避免 webpack manifest 残留
   path.join(vuepressDir, 'dist'),
   path.join(blogDir, 'node_modules', '.cache'),  // 新增
   path.join(blogDir, '.cache'),          // 新增
 ]
-for (const cp of cachePaths) {
-  if (fs.existsSync(cp)) {
-    await fs.remove(cp)
-    console.log('[BlogDeploy] Cleaned cache:', cp)
-  }
-}
 ```
 
-**效果**：每次构建从干净状态出发，不受上一次失败/中断的残留影响。
+**修复历史**：早期"缓存清理在 package.json 处理后"导致中断的构建残留 `Cannot find module ... manifest/client.json`；现改为"构建前一刻清理"，覆盖所有 5 个可能缓存位置。
+
+### 3.7 GitHub Actions / SFTP 双部署通道（已完成）
+
+| 通道 | 实现 | 触发条件 | 状态 |
+| --- | --- | --- | --- |
+| **GitHub Actions** | `src-electron/main-process/service/github-api.js` + `dispatchWorkflow` | `githubConfig.token && githubConfig.owner && githubConfig.workflowId` 全部存在 | ✅ |
+| **SFTP 上传** | `src-electron/main-process/service/sftp-service.js`（ssh2） | `sftpConfig.enabled === true` | ✅ |
+| **SFTP 备份** | 同上 `backupRemoteDir` | `sftpConfig.backupEnabled === true` | ✅ |
+
+**进度分配**：build 40-85%、GitHub trigger 85%、SFTP 92-100%、done 100%（任务栏进度条同步更新）。
+
+### 3.8 CI 工作流（已完成）
+
+`.github/workflows/` 目录下三件套：
+
+- `blog-build.yml` — 完整构建 + 部署 gh-pages（push master/main、tag v\*、PR、workflow_dispatch）
+- `blog-db-upload.yml` — 手动上传 `memocast.db` 到 artifact
+- `blog-preview.yml` — PR 上自动跑 sidebar/config，不部署
+
+模板字符串常量内联在 `src/services/BlogDeployService.js`，避免 runtime + template 双份维护。
+
+---
+
+## 4. 文件清单（按职责分组）
+
+```
+src/services/BlogDeployService.js              # 短链 ID + CI 模板常量 + GitHub/SFTP 配置 Schema
+src/components/ui/dialog/
+  BlogDeployDialog.vue                         # 配置弹框（博客目录 / 主题 / base / 包管理器 / GitHub / SFTP）
+  BlogDeployProgressDialog.vue                 # 进度弹框（步骤列表 + 日志区）
+src/contextMenu/sideDrawer/
+  menuItems.js                                 # 已注册 EXPORT_TO_BLOG 菜单项
+  actions.js                                   # 同上
+src/i18n/{zh-cn,en-us}/other.js                # 部署相关 i18n
+src/i18n/{zh-cn,en-us}/contextMenu/sideDrawer.js
+src-electron/main-process/service/
+  blog-deploy-handler.js                       # 主流程：Node 检测 / ensureBlogConfig / runVuepressBuild / GitHub / SFTP
+  blog-config-writer.js                        # 三个 utils/*.js 模板 + verify-paths + theme 检测
+  github-api.js                                # dispatchWorkflow
+  sftp-service.js                              # testConnection / uploadDirectory / backupRemoteDir
+src-electron/main-process/api.js               # 注册 start-blog-deploy IPC handler
+src/store/server/actions.js                    # blogDeploy action
+src/ApiInvoker.js / src/ApiHandler.js          # IPC 封装
+share/channels.js                              # IPC channel 定义
+
+scripts/blog/
+  cyrb53.js                                    # 完整版 cyrb53 + shortlinkId（与 src/services 同源）
+  run-smoke.js                                 # smoke 测试
+  blog-config-writer.js                        # 脚本版本（与 main-process 同步）
+
+.github/workflows/
+  blog-build.yml / blog-db-upload.yml / blog-preview.yml
+
+.cursor/skills/blog-deploy-design/SKILL.md     # 详细技能文档（与本文档互为补充）
+```
+
+---
+
+## 5. 关键设计决策（保留为决策记录）
+
+### 5.1 GitHub API vs gh CLI
+**采用 GitHub REST API** — Electron 主进程内置 `fetch`（Node 18+），无新依赖；gh CLI 需用户额外安装，体验反而更差。
+
+### 5.2 PAT 安全存储
+**加密存储** — `electron-store` + CryptoJS AES，与项目现有 AI API Key 存储一致；明文不输出日志。
+
+### 5.3 子进程稳定性
+- `child_process.spawn('cmd.exe', ['/c', '...'])` + Promise 封装，不阻塞主进程
+- 进度通过 `webContents.send('blog-deploy-progress', ...)` 实时推送
+- 取消：`cancelBlogBuild()` 调用 `taskkill /pid /f /t` 终止子进程树（Windows）
+
+### 5.4 软链接策略已弃用
+早期方案（自动创建 `mklink /J` junction 指向 Memocast node_modules）**已弃用**。原因：跨驱动器限制 + 用户易混淆 + 实际打包时 `npm install` 已能解决依赖。现策略：直接 `npm/yarn/pnpm install`，依赖写入博客目录的 `package.json`。
+
+### 5.5 SQLite 导出策略
+- 过滤：分类 `published`、排除 `@private/@draft/@archive` 命名前缀
+- 资源：base64 内嵌图片 → 落盘到 `_docs/.vuepress/public/assets/<note-id>/`，markdown 引用替换为相对路径
+- **当前导出入口**：`BlogDeployDialog` 触发批量导出到 `_posts/<id>.md`，frontmatter 包含 `permalink`
+
+---
+
+## 6. 待办（仅未完成项）
+
+### 6.1 用户已确认但尚未实现
+
+- [ ] **博客导出 MD 时同步导出分类 README.md** —— 当前只有文章 `.md` 缺分类 README，nav-builder 中 `node.link = './' + cat + '/'` 指向的是不存在的 README
+- [ ] **`base` 路径合法性校验增强** —— 当前 `normalizeBase` 已处理 `///`、缺尾斜杠，但非法字符（`#`、`?`）未拦截
+- [ ] **菜单项国际化 key 补全** —— `exportMarkdownAndCopy` 等条目部分 i18n key 缺失英文翻译
+
+### 6.2 优化方向（P2 / P3，可选）
+
+- [ ] 导出层加 `manifest.json` 记录 `(noteId → outPath, mtime, hash)` —— 增量导出
+- [ ] 大库性能：千篇笔记下 `cyrb53` + fs 操作并发化（`p-limit` 限流）
+- [ ] 部署历史记录：SQLite 记录每次部署时间 / 状态 / 目标仓库
+- [ ] 预览模式：打包后自动打开 `vuepress dev` 本地预览
+- [ ] Gitee / GitLab 支持：扩展 API 封装
+
+### 6.3 风险点（待长期观察）
+
+- ⚠️ `vuepress@1.x` 与 Node 18+ 兼容性 —— 当前通过 `set NODE_OPTIONS=--openssl-legacy-provider` + lodash override 解决，长期需关注 1.x EOL
+- ⚠️ `hope` / `reco` 主题在最新 `vuepress@1.9.x` 下偶发依赖冲突 —— 当前通过 `overrides` 解决，新版 vuepress 发布时需回归
+
+---
+
+## 7. 验证命令速查
+
+```bash
+# 本地一键打包（推荐通过 UI 弹框）
+yarn start  # 启动 Memocast → 右键分类 → "部署到博客"
+
+# 单独跑 smoke 测试
+node scripts/blog/run-smoke.js
+
+# 单独验证 cyrb53 算法
+node -e "console.log(require('./scripts/blog/cyrb53').cyrb53('技术/序章'))"
+
+# 远端 CI 触发
+git push origin master          # 自动触发 blog-build.yml
+gh workflow run blog-db-upload.yml  # 手动上传 db
+```
+
+---
+
+## 8. 相关 TODO / 文档索引
+
+- `.cursor/skills/blog-deploy-design/SKILL.md` — 详细技能文档（与本文档互为补充，包含更多代码片段与具体命令）
+- `_todo/TODO-vuepress部署优化-2026.md` — **已删除**（早期事故复盘 + 代码片段，已沉淀到代码注释）
+- `_todo/TODO-vuepress博客自动打包部署-202609.md` — **已删除**（实施计划已全部完成）
+- `_todo/TODO-vuepress博客打包部署优化-2026.md` — **本文档**（保留为最新维护入口）
+
+---
+
+## 9. 变更记录
+
+| 日期 | 变更 |
+| --- | --- |
+| 2026-06-21 | 初版实施计划（GitHub API + SFTP + 进度对话框）|
+| 2026-06-24 | 软链接策略调整 / 任务栏进度条 / 进度对话框增强 |
+| 2026-07-16 | 主题支持扩展（hope/reco）/ 构建缓存清理修复 / 主题自动检测 |
+| 2026-07-17 | 合并 3 份 TODO，删除事故复盘与已完成的实施计划，保留现状 + 设计决策 |
