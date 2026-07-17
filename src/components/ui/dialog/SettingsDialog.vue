@@ -235,7 +235,7 @@
                 </div>
                 <q-separator class='q-my-xs' />
 
-                <div class='server-section'>
+                <div class='cloud-sync-section'>
                   <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
                     <div class='panel-title-bar bg-green-7' />
                     <span class='text-subtitle2 text-weight-medium'>{{ $t('cloudSync') }}</span>
@@ -319,24 +319,6 @@
                       </div>
                     </div>
                   </div>
-                </div>
-                <q-separator class='q-my-xs' />
-                <div class='navigation-section'>
-                  <div class='row items-center no-wrap q-mb-xs panel-title'>
-                    <div class='panel-title-bar bg-pink-purple' />
-                    <span class='text-subtitle2 text-weight-medium'>{{ $t('navigationCenter') }}</span>
-                  </div>
-                  <q-separator class='q-my-sm server-section-separator' />
-                  <div class='text-caption text-grey-6 q-mb-sm'>
-                    {{ $t('navigationCenterHint') }}
-                  </div>
-                  <q-btn
-                    unelevated
-                    class='navigation-open-btn'
-                    icon='explore'
-                    :label="$t('openNavigationCenter')"
-                    @click='openNavigationDialog'
-                  />
                 </div>
                 <q-separator class='q-my-xs' />
                 <div>
@@ -734,7 +716,6 @@
     <ImageUploadServiceDialog ref='imageUploadServiceDialog' />
     <UpdateDialog ref='updateDialog' />
     <NavigationDialog
-      ref='navigationDialog'
       v-model='navigationDialogVisible'
       @go-config='onNavigationGoConfig'
     />

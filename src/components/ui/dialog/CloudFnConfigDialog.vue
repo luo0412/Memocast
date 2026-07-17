@@ -11,7 +11,7 @@
         <q-tooltip>{{ helpText }}</q-tooltip>
       </q-btn>
     </div>
-    <q-separator class='q-my-xs' />
+    <q-separator class='q-my-sm server-section-separator' />
 
     <div class='cloudfn-form'>
       <div class='text-caption text-grey-6 q-mb-sm'>
@@ -134,18 +134,41 @@
       </q-banner>
     </div>
 
+    <q-separator class='q-my-sm server-section-separator' />
+
+    <div class='navigation-section'>
+      <div class='row items-center no-wrap q-mb-xs panel-title'>
+        <div class='panel-title-bar bg-pink-purple' />
+        <span class='text-subtitle2 text-weight-medium'>{{ $t('navigationCenter') }}</span>
+      </div>
+      <q-separator class='q-my-sm server-section-separator' />
+      <div class='text-caption text-grey-6 q-mb-sm'>
+        {{ $t('navigationCenterHint') }}
+      </div>
+      <q-btn
+        unelevated
+        class='navigation-open-btn'
+        icon='explore'
+        :label="$t('openNavigationCenter')"
+        @click='openNavigationDialog'
+      />
+    </div>
+
     <bsp-app-demo-dialog v-model='demoDialogOpen' />
+    <navigation-dialog v-model='navigationDialogVisible' @go-config='onNavigationGoConfig' />
   </div>
 </template>
 
 <script>
 import cloud from 'src/services/cloud/CloudFunctionProvider'
 import BspAppDemoDialog from 'components/ui/dialog/BspAppDemoDialog'
+import NavigationDialog from 'components/ui/dialog/NavigationDialog'
 
 export default {
   name: 'CloudFnConfigDialog',
   components: {
-    BspAppDemoDialog
+    BspAppDemoDialog,
+    NavigationDialog
   },
   data () {
     return {
@@ -166,7 +189,8 @@ export default {
         { label: 'mp-weixin', value: 'mp-weixin' }
       ],
       helpText: '云函数（vk-router url 化）的 baseUrl 形如 https://xxx.bspapp.com/http/router',
-      demoDialogOpen: false
+      demoDialogOpen: false,
+      navigationDialogVisible: false
     }
   },
   created () {
@@ -219,6 +243,13 @@ export default {
     },
     openDemo () {
       this.demoDialogOpen = true
+    },
+    openNavigationDialog () {
+      this.navigationDialogVisible = true
+    },
+    onNavigationGoConfig () {
+      this.navigationDialogVisible = false
+      this.$emit('go-config')
     }
   }
 }
@@ -231,16 +262,39 @@ export default {
 .cloudfn-form {
   max-width: 560px;
 }
+
+/* 与 SettingsDialog 中其他 tab 的 section 标题保持一致尺寸 */
 .panel-title-bar {
-  width: 4px;
-  height: 16px;
-  border-radius: 2px;
+  width: 3px;
+  min-height: 1rem;
+  border-radius: 1px;
   margin-right: 8px;
+  flex-shrink: 0;
 }
 
-.cloudfn-config {
-  border-left: 3px solid transparent;
-  border-image: linear-gradient(180deg, #ec4899 0%, #8b5cf6 100%) 1;
-  padding-left: 8px;
+/* 与 .server-section-separator 保持一致间距 */
+.server-section-separator {
+  margin-top: 8px;
+  margin-bottom: 14px;
+}
+
+.navigation-section {
+  margin-top: 8px;
+  padding: 4px 2px 8px;
+}
+
+.navigation-open-btn {
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  color: #ffffff;
+  width: 100%;
+  max-width: 360px;
+}
+
+.navigation-open-btn:hover {
+  background: linear-gradient(135deg, #db2777 0%, #7c3aed 100%);
+}
+
+.bg-pink-purple {
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
 }
 </style>
