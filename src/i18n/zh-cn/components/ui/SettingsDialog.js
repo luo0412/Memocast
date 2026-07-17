@@ -278,6 +278,12 @@ export default {
   cloudFunctionTokenCleared: '云函数 token 已清除',
   cloudFunctionDoc: '查看云函数文档',
   cloudFunctionDocUrl: 'https://uniapp.dcloud.net.cn/uniCloud/',
+  cloudFunctionDemo: '测试 demo',
+  bspappDemoTitle: 'BspApp 云函数 Demo',
+  bspappDemoRun: '发起调用',
+  bspappDemoRunning: '请求中…',
+  bspappDemoFailed: '调用失败',
+  bspappDemoIdle: '点击右上角 ▶ 发起一次请求',
   // 导航中心（云函数 admin/vkfiles/pub/listFiles）
   navigationCenter: '导航中心',
   navigationCenterHint: '调用云函数 admin/vkfiles/pub/listFiles 拉取卡片，点击图片打开对应链接',

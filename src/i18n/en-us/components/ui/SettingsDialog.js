@@ -278,6 +278,12 @@ export default {
   cloudFunctionTokenCleared: 'CloudFn token cleared',
   cloudFunctionDoc: 'Open cloudFn docs',
   cloudFunctionDocUrl: 'https://uniapp.dcloud.net.cn/uniCloud/',
+  cloudFunctionDemo: 'Test Demo',
+  bspappDemoTitle: 'BspApp CloudFn Demo',
+  bspappDemoRun: 'Send request',
+  bspappDemoRunning: 'Sending…',
+  bspappDemoFailed: 'Request failed',
+  bspappDemoIdle: 'Click ▶ to fire a request',
   // Navigation Center (cloudFn admin/vkfiles/pub/listFiles)
   navigationCenter: 'Navigation Center',
   navigationCenterHint: 'Fetch cards from cloudFn admin/vkfiles/pub/listFiles; click an image to open its link.',

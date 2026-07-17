@@ -97,6 +97,14 @@
         />
         <q-btn
           flat
+          color='purple-7'
+          icon='science'
+          :label="$t('cloudFunctionDemo')"
+          :disable='testing'
+          @click='openDemo'
+        />
+        <q-btn
+          flat
           color='red-7'
           icon='logout'
           :label="$t('cloudFunctionClearToken')"
@@ -125,14 +133,20 @@
         {{ testResult.message }}
       </q-banner>
     </div>
+
+    <bsp-app-demo-dialog v-model='demoDialogOpen' />
   </div>
 </template>
 
 <script>
 import cloud from 'src/services/cloud/CloudFunctionProvider'
+import BspAppDemoDialog from 'components/ui/dialog/BspAppDemoDialog'
 
 export default {
   name: 'CloudFnConfigDialog',
+  components: {
+    BspAppDemoDialog
+  },
   data () {
     return {
       form: {
@@ -151,7 +165,8 @@ export default {
         { label: 'app-plus', value: 'app-plus' },
         { label: 'mp-weixin', value: 'mp-weixin' }
       ],
-      helpText: '云函数（vk-router url 化）的 baseUrl 形如 https://xxx.bspapp.com/http/router'
+      helpText: '云函数（vk-router url 化）的 baseUrl 形如 https://xxx.bspapp.com/http/router',
+      demoDialogOpen: false
     }
   },
   created () {
@@ -201,6 +216,9 @@ export default {
     },
     helpHandler () {
       window.open('https://vkdoc.fsq.pub/client/pages/callFunctionForUrl.html', '_blank')
+    },
+    openDemo () {
+      this.demoDialogOpen = true
     }
   }
 }
