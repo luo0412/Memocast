@@ -43,6 +43,12 @@
                 class='text-green-7'
               />
               <q-tab
+                name='cloudFn'
+                icon='cloud_circle'
+                :label="$t('cloudFunction')"
+                class='text-pink-7'
+              />
+              <q-tab
                 name='ai'
                 icon='auto_awesome'
                 :label="$t('ai')"
@@ -315,6 +321,24 @@
                   </div>
                 </div>
                 <q-separator class='q-my-xs' />
+                <div class='navigation-section'>
+                  <div class='row items-center no-wrap q-mb-xs panel-title'>
+                    <div class='panel-title-bar bg-pink-purple' />
+                    <span class='text-subtitle2 text-weight-medium'>{{ $t('navigationCenter') }}</span>
+                  </div>
+                  <q-separator class='q-my-sm server-section-separator' />
+                  <div class='text-caption text-grey-6 q-mb-sm'>
+                    {{ $t('navigationCenterHint') }}
+                  </div>
+                  <q-btn
+                    unelevated
+                    class='navigation-open-btn'
+                    icon='explore'
+                    :label="$t('openNavigationCenter')"
+                    @click='openNavigationDialog'
+                  />
+                </div>
+                <q-separator class='q-my-xs' />
                 <div>
                   <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
                     <span>{{ $t('resetSqlite') }}</span>
@@ -332,6 +356,10 @@
                     {{ $t('resetSqliteHint') }}
                   </div>
                 </div>
+              </q-tab-panel>
+
+              <q-tab-panel name='cloudFn' class='q-pa-sm'>
+                <cloud-fn-config-dialog />
               </q-tab-panel>
 
               <q-tab-panel name='ai' class='q-pa-sm'>
@@ -705,6 +733,11 @@
     </q-card>
     <ImageUploadServiceDialog ref='imageUploadServiceDialog' />
     <UpdateDialog ref='updateDialog' />
+    <NavigationDialog
+      ref='navigationDialog'
+      v-model='navigationDialogVisible'
+      @go-config='onNavigationGoConfig'
+    />
     <RuneFormDialog
       v-if='runeFormVisible'
       :key='runeFormKey'
@@ -877,6 +910,8 @@ import UpdateDialog from 'components/ui/dialog/UpdateDialog'
 import RuneCard from 'components/ui/dialog/RuneCard'
 import RuneFormDialog from 'components/ui/dialog/RuneFormDialog'
 import EchoFormDialog from 'components/ui/dialog/EchoFormDialog'
+import CloudFnConfigDialog from 'components/ui/dialog/CloudFnConfigDialog'
+import NavigationDialog from 'components/ui/dialog/NavigationDialog'
 import { backfillEchoAnnotationsInMarkdown } from 'components/ui/editor/echo/EchoRuntime'
 import { i18n } from 'boot/i18n'
 import bus from 'components/bus'
@@ -917,7 +952,9 @@ export default {
     UpdateDialog,
     RuneCard,
     RuneFormDialog,
-    EchoFormDialog
+    EchoFormDialog,
+    CloudFnConfigDialog,
+    NavigationDialog
   },
   data () {
     return {
@@ -988,7 +1025,8 @@ export default {
         enabled: true
       },
       aiSkillFormNameError: '',
-      aiSkillFormContentError: ''
+      aiSkillFormContentError: '',
+      navigationDialogVisible: false
     }
   },
   computed: {
@@ -1740,6 +1778,13 @@ export default {
         await this.loadAiSkillConfigs()
         this.$q.notify({ message: this.$t('aiSkillDeleted'), type: 'positive', position: 'top' })
       })
+    },
+    openNavigationDialog () {
+      this.navigationDialogVisible = true
+    },
+    onNavigationGoConfig () {
+      this.navigationDialogVisible = false
+      this.tab = 'cloudFn'
     },
 
     resetSqliteHandler: async function () {
@@ -2511,6 +2556,26 @@ export default {
 
 .rune-chosen {
   box-shadow: 0 4px 20px rgba(156, 39, 176, 0.4);
+}
+
+.navigation-section {
+  margin-top: 8px;
+  padding: 4px 2px 8px;
+}
+
+.navigation-open-btn {
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  color: #ffffff;
+  width: 100%;
+  max-width: 360px;
+}
+
+.navigation-open-btn:hover {
+  background: linear-gradient(135deg, #db2777 0%, #7c3aed 100%);
+}
+
+.bg-pink-purple {
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
 }
 
 .cloud-sync-summary {
