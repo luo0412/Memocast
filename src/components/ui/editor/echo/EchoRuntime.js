@@ -1172,6 +1172,10 @@ export default class EchoRuntime {
   }
 
   disposeAll (_container) {
+    if (this._afterRenderTimer) {
+      clearTimeout(this._afterRenderTimer)
+      this._afterRenderTimer = null
+    }
     if (!Array.isArray(this._installed)) return
     while (this._installed.length) {
       const item = this._installed.pop()
