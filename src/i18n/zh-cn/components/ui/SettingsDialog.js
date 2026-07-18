@@ -119,7 +119,7 @@ export default {
   echoCardPower: '强度',
   echoCardAdd: '添加回响',
   echoCardEdit: '编辑',
-  echoCardView: '查看回响',
+  echoCardView: '查看',
   echoCardDelete: '删除',
   echoCardDeleteConfirm: '确定要删除该回响吗？',
   echoBuiltinReadonlyTag: '只读',

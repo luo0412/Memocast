@@ -28,10 +28,13 @@
       <q-btn
         flat
         dense
+        no-caps
+        unelevated
         size='sm'
         :label="isBuiltin ? resolvedViewLabel : resolvedEditLabel"
-        :icon='isBuiltin ? "visibility" : undefined'
-        :color='isBuiltin ? "teal-3" : "white"'
+        :icon='isBuiltin ? undefined : undefined'
+        :color='isBuiltin ? "white" : undefined'
+        class='rune-card-footer-btn'
         @click='$emit("edit", rune)'
       />
       <q-btn
@@ -39,6 +42,7 @@
         flat dense size='sm'
         :label="resolvedDeleteLabel"
         color='red-3'
+        class='rune-card-footer-btn-right'
         @click='$emit("delete", rune)'
       />
       <span v-else class='rune-card-footer-spacer' />
@@ -365,5 +369,13 @@ export default {
   padding: 0 2px;
   color: rgba(255, 255, 255, 0.85);
   line-height: 1.1;
+}
+
+.rune-card-footer-btn {
+  margin-left: 0;
+}
+
+.rune-card-footer-btn-right {
+  margin-left: auto;
 }
 </style>

@@ -119,7 +119,7 @@ export default {
   echoCardPower: 'Power',
   echoCardAdd: 'Add Echo',
   echoCardEdit: 'Edit',
-  echoCardView: 'View Echo',
+  echoCardView: 'View',
   echoCardDelete: 'Delete',
   echoCardDeleteConfirm: 'Are you sure to delete this echo?',
   echoBuiltinReadonlyTag: 'Read-only',
