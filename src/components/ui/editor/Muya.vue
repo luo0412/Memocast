@@ -786,7 +786,7 @@ export default {
       if (this.contentEditor && this.contentEditor.options) {
         this.contentEditor.options.echoRegistry = this.echoRegistry
         this.contentEditor.options.echoCards = this.echoCards || []
-        this.contentEditor.options.__echoRuntime = this._echoRuntime
+        this.contentEditor.options.echoRuntime = this._echoRuntime
         const quickInsert = this.contentEditor.ui && this.contentEditor.ui.quickInsert
         if (quickInsert) {
           quickInsert.renderObj = quickInsert.getRenderObj()
@@ -1021,11 +1021,10 @@ export default {
       }
 
       // 把 Vue 实例注入 Muya options，让 Muya 内部的 StateRender 能回调到我们的回写方法
-      // （见 src/libs/muya/lib/parser/render/index.js 的 mountRuneVueHosts）
       const muyaSelf = this
       const { container } = this.contentEditor = new Muya(this.$refs.muya, {
-        __memocastMuya: muyaSelf,
-        __echoRuntime: this._echoRuntime,
+        memoMuya: muyaSelf,
+        echoRuntime: this._echoRuntime,
         quickInsertProvider: () => {
           const runeItems = (this.runeCards || [])
             .filter(rune => rune && (rune.name || rune.text || rune.label))
@@ -1080,6 +1079,7 @@ export default {
         runeRendererCtor: RunePreviewRenderer,
         echoRendererCtor: EchoPlaceholderHost,
         enableRuneVueRenderer: true,
+        enableEchoVueRenderer: false, // Echo 默认不使用 Vue 渲染模式
         onEchoPlaceholderCommit: this.updateEchoPlaceholderPayload,
         imagePathPicker: () => {
           return new Promise((resolve, reject) => {

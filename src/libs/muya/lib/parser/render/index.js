@@ -224,28 +224,20 @@ class StateRender {
     })
   }
 
-  cleanupDetachedRunePlaceholders () {
-    for (const host of Array.from(this.runePlaceholderCache.keys())) {
-      if (!host.isConnected) {
-        this.runePlaceholderCache.delete(host)
-      }
-    }
-  }
+  // ===================== 独立的 Echo 渲染方法 =====================
 
-  cleanupDetachedEchoPlaceholders () {
-    for (const host of Array.from(this.echoPlaceholderCache.keys())) {
-      if (!host.isConnected) {
-        this.echoPlaceholderCache.delete(host)
-      }
-    }
-  }
-
-  renderEchoPlaceholderNodes () {
+  /**
+   * 渲染 Echo 占位符（jQuery 模式）
+   * - 查找 [data-echo-node-id] 节点
+   * - 生成卡片 HTML 或调用 echoRuntime 输出特效
+   * - 调用 echoRuntime.afterRender() 处理 echo-chant 特效
+   */
+  renderEchoPlaceholders () {
     const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
     if (!root) return
 
     const echoMap = this.getEchoMap()
-    const runtime = this.muya?.options?.__echoRuntime || null
+    const echoRuntime = this.muya?.options?.echoRuntime || null
     const hosts = root.querySelectorAll(ECHO_PLACEHOLDER_SELECTOR)
 
     hosts.forEach(host => {
@@ -259,32 +251,25 @@ class StateRender {
       const hasExplicitHeight = dataset.echoHeight !== undefined
       const width = String(dataset.echoWidth || '').trim()
       const height = String(dataset.echoHeight || '').trim()
-      // Support anonymous echo: lookup by echoId first, then by echoName
-      // For anonymous echo with only attrs, use echoId or echoName for lookup
+
       const lookupKey = echoId ? `id:${echoId}` : echoName
       const echo = echoMap.get(lookupKey) || (echoId ? echoMap.get(echoName) : null) || null
-      // 解析出当前实例的 attrs，决定是否走 echo-chant 副作用链路
-      const instanceAttrs = (() => {
-        try {
-          // 来源 1：attrsRaw 已经写在 token；这里暂用 definition 的 anno_source 默认空对象
-          // 来源 2：从 echo 定义里推断 kind（多数 echo-chant 类的 kind 由 anno_source.render() 注入）
-          return {}
-        } catch (error) { return {} }
-      })()
-      const isChantLike = (() => {
+
+      // 判断是否为 echo-chant 类特效（离析/生生不息等）
+      const isEchoEffect = (() => {
         if (!echo) return false
-        const kindFromAnno = (() => {
+        const kindFromSource = (() => {
           try {
             const src = String(echo.anno_source || echo.template || '')
             const m = src.match(/kind\s*:\s*['"]([^'"]+)['"]/)
             return m ? m[1] : ''
           } catch (error) { return '' }
         })()
-        if (kindFromAnno === 'echo-chant' || kindFromAnno === 'echo-tbd') return true
-        // 兜底：attrs 已经写在 host dataset（如果有 echoHighlight 等场景）
+        if (kindFromSource === 'echo-chant' || kindFromSource === 'echo-tbd') return true
         const dsKind = String(dataset.kind || '')
         return dsKind === 'echo-chant' || dsKind === 'echo-tbd'
       })()
+
       const cacheKey = JSON.stringify({
         echoName,
         echoId,
@@ -299,7 +284,7 @@ class StateRender {
         hasExplicitHeight,
         width,
         height,
-        runeLike: isChantLike
+        isEchoEffect
       })
 
       if (this.echoPlaceholderCache.get(host) === cacheKey) {
@@ -309,44 +294,18 @@ class StateRender {
       host.classList.add(ECHO_HOST_CLASS)
       host.setAttribute('contenteditable', 'false')
 
-// === 回响可以"影响附近元素"的真正接线点 ===
-// 对于 kind === 'echo-chant' | 'echo-tbd' 的 echo 定义
-// （生生不息 / 破万法 / 天行健 / 双生花 / 夺心魄 / 强运 / 离析 / 替罪 / 招灾），
-// 调用 EchoRuntime.renderToHtml 输出包含 data-rune-id / data-rune-kind 的 span；
-// 随后在 renderRunes() 末由 afterRender() 接管，让对应 handler 改兄弟 / 容器节点的 CSS / 动画 / 边距。
-// 其它（普通的 nice / 自定义 echo / 找不到定义的 echo）继续走卡片 markup。
-//
-// DOM 端保留 data-rune-id / data-rune-kind 字面属性名（不是 echo-chant-*）——
-// 因为历史 markdown ABI 就是这样写的；新代码内部一律走 echo-chant 前缀。
-//
-// === 配套桥接：把 echo 实例的 attrsParsed 序列化到 host 的 dataset，
-// 让 EchoRuntime._readChantAttrs() 在 afterRender() 时能够读到具体参数
-// （比如 @离析{density:'very-loose'} 中的 density 会改变排版密度）。
+      // 将 attrs 序列化到 dataset，让 echoRuntime 能读取
       const echoAttrsJson = (() => {
         try { return JSON.stringify(echo?.anno_source || '') } catch (error) { return '' }
       })()
       if (echo && echoAttrsJson) {
         host.dataset.echoAttrsJson = echoAttrsJson
       }
+
       let innerHtml = ''
-      if (isChantLike && runtime && typeof runtime.renderToHtml === 'function') {
+      if (isEchoEffect && echoRuntime && typeof echoRuntime.renderToHtml === 'function') {
         try {
-          // 1) 用 editor 默认的 *当前* echo 定义做一次 sim-text render，拿 attrs 上下文
-          //    （因为快捷插入/迁移进来的 token 可能没把 attrsParsed 写到 host dataset 上，
-          //    这里从 echoCard 上重新组装一份。）
-          const simAttrs = (() => {
-            const out = { id: echoId, definitionId, value }
-            try {
-              if (echo?.anno_source || echo?.template) {
-                // 只从 echoCard 的 anno_source 抽取直接写明的 kind / runeId / 派生 attrs，
-                // 真实的实例属性（如 @离析{density:'very-loose'}）目前 host dataset 还没有
-                // 这一层（见 Muya.vue 中 echoToken 回写流程）。这里把"echoCard 渲染结果"
-                // 作为兜底 baseline，再在 afterRender() 时尝试从宿主 dataset 里再扩一层。
-                return out
-              }
-            } catch (error) { /* ignore */ }
-            return out
-          })()
+          const simAttrs = { id: echoId, definitionId, value }
           const token = {
             echoName,
             echoId,
@@ -359,10 +318,9 @@ class StateRender {
             payloadRaw: ''
           }
           const matchedEcho = echo || null
-          innerHtml = runtime.renderToHtml(token, matchedEcho)
-          // 2) 把内层 span 的 data-rune-attrs 直接补成"当前 echoCard 渲染结果 + id/definitionId"
-          //    —— 这样 EchoRuntime._readChantAttrs() 走 node.querySelector('[data-rune-attrs]')
-          //    或者回退读 data-rune-attr-* 时都能拿到 baseline。
+          innerHtml = echoRuntime.renderToHtml(token, matchedEcho)
+
+          // 补充 data-rune-attrs 到第一个 span
           try {
             const baselineAttrs = Object.assign({}, simAttrs, {
               echoName,
@@ -378,23 +336,334 @@ class StateRender {
                 1
               )
               if (innerHtml.indexOf('data-rune-attrs=') === -1) {
-                // 渲染产物不包含 span（例如只是文本），包裹一层
                 innerHtml = `<span data-rune-attrs="${escapeAttrString(attrJson)}">${innerHtml}</span>`
               }
             }
           } catch (error) { /* ignore */ }
         } catch (error) {
-          console.warn('[StateRender] runtime.renderToHtml failed, fallback to card', error)
+          console.warn('[StateRender.renderEchoPlaceholders] echoRuntime.renderToHtml failed:', error)
           innerHtml = ''
         }
       }
+
       if (!innerHtml) {
         innerHtml = this.createEchoPlaceholderMarkup(echo, { ...dataset, hasExplicitWidth, hasExplicitHeight, width, height })
       }
+
       host.innerHTML = innerHtml
       host.dataset.echoRenderKey = cacheKey
       this.echoPlaceholderCache.set(host, cacheKey)
     })
+
+    // === Echo-chant 特效：让回响真正影响附近节点的排版/动画/边距 ===
+    if (echoRuntime && typeof echoRuntime.afterRender === 'function' && root) {
+      try {
+        echoRuntime.afterRender(root, { cleanupFirst: true })
+      } catch (error) {
+        console.warn('[StateRender.renderEchoPlaceholders] echoRuntime.afterRender failed:', error)
+      }
+    }
+  }
+
+  cleanupDetachedEchoPlaceholders () {
+    for (const host of Array.from(this.echoPlaceholderCache.keys())) {
+      if (!host.isConnected) {
+        this.echoPlaceholderCache.delete(host)
+      }
+    }
+  }
+
+  // ===================== 独立的 Rune 渲染方法 =====================
+
+  /**
+   * 渲染 Rune 占位符（jQuery 模式）
+   * - 查找 [data-rune-name][data-rune-id][data-rune-node-id] 节点
+   * - 生成简单占位符 HTML
+   * - 如果启用 Vue 渲染模式，则挂载 Vue 组件
+   */
+  renderRunePlaceholders () {
+    const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+    if (!root) return
+
+    const runeMap = this.getRuneMap()
+    const hosts = root.querySelectorAll(RUNE_PLACEHOLDER_SELECTOR)
+
+    hosts.forEach(host => {
+      const dataset = host.dataset || {}
+      const runeName = String(dataset.runeName || '').trim()
+      const runeId = String(dataset.runeId || '')
+      const nodeId = String(dataset.runeNodeId || '')
+      const rune = runeMap.get(runeName) || null
+      const cacheKey = JSON.stringify({
+        runeName,
+        runeId,
+        nodeId,
+        innerText: host.textContent || '',
+        template: rune?.template || ''
+      })
+
+      if (this.runePlaceholderCache.get(host) === cacheKey) {
+        return
+      }
+
+      host.classList.add(RUNE_HOST_CLASS)
+      host.setAttribute('contenteditable', 'false')
+      host.innerHTML = this.createRunePlaceholderMarkup(rune, dataset)
+      host.dataset.runeRenderKey = cacheKey
+      this.runePlaceholderCache.set(host, cacheKey)
+    })
+  }
+
+  cleanupDetachedRunePlaceholders () {
+    for (const host of Array.from(this.runePlaceholderCache.keys())) {
+      if (!host.isConnected) {
+        this.runePlaceholderCache.delete(host)
+      }
+    }
+  }
+
+  /**
+   * 清理已卸载的 Echo Vue 实例
+   */
+  cleanupDetachedEchoVms (force = false) {
+    for (const [nodeId, vm] of this.echoVmMap.entries()) {
+      if (force || !vm || !vm.$el || !vm.$el.isConnected) {
+        if (vm && typeof vm.$destroy === 'function') {
+          vm.$destroy()
+        }
+        this.echoVmMap.delete(nodeId)
+      }
+    }
+  }
+
+  /**
+   * 清理已卸载的 Rune Vue 实例
+   */
+  cleanupDetachedRuneVms (force = false) {
+    for (const [nodeId, vm] of this.runeVmMap.entries()) {
+      if (force || !vm || !vm.$el || !vm.$el.isConnected) {
+        if (vm && typeof vm.$destroy === 'function') {
+          vm.$destroy()
+        }
+        this.runeVmMap.delete(nodeId)
+      }
+    }
+  }
+
+  /**
+   * 挂载 Echo Vue 组件（Vue.extend 模式）
+   */
+  mountEchoVueHosts () {
+    const EchoRenderer = this.muya?.options?.echoRendererCtor
+    const echoRegistry = this.muya?.options?.echoRegistry
+    if (!EchoRenderer || !echoRegistry) return
+
+    const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+    if (!root) return
+
+    const echoMap = this.getEchoMap()
+    const hosts = root.querySelectorAll(ECHO_PLACEHOLDER_SELECTOR)
+    const aliveNodeIds = new Set()
+
+    hosts.forEach(host => {
+      const dataset = host.dataset || {}
+      const echoName = String(dataset.echoName || '').trim()
+      const echoId = String(dataset.echoId || '')
+      const definitionId = String(dataset.echoDefinitionId || '')
+      const nodeId = String(dataset.echoNodeId || '')
+      const value = String(dataset.echoValue || '')
+      if (!echoName || !echoId || !nodeId) {
+        return
+      }
+
+      aliveNodeIds.add(nodeId)
+      const echo = echoMap.get(`id:${definitionId}`) || echoMap.get(echoName) || {
+        id: definitionId,
+        name: echoName
+      }
+      const renderKey = host.dataset.echoRenderKey || ''
+      const mountedVm = this.echoVmMap.get(nodeId)
+
+      if (mountedVm && mountedVm.$el && mountedVm.$el.parentNode === host && mountedVm.__echoRenderKey === renderKey) {
+        mountedVm.echoId = echoId
+        mountedVm.nodeId = nodeId
+        mountedVm.echo = echo
+        mountedVm.value = value
+        return
+      }
+
+      if (mountedVm && typeof mountedVm.$destroy === 'function') {
+        mountedVm.$destroy()
+      }
+
+      while (host.firstChild) {
+        host.removeChild(host.firstChild)
+      }
+      const vm = new EchoRenderer({
+        propsData: {
+          echoId,
+          nodeId,
+          echo,
+          value,
+          onCommit: this.muya?.options?.onEchoPlaceholderCommit || null
+        }
+      })
+      vm.echoRegistry = echoRegistry
+      vm.$root = { echoRegistry }
+      vm.__echoRenderKey = renderKey
+      vm.$mount()
+      host.appendChild(vm.$el)
+      this.echoVmMap.set(nodeId, vm)
+    })
+
+    for (const [savedNodeId, vm] of this.echoVmMap.entries()) {
+      if (!aliveNodeIds.has(savedNodeId)) {
+        if (vm && typeof vm.$destroy === 'function') {
+          vm.$destroy()
+        }
+        this.echoVmMap.delete(savedNodeId)
+      }
+    }
+  }
+
+  /**
+   * 挂载 Rune Vue 组件（Vue.extend 模式）
+   */
+  mountRuneVueHosts () {
+    const RuneRenderer = this.muya?.options?.runeRendererCtor
+    if (!RuneRenderer) return
+
+    const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+    if (!root) return
+
+    const runeMap = this.getRuneMap()
+    const hosts = root.querySelectorAll(RUNE_PLACEHOLDER_SELECTOR)
+    const aliveNodeIds = new Set()
+
+    hosts.forEach(host => {
+      const dataset = host.dataset || {}
+      const runeName = String(dataset.runeName || '').trim()
+      const runeId = String(dataset.runeId || '')
+      const nodeId = String(dataset.runeNodeId || '')
+      if (!runeName || !runeId || !nodeId) {
+        return
+      }
+
+      aliveNodeIds.add(nodeId)
+      const matchedRune = runeMap.get(runeName) || null
+      const rune = matchedRune || {
+        id: '',
+        name: runeName,
+        template: ''
+      }
+      const runeValue = String(dataset.runeValue || '').trim()
+      const renderKey = host.dataset.runeRenderKey || ''
+      const mountedVm = this.runeVmMap.get(nodeId)
+
+      const muyaInstance = this.muya?.options?.memocastMuya || null
+      const onValueChange = (payload) => {
+        if (!muyaInstance || typeof muyaInstance.updateRunePlaceholderValue !== 'function') return
+        muyaInstance.updateRunePlaceholderValue({
+          runeId: payload?.runeId || runeId,
+          nodeId: payload?.nodeId || nodeId,
+          value: payload?.value
+        })
+      }
+
+      if (mountedVm && mountedVm.$el && mountedVm.$el.parentNode === host && mountedVm.__runeRenderKey === renderKey) {
+        mountedVm.runeId = runeId
+        mountedVm.nodeId = nodeId
+        mountedVm.rune = rune
+        mountedVm.value = runeValue
+        mountedVm.onValueChange = onValueChange
+        return
+      }
+
+      if (mountedVm && typeof mountedVm.$destroy === 'function') {
+        mountedVm.$destroy()
+      }
+
+      host.innerHTML = ''
+      const vm = new RuneRenderer({
+        propsData: {
+          runeId,
+          nodeId,
+          rune,
+          value: runeValue,
+          onValueChange
+        }
+      })
+      vm.__runeRenderKey = renderKey
+      vm.$mount()
+      host.appendChild(vm.$el)
+      this.runeVmMap.set(nodeId, vm)
+    })
+
+    for (const [savedNodeId, vm] of this.runeVmMap.entries()) {
+      if (!aliveNodeIds.has(savedNodeId)) {
+        if (vm && typeof vm.$destroy === 'function') {
+          vm.$destroy()
+        }
+        this.runeVmMap.delete(savedNodeId)
+      }
+    }
+  }
+
+  /**
+   * 挂载 Echo Vue 实例（供外部调用）
+   */
+  mountEchoVueInstances () {
+    this.mountEchoVueHosts()
+    this.cleanupDetachedEchoVms()
+  }
+
+  /**
+   * 挂载 Rune Vue 实例（供外部调用）
+   */
+  mountRuneVueInstances () {
+    this.mountRuneVueHosts()
+    this.cleanupDetachedRuneVms()
+  }
+
+  // ===================== 统一入口 =====================
+
+  /**
+   * Echo 占位符后处理入口
+   * 在 render() / partialRender() / singleRender() 之后调用
+   */
+  postRenderEchoPlaceholders () {
+    this.renderEchoPlaceholders()
+    this.cleanupDetachedEchoPlaceholders()
+    if (this.muya?.options?.enableEchoVueRenderer) {
+      this.mountEchoVueInstances()
+    } else {
+      this.cleanupDetachedEchoVms(true)
+    }
+  }
+
+  /**
+   * Rune 占位符后处理入口
+   * 在 render() / partialRender() / singleRender() 之后调用
+   */
+  postRenderRunePlaceholders () {
+    this.renderRunePlaceholders()
+    this.cleanupDetachedRunePlaceholders()
+    if (this.muya?.options?.enableRuneVueRenderer) {
+      this.mountRuneVueInstances()
+    } else {
+      this.cleanupDetachedRuneVms(true)
+    }
+  }
+
+  /**
+   * 兼容旧方法名 - renderRunes()
+   * 依次调用 Echo 和 Rune 的后处理
+   */
+  renderRunes () {
+    // Echo 独立渲染通道
+    this.postRenderEchoPlaceholders()
+    // Rune 独立渲染通道
+    this.postRenderRunePlaceholders()
   }
 
   cleanupDetachedRuneVms (force = false) {
@@ -475,7 +744,7 @@ class StateRender {
       const mountedVm = this.runeVmMap.get(nodeId)
       // Memocast 扩展：把 Muya 实例的回写方法作为 onValueChange 注入，
       // 这样内层 SFC emit('input', value) 时就能写回 Markdown 的 data-rune-value。
-      const muyaInstance = this.muya?.options?.__memocastMuya || null
+      const muyaInstance = this.muya?.options?.memoMuya || null
       const onValueChange = (payload) => {
         if (!muyaInstance || typeof muyaInstance.updateRunePlaceholderValue !== 'function') return
         muyaInstance.updateRunePlaceholderValue({
@@ -662,7 +931,7 @@ class StateRender {
 
   renderRunes () {
     this.renderRunePlaceholderNodes()
-    this.renderEchoPlaceholderNodes()
+    this.renderEchoPlaceholders()
     this.cleanupDetachedRunePlaceholders()
     this.cleanupDetachedEchoPlaceholders()
     if (this.muya?.options?.enableRuneVueRenderer) {
@@ -672,7 +941,7 @@ class StateRender {
       this.cleanupDetachedEchoVms(true)
     }
     // === 让 echo-chant 类回响真正影响附近节点的排版/动画/边距 ===
-    // 上面 renderEchoPlaceholderNodes 已经把包含 data-rune-id 的 span 写进了 host.innerHTML，
+    // 上面 renderEchoPlaceholders 已经把包含 data-rune-id 的 span 写进了 host.innerHTML，
     // 这里再让 EchoRuntime 派发对应 handler（growth / shatter / skywalk / twinbloom /
     // mindsteal / lucky / disperse / tbd）。
     const runtime = this.muya?.options?.__echoRuntime

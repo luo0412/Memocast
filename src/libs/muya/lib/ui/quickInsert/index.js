@@ -155,6 +155,7 @@ class QuickInsert extends BaseScrollFloat {
     this.renderArray = null
     this.activeItem = null
     this.block = null
+    this.cursorOffset = null // Track cursor position for inline @ support
     this.columnsCount = this.getColumnsCount()
     this.sectionOffsets = [] // 记录每个分区的起始索引
     this.shouldHideOnScroll = false // Prevent scroll from hiding the panel during keyboard navigation
@@ -322,15 +323,30 @@ class QuickInsert extends BaseScrollFloat {
   listen () {
     super.listen()
     const { eventCenter } = this.muya
-    eventCenter.subscribe('muya-quick-insert', (reference, block, status) => {
+    eventCenter.subscribe('muya-quick-insert', (reference, block, status, searchText = '', cursorOffset = null) => {
       if (status) {
         this.block = block
+        // Calculate cursor offset from the @ trigger position
+        const textBeforeCursor = block.text.substring(0, cursorOffset !== null ? cursorOffset : block.text.length)
+        const atIndex = textBeforeCursor.lastIndexOf('@')
+        this.cursorOffset = atIndex >= 0 ? atIndex + 1 : textBeforeCursor.length
         this.show(reference)
-        this.search(block.text.substring(1)) // remove `@` char
+        // Use searchText from event if available, otherwise extract from block text
+        const keyword = searchText !== undefined ? searchText : block.text.substring(1)
+        this.search(keyword)
       } else {
+        this.cursorOffset = null
         this.hide()
       }
     })
+  }
+
+  // Get the position right after the @ trigger in current block text
+  getAtTriggerPosition() {
+    if (this.cursorOffset === null || !this.block) {
+      return null
+    }
+    return this.cursorOffset
   }
 
   search(text) {
@@ -454,26 +470,38 @@ class QuickInsert extends BaseScrollFloat {
     const grandParentBlock = parentBlock && typeof contentState.getParent === 'function'
       ? contentState.getParent(parentBlock)
       : null
-    const previousLine = isFirstInsertionFromQuickInsert ? this.getPreviousNonEmptyLine() : null
-    const runeValue = previousLine?.isPlainText ? previousLine.text : ''
-    const createPlaceholder = typeof createRunePlaceholderHtml === 'function'
-      ? createRunePlaceholderHtml
-      : (currentItem = {}, currentDisplayText = '', currentRuneValue = '') => {
-          const runeName = currentItem?.meta?.runeName || 'Rune'
-          const text = currentDisplayText || runeName
-          const normalizedRuneValue = String(currentRuneValue || '').trim()
-          const runeId = uuidv4()
-          const nodeId = `rune-${getUniqueId()}`
 
-          return `<div data-rune-name="${escapeHtmlAttribute(runeName)}" data-rune-id="${escapeHtmlAttribute(runeId)}" data-rune-node-id="${escapeHtmlAttribute(nodeId)}" data-rune-value="${escapeHtmlAttribute(normalizedRuneValue)}">${escapeHtmlAttribute(text)}</div>`
-        }
-    const insertContent = createPlaceholder(item, displayText, runeValue)
+    // Handle inline @ insertion
+    const atPosition = this.getAtTriggerPosition()
+    const isInlineAt = atPosition !== null && atPosition > 1
+
+    let previousLine, runeValue, insertContent, finalText
+
+    if (isInlineAt) {
+      // For inline @, get value from previous line and preserve text before @
+      previousLine = this.getPreviousNonEmptyLine()
+      runeValue = previousLine?.isPlainText ? previousLine.text : ''
+      insertContent = typeof createRunePlaceholderHtml === 'function'
+        ? createRunePlaceholderHtml(item, displayText, runeValue)
+        : `<div data-rune-name="${escapeHtmlAttribute(item?.meta?.runeName || 'Rune')}" data-rune-id="${uuidv4()}" data-rune-node-id="rune-${getUniqueId()}" data-rune-value="${escapeHtmlAttribute(String(runeValue).trim())}">${escapeHtmlAttribute(displayText)}</div>`
+      const textBeforeAt = rawCurrentText.substring(0, atPosition - 1) // -1 to exclude the @
+      finalText = textBeforeAt + insertContent
+    } else {
+      // Original behavior for line-start @
+      previousLine = isFirstInsertionFromQuickInsert ? this.getPreviousNonEmptyLine() : null
+      runeValue = previousLine?.isPlainText ? previousLine.text : ''
+      insertContent = typeof createRunePlaceholderHtml === 'function'
+        ? createRunePlaceholderHtml(item, displayText, runeValue)
+        : `<div data-rune-name="${escapeHtmlAttribute(item?.meta?.runeName || 'Rune')}" data-rune-id="${uuidv4()}" data-rune-node-id="rune-${getUniqueId()}" data-rune-value="${escapeHtmlAttribute(String(runeValue).trim())}">${escapeHtmlAttribute(displayText)}</div>`
+      finalText = insertContent
+    }
 
     console.log('[QuickInsert.insertRuneTemplate]', {
       currentBlockKey: this.block?.key,
       currentBlockText: this.block?.text,
       hasExistingRunePlaceholder,
       isFirstInsertionFromQuickInsert,
+      isInlineAt,
       currentBlock,
       parentBlock,
       grandParentBlock,
@@ -488,7 +516,7 @@ class QuickInsert extends BaseScrollFloat {
       insertContentPreview: insertContent.slice(0, 160)
     })
 
-    if (isFirstInsertionFromQuickInsert && previousLine?.isPlainText && previousLine.removeTarget && this.block) {
+    if (isFirstInsertionFromQuickInsert && !isInlineAt && previousLine?.isPlainText && previousLine.removeTarget && this.block) {
       contentState.removeBlock(previousLine.removeTarget)
     }
 
@@ -496,7 +524,7 @@ class QuickInsert extends BaseScrollFloat {
     if (!activeBlock) return
 
     const { key } = activeBlock
-    activeBlock.text = insertContent
+    activeBlock.text = finalText
     const offset = insertContent.length
     contentState.cursor = {
       start: {
@@ -518,12 +546,28 @@ class QuickInsert extends BaseScrollFloat {
     const activeBlock = this.block && contentState.getBlock(this.block.key)
     if (!activeBlock) return false
 
-    const previousLine = isFirstInsertionFromQuickInsert ? this.getPreviousNonEmptyLine() : null
-    const echoValue = previousLine?.isPlainText ? previousLine.text : ''
-    const insertContent = createEchoPlaceholderMarkup(item, echoValue)
-    const { key } = activeBlock
+    // Handle inline @ insertion - replace from @ to cursor with echo template
+    const atPosition = this.getAtTriggerPosition()
+    const isInlineAt = atPosition !== null && atPosition > 1
 
-    activeBlock.text = insertContent
+    let finalText
+    if (isInlineAt) {
+      // Replace the @ and typed text with echo template
+      const textBeforeAt = rawCurrentText.substring(0, atPosition - 1) // -1 to exclude the @ itself
+      const previousLine = this.getPreviousNonEmptyLine()
+      const echoValue = previousLine?.isPlainText ? previousLine.text : ''
+      const insertContent = createEchoPlaceholderMarkup(item, echoValue)
+      finalText = textBeforeAt + insertContent
+    } else {
+      // Original behavior for line-start @
+      const previousLine = isFirstInsertionFromQuickInsert ? this.getPreviousNonEmptyLine() : null
+      const echoValue = previousLine?.isPlainText ? previousLine.text : ''
+      const insertContent = createEchoPlaceholderMarkup(item, echoValue)
+      finalText = insertContent
+    }
+
+    const { key } = activeBlock
+    activeBlock.text = finalText
     // Position cursor at the end of the block text.
     const offset = activeBlock.text.length
     contentState.cursor = {
@@ -536,7 +580,7 @@ class QuickInsert extends BaseScrollFloat {
     this.muya.dispatchChange()
 
     // If no value was provided, focus the editable value marker so user can type.
-    if (!echoValue) {
+    if (!isInlineAt) {
       this.muya.eventCenter.subscribeOnce('muya-selection-change', () => {
         const valueMarker = this.scrollElement.querySelector('.ag-echo-placeholder-value-marker')
         if (valueMarker) {

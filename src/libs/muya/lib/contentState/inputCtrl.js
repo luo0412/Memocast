@@ -33,10 +33,35 @@ let renderCodeBlockTimer = null
 
 const inputCtrl = ContentState => {
   // Input @ to quick insert paragraph
-  ContentState.prototype.checkQuickInsert = function (block) {
+  // Supports inline @ anywhere in the line (not just at line start)
+  ContentState.prototype.checkQuickInsert = function (block, offset) {
     const { type, text, functionType } = block
     if (type !== 'span' || functionType !== 'paragraphContent') return false
-    return /^@\S*$/.test(text)
+
+    // Find the @ character at or before the current cursor position
+    // Look backwards from offset to find the last @ that's not inside a word
+    const textBeforeCursor = text.substring(0, offset)
+
+    // Find the last @ that could be a trigger (not preceded by a word character)
+    const match = textBeforeCursor.match(/@(?:\S*)$/)
+
+    if (!match) return false
+
+    // The @ must be at the start OR preceded by whitespace/punctuation (not a word char)
+    const atIndex = textBeforeCursor.lastIndexOf('@')
+    if (atIndex > 0) {
+      const charBeforeAt = textBeforeCursor[atIndex - 1]
+      if (/\w/.test(charBeforeAt)) return false
+    }
+
+    return true
+  }
+
+  // Get the text after the last @ trigger (for search)
+  ContentState.prototype.getQuickInsertSearchText = function (block, offset) {
+    const textBeforeCursor = block.text.substring(0, offset)
+    const match = textBeforeCursor.match(/@(\S*)$/)
+    return match ? match[1] : ''
   }
 
   ContentState.prototype.checkCursorInTokenType = function (functionType, text, offset, type) {
@@ -268,10 +293,14 @@ const inputCtrl = ContentState => {
       }
     }
 
-    // show quick insert
+    // show quick insert (inline @ support)
     const rect = paragraph.getBoundingClientRect()
-    const checkQuickInsert = this.checkQuickInsert(block)
+    const cursorOffset = start.offset
+    const checkQuickInsert = this.checkQuickInsert(block, cursorOffset)
+    const searchText = checkQuickInsert ? this.getQuickInsertSearchText(block, cursorOffset) : ''
     const reference = this.getPositionReference()
+    // Attach cursor offset for QuickInsert to use
+    reference._calculatedOffset = cursorOffset
     reference.getBoundingClientRect = function () {
       const { x, y, left, top, height, bottom } = rect
 
@@ -287,7 +316,7 @@ const inputCtrl = ContentState => {
       })
     }
 
-    this.muya.eventCenter.dispatch('muya-quick-insert', reference, block, !!checkQuickInsert)
+    this.muya.eventCenter.dispatch('muya-quick-insert', reference, block, !!checkQuickInsert, searchText, cursorOffset)
 
     this.cursor = { start, end }
 
