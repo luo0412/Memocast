@@ -546,8 +546,8 @@ export default {
       handler (val) {
         if (val) {
           const annoSource = val.anno_source || val.template || createDefaultEchoAnnoSource(val.name)
-          // 内置回响永远归属 builtin 分类，不允许通过 UI 改
-          const category = val.isBuiltin ? 'builtin' : getEchoCategoryValue(val.category)
+          // 内置回响使用代码中定义的分类（builtin / showy / marker），不允许通过 UI 改
+          const category = val.isBuiltin ? (val.category || 'builtin') : getEchoCategoryValue(val.category)
           this.form = {
             id: val.id,
             name: val.name || '',
@@ -814,7 +814,7 @@ export default {
       }
       const annoSource = String(this.monacoEditor ? this.monacoEditor.getValue() : this.form.anno_source || '').trim()
       if (!annoSource) return
-      const category = this.form.isBuiltin ? 'builtin' : getEchoCategoryValue(this.form.category)
+      const category = this.form.isBuiltin ? (this.form.category || 'builtin') : getEchoCategoryValue(this.form.category)
       const payload = {
         ...this.form,
         name,

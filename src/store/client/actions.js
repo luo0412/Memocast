@@ -143,10 +143,18 @@ export default {
 
       // 保留 store 中已有 builtin 的覆盖（向后兼容旧逻辑中可能存在的"用户编辑过的内置拷贝"）。
       // 关键：isBuiltin 永远是 true，store override 不能把它覆盖成 false（安全护栏）。
+      // 分类以代码版 BUILTIN_ECHO_CARDS 为权威，防止 DB 中的错误分类（如全部写成 'builtin'）覆盖正确值。
       const stateBuiltins = (state.echoCards || []).filter(echo => isBuiltinEcho(echo))
       const mergedBuiltins = builtinEchoes.map(builtinEcho => {
         const override = stateBuiltins.find(s => s && s.id === builtinEcho.id)
-        return override ? { ...builtinEcho, ...override, isBuiltin: true } : builtinEcho
+        if (!override) return builtinEcho
+        return {
+          ...builtinEcho,
+          // 允许 override 覆盖 name/desc/color/icon/anno_source 等内容属性，
+          // 但 category 必须以代码中的定义为准（防止 DB 写入错误的分类值）。
+          category: builtinEcho.category,
+          isBuiltin: true
+        }
       })
 
       const mergedEchoes = [

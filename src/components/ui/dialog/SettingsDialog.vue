@@ -2127,7 +2127,11 @@ export default {
       let saved = null
       if (isBuiltin) {
         // ✅ 内置回响不入库；保留 store 中的原始定义（防止用户编辑后污染代码内置数据）
-        saved = builtinMatch ? { ...builtinMatch, ...payload } : { ...payload }
+        // category 必须以代码定义（BUILTIN_ECHO_CARDS → loadEchoes 合并后的 builtinMatch）为准，
+        // 即使 form data 中有错误分类也不允许覆盖。
+        const savedEcho = builtinMatch ? { ...builtinMatch, ...payload } : { ...payload }
+        savedEcho.category = builtinMatch ? builtinMatch.category : (payload.category || 'builtin')
+        saved = savedEcho
       } else {
         // 集合内去重：非内置回响之间不能重名
         const dupNameKey = String(payload.name || '').trim().toLowerCase()

@@ -592,6 +592,15 @@ export default {
   try {
     db.run("UPDATE echoes SET category = 'builtin' WHERE (id LIKE '\\_\\_builtin\\_%' ESCAPE '\\') AND (category IS NULL OR trim(category) = '')")
   } catch (error) {}
+  // 修正历史迁移错误：把原本被错误写成 'builtin' 的内置回响（showy/marker）恢复为正确分类
+  try {
+    const BUILTIN_ECHO_CARDS_MIGRATION = require('./service/builtin-echoes').BUILTIN_ECHO_CARDS
+    for (const meta of (BUILTIN_ECHO_CARDS_MIGRATION || [])) {
+      if (meta && meta.id && meta.category && meta.category !== 'builtin') {
+        db.run('UPDATE echoes SET category = ? WHERE id = ?', [meta.category, meta.id])
+      }
+    }
+  } catch (error) {}
   try {
     db.run("UPDATE echoes SET category = 'marker' WHERE (id NOT LIKE '\\_\\_builtin\\_%' ESCAPE '\\') AND (category IS NULL OR trim(category) = '')")
   } catch (error) {}
@@ -2719,11 +2728,13 @@ function registerDatabaseHandlers() {
         return { success: false, code: 'NO_BUILTIN_ECHO_CARDS' }
       }
       const now = Date.now()
+      const builtinIds = new Set(BUILTIN_ECHO_CARDS.map(e => e.id))
       // 先查出所有非内置的回响，保留下来
-      const customEchoes = execToObjects('SELECT id FROM echoes WHERE category != "builtin"')
-      const customIds = (customEchoes || []).map(e => e.id)
-      // 删掉所有内置回响
-      await db.run('DELETE FROM echoes WHERE category = "builtin"')
+      const customEchoes = execToObjects('SELECT id FROM echoes')
+      const customEchoes2 = (customEchoes || []).filter(e => !builtinIds.has(e.id))
+      const customIds = customEchoes2.map(e => e.id)
+      // 删掉所有内置回响（按 id 前缀判断，避免遗漏 showy/marker 分类）
+      await db.run(`DELETE FROM echoes WHERE ${Array.from(builtinIds).map(() => 'id = ?').join(' OR ')}`, [...builtinIds])
       // 重新插入内置回响
       for (const builtinEcho of BUILTIN_ECHO_CARDS) {
         if (!builtinEcho || !builtinEcho.id) continue
