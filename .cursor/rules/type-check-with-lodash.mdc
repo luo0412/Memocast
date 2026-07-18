@@ -1,0 +1,57 @@
+# 类型判断方法优先使用 lodash
+
+## 1. 为什么优先 lodash
+
+- lodash 提供统一、一致的类型判断 API，避免 JavaScript 原生类型判断的边界 case（如 `typeof null === 'object'`）。
+- 可读性好：`_.isString(value)` 比 `Object.prototype.toString.call(value) === '[object String]'` 更直观。
+- 统一入口：避免项目中混用 `typeof`、`instanceof`、`Object.prototype.toString.call()`、自定义 `typeOf` 等多种方式。
+
+## 2. 推荐的 lodash 判断函数
+
+| 判断目标 | 推荐写法 | 等价原生 |
+|---------|---------|---------|
+| 字符串 | `_.isString(value)` | `typeof value === 'string'` |
+| 数字 | `_.isNumber(value)` | `typeof value === 'number'` |
+| 布尔值 | `_.isBoolean(value)` | `typeof value === 'boolean'` |
+| 函数 | `_.isFunction(value)` | `typeof value === 'function'` |
+| 数组 | `_.isArray(value)` | `Array.isArray(value)` |
+| 对象 | `_.isPlainObject(value)` | `(typeof value === 'object' && value !== null && !Array.isArray(value))` |
+| 日期 | `_.isDate(value)` | `value instanceof Date` |
+| 正则 | `_.isRegExp(value)` | `value instanceof RegExp` |
+| Error | `_.isError(value)` | `value instanceof Error` |
+| 空值 | `_.isNil(value)` | `value === null \|\| value === undefined` |
+| 空对象 | `_.isEmpty(value)` | (复杂，需手动实现) |
+| Promise | `_.isPromise(value)` | (需手动判断) |
+
+## 3. 已废弃的写法（禁止使用）
+
+```javascript
+// ❌ 禁止：typeof 数组/对象/null 判断不准确
+typeof [] === 'object'   // true，误判为普通对象
+typeof null === 'object'  // true，误判为普通对象
+
+// ❌ 禁止：instanceof 无法跨 iframe/frame 判断
+value instanceof Date     // iframe 中可能失效
+
+// ❌ 禁止：自定义 typeOf 工具函数
+function typeOf(obj) { return Object.prototype.toString.call(obj) } // 允许但不推荐，已有 lodash
+
+// ❌ 禁止：混合写法
+function isString(val) {
+  return Object.prototype.toString.call(val) === '[object String]'
+}
+```
+
+## 4. 例外情况
+
+- **性能敏感的热路径**：如在极频繁调用的循环中，lodash 的 tiny 函数（如 `_.isString`）会有额外函数调用开销，此时可考虑直接用 `typeof`（但需注意 `typeof null` 的问题）。
+- **无 lodash 依赖的独立工具脚本**：如 `_temp/` 下的临时脚本或 `node_modules` 外的纯 Node 脚本，可自行判断。
+- **服务端 Node.js 独有对象**：`Buffer` 判断只能用 `Buffer.isBuffer()`，`stream` 判断只能用 `value instanceof stream.Readable` 等原生 API。
+
+## 5. 强制规范
+
+1. **必须**先 `import _ from 'lodash'` 或按需引入（如 `import isString from 'lodash/isString'`）。
+2. 项目中**禁止**新增自定义的 `isString`、`isArray`、`isObject` 等判断函数。
+3. 新增类型判断时，**必须**先查 lodash 文档是否有对应 API。
+4. 老代码中的原生类型判断**允许暂时保留**，但重构时优先替换为 lodash 写法。
+5. ESLint / Stylelint 配置中若发现违规，可配置 `lodash/prop-shorthand` 或自定义规则强制提示。

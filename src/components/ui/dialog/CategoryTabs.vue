@@ -119,36 +119,38 @@ export default {
 
 .category-tabs ::v-deep(.q-tabs__content) {
   padding: 0;
+  justify-content: flex-start !important;
 }
 
 .category-tabs ::v-deep(.q-tabs__content .q-tab__content) {
   min-height: 30px;
+  justify-content: flex-start !important;
+  text-align: left !important;
 }
 
 .category-tab {
   width: 100%;
-  justify-content: flex-start;
+  justify-content: flex-start !important;
   border-radius: 8px;
   margin: 2px 4px;
   padding: 4px 6px;
   min-height: 30px;
   transition: all 0.2s ease;
   position: relative;
+  text-align: left !important;
 }
 
-.category-tab-icon {
+.category-tab ::v-deep(.q-tab__content) {
+  justify-content: flex-start !important;
+  text-align: left !important;
+}
+
+.category-tab ::v-deep(.q-tab__icon) {
   margin-right: 4px;
-  flex-shrink: 0;
 }
 
-.category-tab-label {
-  font-size: 0.72rem;
-  line-height: 1.2;
-  flex: 1;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.category-tab ::v-deep(.q-tab__label) {
+  text-align: left !important;
 }
 
 .category-tab-badge {

@@ -45,6 +45,7 @@ export const RUNE_CATEGORIES = Object.freeze([
 
 export const ECHO_CATEGORIES = Object.freeze([
   { value: 'builtin', i18nKey: 'echoCategoryBuiltin' },
+  { value: 'showy', i18nKey: 'echoCategoryShowy' },
   { value: 'marker', i18nKey: 'echoCategoryMarker' },
   { value: 'typography', i18nKey: 'echoCategoryTypography' }
 ])
@@ -61,11 +62,14 @@ export const getRuneCategoryValue = (raw) => {
   return DEFAULT_RUNE_CATEGORY
 }
 
-export const getEchoCategoryValue = (raw, isBuiltin = false) => {
+export const getEchoCategoryValue = (raw, isBuiltin = false, echoCategory = null) => {
   const value = String(raw || '').trim()
   if (ECHO_CATEGORY_VALUES.includes(value)) return value
-  // 内置 echo 强制归属到 builtin 分类
-  if (isBuiltin) return 'builtin'
+  // 内置 echo 根据其 category 字段分配（builtin 或 showy），否则默认 builtin
+  if (isBuiltin) {
+    if (echoCategory && ECHO_CATEGORY_VALUES.includes(echoCategory)) return echoCategory
+    return 'builtin'
+  }
   return DEFAULT_ECHO_CATEGORY
 }
 

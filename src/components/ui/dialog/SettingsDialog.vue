@@ -101,6 +101,37 @@
                           {{ $t('resetSqliteHint') }}
                         </div>
                       </div>
+                      <q-separator class='q-my-md' />
+                      <div>
+                        <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
+                          <span>{{ $t('resetRunes') }}</span>
+                          <q-btn
+                            class='fab-btn'
+                            flat no-caps color='purple-7'
+                            icon='auto_fix_high'
+                            :label="$t('resetRunes')"
+                            @click='resetRunesHandler'
+                          />
+                        </div>
+                        <div class='text-caption text-grey-6'>
+                          {{ $t('resetRunesHint') }}
+                        </div>
+                      </div>
+                      <div class='q-mt-md'>
+                        <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
+                          <span>{{ $t('resetEchoes') }}</span>
+                          <q-btn
+                            class='fab-btn'
+                            flat no-caps color='cyan-7'
+                            icon='graphic_eq'
+                            :label="$t('resetEchoes')"
+                            @click='resetEchoesHandler'
+                          />
+                        </div>
+                        <div class='text-caption text-grey-6'>
+                          {{ $t('resetEchoesHint') }}
+                        </div>
+                      </div>
                     </SettingsSectionContent>
 
                     <!-- 版本 -->
@@ -423,7 +454,7 @@
                   <div class='general-settings-panel'>
                     <SettingsSectionContent :title='currentRuneCategoryLabel' accent-color='purple-7'>
                       <template v-slot:actions>
-                        <q-btn dense flat no-caps :label="$t('runeCardAdd')" color='purple-7' icon='add' size='sm' @click='openAddRune' />
+                        <q-btn dense flat no-caps :label="runeSelected.length > 0 ? $t('selectedCount', { count: runeSelected.length }) : $t('runeCardAdd')" :color='runeSelected.length > 0 ? "negative" : "purple-7"' :icon='runeSelected.length > 0 ? "delete_sweep" : "add"' size='sm' @click='runeSelected.length > 0 ? confirmBatchDeleteRune() : openAddRune()' />
                       </template>
                       <div class='text-caption text-grey-6 q-mb-sm'>
                         <q-icon name='drag_indicator' size='xs' /> {{ $t('runeDragTip') }}
@@ -439,7 +470,15 @@
                           @drop='onDrop($event, index, "rune")'
                           @dragend='onDragEnd($event, "rune")'
                         >
-                          <RuneCard class='rune-card-item' :rune='rune' @edit='openEditRune' @delete='confirmDeleteRune' />
+                          <RuneCard
+                            class='rune-card-item'
+                            :rune='rune'
+                            :selectable='true'
+                            :selected='runeSelected.includes(rune.id)'
+                            @edit='openEditRune'
+                            @delete='confirmDeleteRune'
+                            @toggle-select='toggleRuneSelect(rune.id)'
+                          />
                         </div>
                       </div>
                       <div v-if='!localRuneCardsInCategory || localRuneCardsInCategory.length === 0' class='text-center text-grey q-pa-xl'>
@@ -462,7 +501,7 @@
                   <div class='general-settings-panel'>
                     <SettingsSectionContent :title='currentEchoCategoryLabel' accent-color='cyan-7'>
                       <template v-slot:actions>
-                        <q-btn v-if='!isCurrentEchoCategoryBuiltin' dense flat no-caps :label='$t("echoCardAdd")' color='cyan-7' icon='add' size='sm' @click='openAddEcho' />
+                        <q-btn v-if='!isCurrentEchoCategoryBuiltin' dense flat no-caps :label="echoSelected.length > 0 ? $t('selectedCount', { count: echoSelected.length }) : $t('echoCardAdd')" :color='echoSelected.length > 0 ? "negative" : "cyan-7"' :icon='echoSelected.length > 0 ? "delete_sweep" : "add"' size='sm' @click='echoSelected.length > 0 ? confirmBatchDeleteEcho() : openAddEcho()' />
                       </template>
                       <div v-if='isCurrentEchoCategoryBuiltin' class='text-caption text-grey-6 q-mb-sm'>
                         <q-icon name='info' size='xs' /> {{ $t('echoBuiltinCategoryHint') }}
@@ -485,6 +524,8 @@
                           <RuneCard
                             class='rune-card-item'
                             :rune='echo'
+                            :selectable='!echo.isBuiltin'
+                            :selected='echoSelected.includes(echo.id)'
                             :name-label='$t("echoCardName")'
                             :desc-label='$t("echoCardDesc")'
                             :power-label='$t("echoCardPower")'
@@ -496,6 +537,7 @@
                             :i18n-desc-key='echoI18nDescKey(echo)'
                             @edit='openEditEcho'
                             @delete='confirmDeleteEcho'
+                            @toggle-select='toggleEchoSelect(echo.id)'
                           />
                         </div>
                       </div>
@@ -696,7 +738,7 @@ import NavigationDialog from 'components/ui/dialog/NavigationDialog'
 import CategoryTabs from 'components/ui/dialog/CategoryTabs'
 import SettingsSectionContent from 'components/ui/dialog/SettingsSectionContent'
 import { backfillEchoAnnotationsInMarkdown } from 'components/ui/editor/echo/EchoRuntime'
-import { i18n } from 'boot/i18n'
+import { i18n, updateDialogDefaults } from 'boot/i18n'
 import bus from 'components/bus'
 import events from 'src/constants/events'
 import { version } from '../../../../package.json'
@@ -752,6 +794,8 @@ export default {
       cloudFnSubTab: 'config',
       runeCategory: DEFAULT_RUNE_CATEGORY,
       echoCategory: DEFAULT_ECHO_CATEGORY,
+      runeSelected: [],
+      echoSelected: [],
       imageUploadServiceOptionsPlain: [
         'wizOfficialImageUploadService',
         'picgoServer',
@@ -824,6 +868,14 @@ export default {
       navigationDialogVisible: false
     }
   },
+  watch: {
+    runeCategory () {
+      this.runeSelected = []
+    },
+    echoCategory () {
+      this.echoSelected = []
+    }
+  },
   computed: {
     languageOptions: function () {
       return i18n.availableLocales.map(l => i18n.t(l))
@@ -894,7 +946,7 @@ export default {
         value: c.value,
         label: this.$t(c.i18nKey),
         count: (this.localEchoCards || []).filter(e => {
-          const cat = getEchoCategoryValue(e && e.category, Boolean(e && e.isBuiltin))
+          const cat = getEchoCategoryValue(e && e.category, Boolean(e && e.isBuiltin), e && e.category)
           return cat === c.value
         }).length
       }))
@@ -908,7 +960,7 @@ export default {
     localEchoCardsInCategory () {
       const target = this.echoCategory
       return (this.localEchoCards || []).filter(e => {
-        const cat = getEchoCategoryValue(e && e.category, Boolean(e && e.isBuiltin))
+        const cat = getEchoCategoryValue(e && e.category, Boolean(e && e.isBuiltin), e && e.category)
         return cat === target
       })
     },
@@ -1079,6 +1131,8 @@ export default {
       })
       this.updateStateAndStore({ language: lan })
       i18n.locale = lan
+      // 更新 Dialog 全局按钮文字以响应语言切换
+      updateDialogDefaults()
       this.$q.notify({
         message: this.$t('switchLanguageHint'),
         color: 'primary',
@@ -1659,6 +1713,72 @@ export default {
         }
       })
     },
+    resetRunesHandler: async function () {
+      this.$q.dialog({
+        title: this.$t('resetRunes'),
+        message: this.$t('resetRunesConfirm'),
+        cancel: { label: this.$t('cancel') },
+        ok: { label: this.$t('confirm'), color: 'purple-7' }
+      }).onOk(async () => {
+        try {
+          const result = await DatabaseClient.runeTemplates.clearAll()
+          if (result && result.success) {
+            this.$q.notify({
+              message: this.$t('resetRunesSuccess', { count: result.count || 0, custom: result.customKept || 0 }),
+              type: 'positive',
+              position: 'top'
+            })
+            this.loadRunes()
+          } else {
+            this.$q.notify({
+              message: this.$t('resetRunesFailed'),
+              type: 'negative',
+              position: 'top'
+            })
+          }
+        } catch (err) {
+          console.error('[Settings] resetRunes error:', err)
+          this.$q.notify({
+            message: this.$t('resetRunesFailed'),
+            type: 'negative',
+            position: 'top'
+          })
+        }
+      })
+    },
+    resetEchoesHandler: async function () {
+      this.$q.dialog({
+        title: this.$t('resetEchoes'),
+        message: this.$t('resetEchoesConfirm'),
+        cancel: { label: this.$t('cancel') },
+        ok: { label: this.$t('confirm'), color: 'cyan-7' }
+      }).onOk(async () => {
+        try {
+          const result = await DatabaseClient.echoes.clearAll()
+          if (result && result.success) {
+            this.$q.notify({
+              message: this.$t('resetEchoesSuccess', { count: result.count || 0, custom: result.customKept || 0 }),
+              type: 'positive',
+              position: 'top'
+            })
+            this.loadEchoes()
+          } else {
+            this.$q.notify({
+              message: this.$t('resetEchoesFailed'),
+              type: 'negative',
+              position: 'top'
+            })
+          }
+        } catch (err) {
+          console.error('[Settings] resetEchoes error:', err)
+          this.$q.notify({
+            message: this.$t('resetEchoesFailed'),
+            type: 'negative',
+            position: 'top'
+          })
+        }
+      })
+    },
     onRuneSortEnd: function () {
       this.saveRunes(this.localRuneCards)
     },
@@ -1818,8 +1938,7 @@ export default {
         '__builtin_lucky__': 'echoBuiltinLuckyDesc',
         '__builtin_scapegoat__': 'echoBuiltinScapegoatDesc',
         '__builtin_calamity__': 'echoBuiltinCalamityDesc',
-        '__builtin_disperse__': 'echoBuiltinDisperseDesc',
-        '__builtin_clock__': 'echoBuiltinClockDesc'
+        '__builtin_disperse__': 'echoBuiltinDisperseDesc'
       }
       return idMap[String(echo.id)] || ''
     },
@@ -1879,6 +1998,73 @@ export default {
         await this.deleteEcho(echo.id)
         const filtered = this.localEchoCards.filter(item => item.id !== echo.id)
         this.updateStateAndStore({ echoCards: filtered })
+        this.$nextTick(() => {
+          bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
+        })
+      })
+    },
+    toggleRuneSelect: function (runeId) {
+      const idx = this.runeSelected.indexOf(runeId)
+      if (idx >= 0) {
+        this.runeSelected.splice(idx, 1)
+      } else {
+        this.runeSelected.push(runeId)
+      }
+    },
+    toggleEchoSelect: function (echoId) {
+      const idx = this.echoSelected.indexOf(echoId)
+      if (idx >= 0) {
+        this.echoSelected.splice(idx, 1)
+      } else {
+        this.echoSelected.push(echoId)
+      }
+    },
+    confirmBatchDeleteRune: function () {
+      if (this.runeSelected.length === 0) return
+      this.$q.dialog({
+        title: this.$t('runeBatchDelete'),
+        message: this.$t('runeBatchDeleteConfirm', { count: this.runeSelected.length }),
+        cancel: { label: this.$t('cancel') },
+        persistent: true
+      }).onOk(async () => {
+        const idsToDelete = [...this.runeSelected]
+        for (const id of idsToDelete) {
+          await this.deleteRune(id)
+        }
+        const filtered = this.localRuneCards.filter(r => !idsToDelete.includes(r.id))
+        this.updateStateAndStore({ runeCards: filtered })
+        this.runeSelected = []
+      })
+    },
+    confirmBatchDeleteEcho: function () {
+      if (this.echoSelected.length === 0) return
+      // 过滤掉内置回响
+      const builtinIds = this.localEchoCards.filter(e => e.isBuiltin).map(e => e.id)
+      const deletableIds = this.echoSelected.filter(id => !builtinIds.includes(id))
+      const builtinCount = this.echoSelected.length - deletableIds.length
+      if (deletableIds.length === 0) {
+        this.$q.notify({
+          message: this.$t('echoBuiltinCannotDelete') || '内置回响无法删除',
+          type: 'warning',
+          position: 'top'
+        })
+        this.echoSelected = []
+        return
+      }
+      this.$q.dialog({
+        title: this.$t('echoBatchDelete'),
+        message: builtinCount > 0
+          ? this.$t('echoBatchDeleteConfirmWithBuiltin', { count: deletableIds.length, builtin: builtinCount })
+          : this.$t('echoBatchDeleteConfirm', { count: deletableIds.length }),
+        cancel: { label: this.$t('cancel') },
+        persistent: true
+      }).onOk(async () => {
+        for (const id of deletableIds) {
+          await this.deleteEcho(id)
+        }
+        const filtered = this.localEchoCards.filter(e => !deletableIds.includes(e.id))
+        this.updateStateAndStore({ echoCards: filtered })
+        this.echoSelected = []
         this.$nextTick(() => {
           bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
         })

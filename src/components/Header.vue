@@ -2,6 +2,7 @@
   <q-bar
     class="q-electron-drag header text-grey"
     :class="['header--skin-' + skin]"
+    :data-header-skin="skin"
     @dblclick="macDoubleClickHandler"
   >
     <!-- Mac: 左侧标题 -->
@@ -474,12 +475,46 @@ export default {
         return
       }
       this.toggleChanged({ key: 'skin', value: nextSkin })
+      this.applySkinThemeColor(nextSkin)
       this.$q.notify({
         message: this.$t('skinSwitched', { name: this.$t(`skin_${nextSkin}`) }),
         type: 'positive',
         position: 'top',
         icon: 'check'
       })
+    },
+
+    applySkinThemeColor (skin) {
+      const skinColors = {
+        baiyang: null,
+        nezha: { main: '#b5817d', rgb: '181, 129, 125' },
+        infp: { main: '#21b56f', rgb: '33, 181, 111' }
+      }
+      const colors = skinColors[skin]
+      const root = document.documentElement
+      if (colors === null) {
+        root.style.removeProperty('--themeColor')
+        root.style.removeProperty('--themeColor90')
+        root.style.removeProperty('--themeColor80')
+        root.style.removeProperty('--themeColor70')
+        root.style.removeProperty('--themeColor60')
+        root.style.removeProperty('--themeColor50')
+        root.style.removeProperty('--themeColor40')
+        root.style.removeProperty('--themeColor30')
+        root.style.removeProperty('--themeColor20')
+        root.style.removeProperty('--themeColor10')
+      } else {
+        root.style.setProperty('--themeColor', `rgba(${colors.rgb}, 1)`)
+        root.style.setProperty('--themeColor90', `rgba(${colors.rgb}, .9)`)
+        root.style.setProperty('--themeColor80', `rgba(${colors.rgb}, .8)`)
+        root.style.setProperty('--themeColor70', `rgba(${colors.rgb}, .7)`)
+        root.style.setProperty('--themeColor60', `rgba(${colors.rgb}, .6)`)
+        root.style.setProperty('--themeColor50', `rgba(${colors.rgb}, .5)`)
+        root.style.setProperty('--themeColor40', `rgba(${colors.rgb}, .4)`)
+        root.style.setProperty('--themeColor30', `rgba(${colors.rgb}, .3)`)
+        root.style.setProperty('--themeColor20', `rgba(${colors.rgb}, .2)`)
+        root.style.setProperty('--themeColor10', `rgba(${colors.rgb}, .1)`)
+      }
     },
 
     handleSettingsClick (options = {}) {
@@ -754,6 +789,7 @@ export default {
 
   mounted () {
     this.updateMaximizeIcon()
+    this.applySkinThemeColor(this.skin)
     ipcRenderer.on('window-maximized', (_, val) => { this.isMaximized = val })
     if (!this.autoLogin && !this.isLogin) {
       this.$refs.loginDialog.toggle()
@@ -1019,13 +1055,32 @@ export default {
   border: 1px solid var(--floatBorderColor);
 }
 
+/* dropdown 菜单在各皮肤下的文字颜色（dropdown 是 teleport 的，scoped 选择器无效，需用变量） */
+:root {
+  --dropdown-text-color: var(--editorColor);
+  --dropdown-text-hover-bg: var(--themeColor10);
+  --dropdown-text-hover-color: var(--themeColor);
+}
+
+[data-header-skin="nezha"] {
+  --dropdown-text-color: #b5817d;
+  --dropdown-text-hover-bg: rgba(181, 129, 125, 0.12);
+  --dropdown-text-hover-color: #b5817d;
+}
+
+[data-header-skin="infp"] {
+  --dropdown-text-color: #5a7a5e;
+  --dropdown-text-hover-bg: rgba(163, 181, 166, 0.12);
+  --dropdown-text-hover-color: #5a7a5e;
+}
+
 .el-dropdown-menu__item {
-  color: var(--editorColor);
+  color: var(--dropdown-text-color);
 }
 
 .el-dropdown-menu__item:hover {
-  background-color: var(--themeColor10);
-  color: var(--themeColor);
+  background-color: var(--dropdown-text-hover-bg);
+  color: var(--dropdown-text-hover-color);
 }
 
 .el-dropdown-menu__item i {
@@ -1088,45 +1143,61 @@ export default {
 
 .header--skin-nezha {
   background-color: #b5817d !important;  /* 莫兰迪砖红(muted dusty rose) */
-  color: #f4ece6 !important;             /* 浅米白(柔和反色) */
+  color: #2c2c2c !important;             /* 深色文字 */
 }
 
 .header--skin-nezha .header-icon-btn .icon-custom,
 .header--skin-nezha .header-note-title > span,
 .header--skin-nezha .header-category-name {
-  color: #f4ece6;
+  color: #2c2c2c;
 }
 
 .header--skin-nezha .header-icon-btn:hover {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(0, 0, 0, 0.08);
 }
 
 .header--skin-nezha .note-method-btn {
-  color: #f4ece6;
+  color: #2c2c2c;
+}
+
+.header--skin-nezha .header-icon-btn.is-active .icon-custom {
+  color: #2c2c2c;
+}
+
+.header--skin-nezha .header-avatar-placeholder {
+  background-color: rgba(0, 0, 0, 0.2);
 }
 
 .header--skin-infp {
   background-color: #a3b5a6 !important;  /* 莫兰迪灰绿(sage green) */
-  color: #f4f0e6 !important;             /* 浅米白(柔和反色) */
+  color: #2c2c2c !important;             /* 深色文字 */
 }
 
 .header--skin-infp .header-icon-btn .icon-custom,
 .header--skin-infp .header-note-title > span,
 .header--skin-infp .header-category-name {
-  color: #f4f0e6;
+  color: #2c2c2c;
 }
 
 .header--skin-infp .header-icon-btn:hover {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(0, 0, 0, 0.08);
 }
 
 .header--skin-infp .note-method-btn {
-  color: #f4f0e6;
+  color: #2c2c2c;
 }
 
-/* 暗黑模式下:无论哪种皮肤,头部都要保持反色文字 */
+.header--skin-infp .header-icon-btn.is-active .icon-custom {
+  color: #2c2c2c;
+}
+
+.header--skin-infp .header-avatar-placeholder {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+/* 暗黑模式下:无论哪种皮肤,头部都要保持深色文字 */
 .body--dark .header--skin-nezha,
 .body--dark .header--skin-infp {
-  color: #f4ece6 !important;
+  color: #2c2c2c !important;
 }
 </style>

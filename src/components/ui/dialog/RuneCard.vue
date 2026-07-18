@@ -1,8 +1,17 @@
 <template>
-  <div class='rune-card' :class='cardClasses' :style='cardStyle' :draggable='draggable'>
+  <div
+    class='rune-card'
+    :class='cardClasses'
+    :style='cardStyle'
+    :draggable='draggable'
+    @click='onCardClick'
+  >
     <div v-if='isBuiltin' class='rune-card-builtin-badge'>
       <q-icon name='verified' size='12px' />
       <span>{{ resolvedBuiltinBadgeLabel }}</span>
+    </div>
+    <div v-if='selectable' class='rune-card-select-indicator'>
+      <q-icon :name='selected ? "check_circle" : "radio_button_unchecked"' size='14px' :color='selected ? "primary" : "grey-5"' />
     </div>
     <div class='rune-card-header' :style='headerStyle'>
       <div class='rune-card-icon' :style='iconBadgeStyle'>
@@ -110,6 +119,14 @@ export default {
     i18nDescKey: {
       type: String,
       default: ''
+    },
+    selectable: {
+      type: Boolean,
+      default: false
+    },
+    selected: {
+      type: Boolean,
+      default: false
     }
   },
   computed: {
@@ -145,7 +162,8 @@ export default {
     cardClasses () {
       return {
         'rune-card--readonly': this.disableDrag,
-        'rune-card--builtin': this.isBuiltin
+        'rune-card--builtin': this.isBuiltin,
+        'rune-card--selected': this.selected
       }
     },
     draggable () {
@@ -177,6 +195,14 @@ export default {
         if (translated && translated !== this.i18nDescKey) return translated
       }
       return this.rune.desc || ''
+    }
+  },
+  methods: {
+    onCardClick (event) {
+      if (this.selectable) {
+        event.stopPropagation()
+        this.$emit('toggle-select', this.rune.id)
+      }
     }
   }
 }
@@ -215,6 +241,11 @@ export default {
   border-style: solid;
 }
 
+.rune-card--selected {
+  border-color: #7E57C2 !important;
+  box-shadow: 0 0 0 2px rgba(126, 87, 194, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
 .rune-card-builtin-badge {
   position: absolute;
   top: 4px;
@@ -232,6 +263,13 @@ export default {
   backdrop-filter: blur(4px);
   z-index: 2;
   text-transform: uppercase;
+}
+
+.rune-card-select-indicator {
+  position: absolute;
+  top: -6px;
+  left: 0px;
+  z-index: 2;
 }
 
 .rune-card-footer-spacer {

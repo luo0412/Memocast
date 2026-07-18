@@ -124,7 +124,7 @@ export default {
 
       // === 内置回响以代码版 BUILTIN_ECHO_CARDS 为权威 ===
       // 1) 先用 DB 中已存在的 builtin 行（可能是 sync seed 写入的）作为基准
-      // 2) 用代码版 BUILTIN_ECHO_CARDS 补全缺失项（保证 11 个总在场）
+      // 2) 用代码版 BUILTIN_ECHO_CARDS 补全缺失项（保证 16 个总在场）
       // 3) 附加非 builtin 的 dbCards
       // 这样既能看到"DB 工具里查到的内置回响"也能在代码升级时自动补全新内置
       // DB schema 没有 isBuiltin 列；按 id 前缀约定补标记，供 UI 区分显示

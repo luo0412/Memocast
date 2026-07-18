@@ -1,7 +1,7 @@
 <template>
   <div class='cloudfn-config'>
     <div class='row items-center no-wrap q-mb-xs panel-title'>
-      <div class='panel-title-bar bg-pink-purple' />
+      <div class='panel-title-bar bg-blue-7' />
       <span class='text-subtitle2 text-weight-medium'>{{ $t('cloudFunction') }}</span>
       <q-space />
       <q-btn
@@ -97,7 +97,7 @@
         />
         <q-btn
           flat
-          color='purple-7'
+          color='blue-7'
           icon='science'
           :label="$t('cloudFunctionDemo')"
           :disable='testing'
@@ -138,7 +138,7 @@
 
     <div class='navigation-section'>
       <div class='row items-center no-wrap q-mb-xs panel-title'>
-        <div class='panel-title-bar bg-pink-purple' />
+        <div class='panel-title-bar bg-blue-7' />
         <span class='text-subtitle2 text-weight-medium'>{{ $t('navigationCenter') }}</span>
       </div>
       <q-separator class='q-my-sm server-section-separator' />
@@ -284,17 +284,17 @@ export default {
 }
 
 .navigation-open-btn {
-  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: #ffffff;
   width: 100%;
   max-width: 360px;
 }
 
 .navigation-open-btn:hover {
-  background: linear-gradient(135deg, #db2777 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
 }
 
-.bg-pink-purple {
-  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+.bg-blue-7 {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
 }
 </style>

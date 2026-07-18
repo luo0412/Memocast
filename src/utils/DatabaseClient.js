@@ -363,6 +363,10 @@ const runeTemplates = {
     return await invoke('db:deleteRuneTemplate', id)
   },
 
+  async clearAll () {
+    return await invoke('db:clearRuneTemplates')
+  },
+
   async fetchRemote({ sourceUrl, categoryKey }) {
     return await invoke('rune-template:fetchRemote', { sourceUrl, categoryKey })
   }
@@ -383,6 +387,10 @@ const echoes = {
 
   async remove(id) {
     return await invoke('db:deleteEcho', id)
+  },
+
+  async clearAll () {
+    return await invoke('db:clearEchoes')
   }
 }
 

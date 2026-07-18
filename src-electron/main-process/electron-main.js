@@ -2303,13 +2303,14 @@ function registerDatabaseHandlers() {
       await db.run('DELETE FROM guid_mapping')
       await db.run('DELETE FROM sync_log')
       await db.run('DELETE FROM local_categories')
+      await db.run('DELETE FROM echoes')
       // 重建离线根目录
       await db.run(
         `INSERT INTO local_categories (category, parent, kb_guid, local_only, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
         [DEFAULT_ROOT_CATEGORY, '/', '', 1, Date.now(), Date.now()]
       )
       saveDatabase()
-      log.info('[DB] Database reset successfully')
+      log.info('[DB] Database reset successfully (including echoes)')
       return true
     } catch (error) {
       log.error('[DB] resetDatabase error:', error)
@@ -2559,8 +2560,10 @@ function registerDatabaseHandlers() {
         return { success: false, code: 'ECHO_NAME_REQUIRED', message: 'echo.name is required' }
       }
 
-      // 内置回响 id 以 __builtin_ 开头，强制归类到 builtin；其它回响默认 marker
       const isBuiltin = typeof echo.id === 'string' && echo.id.startsWith('__builtin_')
+      // 查找内置回响的真实分类（builtin / showy / marker）
+      const builtinMeta = BUILTIN_ECHO_CARDS && BUILTIN_ECHO_CARDS.find(e => e.id === echo.id)
+      const builtinCategory = builtinMeta && builtinMeta.category ? builtinMeta.category : 'builtin'
 
       // 同名校验：不区分大小写、去首尾空白，且允许 id 自身（更新时）
       const dup = execOne(
@@ -2576,7 +2579,7 @@ function registerDatabaseHandlers() {
       const annoSource = echo.anno_source || echo.template || createDefaultEchoAnnoSource(name)
       const renderType = echo.render_type || 'anno'
       const category = isBuiltin
-        ? 'builtin'
+        ? builtinCategory
         : (typeof echo.category === 'string' && echo.category.trim() ? echo.category.trim() : 'marker')
       const sortOrder = Number.isFinite(Number(echo.sort_order)) ? Number(echo.sort_order) : 0
       if (existing) {
@@ -2640,8 +2643,10 @@ function registerDatabaseHandlers() {
       for (const echo of list) {
         const annoSource = echo.anno_source || echo.template || createDefaultEchoAnnoSource(echo.name)
         const isBuiltin = typeof echo.id === 'string' && echo.id.startsWith('__builtin_')
+        const builtinMeta = BUILTIN_ECHO_CARDS && BUILTIN_ECHO_CARDS.find(e => e.id === echo.id)
+        const builtinCategory = builtinMeta && builtinMeta.category ? builtinMeta.category : 'builtin'
         const category = isBuiltin
-          ? 'builtin'
+          ? builtinCategory
           : (typeof echo.category === 'string' && echo.category.trim() ? echo.category.trim() : 'marker')
         const sortOrder = Number.isFinite(Number(echo.sort_order)) ? Number(echo.sort_order) : 0
         await db.run(`INSERT OR REPLACE INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -2660,6 +2665,91 @@ function registerDatabaseHandlers() {
         code: 'ECHO_SAVE_FAILED',
         message: error && error.message ? error.message : String(error)
       }
+    }
+  })
+
+  // 清空所有符文模板
+  ipcMain.handle('db:clearRuneTemplates', async () => {
+    try {
+      const seedModule = require('./service/builtin-rune-templates')
+      const list = (seedModule && seedModule.BUILTIN_RUNE_TEMPLATES) || []
+      if (!list.length) {
+        return { success: false, code: 'NO_BUILTIN_RUNE_TEMPLATES' }
+      }
+      const now = Date.now()
+      // 先查出所有非内置的符文模板，保留下来
+      const customRunes = execToObjects('SELECT id FROM rune_templates WHERE is_builtin = 0')
+      const customIds = (customRunes || []).map(r => r.id)
+      // 删掉所有内置符文模板
+      await db.run('DELETE FROM rune_templates WHERE is_builtin = 1')
+      // 重新插入内置符文模板
+      const rows = list.map((it, idx) => ({
+        id: it.id,
+        category_key: it.category_key,
+        name: it.name,
+        desc: it.desc,
+        color: it.color,
+        icon: it.icon,
+        template: it.template,
+        source_url: '',
+        is_builtin: 1,
+        sort_order: idx,
+        created_at: now,
+        updated_at: now
+      }))
+      for (const row of rows) {
+        await db.run(
+          `INSERT INTO rune_templates (id, category_key, name, "desc", color, icon, template, source_url, is_builtin, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [row.id, row.category_key, row.name, row.desc || '', row.color || '#9C27B0', row.icon || 'auto_fix_high', row.template, row.source_url, row.is_builtin, row.sort_order, row.created_at, row.updated_at]
+        )
+      }
+      saveDatabase()
+      log.info(`[DB] Reset rune templates: re-inserted ${rows.length} builtins, kept ${customIds.length} custom`)
+      return { success: true, count: rows.length, customKept: customIds.length }
+    } catch (error) {
+      log.error('[DB] clearRuneTemplates error:', error)
+      return { success: false, code: 'CLEAR_RUNE_TEMPLATES_FAILED', message: String(error) }
+    }
+  })
+
+  // 清空所有回响
+  ipcMain.handle('db:clearEchoes', async () => {
+    try {
+      if (!BUILTIN_ECHO_CARDS || !BUILTIN_ECHO_CARDS.length) {
+        return { success: false, code: 'NO_BUILTIN_ECHO_CARDS' }
+      }
+      const now = Date.now()
+      // 先查出所有非内置的回响，保留下来
+      const customEchoes = execToObjects('SELECT id FROM echoes WHERE category != "builtin"')
+      const customIds = (customEchoes || []).map(e => e.id)
+      // 删掉所有内置回响
+      await db.run('DELETE FROM echoes WHERE category = "builtin"')
+      // 重新插入内置回响
+      for (const builtinEcho of BUILTIN_ECHO_CARDS) {
+        if (!builtinEcho || !builtinEcho.id) continue
+        await db.run(
+          `INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            builtinEcho.id,
+            builtinEcho.name,
+            builtinEcho.desc || '',
+            builtinEcho.color || '#26A69A',
+            builtinEcho.icon || 'graphic_eq',
+            builtinEcho.anno_source,
+            'anno',
+            builtinEcho.category || 'builtin',
+            Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
+            now,
+            now
+          ]
+        )
+      }
+      saveDatabase()
+      log.info(`[DB] Reset echoes: re-inserted ${BUILTIN_ECHO_CARDS.length} builtins, kept ${customIds.length} custom`)
+      return { success: true, count: BUILTIN_ECHO_CARDS.length, customKept: customIds.length }
+    } catch (error) {
+      log.error('[DB] clearEchoes error:', error)
+      return { success: false, code: 'CLEAR_ECHOES_FAILED', message: String(error) }
     }
   })
 
