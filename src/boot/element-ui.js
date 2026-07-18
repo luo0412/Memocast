@@ -5,6 +5,7 @@ import 'element-ui/lib/theme-chalk/index.css'
 
 Vue.use(ElementUI)
 Vue.use(ElementUIX)
+window.$message = ElementUI.Message
 
 export default ({ app }) => {
   app.elementUI = ElementUI

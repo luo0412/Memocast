@@ -1076,7 +1076,10 @@ export default class EchoRuntime {
       ? ` data-rune-id="${escapeHtml(rendered.echoChantMeta.runeId || 'unknown')}" data-rune-kind="${escapeHtml(rendered.echoChantMeta.kind || 'echo-chant')}"`
       : ''
 
-    return `<span class="ag-echo-inline" data-echo-inline="true" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}"${echoChantAttr} style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}${customHtml}</span></span>`
+    // 默认为 inline，除非有自定义 HTML 才切成 block（customHtml 通常是 block 级内容）。
+    const isInline = customHtml ? 'false' : 'true'
+
+    return `<span class="ag-echo-inline" data-echo-inline="${isInline}" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}"${echoChantAttr} style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}${customHtml}</span></span>`
   }
 
   // 渲染完成后的副作用入口。
@@ -1084,6 +1087,19 @@ export default class EchoRuntime {
   //   options.cleanupFirst —— 编辑器重建时先卸载上一次 handler
   afterRender (container, options = {}) {
     if (!container || typeof container.querySelectorAll !== 'function') return []
+
+    // 每次调用先清除上一次的 debounce 定时器，避免累积
+    if (this._afterRenderTimer) {
+      clearTimeout(this._afterRenderTimer)
+      this._afterRenderTimer = null
+    }
+
+    this._afterRenderTimer = setTimeout(() => {
+      this._doAfterRender(container, options)
+    }, 250)
+  }
+
+  _doAfterRender (container, options = {}) {
     const cleanupFirst = Boolean(options.cleanupFirst)
     if (cleanupFirst) {
       this.disposeAll(container)

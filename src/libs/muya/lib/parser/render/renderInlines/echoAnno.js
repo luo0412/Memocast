@@ -53,7 +53,9 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
     echoId: echoId || '',
     echoDefinitionId: definitionId,
     echoNodeId,
-    echoValue: value
+    echoValue: value,
+    // 永远为 "true"：echoAnno.js 渲染的是 inline placeholder，没有 block 级自定义 HTML
+    echoInline: 'true'
   }
   if (hasExplicitWidth) dataset.echoWidth = width
   if (hasExplicitHeight) dataset.echoHeight = height
