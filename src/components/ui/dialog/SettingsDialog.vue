@@ -260,6 +260,21 @@
                   </div>
                   <q-separator class='q-my-sm server-section-separator' />
 
+                  <!-- 同步方式选择 -->
+                  <div class='cloud-sync-provider q-mb-md'>
+                    <div class='text-body2 text-weight-medium q-mb-xs'>{{ $t('cloudSyncProvider') }}</div>
+                    <div class='text-caption text-grey-6 q-mb-sm'>{{ $t('cloudSyncProviderHint') }}</div>
+                    <q-option-group
+                      :value='cloudSyncProvider'
+                      :options='cloudSyncProviderOptionsResolved'
+                      color='green-7'
+                      type='radio'
+                      inline
+                      @input='v => handleCloudSyncProviderChange(v)'
+                    />
+                  </div>
+                  <q-separator class='q-my-sm' />
+
                   <!-- 未登录状态 -->
                   <div v-if='!isLoggedIn' class='text-center q-pa-lg'>
                     <q-icon name='cloud_off' size='3rem' color='grey-5' />
@@ -967,6 +982,10 @@ export default {
       lastSyncTimeDisplay: null,
       isSyncing: false,
       syncError: null,
+      cloudSyncProviderOptions: [
+        { label: 'cloudSyncProviderWizNote', labelKey: true, value: 'wiznote' },
+        { label: 'cloudSyncProviderCustomFn', labelKey: true, value: 'customFn' }
+      ],
       aiModelsLoading: false,
       aiModelSaving: false,
       aiModelDialogVisible: false,
@@ -1135,6 +1154,12 @@ export default {
     accountInfo () {
       return this.cloudSyncLoginState.accountInfo || {}
     },
+    cloudSyncProviderOptionsResolved () {
+      return this.cloudSyncProviderOptions.map(opt => ({
+        ...opt,
+        label: opt.labelKey ? this.$t(opt.label) : opt.label
+      }))
+    },
     aiModelApiKeyHint () {
       if (!this.aiModelForm.id) {
         return ''
@@ -1177,6 +1202,7 @@ export default {
       'runeCards',
       'echoCards',
       'aiAssistantProvider',
+      'cloudSyncProvider',
       'syncStatus'
     ])
   },
@@ -2259,6 +2285,18 @@ export default {
         this.isSyncing = false
         this.syncError = event.error
       }
+    },
+
+    handleCloudSyncProviderChange (value) {
+      this.updateStateAndStore({ cloudSyncProvider: value })
+      const name = this.cloudSyncProviderOptions.find(opt => opt.value === value)?.labelKey
+        ? this.$t(this.cloudSyncProviderOptions.find(opt => opt.value === value).label)
+        : ''
+      this.$q.notify({
+        message: this.$t('cloudSyncProviderChanged', { name }),
+        type: 'info',
+        icon: 'cloud_circle'
+      })
     },
     ...mapClientActions([
       'toggleChanged',

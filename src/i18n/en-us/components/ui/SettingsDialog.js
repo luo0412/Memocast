@@ -125,6 +125,11 @@ export default {
   aiAssistantProviderChanged: 'AI assistant entry switched to: {name}',
   // Cloud Sync
   cloudSync: 'Cloud Sync',
+  cloudSyncProvider: 'Sync Provider',
+  cloudSyncProviderHint: 'Choose the cloud sync provider',
+  cloudSyncProviderWizNote: 'WizNote',
+  cloudSyncProviderCustomFn: 'Custom CloudFn',
+  cloudSyncProviderChanged: 'Cloud sync provider switched to: {name}',
   cloudSyncAccount: 'Current Account',
   cloudSyncNotLoggedIn: 'Not Logged In',
   cloudSyncNotLoggedInHint: 'Offline mode available, local notes stay local',

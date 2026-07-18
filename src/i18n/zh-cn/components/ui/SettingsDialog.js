@@ -126,6 +126,11 @@ export default {
   aiAssistantProviderChanged: 'AI 助手入口已切换为：{name}',
   // 云同步
   cloudSync: '云同步',
+  cloudSyncProvider: '同步方式',
+  cloudSyncProviderHint: '选择云同步的同步方式',
+  cloudSyncProviderWizNote: '为知笔记',
+  cloudSyncProviderCustomFn: '自定义云函数',
+  cloudSyncProviderChanged: '云同步方式已切换为：{name}',
   cloudSyncNotLoggedIn: '未登录',
   cloudSyncNotLoggedInHint: '离线模式可用，本地笔记保留本地',
   cloudSyncSyncNow: '备份到云端',

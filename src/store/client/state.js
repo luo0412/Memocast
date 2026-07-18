@@ -45,6 +45,10 @@ export default function () {
     //   'builtin' -> 内置 AI 抽屉（读取 ai_model_configs 默认项）
     //   'doubao'  -> 豆包 WebApp（wujie 微前端）
     aiAssistantProvider: 'builtin',
+    // 云同步方式：
+    //   'wiznote'    -> 为知笔记同步
+    //   'customFn'   -> 自定义云函数同步
+    cloudSyncProvider: 'wiznote',
     syncStatus: {
       isSyncing: false,
       lastSyncTime: null,

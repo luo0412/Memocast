@@ -103,7 +103,9 @@ module.exports = function (/* ctx */) {
         // Monaco editor: use monaco-editor-webpack-plugin to bundle workers
         const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin')
         cfg.plugins.push(new MonacoWebpackPlugin({
-          languages: ['markdown', 'yaml', 'json', 'html', 'css', 'typescript', 'javascript'],
+          // 只保留 Markdown 编辑器必需的语言支持
+          // 注意：不要包含 typescript/javascript，它们会触发 web worker 中的 loadForeignModule 错误
+          languages: ['markdown', 'yaml', 'json', 'html', 'css'],
           features: [
             // ─── 核心功能（必需）─
             'bracketMatching',
