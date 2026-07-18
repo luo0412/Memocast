@@ -5,6 +5,33 @@ export default {
   ai: 'AI',
   rune: 'Rune',
   echo: 'Echo',
+  cloudFn: 'CloudFn',
+
+  // ===== 二级分类名称 =====
+  // 通用
+  generalLanguage: 'Language',
+  generalTheme: 'Theme',
+  generalLog: 'Log',
+  generalDatabase: 'Database',
+  generalVersion: 'Version',
+
+  // 编辑器
+  editorNote: 'Note',
+  editorPanel: 'Panel',
+
+  // AI
+  aiEntry: 'Entry',
+  aiModel: 'Model',
+  aiSkill: 'Skill',
+
+  // 云服务
+  cloudSync: 'Sync',
+  cloudImage: 'Image',
+
+  // 云函数
+  cloudFnConfig: 'Config',
+  cloudFnNavigation: 'Navigation',
+
   language: 'Language',
   'en-us': 'English (US)',
   'zh-cn': 'Chinese (Simplified)',

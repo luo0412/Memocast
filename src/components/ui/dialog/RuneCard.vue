@@ -15,7 +15,13 @@
       </div>
     </div>
     <div class='rune-card-body'>
-      <div class='rune-card-name'>{{ rune.name }}</div>
+      <div class='rune-card-name'>
+        <span class='rune-name-prefix'>{{ namePrefix }}</span>
+        <span class='rune-name-wrapper'>
+          <span class='rune-name-text'>{{ rune.name }}</span>
+          <span v-if='nameSuffix' class='rune-name-suffix'>{{ nameSuffix }}</span>
+        </span>
+      </div>
       <div class='rune-card-desc'>{{ resolvedDesc }}</div>
     </div>
     <div class='rune-card-footer'>
@@ -108,6 +114,18 @@ export default {
     },
     runeInitial () {
       return getRuneInitial(this.rune)
+    },
+    namePrefix () {
+      if (this.nameLabel) {
+        return '@'
+      }
+      return '<'
+    },
+    nameSuffix () {
+      if (this.nameLabel) {
+        return ''
+      }
+      return ' />'
     },
     iconBadgeStyle () {
       return {
@@ -303,6 +321,22 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: 0.01em;
+}
+
+.rune-name-wrapper {
+  display: inline;
+}
+
+.rune-name-prefix {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.rune-name-text {
+  color: #fff;
+}
+
+.rune-name-suffix {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .rune-card-desc {

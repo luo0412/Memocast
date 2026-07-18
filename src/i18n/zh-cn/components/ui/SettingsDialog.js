@@ -5,6 +5,33 @@ export default {
   ai: 'AI',
   rune: '符文',
   echo: '回响',
+  cloudFn: '云函数',
+
+  // ===== 二级分类名称 =====
+  // 通用
+  generalLanguage: '语言',
+  generalTheme: '主题',
+  generalLog: '日志',
+  generalDatabase: '数据库',
+  generalVersion: '版本',
+
+  // 编辑器
+  editorNote: '笔记',
+  editorPanel: '面板',
+
+  // AI
+  aiEntry: '入口',
+  aiModel: '模型',
+  aiSkill: '技能',
+
+  // 云服务
+  cloudSync: '笔记同步',
+  cloudImage: '图片上传',
+
+  // 云函数
+  cloudFnConfig: '配置',
+  cloudFnNavigation: '导航中心',
+
   language: '语言',
   'en-us': '英语 (美国)',
   'zh-cn': '中文 (简体)',

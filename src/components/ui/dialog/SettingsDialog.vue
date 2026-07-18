@@ -10,718 +10,503 @@
 
       <q-card-section class='scroll settings-dialog-body'>
         <div class='settings-dialog-layout'>
+          <!-- 一级导航 -->
           <div class='settings-dialog-nav'>
             <q-tabs v-model='tab' vertical dense class='text-teal no-border settings-dialog-tabs'>
-              <q-tab
-                name='general'
-                icon='tune'
-                :label="$t('general')"
-                class='text-red-7'
-              />
-              <q-tab
-                name='editor'
-                icon='edit_attributes'
-                :label="$t('editor')"
-                class='text-orange-8'
-              />
-              <q-tab
-                name='ai'
-                icon='auto_awesome'
-                :label="$t('ai')"
-                class='text-yellow-9'
-              />
-              <q-tab
-                name='server'
-                icon='storage'
-                :label="$t('server')"
-                class='text-green-7'
-              />
-              <q-tab
-                name='echo'
-                icon='graphic_eq'
-                :label="$t('echo')"
-                class='text-cyan-7'
-              />
-              <q-tab
-                name='cloudFn'
-                icon='cloud_circle'
-                :label="$t('cloudFunction')"
-                class='text-blue-7'
-              />
-              <q-tab
-                name='rune'
-                icon='star'
-                :label="$t('rune')"
-                class='text-purple-7'
-              />
+              <q-tab name='general' icon='tune' :label="$t('general')" class='text-red-7' />
+              <q-tab name='editor' icon='edit_attributes' :label="$t('editor')" class='text-orange-8' />
+              <q-tab name='ai' icon='auto_awesome' :label="$t('ai')" class='text-yellow-9' />
+              <q-tab name='server' icon='storage' :label="$t('server')" class='text-green-7' />
+              <q-tab name='echo' icon='graphic_eq' :label="$t('echo')" class='text-cyan-7' />
+              <q-tab name='cloudFn' icon='cloud_circle' :label="$t('cloudFn')" class='text-blue-7' />
+              <q-tab name='rune' icon='star' :label="$t('rune')" class='text-purple-7' />
             </q-tabs>
           </div>
           <q-separator vertical class='settings-dialog-sep' />
           <div class='settings-dialog-panels'>
-            <q-tab-panels
-              v-model='tab'
-              animated
-              swipeable
-              vertical
-              transition-prev='jump-up'
-              transition-next='jump-up'
-            >
-              <q-tab-panel name='general' class='q-pa-sm'>
-                <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-red-7' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('general') }}</span>
-                </div>
-                <q-separator class='q-my-xs' />
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
-                    {{ $t('language') }}
-                  </div>
-                  <q-select
-                    dense
-                    options-dense
-                    :value='$t(language)'
-                    :options='languageOptions'
-                    @input='languageChangeHandler'
+            <q-tab-panels v-model='tab' animated swipeable vertical transition-prev='jump-up' transition-next='jump-up'>
+
+              <!-- ==================== 通用 ==================== -->
+              <q-tab-panel name='general' class='q-pa-none'>
+                <div class='general-settings-layout'>
+                  <CategoryTabs
+                    v-model='generalSubTab'
+                    :tabs='generalSubTabOptions'
+                    color-theme='red'
                   />
-                </div>
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
-                    {{ $t('theme') }}
-                  </div>
-                  <q-select
-                    dense
-                    options-dense
-                    :value='$t(theme)'
-                    :options='themeOptions'
-                    @input='themeChangeHandler'
-                  >
-                    <template v-slot:after>
-                      <q-btn round dense flat size="sm" icon="contact_support" @click="themeHelpHandler" />
-                      <q-btn round dense flat size="sm" icon="refresh" @click="refreshThemeFolderHandler" />
-                      <q-btn round dense flat size="sm" icon="open_in_new" @click="openThemeFolderHandler" />
-                    </template>
-                  </q-select>
-                </div>
-                <q-separator class='q-my-xs' />
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row fa-align-center'>
-                    <span>{{ $t('openLogFiles') }}</span>
-                    <q-btn
-                      class='fab-btn'
-                      flat
-                      round
-                      dense
-                      size='sm'
-                      color='red-7'
-                      icon='open_in_new'
-                      @click='openLogFilesHandler'
-                    />
-                  </div>
-                </div>
-                <q-separator class='q-my-xs' />
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
-                    <span>{{ $t('resetSqlite') }}</span>
-                    <q-btn
-                      class='fab-btn reset-sqlite-btn'
-                      flat
-                      no-caps
-                      color='negative'
-                      icon='delete_forever'
-                      :label="$t('resetSqlite')"
-                      @click='resetSqliteHandler'
-                    />
-                  </div>
-                  <div class='text-caption text-grey-6'>
-                    {{ $t('resetSqliteHint') }}
-                  </div>
-                </div>
-                <q-separator class='q-my-xs' />
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row fa-align-center'>
-                    <span>{{ $t('currentVersion', { version }) }}</span>
-                    <q-btn
-                      class='fab-btn'
-                      flat
-                      round
-                      dense
-                      size='sm'
-                      color='red-7'
-                      icon='cached'
-                      @click='checkUpdateHandler'
-                    />
-                  </div>
-                </div>
-              </q-tab-panel>
-
-              <q-tab-panel name='editor' class='q-pa-sm'>
-                <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-orange-8' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('editor') }}</span>
-                </div>
-                <q-separator class='q-my-xs' />
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
-                    <span>{{ $t('markdownOnly') }}</span>
-                    <q-toggle
-                      :value='markdownOnly'
-                      color='orange-8'
-                      @input="
-                        v => toggleChanged({ key: 'markdownOnly', value: v })
-                      "
-                    />
-                  </div>
-                </div>
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
-                    <span>{{ $t('noteListDenseMode') }}</span>
-                    <q-toggle
-                      :value='noteListDenseMode'
-                      color='orange-8'
-                      @input="
-                        v => toggleChanged({ key: 'noteListDenseMode', value: v })
-                      "
-                    />
-                  </div>
-                </div>
-                <q-separator class='q-my-xs' />
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
-                    <div class='row items-center no-wrap justify-between q-mb-xs'>
-                      <span>{{ $t('quickInsertColumns') }}</span>
-                      <div class='row items-center no-wrap q-gutter-xs'>
-                        <q-badge color='orange-8' align='middle'>{{ quickInsertColumns }}</q-badge>
-                        <span class='text-caption text-grey-6'>默认 6</span>
-                      </div>
-                    </div>
-                    <q-slider
-                      :value='quickInsertColumns'
-                      :min='4'
-                      :max='8'
-                      :step='1'
-                      label
-                      snap
-                      color='orange-8'
-                      markers
-                      @input="value => updateStateAndStore({ quickInsertColumns: value })"
-                    />
-                    <div class='row justify-between text-caption text-grey-6 q-mt-xs'>
-                      <span>4</span>
-                      <span>5</span>
-                      <span>6</span>
-                      <span>7</span>
-                      <span>8</span>
-                    </div>
-                  </div>
-                </div>
-                <q-separator class='q-my-xs' />
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
-                    <span>{{ $t('noteOrder') }}</span>
-                    <q-select
-                      dense
-                      options-dense
-                      :value='noteOrderType'
-                      :options='noteOrderOptions'
-                      emit-value
-                      map-options
-                      @input='noteOrderChangeHandler'
-                    />
-                  </div>
-                </div>
-                <!-- ✅ 已移除自动保存选项！不再需要自动保存配置 -->
-              </q-tab-panel>
-
-              <q-tab-panel name='server' class='q-pa-sm'>
-                <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-green-7' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('server') }}</span>
-                </div>
-                <q-separator class='q-my-xs' />
-                <div>
-                  <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
-                    <span>{{ $t('imageUploadService') }}</span>
-                    <q-select
-                      dense
-                      options-dense
-                      :value='$t(imageUploadService)'
-                      :options='imageUploadServiceOptions'
-                      @input='imageUploadServiceChangeHandler'
-                    >
-                    </q-select>
-                  </div>
-                </div>
-                <q-separator class='q-my-xs' />
-
-                <div class='cloud-sync-section'>
-                  <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
-                    <div class='panel-title-bar bg-green-7' />
-                    <span class='text-subtitle2 text-weight-medium'>{{ $t('cloudSync') }}</span>
-                  </div>
-                  <q-separator class='q-my-sm server-section-separator' />
-
-                  <!-- 同步方式选择 -->
-                  <div class='cloud-sync-provider q-mb-md'>
-                    <div class='text-body2 text-weight-medium q-mb-xs'>{{ $t('cloudSyncProvider') }}</div>
-                    <div class='text-caption text-grey-6 q-mb-sm'>{{ $t('cloudSyncProviderHint') }}</div>
-                    <q-option-group
-                      :value='cloudSyncProvider'
-                      :options='cloudSyncProviderOptionsResolved'
-                      color='green-7'
-                      type='radio'
-                      inline
-                      @input='v => handleCloudSyncProviderChange(v)'
-                    />
-                  </div>
-                  <q-separator class='q-my-sm' />
-
-                  <!-- 未登录状态 -->
-                  <div v-if='!isLoggedIn' class='text-center q-pa-lg'>
-                    <q-icon name='cloud_off' size='3rem' color='grey-5' />
-                    <div class='text-h6 q-mt-sm text-grey-7'>{{ $t('cloudSyncNotLoggedIn') }}</div>
-                    <div class='text-caption text-grey-5 q-mt-xs'>{{ $t('cloudSyncNotLoggedInHint') }}</div>
-                    <q-btn
-                      class='q-mt-md'
-                      color='green-7'
-                      :label="$t('cloudSyncLogin')"
-                      icon='login'
-                      unelevated
-                      @click='openLoginDialog'
-                    />
-                  </div>
-
-                  <!-- 已登录状态 -->
-                  <div v-else>
-                    <div class='cloud-sync-summary q-mb-md'>
-                      <div class='cloud-sync-summary__header row items-start justify-between no-wrap q-col-gutter-md'>
-                        <div class='col'>
-                          <div class='text-body2 text-weight-medium'>{{ accountInfo.displayName || accountInfo.nickname || accountInfo.username || accountInfo.email || $t('cloudSync') }}</div>
-                          <div class='text-caption text-grey-6 q-mt-xs'>{{ lastSyncTimeFormatted }}</div>
+                  <q-separator vertical class='settings-dialog-sep' />
+                  <div class='general-settings-panel'>
+                    <!-- 语言 -->
+                    <SettingsSectionContent v-if='generalSubTab === "language"' :title="$t('generalLanguage')" accent-color='red-7'>
+                      <div>
+                        <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
+                          {{ $t('language') }}
                         </div>
-                        <q-btn
-                          flat
-                          dense
-                          no-caps
-                          color='grey-7'
-                          icon='logout'
-                          :label="$t('cloudSyncLogout')"
-                          @click='confirmLogout'
+                        <q-select
+                          dense options-dense
+                          :value='$t(language)'
+                          :options='languageOptions'
+                          @input='languageChangeHandler'
                         />
                       </div>
+                    </SettingsSectionContent>
 
-                      <div class='row q-col-gutter-sm q-mt-sm'>
-                        <div class='col-4'>
-                          <div class='sync-stat-card'>
-                            <div class='text-caption text-grey-6'>{{ $t('cloudSyncPending') }}</div>
-                            <div class='text-subtitle1 text-weight-bold text-green-7'>{{ syncStats.pending || 0 }}</div>
-                          </div>
+                    <!-- 主题 -->
+                    <SettingsSectionContent v-if='generalSubTab === "theme"' :title="$t('generalTheme')" accent-color='red-7'>
+                      <div>
+                        <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
+                          {{ $t('theme') }}
                         </div>
-                        <div class='col-4'>
-                          <div class='sync-stat-card'>
-                            <div class='text-caption text-grey-6'>{{ $t('syncing') }}</div>
-                            <div class='text-subtitle1 text-weight-bold'>{{ syncStatusText }}</div>
-                          </div>
-                        </div>
-                        <div class='col-4'>
-                          <div class='sync-stat-card'>
-                            <div class='text-caption text-grey-6'>{{ $t('cloudSync') }}</div>
-                            <div class='text-subtitle1 text-weight-bold'>{{ syncStats.synced || 0 }}</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div v-if='syncError' class='text-caption text-negative q-mt-sm'>{{ syncError }}</div>
-
-                      <div class='row q-gutter-sm q-mt-md'>
-                        <q-btn
-                          unelevated
-                          color='green-7'
-                          icon='cloud_upload'
-                          :label="$t('cloudSyncSyncPushOnly')"
-                          :loading='isSyncing'
-                          @click='doPushOnly'
-                        />
-                        <q-btn
-                          outline
-                          color='green-7'
-                          icon='cloud_download'
-                          :label="$t('cloudSyncSyncPullOnly')"
-                          :loading='isSyncing'
-                          @click='doPullOnly'
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </q-tab-panel>
-
-              <q-tab-panel name='cloudFn' class='q-pa-sm'>
-                <cloud-fn-config-dialog />
-              </q-tab-panel>
-
-              <q-tab-panel name='ai' class='q-pa-sm'>
-                <div class='row items-center no-wrap q-mb-xs panel-title'>
-                  <div class='panel-title-bar bg-yellow-9' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('ai') }}</span>
-                </div>
-                <q-separator class='q-my-xs' />
-
-                <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
-                  <div class='panel-title-bar bg-yellow-9' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('aiAssistantEntry') }}</span>
-                </div>
-                <q-separator class='q-my-sm server-section-separator' />
-
-                <div class='text-caption text-grey-6 q-mb-sm'>
-                  {{ $t('aiAssistantEntryHint') }}
-                </div>
-                <div class='q-mb-md'>
-                  <q-option-group
-                    :value='aiAssistantProvider'
-                    :options='aiAssistantProviderOptionsResolved'
-                    color='yellow-9'
-                    type='radio'
-                    inline
-                    @input='v => handleAiAssistantProviderChange(v)'
-                  />
-                </div>
-
-                <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
-                  <div class='panel-title-bar bg-yellow-9' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('aiModelSettings') }}</span>
-                  <q-space />
-                  <q-btn
-                    dense flat no-caps
-                    color='yellow-9'
-                    icon='add'
-                    size='sm'
-                    :label="$t('aiModelAdd')"
-                    @click='openAiModelDialog()'
-                  />
-                </div>
-                <q-separator class='q-my-sm server-section-separator' />
-
-                <div v-if='aiModelsLoading' class='row items-center text-grey-6 q-py-md'>
-                  <q-spinner size='20px' class='q-mr-sm' />
-                  <span>{{ $t('loading') }}</span>
-                </div>
-
-                <div v-else-if='aiModelConfigs.length === 0' class='text-center text-grey q-pa-md ai-model-empty'>
-                  <q-icon name='smart_toy' size='2rem' />
-                  <div class='q-mt-sm'>{{ $t('aiNoModelConfigured') }}</div>
-                </div>
-
-                <div v-else class='column q-gutter-sm q-mb-md'>
-                  <q-card
-                    v-for='item in aiModelConfigs'
-                    :key='item.id'
-                    flat
-                    bordered
-                    class='ai-model-card'
-                  >
-                    <q-card-section class='q-pa-sm'>
-                      <div class='row items-start no-wrap q-col-gutter-sm'>
-                        <div class='col'>
-                          <div class='row items-center no-wrap q-gutter-xs'>
-                            <div class='text-body2 text-weight-medium'>{{ item.name }}</div>
-                            <q-badge v-if='item.is_default' color='yellow-9' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
-                            <q-badge :color='getAiModelStatusColor(item)' outline>
-                              {{ getAiModelStatusLabel(item) }}
-                            </q-badge>
-                          </div>
-                          <div class='text-caption text-grey-6 q-mt-xs'>{{ getAiProviderLabel(item.provider_type) }}</div>
-                          <div class='text-caption text-grey-7 q-mt-xs'>{{ item.base_url }}</div>
-                          <div class='text-caption text-grey-7 q-mt-xs'>{{ item.model }}</div>
-                          <div
-                            class='text-caption q-mt-xs'
-                            :class='isAiModelUsable(item) ? "text-positive" : "text-warning"'
-                          >
-                            {{ getAiModelStatusHint(item) }}
-                          </div>
-                          <div
-                            v-if='!isAiModelUsable(item) && getAiModelMissingFieldLabels(item).length > 0'
-                            class='row items-center q-gutter-xs q-mt-sm'
-                          >
-                            <q-badge
-                              v-for='field in getAiModelMissingFieldLabels(item)'
-                              :key='field'
-                              color='warning'
-                              outline
-                            >
-                              {{ field }}
-                            </q-badge>
-                          </div>
-                          <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasApiKey'>
-                            {{ item.provider_type === 'portkey' ? $t('aiPortkeyApiKey') : $t('aiApiKey') }}: {{ item.apiKeyMasked }}
-                          </div>
-                          <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasVirtualKey'>
-                            {{ $t('aiPortkeyVirtualKey') }}: {{ item.portkeyVirtualKeyMasked }}
-                          </div>
-                          <div
-                            v-if='aiModelTestResults[item.id]'
-                            class='text-caption q-mt-xs'
-                            :class='aiModelTestResults[item.id].success ? "text-positive" : "text-negative"'
-                          >
-                            {{ getAiModelTestResultText(item) }}
-                          </div>
-                        </div>
-                        <div class='column q-gutter-xs'>
-                          <q-btn
-                            dense flat no-caps color='yellow-9' size='sm' icon='network_check'
-                            :label="$t('aiModelTestConnection')"
-                            :loading='testingAiModelId === item.id'
-                            :disable='testingAiModelId !== null || !isAiModelUsable(item)'
-                            @click='testAiModelConnection(item)'
-                          />
-                          <q-btn dense flat no-caps color='yellow-9' size='sm' icon='edit' :label="$t('aiModelEdit')" @click='openAiModelDialog(item.id)' />
-                          <q-btn
-                            v-if='!item.is_default'
-                            dense flat no-caps color='positive' size='sm' icon='check_circle'
-                            :label="$t('aiSetDefault')"
-                            @click='setDefaultAiModel(item)'
-                          />
-                          <q-btn dense flat no-caps color='negative' size='sm' icon='delete' :label="$t('aiModelDelete')" @click='confirmDeleteAiModel(item)' />
-                        </div>
-                      </div>
-                    </q-card-section>
-                  </q-card>
-                </div>
-
-                <!-- AI 技能管理 -->
-                <div class='row items-center no-wrap q-mb-xs panel-title q-mt-md'>
-                  <div class='panel-title-bar bg-yellow-9' />
-                  <span class='text-subtitle2 text-weight-medium'>{{ $t('aiSkillSettings') }}</span>
-                  <q-space />
-                  <q-btn
-                    dense flat no-caps
-                    color='yellow-9'
-                    icon='add'
-                    size='sm'
-                    :label="$t('aiSkillAdd')"
-                    @click='openAiSkillDialog()'
-                  />
-                </div>
-                <q-separator class='q-my-sm server-section-separator' />
-
-                <div class='text-caption text-grey-6 q-mb-sm'>
-                  {{ $t('aiSkillSettingsHint') }}
-                </div>
-
-                <div v-if='aiSkillsLoading' class='row items-center text-grey-6 q-py-md'>
-                  <q-spinner size='20px' class='q-mr-sm' />
-                  <span>{{ $t('loading') }}</span>
-                </div>
-
-                <div v-else-if='aiSkillConfigs.length === 0' class='text-center text-grey q-pa-md ai-model-empty'>
-                  <q-icon name='auto_fix_high' size='2rem' />
-                  <div class='q-mt-sm'>{{ $t('aiSkillEmpty') }}</div>
-                </div>
-
-                <div v-else class='column q-gutter-sm q-mb-md'>
-                  <q-card
-                    v-for='skill in aiSkillConfigs'
-                    :key='skill.id'
-                    flat
-                    bordered
-                    class='ai-model-card'
-                  >
-                    <q-card-section class='q-pa-sm'>
-                      <div class='row items-start no-wrap q-col-gutter-sm'>
-                        <div class='col'>
-                          <div class='row items-center no-wrap q-gutter-xs'>
-                            <div class='text-body2 text-weight-medium'>{{ skill.title }}</div>
-                            <q-badge v-if='!skill.enabled' color='grey-6' outline>{{ $t('aiSkillDisabled') }}</q-badge>
-                          </div>
-                          <div class='text-caption text-grey-6 q-mt-xs'>{{ skill.name }}</div>
-                          <div class='text-caption text-grey-7 q-mt-xs ai-skill-content'>{{ truncateText(skill.content, 160) }}</div>
-                        </div>
-                        <div class='column q-gutter-xs'>
-                          <q-btn
-                            dense flat no-caps color='yellow-9' size='sm' icon='edit'
-                            :label="$t('aiSkillEdit')"
-                            @click='openAiSkillDialog(skill.id)'
-                          />
-                          <q-btn
-                            dense flat no-caps color='negative' size='sm' icon='delete'
-                            :label="$t('aiSkillDelete')"
-                            @click='confirmDeleteAiSkill(skill)'
-                          />
-                        </div>
-                      </div>
-                    </q-card-section>
-                  </q-card>
-                </div>
-              </q-tab-panel>
-
-              <q-tab-panel name='rune' class='q-pa-sm'>
-                <div class='rune-or-echo-category-layout'>
-                  <div class='rune-or-echo-category-nav'>
-                    <q-tabs
-                      v-model='runeCategory'
-                      vertical
-                      dense
-                      class='text-purple-7 no-border rune-or-echo-category-tabs'
-                    >
-                      <q-tab
-                        v-for='opt in runeCategoryOptions'
-                        :key='opt.value'
-                        :name='opt.value'
-                        no-caps
-                        class='rune-or-echo-category-tab'
-                      >
-                        <span class='rune-or-echo-category-tab-label'>{{ opt.label }}</span>
-                        <q-badge
-                          v-if='opt.count > 0'
-                          color='purple-7'
-                          align='middle'
-                          class='q-ml-xs'
+                        <q-select
+                          dense options-dense
+                          :value='$t(theme)'
+                          :options='themeOptions'
+                          @input='themeChangeHandler'
                         >
-                          {{ opt.count }}
-                        </q-badge>
-                      </q-tab>
-                    </q-tabs>
-                  </div>
-                  <q-separator vertical class='rune-or-echo-category-sep' />
-                  <div class='rune-or-echo-category-panel'>
-                    <div class='row items-center no-wrap q-mb-xs panel-title'>
-                      <div class='panel-title-bar bg-purple-7' />
-                      <span class='text-subtitle2 text-weight-medium'>
-                        {{ currentRuneCategoryLabel }}
-                      </span>
-                      <q-space />
-                      <q-btn
-                        dense flat no-caps
-                        :label="$t('runeCardAdd')"
-                        color='purple-7'
-                        icon='add'
-                        size='sm'
-                        @click='openAddRune'
-                      />
-                    </div>
-                    <div class='text-caption text-grey-6 q-mb-sm'>
-                      <q-icon name='drag_indicator' size='xs' /> {{ $t('runeDragTip') }}
-                    </div>
-                    <q-separator class='q-my-xs' />
-                    <div class='rune-grid'>
-                      <div
-                        v-for='(rune, index) in localRuneCardsInCategory'
-                        :key='rune.id'
-                        draggable='true'
-                        class='rune-card-wrapper'
-                        @dragstart='onDragStart($event, index, "rune")'
-                        @dragover.prevent='onDragOver($event, index, "rune")'
-                        @drop='onDrop($event, index, "rune")'
-                        @dragend='onDragEnd($event, "rune")'
-                      >
-                        <RuneCard
-                          class='rune-card-item'
-                          :rune='rune'
-                          @edit='openEditRune'
-                          @delete='confirmDeleteRune'
+                          <template v-slot:after>
+                            <q-btn round dense flat size="sm" icon="contact_support" @click="themeHelpHandler" />
+                            <q-btn round dense flat size="sm" icon="refresh" @click="refreshThemeFolderHandler" />
+                            <q-btn round dense flat size="sm" icon="open_in_new" @click="openThemeFolderHandler" />
+                          </template>
+                        </q-select>
+                      </div>
+                    </SettingsSectionContent>
+
+                    <!-- 日志 -->
+                    <SettingsSectionContent v-if='generalSubTab === "log"' :title="$t('generalLog')" accent-color='red-7'>
+                      <div class='setting-item--row fa-align-center'>
+                        <span>{{ $t('openLogFiles') }}</span>
+                        <q-btn
+                          class='fab-btn' flat round dense size='sm'
+                          color='red-7' icon='open_in_new'
+                          @click='openLogFilesHandler'
                         />
                       </div>
-                    </div>
-                    <div
-                      v-if='!localRuneCardsInCategory || localRuneCardsInCategory.length === 0'
-                      class='text-center text-grey q-pa-xl'
-                    >
-                      <q-icon name='star' size='3rem' />
-                      <div class='q-mt-sm'>{{ $t('runeCardAdd') }}</div>
-                    </div>
+                    </SettingsSectionContent>
+
+                    <!-- 数据库 -->
+                    <SettingsSectionContent v-if='generalSubTab === "database"' :title="$t('generalDatabase')" accent-color='red-7'>
+                      <div>
+                        <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
+                          <span>{{ $t('resetSqlite') }}</span>
+                          <q-btn
+                            class='fab-btn reset-sqlite-btn'
+                            flat no-caps color='negative'
+                            icon='delete_forever'
+                            :label="$t('resetSqlite')"
+                            @click='resetSqliteHandler'
+                          />
+                        </div>
+                        <div class='text-caption text-grey-6'>
+                          {{ $t('resetSqliteHint') }}
+                        </div>
+                      </div>
+                    </SettingsSectionContent>
+
+                    <!-- 版本 -->
+                    <SettingsSectionContent v-if='generalSubTab === "version"' :title="$t('generalVersion')" accent-color='red-7'>
+                      <div class='setting-item--row fa-align-center'>
+                        <span>{{ $t('currentVersion', { version }) }}</span>
+                        <q-btn
+                          class='fab-btn' flat round dense size='sm'
+                          color='red-7' icon='cached'
+                          @click='checkUpdateHandler'
+                        />
+                      </div>
+                    </SettingsSectionContent>
                   </div>
                 </div>
               </q-tab-panel>
 
-              <q-tab-panel name='echo' class='q-pa-sm'>
-                <div class='rune-or-echo-category-layout'>
-                  <div class='rune-or-echo-category-nav'>
-                    <q-tabs
-                      v-model='echoCategory'
-                      vertical
-                      dense
-                      class='text-cyan-7 no-border rune-or-echo-category-tabs'
-                    >
-                      <q-tab
-                        v-for='opt in echoCategoryOptions'
-                        :key='opt.value'
-                        :name='opt.value'
-                        no-caps
-                        class='rune-or-echo-category-tab'
-                      >
-                        <span class='rune-or-echo-category-tab-label'>{{ opt.label }}</span>
-                        <q-badge
-                          v-if='opt.count > 0'
-                          color='cyan-7'
-                          align='middle'
-                          class='q-ml-xs'
+              <!-- ==================== 编辑器 ==================== -->
+              <q-tab-panel name='editor' class='q-pa-none'>
+                <div class='general-settings-layout'>
+                  <CategoryTabs
+                    v-model='editorSubTab'
+                    :tabs='editorSubTabOptions'
+                    color-theme='orange'
+                  />
+                  <q-separator vertical class='settings-dialog-sep' />
+                  <div class='general-settings-panel'>
+                    <!-- 笔记 -->
+                    <SettingsSectionContent v-if='editorSubTab === "note"' :title="$t('editorNote')" accent-color='orange-8'>
+                      <div>
+                        <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
+                          <span>{{ $t('markdownOnly') }}</span>
+                          <q-toggle
+                            :value='markdownOnly'
+                            color='orange-8'
+                            @input="v => toggleChanged({ key: 'markdownOnly', value: v })"
+                          />
+                        </div>
+                      </div>
+                      <q-separator class='q-my-xs' />
+                      <div>
+                        <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
+                          <span>{{ $t('noteListDenseMode') }}</span>
+                          <q-toggle
+                            :value='noteListDenseMode'
+                            color='orange-8'
+                            @input="v => toggleChanged({ key: 'noteListDenseMode', value: v })"
+                          />
+                        </div>
+                      </div>
+                      <q-separator class='q-my-xs' />
+                      <div>
+                        <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
+                          <span>{{ $t('noteOrder') }}</span>
+                          <q-select
+                            dense options-dense
+                            :value='noteOrderType'
+                            :options='noteOrderOptions'
+                            emit-value map-options
+                            @input='noteOrderChangeHandler'
+                          />
+                        </div>
+                      </div>
+                    </SettingsSectionContent>
+
+                    <!-- 面板 -->
+                    <SettingsSectionContent v-if='editorSubTab === "panel"' :title="$t('editorPanel')" accent-color='orange-8'>
+                      <div>
+                        <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
+                          <div class='row items-center no-wrap justify-between q-mb-xs'>
+                            <span>{{ $t('quickInsertColumns') }}</span>
+                            <div class='row items-center no-wrap q-gutter-xs'>
+                              <q-badge color='orange-8' align='middle'>{{ quickInsertColumns }}</q-badge>
+                              <span class='text-caption text-grey-6'>默认 6</span>
+                            </div>
+                          </div>
+                          <q-slider
+                            :value='quickInsertColumns'
+                            :min='4' :max='8' :step='1'
+                            label snap color='orange-8' markers
+                            @input="value => updateStateAndStore({ quickInsertColumns: value })"
+                          />
+                          <div class='row justify-between text-caption text-grey-6 q-mt-xs'>
+                            <span>4</span><span>5</span><span>6</span><span>7</span><span>8</span>
+                          </div>
+                        </div>
+                      </div>
+                    </SettingsSectionContent>
+                  </div>
+                </div>
+              </q-tab-panel>
+
+              <!-- ==================== AI ==================== -->
+              <q-tab-panel name='ai' class='q-pa-none'>
+                <div class='general-settings-layout'>
+                  <CategoryTabs
+                    v-model='aiSubTab'
+                    :tabs='aiSubTabOptions'
+                    color-theme='warning'
+                  />
+                  <q-separator vertical class='settings-dialog-sep' />
+                  <div class='general-settings-panel'>
+                    <!-- 入口 -->
+                    <SettingsSectionContent v-if='aiSubTab === "entry"' :title="$t('aiEntry')" accent-color='yellow-9'>
+                      <div class='text-caption text-grey-6 q-mb-sm'>
+                        {{ $t('aiAssistantEntryHint') }}
+                      </div>
+                      <div>
+                        <q-option-group
+                          :value='aiAssistantProvider'
+                          :options='aiAssistantProviderOptionsResolved'
+                          color='yellow-9'
+                          type='radio' inline
+                          @input='v => handleAiAssistantProviderChange(v)'
+                        />
+                      </div>
+                    </SettingsSectionContent>
+
+                    <!-- 模型 -->
+                    <SettingsSectionContent v-if='aiSubTab === "model"' :title="$t('aiModel')" accent-color='yellow-9'>
+                      <template v-slot:actions>
+                        <q-btn dense flat no-caps color='yellow-9' icon='add' size='sm'
+                          :label="$t('aiModelAdd')" @click='openAiModelDialog()' />
+                      </template>
+                      <div v-if='aiModelsLoading' class='row items-center text-grey-6 q-py-md'>
+                        <q-spinner size='20px' class='q-mr-sm' /><span>{{ $t('loading') }}</span>
+                      </div>
+                      <div v-else-if='aiModelConfigs.length === 0' class='text-center text-grey q-pa-md ai-model-empty'>
+                        <q-icon name='smart_toy' size='2rem' />
+                        <div class='q-mt-sm'>{{ $t('aiNoModelConfigured') }}</div>
+                      </div>
+                      <div v-else class='column q-gutter-sm'>
+                        <q-card v-for='item in aiModelConfigs' :key='item.id' flat bordered class='ai-model-card'>
+                          <q-card-section class='q-pa-sm'>
+                            <div class='row items-start no-wrap q-col-gutter-sm'>
+                              <div class='col'>
+                                <div class='row items-center no-wrap q-gutter-xs'>
+                                  <div class='text-body2 text-weight-medium'>{{ item.name }}</div>
+                                  <q-badge v-if='item.is_default' color='yellow-9' outline>{{ $t('aiDefaultModelBadge') }}</q-badge>
+                                  <q-badge :color='getAiModelStatusColor(item)' outline>{{ getAiModelStatusLabel(item) }}</q-badge>
+                                </div>
+                                <div class='text-caption text-grey-6 q-mt-xs'>{{ getAiProviderLabel(item.provider_type) }}</div>
+                                <div class='text-caption text-grey-7 q-mt-xs'>{{ item.base_url }}</div>
+                                <div class='text-caption text-grey-7 q-mt-xs'>{{ item.model }}</div>
+                                <div class='text-caption q-mt-xs' :class='isAiModelUsable(item) ? "text-positive" : "text-warning"'>
+                                  {{ getAiModelStatusHint(item) }}
+                                </div>
+                                <div v-if='!isAiModelUsable(item) && getAiModelMissingFieldLabels(item).length > 0' class='row items-center q-gutter-xs q-mt-sm'>
+                                  <q-badge v-for='field in getAiModelMissingFieldLabels(item)' :key='field' color='warning' outline>{{ field }}</q-badge>
+                                </div>
+                                <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasApiKey'>{{ $t('aiApiKey') }}: {{ item.apiKeyMasked }}</div>
+                                <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasVirtualKey'>{{ $t('aiPortkeyVirtualKey') }}: {{ item.portkeyVirtualKeyMasked }}</div>
+                                <div v-if='aiModelTestResults[item.id]' class='text-caption q-mt-xs' :class='aiModelTestResults[item.id].success ? "text-positive" : "text-negative"'>
+                                  {{ getAiModelTestResultText(item) }}
+                                </div>
+                              </div>
+                              <div class='column q-gutter-xs'>
+                                <q-btn dense flat no-caps color='yellow-9' size='sm' icon='network_check' :label="$t('aiModelTestConnection')" :loading='testingAiModelId === item.id' :disable='testingAiModelId !== null || !isAiModelUsable(item)' @click='testAiModelConnection(item)' />
+                                <q-btn dense flat no-caps color='yellow-9' size='sm' icon='edit' :label="$t('aiModelEdit')" @click='openAiModelDialog(item.id)' />
+                                <q-btn v-if='!item.is_default' dense flat no-caps color='positive' size='sm' icon='check_circle' :label="$t('aiSetDefault')" @click='setDefaultAiModel(item)' />
+                                <q-btn dense flat no-caps color='negative' size='sm' icon='delete' :label="$t('aiModelDelete')" @click='confirmDeleteAiModel(item)' />
+                              </div>
+                            </div>
+                          </q-card-section>
+                        </q-card>
+                      </div>
+                    </SettingsSectionContent>
+
+                    <!-- 技能 -->
+                    <SettingsSectionContent v-if='aiSubTab === "skill"' :title="$t('aiSkill')" accent-color='yellow-9'>
+                      <template v-slot:actions>
+                        <q-btn dense flat no-caps color='yellow-9' icon='add' size='sm'
+                          :label="$t('aiSkillAdd')" @click='openAiSkillDialog()' />
+                      </template>
+                      <div class='text-caption text-grey-6 q-mb-sm'>
+                        {{ $t('aiSkillSettingsHint') }}
+                      </div>
+                      <div v-if='aiSkillsLoading' class='row items-center text-grey-6 q-py-md'>
+                        <q-spinner size='20px' class='q-mr-sm' /><span>{{ $t('loading') }}</span>
+                      </div>
+                      <div v-else-if='aiSkillConfigs.length === 0' class='text-center text-grey q-pa-md ai-model-empty'>
+                        <q-icon name='auto_fix_high' size='2rem' />
+                        <div class='q-mt-sm'>{{ $t('aiSkillEmpty') }}</div>
+                      </div>
+                      <div v-else class='column q-gutter-sm'>
+                        <q-card v-for='skill in aiSkillConfigs' :key='skill.id' flat bordered class='ai-model-card'>
+                          <q-card-section class='q-pa-sm'>
+                            <div class='row items-start no-wrap q-col-gutter-sm'>
+                              <div class='col'>
+                                <div class='row items-center no-wrap q-gutter-xs'>
+                                  <div class='text-body2 text-weight-medium'>{{ skill.title }}</div>
+                                  <q-badge v-if='!skill.enabled' color='grey-6' outline>{{ $t('aiSkillDisabled') }}</q-badge>
+                                </div>
+                                <div class='text-caption text-grey-6 q-mt-xs'>{{ skill.name }}</div>
+                                <div class='text-caption text-grey-7 q-mt-xs ai-skill-content'>{{ truncateText(skill.content, 160) }}</div>
+                              </div>
+                              <div class='column q-gutter-xs'>
+                                <q-btn dense flat no-caps color='yellow-9' size='sm' icon='edit' :label="$t('aiSkillEdit')" @click='openAiSkillDialog(skill.id)' />
+                                <q-btn dense flat no-caps color='negative' size='sm' icon='delete' :label="$t('aiSkillDelete')" @click='confirmDeleteAiSkill(skill)' />
+                              </div>
+                            </div>
+                          </q-card-section>
+                        </q-card>
+                      </div>
+                    </SettingsSectionContent>
+                  </div>
+                </div>
+              </q-tab-panel>
+
+              <!-- ==================== 云服务 ==================== -->
+              <q-tab-panel name='server' class='q-pa-none'>
+                <div class='general-settings-layout'>
+                  <CategoryTabs
+                    v-model='serverSubTab'
+                    :tabs='serverSubTabOptions'
+                    color-theme='positive'
+                  />
+                  <q-separator vertical class='settings-dialog-sep' />
+                  <div class='general-settings-panel'>
+                    <!-- 笔记同步 -->
+                    <SettingsSectionContent v-if='serverSubTab === "sync"' :title="$t('cloudSync')" accent-color='green-7'>
+                      <!-- 同步方式选择 -->
+                      <div class='cloud-sync-provider q-mb-md'>
+                        <div class='text-body2 text-weight-medium q-mb-xs'>{{ $t('cloudSyncProvider') }}</div>
+                        <div class='text-caption text-grey-6 q-mb-sm'>{{ $t('cloudSyncProviderHint') }}</div>
+                        <q-option-group
+                          :value='cloudSyncProvider'
+                          :options='cloudSyncProviderOptionsResolved'
+                          color='green-7'
+                          type='radio' inline
+                          @input='v => handleCloudSyncProviderChange(v)'
+                        />
+                      </div>
+                      <q-separator class='q-my-sm' />
+
+                      <!-- 未登录状态 -->
+                      <div v-if='!isLoggedIn' class='text-center q-pa-lg'>
+                        <q-icon name='cloud_off' size='3rem' color='grey-5' />
+                        <div class='text-h6 q-mt-sm text-grey-7'>{{ $t('cloudSyncNotLoggedIn') }}</div>
+                        <div class='text-caption text-grey-5 q-mt-xs'>{{ $t('cloudSyncNotLoggedInHint') }}</div>
+                        <q-btn class='q-mt-md' color='green-7' :label="$t('cloudSyncLogin')" icon='login' unelevated @click='openLoginDialog' />
+                      </div>
+
+                      <!-- 已登录状态 -->
+                      <div v-else>
+                        <div class='cloud-sync-summary q-mb-md'>
+                          <div class='cloud-sync-summary__header row items-start justify-between no-wrap q-col-gutter-md'>
+                            <div class='col'>
+                              <div class='text-body2 text-weight-medium'>{{ accountInfo.displayName || accountInfo.nickname || accountInfo.username || accountInfo.email || $t('cloudSync') }}</div>
+                              <div class='text-caption text-grey-6 q-mt-xs'>{{ lastSyncTimeFormatted }}</div>
+                            </div>
+                            <q-btn flat dense no-caps color='grey-7' icon='logout' :label="$t('cloudSyncLogout')" @click='confirmLogout' />
+                          </div>
+                          <div class='row q-col-gutter-sm q-mt-sm'>
+                            <div class='col-4'><div class='sync-stat-card'><div class='text-caption text-grey-6'>{{ $t('cloudSyncPending') }}</div><div class='text-subtitle1 text-weight-bold text-green-7'>{{ syncStats.pending || 0 }}</div></div></div>
+                            <div class='col-4'><div class='sync-stat-card'><div class='text-caption text-grey-6'>{{ $t('syncing') }}</div><div class='text-subtitle1 text-weight-bold'>{{ syncStatusText }}</div></div></div>
+                            <div class='col-4'><div class='sync-stat-card'><div class='text-caption text-grey-6'>{{ $t('cloudSync') }}</div><div class='text-subtitle1 text-weight-bold'>{{ syncStats.synced || 0 }}</div></div></div>
+                          </div>
+                          <div v-if='syncError' class='text-caption text-negative q-mt-sm'>{{ syncError }}</div>
+                          <div class='row q-gutter-sm q-mt-md'>
+                            <q-btn unelevated color='green-7' icon='cloud_upload' :label="$t('cloudSyncSyncPushOnly')" :loading='isSyncing' @click='doPushOnly' />
+                            <q-btn outline color='green-7' icon='cloud_download' :label="$t('cloudSyncSyncPullOnly')" :loading='isSyncing' @click='doPullOnly' />
+                          </div>
+                        </div>
+                      </div>
+                    </SettingsSectionContent>
+
+                    <!-- 图片上传 -->
+                    <SettingsSectionContent v-if='serverSubTab === "image"' :title="$t('cloudImage')" accent-color='green-7'>
+                      <div>
+                        <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
+                          <span>{{ $t('imageUploadService') }}</span>
+                          <q-select
+                            dense options-dense
+                            :value='$t(imageUploadService)'
+                            :options='imageUploadServiceOptions'
+                            @input='imageUploadServiceChangeHandler'
+                          />
+                        </div>
+                      </div>
+                    </SettingsSectionContent>
+                  </div>
+                </div>
+              </q-tab-panel>
+
+              <!-- ==================== 云函数 ==================== -->
+              <q-tab-panel name='cloudFn' class='q-pa-none'>
+                <div class='general-settings-layout'>
+                  <CategoryTabs
+                    v-model='cloudFnSubTab'
+                    :tabs='cloudFnSubTabOptions'
+                    color-theme='info'
+                  />
+                  <q-separator vertical class='settings-dialog-sep' />
+                  <div class='general-settings-panel'>
+                    <!-- 配置 -->
+                    <SettingsSectionContent v-if='cloudFnSubTab === "config"' :title="$t('cloudFnConfig')" accent-color='blue-7'>
+                      <cloud-fn-config-dialog />
+                    </SettingsSectionContent>
+
+                    <!-- 导航中心 -->
+                    <SettingsSectionContent v-if='cloudFnSubTab === "navigation"' :title="$t('cloudFnNavigation')" accent-color='blue-7'>
+                      <NavigationDialog v-model='navigationDialogVisible' @go-config='onNavigationGoConfig' />
+                      <div class='text-center q-pa-lg'>
+                        <q-btn color='blue-7' unelevated icon='explore' :label="$t('openNavigationCenter')" @click='openNavigationDialog' />
+                      </div>
+                    </SettingsSectionContent>
+                  </div>
+                </div>
+              </q-tab-panel>
+
+              <q-tab-panel name='rune' class='q-pa-none'>
+                <div class='general-settings-layout'>
+                  <CategoryTabs
+                    v-model='runeCategory'
+                    :tabs='runeCategoryOptions'
+                    color-theme='purple'
+                  />
+                  <q-separator vertical class='settings-dialog-sep' />
+                  <div class='general-settings-panel'>
+                    <SettingsSectionContent :title='currentRuneCategoryLabel' accent-color='purple-7'>
+                      <template v-slot:actions>
+                        <q-btn dense flat no-caps :label="$t('runeCardAdd')" color='purple-7' icon='add' size='sm' @click='openAddRune' />
+                      </template>
+                      <div class='text-caption text-grey-6 q-mb-sm'>
+                        <q-icon name='drag_indicator' size='xs' /> {{ $t('runeDragTip') }}
+                      </div>
+                      <div class='rune-grid'>
+                        <div
+                          v-for='(rune, index) in localRuneCardsInCategory'
+                          :key='rune.id'
+                          draggable='true'
+                          class='rune-card-wrapper'
+                          @dragstart='onDragStart($event, index, "rune")'
+                          @dragover.prevent='onDragOver($event, index, "rune")'
+                          @drop='onDrop($event, index, "rune")'
+                          @dragend='onDragEnd($event, "rune")'
                         >
-                          {{ opt.count }}
-                        </q-badge>
-                      </q-tab>
-                    </q-tabs>
-                  </div>
-                  <q-separator vertical class='rune-or-echo-category-sep' />
-                  <div class='rune-or-echo-category-panel'>
-                    <div class='row items-center no-wrap q-mb-xs panel-title'>
-                      <div class='panel-title-bar bg-cyan-7' />
-                      <span class='text-subtitle2 text-weight-medium'>
-                        {{ currentEchoCategoryLabel }}
-                      </span>
-                      <q-space />
-                      <q-btn
-                        v-if='!isCurrentEchoCategoryBuiltin'
-                        dense flat no-caps
-                        :label='$t("echoCardAdd")'
-                        color='cyan-7'
-                        icon='add'
-                        size='sm'
-                        @click='openAddEcho'
-                      />
-                    </div>
-                    <div v-if='!isCurrentEchoCategoryBuiltin' class='text-caption text-grey-6 q-mb-sm'>
-                      <q-icon name='drag_indicator' size='xs' /> {{ $t('echoDragTip') }}
-                    </div>
-                    <q-separator class='q-my-xs' />
-                    <div v-if='isCurrentEchoCategoryBuiltin' class='text-caption text-grey-6 q-mb-sm'>
-                      <q-icon name='info' size='xs' /> {{ $t('echoBuiltinCategoryHint') }}
-                    </div>
-                    <div class='rune-grid'>
-                      <div
-                        v-for='(echo, index) in sortedEchoCards'
-                        :key='echo.id'
-                        :draggable='!echo.isBuiltin'
-                        class='rune-card-wrapper echo-card-wrapper'
-                        :class='{"echo-card-wrapper--builtin": echo.isBuiltin}'
-                        @dragstart='onDragStart($event, index, "echo")'
-                        @dragover.prevent='onDragOver($event, index, "echo")'
-                        @drop='onDrop($event, index, "echo")'
-                        @dragend='onDragEnd($event, "echo")'
-                      >
-                        <RuneCard
-                          class='rune-card-item'
-                          :rune='echo'
-                          :name-label='$t("echoCardName")'
-                          :desc-label='$t("echoCardDesc")'
-                          :power-label='$t("echoCardPower")'
-                          :edit-label='$t("echoCardEdit")'
-                          :delete-label='$t("echoCardDelete")'
-                          :disable-delete='echo.isBuiltin'
-                          :disable-drag='echo.isBuiltin'
-                          :is-builtin='echo.isBuiltin'
-                          :i18n-desc-key='echoI18nDescKey(echo)'
-                          @edit='openEditEcho'
-                          @delete='confirmDeleteEcho'
-                        />
+                          <RuneCard class='rune-card-item' :rune='rune' @edit='openEditRune' @delete='confirmDeleteRune' />
+                        </div>
                       </div>
-                    </div>
-                    <div v-if='!sortedEchoCards || sortedEchoCards.length === 0' class='text-center text-grey q-pa-xl'>
-                      <q-icon name='graphic_eq' size='3rem' />
-                      <div class='q-mt-sm'>{{ $t('echoCardAdd') }}</div>
-                    </div>
+                      <div v-if='!localRuneCardsInCategory || localRuneCardsInCategory.length === 0' class='text-center text-grey q-pa-xl'>
+                        <q-icon name='star' size='3rem' />
+                        <div class='q-mt-sm'>{{ $t('runeCardAdd') }}</div>
+                      </div>
+                    </SettingsSectionContent>
                   </div>
                 </div>
               </q-tab-panel>
 
+              <q-tab-panel name='echo' class='q-pa-none'>
+                <div class='general-settings-layout'>
+                  <CategoryTabs
+                    v-model='echoCategory'
+                    :tabs='echoCategoryOptions'
+                    color-theme='cyan'
+                  />
+                  <q-separator vertical class='settings-dialog-sep' />
+                  <div class='general-settings-panel'>
+                    <SettingsSectionContent :title='currentEchoCategoryLabel' accent-color='cyan-7'>
+                      <template v-slot:actions>
+                        <q-btn v-if='!isCurrentEchoCategoryBuiltin' dense flat no-caps :label='$t("echoCardAdd")' color='cyan-7' icon='add' size='sm' @click='openAddEcho' />
+                      </template>
+                      <div v-if='isCurrentEchoCategoryBuiltin' class='text-caption text-grey-6 q-mb-sm'>
+                        <q-icon name='info' size='xs' /> {{ $t('echoBuiltinCategoryHint') }}
+                      </div>
+                      <div v-else class='text-caption text-grey-6 q-mb-sm'>
+                        <q-icon name='drag_indicator' size='xs' /> {{ $t('echoDragTip') }}
+                      </div>
+                      <div class='rune-grid'>
+                        <div
+                          v-for='(echo, index) in sortedEchoCards'
+                          :key='echo.id'
+                          :draggable='!echo.isBuiltin'
+                          class='rune-card-wrapper echo-card-wrapper'
+                          :class='{"echo-card-wrapper--builtin": echo.isBuiltin}'
+                          @dragstart='onDragStart($event, index, "echo")'
+                          @dragover.prevent='onDragOver($event, index, "echo")'
+                          @drop='onDrop($event, index, "echo")'
+                          @dragend='onDragEnd($event, "echo")'
+                        >
+                          <RuneCard
+                            class='rune-card-item'
+                            :rune='echo'
+                            :name-label='$t("echoCardName")'
+                            :desc-label='$t("echoCardDesc")'
+                            :power-label='$t("echoCardPower")'
+                            :edit-label='$t("echoCardEdit")'
+                            :delete-label='$t("echoCardDelete")'
+                            :disable-delete='echo.isBuiltin'
+                            :disable-drag='echo.isBuiltin'
+                            :is-builtin='echo.isBuiltin'
+                            :i18n-desc-key='echoI18nDescKey(echo)'
+                            @edit='openEditEcho'
+                            @delete='confirmDeleteEcho'
+                          />
+                        </div>
+                      </div>
+                      <div v-if='!sortedEchoCards || sortedEchoCards.length === 0' class='text-center text-grey q-pa-xl'>
+                        <q-icon name='graphic_eq' size='3rem' />
+                        <div class='q-mt-sm'>{{ $t('echoCardAdd') }}</div>
+                      </div>
+                    </SettingsSectionContent>
+                  </div>
+                </div>
+              </q-tab-panel>
 
             </q-tab-panels>
           </div>
@@ -908,6 +693,8 @@ import RuneFormDialog from 'components/ui/dialog/RuneFormDialog'
 import EchoFormDialog from 'components/ui/dialog/EchoFormDialog'
 import CloudFnConfigDialog from 'components/ui/dialog/CloudFnConfigDialog'
 import NavigationDialog from 'components/ui/dialog/NavigationDialog'
+import CategoryTabs from 'components/ui/dialog/CategoryTabs'
+import SettingsSectionContent from 'components/ui/dialog/SettingsSectionContent'
 import { backfillEchoAnnotationsInMarkdown } from 'components/ui/editor/echo/EchoRuntime'
 import { i18n } from 'boot/i18n'
 import bus from 'components/bus'
@@ -950,11 +737,19 @@ export default {
     RuneFormDialog,
     EchoFormDialog,
     CloudFnConfigDialog,
-    NavigationDialog
+    NavigationDialog,
+    CategoryTabs,
+    SettingsSectionContent
   },
   data () {
     return {
       tab: 'general',
+      // 二级分类
+      generalSubTab: 'language',
+      editorSubTab: 'note',
+      aiSubTab: 'entry',
+      serverSubTab: 'sync',
+      cloudFnSubTab: 'config',
       runeCategory: DEFAULT_RUNE_CATEGORY,
       echoCategory: DEFAULT_ECHO_CATEGORY,
       imageUploadServiceOptionsPlain: [
@@ -1137,6 +932,45 @@ export default {
     },
     isCurrentEchoCategoryBuiltin () {
       return this.echoCategory === 'builtin'
+    },
+    // 通用二级分类选项
+    generalSubTabOptions () {
+      return [
+        { value: 'language', label: this.$t('generalLanguage'), icon: 'language' },
+        { value: 'theme', label: this.$t('generalTheme'), icon: 'palette' },
+        { value: 'log', label: this.$t('generalLog'), icon: 'description' },
+        { value: 'database', label: this.$t('generalDatabase'), icon: 'storage' },
+        { value: 'version', label: this.$t('generalVersion'), icon: 'info' }
+      ]
+    },
+    // 编辑器二级分类选项
+    editorSubTabOptions () {
+      return [
+        { value: 'note', label: this.$t('editorNote'), icon: 'article' },
+        { value: 'panel', label: this.$t('editorPanel'), icon: 'dashboard' }
+      ]
+    },
+    // AI 二级分类选项
+    aiSubTabOptions () {
+      return [
+        { value: 'entry', label: this.$t('aiEntry'), icon: 'auto_awesome' },
+        { value: 'model', label: this.$t('aiModel'), icon: 'smart_toy' },
+        { value: 'skill', label: this.$t('aiSkill'), icon: 'auto_fix_high' }
+      ]
+    },
+    // 云服务二级分类选项
+    serverSubTabOptions () {
+      return [
+        { value: 'sync', label: this.$t('cloudSync'), icon: 'cloud_sync' },
+        { value: 'image', label: this.$t('cloudImage'), icon: 'image' }
+      ]
+    },
+    // 云函数二级分类选项
+    cloudFnSubTabOptions () {
+      return [
+        { value: 'config', label: this.$t('cloudFnConfig'), icon: 'settings' },
+        { value: 'navigation', label: this.$t('cloudFnNavigation'), icon: 'explore' }
+      ]
     },
     lastSyncTimeFormatted () {
       if (!this.syncStatus?.lastSyncTime) return this.$t('never')
@@ -2419,6 +2253,144 @@ export default {
   margin-top: 1px;
 }
 
+/* 一级导航高亮样式 */
+.settings-dialog-tabs ::v-deep(.q-tab) {
+  border-radius: 6px;
+  margin: 2px 4px;
+  transition: all 0.2s ease;
+}
+
+/* 通用 - 红色 */
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-red-7) {
+  background: linear-gradient(135deg, rgba(229, 57, 53, 0.15) 0%, rgba(229, 57, 53, 0.05) 100%);
+  box-shadow: 0 2px 8px rgba(229, 57, 53, 0.2);
+}
+
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-red-7)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 50%;
+  background: linear-gradient(180deg, #e53935 0%, #c62828 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* 编辑器 - 橙色 */
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-orange-8) {
+  background: linear-gradient(135deg, rgba(239, 108, 0, 0.15) 0%, rgba(239, 108, 0, 0.05) 100%);
+  box-shadow: 0 2px 8px rgba(239, 108, 0, 0.2);
+}
+
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-orange-8)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 50%;
+  background: linear-gradient(180deg, #ef6c00 0%, #e65100 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* AI - 黄色 */
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-yellow-9) {
+  background: linear-gradient(135deg, rgba(249, 168, 37, 0.15) 0%, rgba(249, 168, 37, 0.05) 100%);
+  box-shadow: 0 2px 8px rgba(249, 168, 37, 0.2);
+}
+
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-yellow-9)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 50%;
+  background: linear-gradient(180deg, #f9a825 0%, #f57f17 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* 云服务 - 绿色 */
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-green-7) {
+  background: linear-gradient(135deg, rgba(67, 160, 71, 0.15) 0%, rgba(67, 160, 71, 0.05) 100%);
+  box-shadow: 0 2px 8px rgba(67, 160, 71, 0.2);
+}
+
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-green-7)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 50%;
+  background: linear-gradient(180deg, #43a047 0%, #2e7d32 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* 回响 - 青色 */
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-cyan-7) {
+  background: linear-gradient(135deg, rgba(0, 172, 193, 0.15) 0%, rgba(0, 172, 193, 0.05) 100%);
+  box-shadow: 0 2px 8px rgba(0, 172, 193, 0.2);
+}
+
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-cyan-7)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 50%;
+  background: linear-gradient(180deg, #00acc1 0%, #00838f 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* 云函数 - 蓝色 */
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-blue-7) {
+  background: linear-gradient(135deg, rgba(2, 136, 209, 0.15) 0%, rgba(2, 136, 209, 0.05) 100%);
+  box-shadow: 0 2px 8px rgba(2, 136, 209, 0.2);
+}
+
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-blue-7)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 50%;
+  background: linear-gradient(180deg, #0288d1 0%, #0277bd 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* 符文 - 紫色 */
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-purple-7) {
+  background: linear-gradient(135deg, rgba(156, 39, 176, 0.15) 0%, rgba(156, 39, 176, 0.05) 100%);
+  box-shadow: 0 2px 8px rgba(156, 39, 176, 0.2);
+}
+
+.settings-dialog-tabs ::v-deep(.q-tab--active.text-purple-7)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 50%;
+  background: linear-gradient(180deg, #9c27b0 0%, #7b1fa2 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* 一级导航悬停效果 */
+.settings-dialog-tabs ::v-deep(.q-tab:hover:not(.q-tab--active)) {
+  background: rgba(120, 120, 120, 0.08);
+}
+
 .panel-title {
   padding-left: 2px;
 }
@@ -2444,6 +2416,37 @@ export default {
 
 .setting-item--row .q-toggle {
   flex-shrink: 0;
+}
+
+/* 通用/编辑器/AI/云服务/云函数二级分类布局 */
+.general-settings-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+  height: calc(70vh - 52px);
+}
+
+.general-settings-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  padding: 0 6px 4px 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 120, 0.45) transparent;
+}
+
+.general-settings-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.general-settings-panel::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.35);
+  border-radius: 999px;
+}
+
+.general-settings-panel::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* 符文/回响二级分类布局:左侧垂直 tab,右侧网格 */
@@ -2508,12 +2511,113 @@ export default {
 .rune-or-echo-category-tab {
   width: 100%;
   justify-content: flex-start;
-  border-radius: 6px;
+  border-radius: 8px;
+  margin: 2px 4px;
+  transition: all 0.2s ease;
+}
+
+/* 符文侧边栏 - 未选中态 */
+.rune-or-echo-category-tabs.text-purple-7 ::v-deep(.q-tab) {
+  background: transparent;
+  color: #9e27b0;
+}
+
+/* 符文侧边栏 - 选中态 */
+.rune-or-echo-category-tabs.text-purple-7 ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(156, 39, 176, 0.18) 0%, rgba(156, 39, 176, 0.08) 100%);
+  color: #7b1fa2;
+  box-shadow: 0 2px 8px rgba(156, 39, 176, 0.25);
+}
+
+.rune-or-echo-category-tabs.text-purple-7 ::v-deep(.q-tab--active)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, #9c27b0 0%, #7b1fa2 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* 回响侧边栏 - 未选中态 */
+.rune-or-echo-category-tabs.text-cyan-7 ::v-deep(.q-tab) {
+  background: transparent;
+  color: #00acc1;
+}
+
+/* 回响侧边栏 - 选中态 */
+.rune-or-echo-category-tabs.text-cyan-7 ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(0, 172, 193, 0.18) 0%, rgba(0, 172, 193, 0.08) 100%);
+  color: #00838f;
+  box-shadow: 0 2px 8px rgba(0, 172, 193, 0.25);
+}
+
+.rune-or-echo-category-tabs.text-cyan-7 ::v-deep(.q-tab--active)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, #00acc1 0%, #00838f 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* 悬停效果 */
+.rune-or-echo-category-tabs ::v-deep(.q-tab:hover:not(.q-tab--active)) {
+  background: rgba(120, 120, 120, 0.08);
+}
+
+/* 分类计数 badge 样式优化 */
+.rune-or-echo-category-tab .q-badge {
+  font-size: 0.6rem;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  padding: 0 4px;
 }
 
 .rune-or-echo-category-tab-label {
   font-size: 0.72rem;
   line-height: 1.2;
+}
+
+/* 暗色模式适配 */
+.body--dark .rune-or-echo-category-tabs.text-purple-7 ::v-deep(.q-tab) {
+  color: #ce93d8;
+}
+
+.body--dark .rune-or-echo-category-tabs.text-purple-7 ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(171, 71, 188, 0.3) 0%, rgba(171, 71, 188, 0.15) 100%);
+  color: #e1bee7;
+  box-shadow: 0 2px 8px rgba(171, 71, 188, 0.35);
+}
+
+.body--dark .rune-or-echo-category-tabs.text-cyan-7 ::v-deep(.q-tab) {
+  color: #4dd0e1;
+}
+
+.body--dark .rune-or-echo-category-tabs.text-cyan-7 ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(38, 166, 154, 0.3) 0%, rgba(38, 166, 154, 0.15) 100%);
+  color: #80cbc4;
+  box-shadow: 0 2px 8px rgba(38, 166, 154, 0.35);
+}
+
+.rune-or-echo-category-tab-label {
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+/* 暗色模式：标签文字在高亮时保持清晰 */
+.body--dark .rune-or-echo-category-tabs.text-purple-7 ::v-deep(.q-tab--active) .rune-or-echo-category-tab-label {
+  color: #e1bee7;
+}
+
+.body--dark .rune-or-echo-category-tabs.text-cyan-7 ::v-deep(.q-tab--active) .rune-or-echo-category-tab-label {
+  color: #80cbc4;
 }
 
 @media (max-width: 760px) {
@@ -2643,5 +2747,45 @@ export default {
 
 .body--dark .sync-stat-card {
   background: #2a2a2a;
+}
+
+/* 暗色模式 - 一级导航高亮 */
+.body--dark .settings-dialog-tabs ::v-deep(.q-tab--active.text-red-7) {
+  background: linear-gradient(135deg, rgba(239, 83, 80, 0.25) 0%, rgba(239, 83, 80, 0.1) 100%);
+  box-shadow: 0 2px 8px rgba(239, 83, 80, 0.3);
+}
+
+.body--dark .settings-dialog-tabs ::v-deep(.q-tab--active.text-orange-8) {
+  background: linear-gradient(135deg, rgba(255, 138, 80, 0.25) 0%, rgba(255, 138, 80, 0.1) 100%);
+  box-shadow: 0 2px 8px rgba(255, 138, 80, 0.3);
+}
+
+.body--dark .settings-dialog-tabs ::v-deep(.q-tab--active.text-yellow-9) {
+  background: linear-gradient(135deg, rgba(253, 216, 53, 0.25) 0%, rgba(253, 216, 53, 0.1) 100%);
+  box-shadow: 0 2px 8px rgba(253, 216, 53, 0.3);
+}
+
+.body--dark .settings-dialog-tabs ::v-deep(.q-tab--active.text-green-7) {
+  background: linear-gradient(135deg, rgba(102, 187, 106, 0.25) 0%, rgba(102, 187, 106, 0.1) 100%);
+  box-shadow: 0 2px 8px rgba(102, 187, 106, 0.3);
+}
+
+.body--dark .settings-dialog-tabs ::v-deep(.q-tab--active.text-cyan-7) {
+  background: linear-gradient(135deg, rgba(38, 166, 154, 0.25) 0%, rgba(38, 166, 154, 0.1) 100%);
+  box-shadow: 0 2px 8px rgba(38, 166, 154, 0.3);
+}
+
+.body--dark .settings-dialog-tabs ::v-deep(.q-tab--active.text-blue-7) {
+  background: linear-gradient(135deg, rgba(41, 182, 246, 0.25) 0%, rgba(41, 182, 246, 0.1) 100%);
+  box-shadow: 0 2px 8px rgba(41, 182, 246, 0.3);
+}
+
+.body--dark .settings-dialog-tabs ::v-deep(.q-tab--active.text-purple-7) {
+  background: linear-gradient(135deg, rgba(171, 71, 188, 0.25) 0%, rgba(171, 71, 188, 0.1) 100%);
+  box-shadow: 0 2px 8px rgba(171, 71, 188, 0.3);
+}
+
+.body--dark .settings-dialog-tabs ::v-deep(.q-tab:hover:not(.q-tab--active)) {
+  background: rgba(120, 120, 120, 0.15);
 }
 </style>
