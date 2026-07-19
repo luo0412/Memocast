@@ -2,18 +2,18 @@
  * 多回响运行时样式（Echo 体系的 echo-chant 子分类）
  * 配合 EchoRuntime.js 中的 ECHO_CHANT_HANDLERS 使用
  *
- * - 触发点：[data-rune-id]（由 EchoRuntime.renderToHtml 注入，与 markdown ABI 同名）
+ * - 触发点：[data-echo-chant-id]（由 EchoRuntime.renderToHtml 注入）
  * - kind 枚举：'echo-chant' / 'echo-tbd'
- * - 副作用样式：ag-rune-<runeId>-target / -active / -disabled
+ * - 副作用样式：ag-rune-<id>-target / -active / -disabled
  * - 容器属性：data-skywalk-theme / data-skywalk-layout / data-disperse-density
  *
  * 注意：
- *   data-rune-id / data-rune-kind / ag-rune-* class 是历史 markdown / DOM ABI，
- *   代码层面已重命名为 echo-chant / echo-tbd，不再保留旧名兼容分支。
+ *   data-echo-chant-id / data-echo-chant-kind / ag-rune-* class 是 echo 命名空间下的
+ *   当前 markdown / DOM ABI；CSS class 名沿用 ag-rune-* 前缀仅为保留视觉样式锚点。
  * ============================================================ */
 
 /* ====================== 共同基类 ====================== */
-.ag-echo-inline[data-rune-id] {
+.ag-echo-inline[data-echo-chant-id] {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -22,7 +22,7 @@
   padding: 0 4px;
   transition: background 0.2s ease, transform 0.2s ease;
 }
-.ag-echo-inline[data-rune-kind="echo-chant"]::before {
+.ag-echo-inline[data-echo-chant-kind="echo-chant"]::before {
   content: "回响·咏唱";
   font-size: 10px;
   color: var(--echo-color, #43A047);
@@ -32,7 +32,7 @@
   line-height: 1.4;
   opacity: 0.7;
 }
-.ag-echo-inline[data-rune-kind="echo-tbd"]::before {
+.ag-echo-inline[data-echo-chant-kind="echo-tbd"]::before {
   content: "回响·待定";
   font-size: 10px;
   color: #9E9E9E;
@@ -122,11 +122,11 @@
 }
 
 /* ====================== 夺心魄 ====================== */
-[data-mindsteal-mode="override"] [data-rune-id]:not([data-rune-id="mindsteal"]) {
+[data-mindsteal-mode="override"] [data-echo-chant-id]:not([data-echo-chant-id="mindsteal"]) {
   filter: hue-rotate(180deg) saturate(1.2);
   opacity: 0.6;
 }
-[data-mindsteal-mode="stack"] [data-rune-id]:not([data-rune-id="mindsteal"]) {
+[data-mindsteal-mode="stack"] [data-echo-chant-id]:not([data-echo-chant-id="mindsteal"]) {
   outline: 1px solid currentColor;
 }
 .ag-rune-mindsteal-active {

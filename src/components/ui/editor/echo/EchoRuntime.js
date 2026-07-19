@@ -1,8 +1,10 @@
-const DEFAULT_ECHO_COLOR = '#26A69A'
-const DEFAULT_ECHO_ICON = 'graphic_eq'
+import {
+  DEFAULT_ECHO_COLOR,
+  DEFAULT_ECHO_ICON,
+  CURRENT_ECHO_PLACEHOLDER_RE
+} from './builtin-echo-shared'
+
 const ECHO_PAYLOAD_VERSION = 1
-const LEGACY_ECHO_INSERT_RE = /@([^\s{}()@]+)\{\}\(\)/g
-const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]*)\{([\s\S]*?)\}\(([^)]*)\)/g
 
 const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
@@ -140,7 +142,7 @@ export const createDefaultEchoAnnoSource = (echoName = '回响') => `export defa
 //   echo-tbd          兜底 echo（占位）
 //
 // 函数 / Map / 常量名：
-//   ECHO_CHANT_HANDLERS         // 9 个内置 handler 表
+//   ECHO_CHANT_HANDLERS         // 8 个内置 handler 表（growth / shatter / skywalk / twinbloom / mindsteal / lucky / disperse / __echo_chant_tbd__）
 //   ECHO_CHANT_KINDS            // ['echo-chant', 'echo-tbd'] Set
 //   echoChantHandlers           // this.echoChantHandlers 用户动态注册 Map
 //   findEchoChantHandler        // 按 id 查找内置 handler
@@ -152,61 +154,13 @@ export const createDefaultEchoAnnoSource = (echoName = '回响') => `export defa
 //   echoChantMeta               // 渲染结果上的字段名
 //   _readChantAttrs             // 从 DOM 读 echo 实例参数
 //
-// DOM ABI（字面保留）：data-rune-id / data-rune-kind / data-rune-attrs / data-rune-attr-*
-//   —— 历史 markdown 源 ABI，迁移会破坏既有笔记。
-//   字段值（runeId / kind）是 echo 体系的内容；属性名本身属于历史稳定 ABI。
+// DOM ABI：data-echo-chant-id / data-echo-chant-kind / data-echo-chant-attrs / data-echo-chant-attr-*
+//   —— 当前 markdown 源 ABI；早期 data-rune-id / data-rune-kind / data-rune-attrs / data-rune-attr-*
+//      形态不主动兼容（实验功能，迁移成本由后续规则约束）。
+//   字段值（id / kind）是 echo 体系的内容；属性名本身属于 echo 命名空间。
 //
 // CSS class（字面保留）：ag-rune-*（视觉样式锚点；避免触发回归）。
 // ============================================================================
-
-// 默认的 echo-chant（"咏唱派发 / 影响附近元素"）模板。
-// 关键点：
-//  - kind: 'echo-chant'，render() 仍然返回标准的 { type, icon, color, title, ... }
-//  - handler(chantNode, scopeContainer, meta) 是副作用钩子，
-//    编译时被自动注册到 EchoRuntime.echoChantHandlers
-//    meta = { runeId, kind, attrs }
-export const createDefaultChantAnnoSource = (echoName = '回响') => `export default {
-  kind: 'echo-chant',
-  version: 1,
-  name: '${String(echoName || '回响').replace(/'/g, "\\'")}',
-  runeId: 'my-chant',
-
-  render (context = {}) {
-    const attrs = context.attrs || {}
-    const prompt = context.prompt || ''
-    return {
-      type: 'card',
-      icon: attrs.icon || context.echo?.icon || 'auto_awesome',
-      color: attrs.color || context.echo?.color || '${DEFAULT_ECHO_COLOR}',
-      title: attrs.title || context.echo?.name || '${String(echoName || '回响').replace(/'/g, "\\'")}',
-      description: attrs.desc || context.echo?.desc || '影响附近元素或排版',
-      prompt,
-      attrs: { ...attrs, kind: 'echo-chant', runeId: this.runeId },
-      html: ''
-    }
-  },
-
-  // 副作用钩子 —— 在容器 paint 完成时由 EchoRuntime.afterRender() 调用
-  //   chantNode      当前 echo 对应的 <span data-rune-id="...">
-  //   container     编辑器根 DOM 容器
-  //   meta          { runeId, kind, attrs }，attrs 已经聚合自 data-echo-attrs-json / data-rune-attrs / dataset
-  // 返回值可选：返回 cleanup 函数，将在编辑器下次重渲染/卸载时被调用
-  // 直接用 jQuery 写，简洁明了。
-  handler (chantNode, container, meta) {
-    const $chant = $(chantNode)
-    const $target = $chant.closest('[data-block-type], .mu-block, p, pre, h1, h2, h3, h4, h5, h6, li, blockquote').parent()
-    const target = $target.length ? $target.get(0) : container
-    if (!target) return () => {}
-    const $targetEl = $(target)
-    const previous = $targetEl.attr('data-my-chant-active') || null
-    $targetEl.attr('data-my-chant-active', 'true').css('outline', '1px dashed #9C27B0')
-    return () => {
-      if (previous === null) $targetEl.removeAttr('data-my-chant-active')
-      else $targetEl.attr('data-my-chant-active', previous)
-      $targetEl.css('outline', '')
-    }
-  }
-}`
 
 const createFallbackRenderResult = (context = {}) => {
   const attrs = context.attrs || {}
@@ -345,9 +299,7 @@ export const extractPrevEchoTokenValue = (markdown = '', currentIndex = -1, opti
 
   const onlyName = (options && options.echoName) ? String(options.echoName).trim() : ''
   let lastValue = ''
-  // 用一个与文件顶部 CURRENT_ECHO_PLACEHOLDER_RE 等价的本地正则（不可跨文件复用变量，
-  // 否则拿到的是 defined 时的旧引用），逐 match 取最后一个值
-  const localRe = /@([^\s{}()@]*)\{([\s\S]*?)\}\(([^)]*)\)/g
+  const localRe = new RegExp(CURRENT_ECHO_PLACEHOLDER_RE.source, 'g')
   let match
   while ((match = localRe.exec(prefix)) !== null) {
     const rawEchoName = String(match[1] || '').trim()
@@ -406,12 +358,7 @@ export const backfillEchoAnnotationsInMarkdown = ({ markdown = '', echoCards = [
   }, new Map())
   if (!echoMap.size) return source
 
-  return source.replace(LEGACY_ECHO_INSERT_RE, (match, rawEchoName = '') => {
-    const echoName = String(rawEchoName || '').trim()
-    const echo = echoMap.get(echoName)
-    if (!echo) return match
-    return buildUpdatedEchoAnnotationText({ raw: match, echo, keepInstanceId: false })
-  }).replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, rawEchoName = '', attrsRaw = '', promptRaw = '') => {
+  return source.replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, rawEchoName = '', attrsRaw = '', promptRaw = '') => {
     const echoName = String(rawEchoName || '').trim() || '回响'
     const echo = echoMap.get(echoName)
     if (!echo) return match
@@ -486,7 +433,7 @@ const safeEvalFactory = (source = '', prelude = '') => {
 // ============================================================================
 // 渲染管线：
 //   1. parseEchoAttrs / decodeEchoPayload 解析 token
-//   2. definition.render() 拿到标准化结果（包含 attrs.kind / attrs.runeId）
+//   2. definition.render() 拿到标准化结果（包含 attrs.kind / attrs.id）
 //   3. EchoRuntime.render() 在 kind === 'echo-chant' | 'echo-tbd' 时挂 echoChantMeta
 //      （已重命名，旧名 'rune' / 'rune-tbd' / 'runeMeta' 全部清除，无兼容分支）
 //   4. 编辑器把 rendered HTML 插入到内容容器
@@ -547,12 +494,12 @@ const removeClasses = (el, classNames = []) => {
   String(classNames || '').split(/\s+/).filter(Boolean).forEach(name => el.classList.remove(name))
 }
 
-// ----- 9 个 rune 的 handler -----
+// ----- 8 个内置 echo-chant handler -----
 
 const growthHandler = {
   id: 'growth',
-  match (meta) { return meta && meta.runeId === 'growth' },
-  apply (chantNode, _scopeContainer, meta) {
+  match (meta) { return meta && meta.id === 'growth' },
+  handler (chantNode, _scopeContainer, meta) {
     const scope = (meta && meta.attrs && meta.attrs.scope) || 'siblings'
     const container = resolveScopeContainer(chantNode, scope)
     if (!container) return () => {}
@@ -575,8 +522,8 @@ const growthHandler = {
 
 const shatterHandler = {
   id: 'shatter',
-  match (meta) { return meta && meta.runeId === 'shatter' },
-  apply (chantNode, _scopeContainer, meta) {
+  match (meta) { return meta && meta.id === 'shatter' },
+  handler (chantNode, _scopeContainer, meta) {
     const target = (meta && meta.attrs && meta.attrs.target) || 'line'
     const container = resolveScopeContainer(chantNode, target === 'block' ? 'block' : 'siblings')
     if (!container) return () => {}
@@ -600,8 +547,8 @@ const shatterHandler = {
 
 const skywalkHandler = {
   id: 'skywalk',
-  match (meta) { return meta && meta.runeId === 'skywalk' },
-  apply (chantNode, _scopeContainer, meta) {
+  match (meta) { return meta && meta.id === 'skywalk' },
+  handler (chantNode, _scopeContainer, meta) {
     const theme = (meta && meta.attrs && meta.attrs.theme) || 'auto'
     const layout = (meta && meta.attrs && meta.attrs.layout) || 'enhanced'
     const container = resolveScopeContainer(chantNode, 'document')
@@ -625,17 +572,17 @@ const skywalkHandler = {
 
 const twinbloomHandler = {
   id: 'twinbloom',
-  match (meta) { return meta && meta.runeId === 'twinbloom' },
-  apply (chantNode, _scopeContainer, meta) {
+  match (meta) { return meta && meta.id === 'twinbloom' },
+  handler (chantNode, _scopeContainer, meta) {
     const placeholder = (meta && meta.attrs && meta.attrs.placeholder) || '双生节点'
     const block = chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || chantNode.parentElement
     if (!block) return () => {}
     const previous = block.nextElementSibling
-    if (previous && previous.getAttribute('data-twinbloom-of') === chantNode.getAttribute('data-rune-id')) {
+    if (previous && previous.getAttribute('data-twinbloom-of') === chantNode.getAttribute('data-echo-chant-id')) {
       return () => {}
     }
     const cloned = block.cloneNode(true)
-    cloned.setAttribute('data-twinbloom-of', chantNode.getAttribute('data-rune-id') || 'twinbloom')
+    cloned.setAttribute('data-twinbloom-of', chantNode.getAttribute('data-echo-chant-id') || 'twinbloom')
     cloned.classList.add('ag-rune-twinbloom-clone')
     cloned.setAttribute('data-twinbloom-placeholder', placeholder)
     const originalText = (cloned.textContent || '').trim()
@@ -655,20 +602,20 @@ const twinbloomHandler = {
 
 const mindstealHandler = {
   id: 'mindsteal',
-  match (meta) { return meta && meta.runeId === 'mindsteal' },
-  apply (chantNode, _scopeContainer, meta) {
+  match (meta) { return meta && meta.id === 'mindsteal' },
+  handler (chantNode, _scopeContainer, meta) {
     const mode = (meta && meta.attrs && meta.attrs.mode) || 'override'
     const container = resolveScopeContainer(chantNode, 'siblings')
     if (!container) return () => {}
-    const runeTargets = safeQueryAll(container, '[data-rune-id]')
-    runeTargets.forEach(node => {
+    const echoChantTargets = safeQueryAll(container, '[data-echo-chant-id]')
+    echoChantTargets.forEach(node => {
       if (node === chantNode) return
       node.setAttribute('data-mindsteal-mode', mode)
       node.style.setProperty('animation', 'none', 'important')
     })
     addClassOnce(chantNode, 'ag-rune-mindsteal-active')
     return () => {
-      runeTargets.forEach(node => {
+      echoChantTargets.forEach(node => {
         if (node === chantNode) return
         node.removeAttribute('data-mindsteal-mode')
         node.style.removeProperty('animation')
@@ -680,8 +627,8 @@ const mindstealHandler = {
 
 const luckyHandler = {
   id: 'lucky',
-  match (meta) { return meta && meta.runeId === 'lucky' },
-  apply (chantNode, _scopeContainer, meta) {
+  match (meta) { return meta && meta.id === 'lucky' },
+  handler (chantNode, _scopeContainer, meta) {
     addClassOnce(chantNode, 'ag-rune-lucky-active')
     chantNode.style.cursor = 'pointer'
     chantNode.setAttribute('role', 'button')
@@ -727,8 +674,8 @@ const luckyHandler = {
 
 const disperseHandler = {
   id: 'disperse',
-  match (meta) { return meta && meta.runeId === 'disperse' },
-  apply (chantNode, _scopeContainer, meta) {
+  match (meta) { return meta && meta.id === 'disperse' },
+  handler (chantNode, _scopeContainer, meta) {
     const density = (meta && meta.attrs && meta.attrs.density) || 'loose'
     const container = resolveScopeContainer(chantNode, 'block')
     if (!container) return () => {}
@@ -746,7 +693,7 @@ const disperseHandler = {
 const tbdHandler = {
   id: '__echo_chant_tbd__',
   match (meta) { return meta && meta.kind === 'echo-tbd' },
-  apply (chantNode, _scopeContainer, _meta) {
+  handler (chantNode, _scopeContainer, _meta) {
     addClassOnce(chantNode, 'ag-echo-tbd-active')
     return () => removeClasses(chantNode, 'ag-echo-tbd-active')
   }
@@ -769,27 +716,27 @@ export const findEchoChantHandler = (chantId = '') => {
 }
 
 // 让运行时能挂载"由 echo anno_source 内置 handler 字段动态声明"的 echo-chant handler
-// - id 必须唯一（建议用 `echo:${definitionId}` 或自定义 runeId）
+// - id 必须唯一（建议用 `echo:${definitionId}` 或自定义 id）
 // - match(meta) -> boolean，决定该 handler 是否对该 echo 起作用
-// - apply(chantNode, scopeContainer, meta) -> cleanupFn? 与内置 handler 同样语义
+// - handler(chantNode, scopeContainer, meta) -> cleanupFn? 与内置 handler 同样语义
 export const normalizeCustomHandler = (raw = {}, fallbackId = '') => {
   if (!raw || typeof raw !== 'object') return null
   const id = String(raw.id || raw.runeId || fallbackId || '').trim()
   if (!id) return null
   const match = (typeof raw.match === 'function')
     ? raw.match
-    : (meta) => Boolean(meta) && (meta.runeId === id || meta?.attrs?.runeId === id)
-  const apply = (typeof raw.apply === 'function')
-    ? raw.apply
-    : (typeof raw.handler === 'function')
-      ? raw.handler
+    : (meta) => Boolean(meta) && (meta.id === id || meta?.attrs?.id === id)
+  const handler = (typeof raw.handler === 'function')
+    ? raw.handler
+    : (typeof raw.apply === 'function')
+      ? raw.apply
       : null
-  if (!apply) return null
+  if (!handler) return null
   const cleanupFn = (typeof raw.cleanup === 'function') ? raw.cleanup : null
   return {
     id,
     match,
-    apply,
+    handler,
     cleanup: cleanupFn,
     description: typeof raw.description === 'string' ? raw.description : '',
     source: typeof raw.source === 'string' ? raw.source : ''
@@ -801,7 +748,7 @@ export const extractEchoChantMeta = (rendered = {}) => {
   const kind = String(attrs.kind || '').trim()
   if (!isChantKind(kind)) return null
   return {
-    runeId: String(attrs.runeId || '').trim(),
+    id: String(attrs.id || attrs.runeId || '').trim(),
     kind,
     attrs: { ...attrs, kind },
     title: rendered.title || '',
@@ -813,7 +760,7 @@ export default class EchoRuntime {
   constructor ({ registry } = {}) {
     this.registry = registry
     this.definitionCache = new Map()
-    // 用户/动态注册 echo-chant handler，id -> { id, match, apply, cleanup, ... }
+    // 用户/动态注册 echo-chant handler，id -> { id, match, handler, cleanup, ... }
     this.echoChantHandlers = new Map()
   }
 
@@ -827,7 +774,7 @@ export default class EchoRuntime {
 
   /**
    * 动态注册一个 echo-chant handler。
-   *  - raw 可以是已规整的 { id, match, apply } 或 anno_source 里的 handler 字段。
+   *  - raw 可以是已规整的 { id, match, handler } 或 anno_source 里的 handler 字段。
    *  - 注册后，afterRender() 派发时会优先命中 echoChant handler；找不到再退到 ECHO_CHANT_HANDLERS。
    *  - 同一 id 重复 register 会覆盖。
    *  - 返回注册的 id，失败返回空串。
@@ -857,7 +804,7 @@ export default class EchoRuntime {
    * 提供给内部 afterRender() 使用，外部也可直接调用。
    */
   resolveEchoChantHandler (echoChantMeta = {}) {
-    const id = String(echoChantMeta?.runeId || '').trim()
+    const id = String(echoChantMeta?.id || echoChantMeta?.runeId || '').trim()
     const kind = String(echoChantMeta?.kind || 'echo-chant').trim()
     // 1) 自定义 handler（精确按 id）
     if (id && this.echoChantHandlers.has(id)) {
@@ -918,23 +865,22 @@ export default class EchoRuntime {
 
     // === 自动注册 anno_source 内置的 echo-chant handler ===
     // 约定：definition.handler = function (chantNode, scopeContainer, meta) { ... }
-    // （'runeMeta' 是 anno_source 字符串里 meta 参数名，handler 函数体内也可以这么写；
-    //   注释里为了与运行时的 echoChantMeta 区分，写成 chantNode / meta。）
+    // 注释里为了与运行时的 echoChantMeta 区分，写成 chantNode / meta。
     // 同时 definition.kind === 'echo-chant' | 'echo-tbd' 且
-    // definition.runeId / definition.id 已声明。
+    // definition.id 已声明（早期模板可能叫 runeId，向后兼容读）。
     try {
       const kind = String(definition.kind || definition?.attrs?.kind || '').trim()
       if (isChantKind(kind)) {
         const handlerSpec = definition.handler || definition
-        const fallbackId = String(definition.runeId || definition.id || cacheKey || '').trim()
-        if (typeof handlerSpec?.apply === 'function' || typeof handlerSpec === 'function' || typeof handlerSpec?.match === 'function') {
+        const fallbackId = String(definition.id || definition.runeId || cacheKey || '').trim()
+        if (typeof handlerSpec?.handler === 'function' || typeof handlerSpec === 'function' || typeof handlerSpec?.match === 'function') {
           const normalizedHandler = normalizeCustomHandler({
             ...(typeof handlerSpec === 'object' ? handlerSpec : {}),
-            // 函数形式：apply(chantNode, container, meta)
-            apply: (typeof handlerSpec === 'function')
+            // 函数形式：handler(chantNode, container, meta)
+            handler: (typeof handlerSpec === 'function')
               ? handlerSpec
-              : (typeof handlerSpec?.apply === 'function' ? handlerSpec.apply : undefined),
-            id: String(definition.runeId || definition.id || fallbackId || '').trim(),
+              : (typeof handlerSpec?.handler === 'function' ? handlerSpec.handler : undefined),
+            id: String(definition.id || definition.runeId || fallbackId || '').trim(),
             source: `definition:${cacheKey}`
           }, fallbackId)
           if (normalizedHandler) {
@@ -1071,9 +1017,9 @@ export default class EchoRuntime {
     const promptHtml = prompt ? `<div class="ag-echo-inline__prompt">${prompt}</div>` : ''
     const customHtml = bodyHtml ? `<div class="ag-echo-inline__html">${bodyHtml}</div>` : ''
 
-    // DOM 属性 ABI：data-rune-id / data-rune-kind 字面（已写进 markdown 源 ABI）。
+    // DOM 属性 ABI：data-echo-chant-id / data-echo-chant-kind（echo-chant handler 元数据，与 echo 体系同名空间）。
     const echoChantAttr = rendered.echoChantMeta
-      ? ` data-rune-id="${escapeHtml(rendered.echoChantMeta.runeId || 'unknown')}" data-rune-kind="${escapeHtml(rendered.echoChantMeta.kind || 'echo-chant')}"`
+      ? ` data-echo-chant-id="${escapeHtml(rendered.echoChantMeta.id || 'unknown')}" data-echo-chant-kind="${escapeHtml(rendered.echoChantMeta.kind || 'echo-chant')}"`
       : ''
 
     // 默认为 inline，除非有自定义 HTML 才切成 block（customHtml 通常是 block 级内容）。
@@ -1108,7 +1054,7 @@ export default class EchoRuntime {
     const echoNodes = safeQueryAll(container, '[data-echo-inline="true"]')
     const installed = []
 
-    //   对每个 echo host 调一次（无论是否有 runeId）；hook 可访问 domElement 与 neighbors。
+    //   对每个 echo host 调一次；hook 可访问 domElement 与 neighbors。
     echoNodes.forEach(node => {
       const echoName = node.getAttribute('data-echo-name') || ''
       const echoId = node.getAttribute('data-echo-id') || ''
@@ -1134,36 +1080,35 @@ export default class EchoRuntime {
         console.error('[EchoRuntime] afterRender hook failed:', echoName, error)
       }
       if (typeof cleanup === 'function') {
-        installed.push({ node, runeId: `__afterRender_${echoName}_${echoId}`, cleanup })
+        installed.push({ node, id: `__afterRender_${echoName}_${echoId}`, cleanup })
         node.__agEchoCleanup = cleanup
       }
     })
 
-    const chantNodes = safeQueryAll(container, '[data-rune-id]')
+    const chantNodes = safeQueryAll(container, '[data-echo-chant-id]')
     chantNodes.forEach(node => {
-      const runeId = node.getAttribute('data-rune-id') || ''
+      const id = node.getAttribute('data-echo-chant-id') || ''
       const meta = {
-        runeId,
-        // DOM 里的 data-rune-kind 仍是历史 ABI（值域：'echo-chant' | 'echo-tbd'）
-        kind: node.getAttribute('data-rune-kind') || 'echo-chant',
+        id,
+        kind: node.getAttribute('data-echo-chant-kind') || 'echo-chant',
         attrs: this._readChantAttrs(node)
       }
       const handler = this.resolveEchoChantHandler(meta)
       if (!handler) return
       let cleanup = null
       try {
-        cleanup = handler.apply(node, container, meta) || null
+        cleanup = handler.handler(node, container, meta) || null
       } catch (error) {
-        console.error('[EchoRuntime] handler failed:', runeId, error)
+        console.error('[EchoRuntime] handler failed:', id, error)
       }
       if (typeof cleanup === 'function') {
-        installed.push({ node, runeId, cleanup })
-        node.__agRuneCleanup = cleanup
+        installed.push({ node, id, cleanup })
+        node.__agEchoChantCleanup = cleanup
       } else if (typeof handler.cleanup === 'function') {
-        // 自定义 handler 可能把 cleanup 挂在自身而不是 apply 返回值
+        // 自定义 handler 可能把 cleanup 挂在自身而不是 handler 返回值
         const boundCleanup = handler.cleanup.bind(handler, node, container, meta)
-        installed.push({ node, runeId, cleanup: boundCleanup })
-        node.__agRuneCleanup = boundCleanup
+        installed.push({ node, id, cleanup: boundCleanup })
+        node.__agEchoChantCleanup = boundCleanup
       }
     })
 
@@ -1182,20 +1127,18 @@ export default class EchoRuntime {
       try {
         item.cleanup(item.node)
       } catch (error) {
-        console.warn('[EchoRuntime] dispose cleanup failed:', item.runeId, error)
+        console.warn('[EchoRuntime] dispose cleanup failed:', item.id, error)
       }
-      if (item.node) delete item.node.__agRuneCleanup
+      if (item.node) delete item.node.__agEchoChantCleanup
     }
   }
 
-  // === _readChantAttrs：从 <span data-rune-attrs> 读 echo 实例参数（kind/scope/density 等） ===
-  // DOM 属性名 [data-rune-attrs] 是 markdown 源 ABI，所以读它没错；
-  // 方法名与 'rune' 解耦成 _readChantAttrs 以统一口径。
+  // === _readChantAttrs：从 <span data-echo-chant-attrs> 读 echo 实例参数（kind/scope/density 等） ===
   _readChantAttrs (node) {
-    const card = node.querySelector('[data-rune-attrs]') || node
+    const card = node.querySelector('[data-echo-chant-attrs]') || node
     if (!card) return {}
     try {
-      const raw = card.getAttribute('data-rune-attrs')
+      const raw = card.getAttribute('data-echo-chant-attrs')
       if (raw) return JSON.parse(raw)
     } catch (error) { /* ignore */ }
     // 再回退：直接从当前 echo host（node 自身）读 data-echo-attrs-json，
@@ -1210,10 +1153,8 @@ export default class EchoRuntime {
     const result = {}
     const attrSource = (typeof node.attributes !== 'undefined') ? node : card
     Array.from(attrSource.attributes || []).forEach(attr => {
-      if (attr.name.startsWith('data-rune-attr-') || attr.name.startsWith('data-echo-attr-')) {
-        const key = attr.name
-          .replace(/^data-rune-attr-/, '')
-          .replace(/^data-echo-attr-/, '')
+      if (attr.name.startsWith('data-echo-chant-attr-')) {
+        const key = attr.name.replace(/^data-echo-chant-attr-/, '')
         try {
           result[key] = JSON.parse(attr.value)
         } catch (error) {
@@ -1221,7 +1162,7 @@ export default class EchoRuntime {
         }
       }
     })
-    // 兜底：把 host 上数据集中可能写着的 attrs.* 关键字段（kind/runeId/scope/...）
+    // 兜底：把 host 上数据集中可能写着的 attrs.* 关键字段（kind/id/scope/...）
     // 也一并合并进来，让运行时 handler 可以无依赖使用。
     try {
       const host = (typeof node.closest === 'function')
@@ -1231,7 +1172,7 @@ export default class EchoRuntime {
         for (const key of Object.keys(host.dataset)) {
           if (Object.prototype.hasOwnProperty.call(result, key)) continue
           if (['echoName', 'echoId', 'echoDefinitionId', 'echoNodeId', 'echoValue'].includes(key)) continue
-          if (!['kind', 'runeId', 'scope', 'trigger', 'target', 'theme', 'layout', 'density', 'mode', 'targets', 'placeholder', 'source', 'label', 'action', 'model'].includes(key)) continue
+          if (!['kind', 'id', 'scope', 'trigger', 'target', 'theme', 'layout', 'density', 'mode', 'targets', 'placeholder', 'source', 'label', 'action', 'model'].includes(key)) continue
           result[key] = host.dataset[key]
         }
       }

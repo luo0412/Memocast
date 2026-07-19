@@ -443,7 +443,7 @@ class StateRender {
           const matchedEcho = echo || null
           innerHtml = echoRuntime.renderToHtml(token, matchedEcho)
 
-          // 补充 data-rune-attrs 到第一个 span
+          // 补充 data-echo-chant-attrs 到第一个 span
           try {
             const baselineAttrs = Object.assign({}, simAttrs, {
               echoName,
@@ -455,11 +455,11 @@ class StateRender {
             if (attrJson) {
               innerHtml = innerHtml.replace(
                 /<span\b/,
-                `<span data-rune-attrs="${escapeAttrString(attrJson)}"`,
+                `<span data-echo-chant-attrs="${escapeAttrString(attrJson)}"`,
                 1
               )
-              if (innerHtml.indexOf('data-rune-attrs=') === -1) {
-                innerHtml = `<span data-rune-attrs="${escapeAttrString(attrJson)}">${innerHtml}</span>`
+              if (innerHtml.indexOf('data-echo-chant-attrs=') === -1) {
+                innerHtml = `<span data-echo-chant-attrs="${escapeAttrString(attrJson)}">${innerHtml}</span>`
               }
             }
           } catch (error) { /* ignore */ }
@@ -1091,7 +1091,7 @@ class StateRender {
       this.cleanupDetachedEchoVms(true)
     }
     // === 让 echo-chant 类回响真正影响附近节点的排版/动画/边距 ===
-    // 上面 renderEchoPlaceholders 已经把包含 data-rune-id 的 span 写进了 host.innerHTML，
+    // 上面 renderEchoPlaceholders 已经把包含 data-echo-chant-id 的 span 写进了 host.innerHTML，
     // 这里再让 EchoRuntime 派发对应 handler（growth / shatter / skywalk / twinbloom /
     // mindsteal / lucky / disperse / tbd）。
     const runtime = this.muya?.options?.__echoRuntime

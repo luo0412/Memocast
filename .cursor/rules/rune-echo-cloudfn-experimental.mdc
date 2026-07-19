@@ -124,7 +124,26 @@ function renderEcho (echo) {
 5. 读取路径对未知 shape 是否 graceful 降级？→ 没做的话补上。
 6. 这个改动会不会牵连稳定功能？→ 会的话**停下来问用户**。
 
-## 6. 与其它规则的关系
+## 6. 命名空间隔离（rune vs echo-chant）
+
+> echo-chant 命名空间不要套用 `rune` 前缀，避免和 rune 系统本身混淆。
+
+| 概念 | rune 系统（rune 占位符） | echo-chant 子系统 |
+|------|--------------------------|-------------------|
+| JS 对象 id 字段 | `runeId`（保留） | `id`（**已统一**） |
+| 元数据 / kind 字段 | — | `id`、`kind`（**已统一**） |
+| anno_source 顶层 id | `runeId`（保留） | `id`（**已统一**） |
+| DOM 属性（写入侧） | `data-rune-name` / `data-rune-id` / `data-rune-node-id` / `data-rune-value` / `data-rune-mounted` / `data-rune-prop-*` / `data-rune-scope-*` | `data-echo-chant-id` / `data-echo-chant-kind` / `data-echo-chant-attrs` / `data-echo-chant-attr-*`（**已重命名**） |
+| JS handler 函数名 | — | `handler`（**已统一**），旧名 `apply` 已废除 |
+| CSS class（视觉锚点） | `ag-rune-*`（保留） | `ag-rune-*`（**保留**）—— class 名沿用前缀仅为视觉稳定，不表示 rune 系统 |
+
+> 旧的 `data-rune-id` / `data-rune-kind` / `data-rune-attrs` / `data-rune-attr-*` 在 echo 上下文中**已重命名**；不做兼容分支，旧笔记会失去 echo-chant 视觉效果但**不报错**（见 §3.5）。
+>
+> `attrs.runeId` / `definition.runeId` 在 echo anno_source 中**已重命名**为 `attrs.id` / `definition.id`；读取时仍保留 `|| attrs.runeId` 之类的 graceful fallback。
+>
+> CSS class 名（`ag-rune-growth-target` 等）刻意**不改**，避免视觉回归；运行时仍是 echo-chant 体系。
+
+## 7. 与其它规则的关系
 
 - **本规则优先于**通用的"代码兼容性"直觉——这三个特性不在通用兼容性考量范围内。
 - **`safe-shell.mdc`** 仍然适用：破坏性操作前先备份。

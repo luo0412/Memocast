@@ -67,7 +67,7 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
   let echoAttrsJson = ''
   if (parsedAttrs) {
     try {
-      // 把 value/width/height 这种已知字段合并到 props，再补 kind/runeId 让 handler 能 fallback 用上
+      // 把 value/width/height 这种已知字段合并到 props，让 _readChantAttrs 的 dataset 回退分支能直接读到实例参数。
       const merged = { ...parsedAttrs, value, echoName, echoId, definitionId }
       echoAttrsJson = JSON.stringify(merged)
       dataset.echoAttrsJson = echoAttrsJson

@@ -35,6 +35,7 @@ import { showContextMenu as showEditorContextMenu } from 'src/contextMenu/muya'
 import EchoRegistry from './echo/EchoRegistry'
 import EchoRuntime from './echo/EchoRuntime'
 import { decodeEchoPayload, encodeEchoPayload, createEchoPlaceholderPayload, parseEchoAttrs, extractPrevEchoTokenValue, echoInheritFromPrevious } from './echo/EchoRuntime'
+import { CURRENT_ECHO_PLACEHOLDER_RE } from './echo/builtin-echo-shared'
 import AiProofreadService from 'src/services/AiProofreadService'
 
 const {
@@ -109,8 +110,6 @@ const compileTemplateToFunctions = vueSfcCompiler && typeof vueSfcCompiler.compi
   : vueSfcCompiler?.default && typeof vueSfcCompiler.default.compileToFunctions === 'function'
     ? vueSfcCompiler.default.compileToFunctions.bind(vueSfcCompiler.default)
     : null
-const LEGACY_RUNE_PLACEHOLDER_RE = /<div\s+[^>]*?(?:data-rune="([^"]+)"|data-rune-name="([^"]+)")[^>]*>([\s\S]*?)<\/div>/gi
-const CURRENT_RUNE_PLACEHOLDER_RE = /<div\s+[^>]*data-rune-name="([^"]+)"[^>]*>([\s\S]*?)<\/div>/gi
 const RUNE_TEXT_SLOT = 'default'
 
 const injectScopedAttribute = (template = '', scopeId = '') => {
@@ -166,21 +165,8 @@ const normalizeRuneSfc = (template = '') => {
   }
 }
 
-const createRuneMigrationMap = (runeCards = []) => {
-  return (Array.isArray(runeCards) ? runeCards : []).reduce((acc, rune) => {
-    const runeName = String((rune?.name || '').trim())
-    if (runeName) {
-      acc.set(runeName, rune)
-    }
-    return acc
-  }, new Map())
-}
-
 const createRuneInstanceId = () => uuidv4()
 const createRuneNodeId = () => `rune-${uuidv4()}`
-const LEGACY_ECHO_INSERT_RE = /@([^\s{}()@]+)\{\}\(\)/g
-// Support both named (@name{...}(...)) and anonymous (@{...}(...)) echo annotations
-const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]*)\{([\s\S]*?)\}\(([^)]*)\)/g
 const escapeHtmlAttribute = (value = '') => String(value)
   .replace(/&/g, '&amp;')
   .replace(/"/g, '&quot;')
@@ -217,36 +203,6 @@ const buildEchoAnnotationText = (echoName = '回响', payload = '', options = {}
 const createEchoInstanceId = () => uuidv4()
 const createEchoNodeId = () => `echo-${uuidv4()}`
 
-const migrateLegacyRunePlaceholders = (markdown = '', runeCards = []) => {
-  const source = String(markdown || '')
-  if (!source || (source.indexOf('data-rune="') === -1 && source.indexOf('data-rune-name="') === -1)) {
-    return source
-  }
-
-  const runeMap = createRuneMigrationMap(runeCards)
-  if (!runeMap.size) return source
-
-  return source.replace(LEGACY_RUNE_PLACEHOLDER_RE, (match, legacyRuneValue = '', legacyRuneNameAttr = '', innerHtml = '') => {
-    const hasModernRuneAttributes = /data-rune-name\s*=/.test(match) && /data-rune-id\s*=/.test(match) && /data-rune-node-id\s*=/.test(match)
-    if (hasModernRuneAttributes) {
-      return match
-    }
-
-    const runeName = String(legacyRuneNameAttr || legacyRuneValue || '').trim()
-    const rune = runeMap.get(runeName)
-    if (!rune?.name) return match
-
-    const plainText = String(innerHtml || '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-    const text = plainText && plainText !== 'Rune' ? plainText : rune.name
-
-    return `<div data-rune-name="${rune.name}" data-rune-id="${createRuneInstanceId()}" data-rune-node-id="${createRuneNodeId()}">${text}</div>`
-  })
-}
-
 const createEchoPlaceholderMarkup = (echo = {}, options = {}) => {
   const echoName = String(echo?.name || '回响').trim() || '回响'
   // 「上一节点 value 继承」：默认不开启；当 echo 名片层（或调用方 options）声明 inheritFromPrevious: true 时，
@@ -262,57 +218,6 @@ const createEchoPlaceholderMarkup = (echo = {}, options = {}) => {
   return buildEchoAnnotationText(echoName, payload, {
     echoId: createEchoInstanceId(),
     definitionId: String(echo?.id || '').trim()
-  })
-}
-
-const migrateLegacyEchoPlaceholders = (markdown = '', echoCards = []) => {
-  const source = String(markdown || '')
-  if (!source || source.indexOf('@') === -1) return source
-  const echoMap = (Array.isArray(echoCards) ? echoCards : []).reduce((acc, echo) => {
-    const name = String(echo?.name || '').trim()
-    if (name) acc.set(name, echo)
-    return acc
-  }, new Map())
-  if (!echoMap.size) return source
-
-  return source.replace(LEGACY_ECHO_INSERT_RE, (match, rawEchoName = '') => {
-    const echoName = String(rawEchoName || '').trim()
-    const echo = echoMap.get(echoName)
-    if (!echo) return match
-    // 「上一节点 value 继承」：从当前 match 之前的 markdown 切片找上一个 echo token value
-    return createEchoPlaceholderMarkup(echo, {
-      markdown: source,
-      currentIndex: source.indexOf(match)
-    })
-  }).replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, rawEchoName = '', attrsRaw = '', promptRaw = '') => {
-    const echoName = String(rawEchoName || '').trim()
-    const attrs = parseEchoAttrs(attrsRaw)
-    if (attrs.id) return match
-    const generatedEchoId = createEchoInstanceId()
-    const matchedEcho = echoMap.get(echoName)
-    const generatedDefinitionId = String(attrs.definitionId || matchedEcho?.id || '').trim()
-    // 已存在的 attrs.value 优先；当 echo 名片层声明了 inheritFromPrevious: true 且原 value 为空，
-    // 从 match 之前的 markdown 切片提取上一节点 value 注入。
-    const existingValue = String(attrs.value || promptRaw || '')
-    let resolvedValue = existingValue
-    if (!resolvedValue && matchedEcho && echoInheritFromPrevious(matchedEcho)) {
-      const prevValue = extractPrevEchoTokenValue(source, source.indexOf(match), { echoName })
-      if (prevValue) resolvedValue = prevValue
-    }
-    const upgradedPayload = encodeEchoPayload({
-      prompt: resolvedValue,
-      attrs: {
-        ...attrs,
-        id: generatedEchoId,
-        definitionId: generatedDefinitionId,
-        value: resolvedValue,
-        inheritFromPrevious: echoInheritFromPrevious(matchedEcho) || echoInheritFromPrevious(attrs)
-      }
-    })
-    return buildEchoAnnotationText(echoName || '回响', upgradedPayload, {
-      echoId: generatedEchoId,
-      definitionId: generatedDefinitionId
-    })
   })
 }
 
@@ -416,8 +321,7 @@ const createRuneRendererCtor = (rune = {}) => {
     },
     data () {
       return {
-        ...baseData.call(this),
-        runeMeta: this.rune || rune
+        ...baseData.call(this)
       }
     },
     render (h) {
@@ -654,40 +558,6 @@ export default {
     ...mapClientState(['darkMode', 'enablePreviewEditor', 'theme', 'runeCards', 'echoCards'])
   },
   methods: {
-    migrateCurrentNoteRunePlaceholders () {
-      if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function' || typeof this.contentEditor.setMarkdown !== 'function') {
-        return false
-      }
-
-      const markdown = this.contentEditor.getMarkdown()
-      const migrated = migrateLegacyRunePlaceholders(markdown, this.runeCards)
-      if (migrated === markdown) {
-        return false
-      }
-
-      const cursor = typeof this.contentEditor.getCursor === 'function' ? this.contentEditor.getCursor() : null
-      this.contentEditor.setMarkdown(migrated, cursor)
-      this.updateContentsList(this.contentEditor.getTOC())
-      this.updateNoteState('changed')
-      return true
-    },
-    migrateCurrentNoteEchoPlaceholders () {
-      if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function' || typeof this.contentEditor.setMarkdown !== 'function') {
-        return false
-      }
-
-      const markdown = this.contentEditor.getMarkdown()
-      const migrated = migrateLegacyEchoPlaceholders(markdown, this.echoCards)
-      if (migrated === markdown) {
-        return false
-      }
-
-      const cursor = typeof this.contentEditor.getCursor === 'function' ? this.contentEditor.getCursor() : null
-      this.contentEditor.setMarkdown(migrated, cursor)
-      this.updateContentsList(this.contentEditor.getTOC())
-      this.updateNoteState('changed')
-      return true
-    },
     updateEchoPlaceholderPayload ({ echoId = '', nodeId = '', echoName = '', payload = '', mode = '', value = '' } = {}) {
       if (mode === 'open-instance') {
         appBus.$emit(appEvents.ECHO_EVENTS.openInstanceEditor, {
@@ -1314,21 +1184,9 @@ export default {
       try {
         this.contentEditor.focus()
         console.log(`[Muya watcher] 📝 Loading into editor: len=${markdownContent.length}`)
-        const runeMigratedMarkdown = migrateLegacyRunePlaceholders(markdownContent, this.runeCards)
-        const migratedMarkdown = migrateLegacyEchoPlaceholders(runeMigratedMarkdown, this.echoCards)
 
         // ✅ 强制设置内容（空字符串也是有效内容，会清空编辑器）
-        this.contentEditor.setMarkdown(migratedMarkdown)
-        if (migratedMarkdown !== markdownContent) {
-          this.pendingSaveData = {
-            markdown: migratedMarkdown,
-            docGuid: docGuid || currentData?.info?.docGuid || this.$store.state.server.currentNote?.info?.docGuid,
-            title: currentData?.info?.title || this.$store.state.server.currentNote?.info?.title,
-            resources: currentData?.resources || this.$store.state.server.currentNote?.resources || [],
-            timestamp: Date.now()
-          }
-          this.updateNoteState('changed')
-        }
+        this.contentEditor.setMarkdown(markdownContent)
 
         this.firstTimeLoad = true
         this.updateContentsList(this.contentEditor.getTOC())
@@ -1367,7 +1225,6 @@ export default {
       if (this.contentEditor && typeof this.contentEditor.refreshRuneCards === 'function') {
         this.contentEditor.refreshRuneCards(cards || [])
         this.$nextTick(() => {
-          this.migrateCurrentNoteRunePlaceholders()
           if (this.contentEditor?.contentState?.stateRender?.renderRunes) {
             this.contentEditor.contentState.stateRender.renderRunes()
           }
@@ -1377,7 +1234,6 @@ export default {
     echoCards: function () {
       this.$nextTick(() => {
         this.refreshEchoDefinitions()
-        this.migrateCurrentNoteEchoPlaceholders()
         if (this.contentEditor?.contentState?.stateRender?.renderRunes) {
           this.contentEditor.contentState.stateRender.renderRunes()
         }

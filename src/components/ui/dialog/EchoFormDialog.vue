@@ -424,11 +424,10 @@
 import * as monaco from 'monaco-editor'
 import { v4 as uuidv4 } from 'uuid'
 import { createDefaultEchoAnnoSource } from 'components/ui/editor/echo/EchoRuntime'
+import { DEFAULT_ECHO_COLOR, DEFAULT_ECHO_ICON } from 'components/ui/editor/echo/builtin-echo-shared'
 import { ECHO_CATEGORIES, DEFAULT_ECHO_CATEGORY, getEchoCategoryValue } from 'src/constants/runeEchoCategories'
 import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
 
-const DEFAULT_ECHO_ICON = 'graphic_eq'
-const DEFAULT_ECHO_COLOR = '#26A69A'
 const DEFAULT_RENDER_TYPE = 'anno'
 
 const createUuid = () => uuidv4()

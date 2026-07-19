@@ -35,7 +35,9 @@ export const inlineRules = {
 
   // Markdown extensions (not belongs to GFM and Commonmark)
   inline_math: /^(\$)([^\$]*?[^\$\\])(\\*)\1(?!\1)/,
-  echo_anno: /^@([^\s\{\(\)@]+)?(?:\{([\s\S]*?)\})?\(([\s\S]*?)\)$/
+  // 捕获组：[name, attrsRaw, promptRaw]；attrsRaw 可缺省（兼容早期 @name{}() 形态）。
+  // 与 CURRENT_ECHO_PLACEHOLDER_RE（builtin-echo-shared.js）保持完全同源。
+  echo_anno: /^@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)$/
 }
 
 // Markdown extensions (not belongs to GFM and Commonmark)
