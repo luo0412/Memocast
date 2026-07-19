@@ -5,7 +5,7 @@ import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from 'src/components/bus'
 import { OFFLINE_ROOT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY, normalizeCategoryForMatch } from 'src/utils/constants'
 import SessionStorageService from 'src/services/SessionStorageService'
-import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/constants/calendarDateBasis'
+import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/utils/calendarDateBasisConst'
 import { APP_STATE_KEYS, loadWorkspaceState, saveWorkspaceStateValue } from 'src/store/server/workspaceState'
 import path from 'path'
 import {

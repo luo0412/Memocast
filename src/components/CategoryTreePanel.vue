@@ -60,7 +60,7 @@ import { showContextMenu as showSideDrawerContextMenu } from 'src/components/con
 import TierRankingDialog from 'components/TierRankingDialog'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from './bus'
-import events from 'src/constants/events'
+import { EVENTS as events } from 'src/utils/eventsConst'
 import * as echarts from 'echarts'
 
 const {

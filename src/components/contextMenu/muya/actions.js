@@ -1,4 +1,4 @@
-import events from 'src/constants/events'
+import { EVENTS as events } from 'src/utils/eventsConst'
 import { packClickFunction } from 'src/components/contextMenu/utils'
 
 export const copyAsMarkdown = (menuItem, browserWindow) => {

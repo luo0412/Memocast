@@ -1,4 +1,4 @@
-export default {
+export const EVENTS = Object.freeze({
   REQUEST_ERROR: 'request.error',
   RELOGIN: 'relogin',
   INSERT_IMAGE: 'insert.image',
@@ -9,7 +9,7 @@ export default {
   GENERATE_MINDMAP: 'generate.mindmap',
   UPDATE_WORD_COUNT: 'update.word.count',
   PARAGRAPH_SHORTCUT_CALL: 'paragraph.shortcut.call',
-  EDIT_SHORTCUT_CALL: {
+  EDIT_SHORTCUT_CALL: Object.freeze({
     undo: 'edit.shortcut.undo.call',
     redo: 'edit.shortcut.redo.call',
     save: 'edit.shortcut.save.call',
@@ -22,63 +22,63 @@ export default {
     deleteParagraph: 'edit.shortcut.delete.paragraph.call',
     insertParagraph: 'edit.shortcut.insert.paragraph.call',
     formatDocumentByPangu: 'edit.shortcut.format.document.by.pangu.call'
-  },
+  }),
   FORMAT_SHORTCUT_CALL: 'format.shortcut.call',
-  VIEW_SHORTCUT_CALL: {
+  VIEW_SHORTCUT_CALL: Object.freeze({
     switchView: 'view.shortcut.switch.view.call',
     sourceMode: 'view.shortcut.source.code.call',
     lockMode: 'view.shortcut.lock.code.call'
-  },
-  NOTE_SHORTCUT_CALL: {
+  }),
+  NOTE_SHORTCUT_CALL: Object.freeze({
     save: 'note.shortcut.save.call',
     searchNote: 'note.shortcut.search.note',
     exportNoteAsMarkdown: 'note.shortcut.export.markdown.call',
     exportNoteAsPNG: 'note.shortcut.export.png.call'
-  },
-  UPDATE_EVENTS: {
+  }),
+  UPDATE_EVENTS: Object.freeze({
     updateAvailable: 'update.events.update.available',
     updateNotAvailable: 'update.events.update.not.available',
     updateDownloading: 'update.events.update.downloading',
     updateDownloaded: 'update.events.update.downloaded',
     updateError: 'update.events.update.error'
-  },
+  }),
   EDITOR_SCROLL: 'editor.scroll',
-  NOTE_ITEM_CONTEXT_MENU: {
+  NOTE_ITEM_CONTEXT_MENU: Object.freeze({
     rename: 'note.item.context.menu.rename',
     copy: 'note.item.context.menu.copy',
     move: 'note.item.context.menu.',
-    exportNote: {
+    exportNote: Object.freeze({
       markdown: 'note.item.context.menu.export.markdown',
       png: 'note.item.context.menu.export.png'
-    },
+    }),
     flomo: 'note.item.context.menu.flomo',
     delete: 'note.item.context.menu.delete'
-  },
-  SIDE_DRAWER_CONTEXT_MENU: {
+  }),
+  SIDE_DRAWER_CONTEXT_MENU: Object.freeze({
     renameCategory: 'side.drawer.context.menu.rename.category',
     createCategory: 'side.drawer.context.menu.create.category',
     createNote: 'side.drawer.context.menu.create.note',
     delete: 'side.drawer.context.menu.delete.category',
-    exportCategory: {
+    exportCategory: Object.freeze({
       markdown: 'side.drawer.context.menu.export.markdown'
-    },
+    }),
     exportToBlog: 'side.drawer.context.menu.export.to.blog',
     copyMarkdown: 'side.drawer.context.menu.copy.markdown',
     openTierRanking: 'side.drawer.context.menu.open.tier.ranking',
     openImport: 'side.drawer.context.menu.open.import'
-  },
+  }),
   TAG_TREEMAP_RESIZE: 'tag.treemap.resize',
-  MARK_MAP_CONTEXT_MENU: {
+  MARK_MAP_CONTEXT_MENU: Object.freeze({
     saveAsPNG: 'mark.map.context.menu.save.as.png',
     saveAsSVG: 'mark.map.context.menu.save.as.svg',
     saveAsHTML: 'mark.map.context.menu.save.as.html'
-  },
-  RENDER_EVENTS: {
+  }),
+  RENDER_EVENTS: Object.freeze({
     codeStyleUpdate: 'render.events.code.style.update'
-  },
-  ECHO_EVENTS: {
+  }),
+  ECHO_EVENTS: Object.freeze({
     openManager: 'echo.events.open.manager',
     openInstanceEditor: 'echo.events.open.instance.editor',
     commitInstance: 'echo.events.commit.instance'
-  }
-}
+  })
+})

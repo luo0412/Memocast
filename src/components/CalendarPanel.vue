@@ -75,8 +75,8 @@
 <script>
 import moment from 'moment'
 import { createNamespacedHelpers } from 'vuex'
-import { CALENDAR_DATE_BASIS_LABELS, CALENDAR_DATE_BASIS_TYPES } from 'src/constants/calendarDateBasis'
-import { NOTE_ORDER_TYPES } from 'src/constants/noteOrderTypes'
+import { CALENDAR_DATE_BASIS_LABELS, CALENDAR_DATE_BASIS_TYPES } from 'src/utils/calendarDateBasisConst'
+import { NOTE_ORDER_TYPES } from 'src/utils/noteOrderTypesConst'
 
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 const { mapActions: mapServerActions } = createNamespacedHelpers('server')

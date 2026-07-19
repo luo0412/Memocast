@@ -14,7 +14,7 @@ import { Transformer } from 'markmap-lib'
 import * as markmap from 'markmap-view'
 import { showContextMenu as showMarkMapContextMenu } from 'src/components/contextMenu/markMap'
 import bus from './bus'
-import events from '../constants/events'
+import { EVENTS as events } from 'src/utils/eventsConst'
 import MarkMapToolBar from './MarkMapToolBar'
 
 const transformer = new Transformer()

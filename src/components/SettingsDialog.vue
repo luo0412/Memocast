@@ -760,7 +760,7 @@ import SettingsSectionContent from 'components/SettingsSectionContent'
 import { backfillEchoAnnotationsInMarkdown } from 'components/EchoRuntime'
 import { i18n, updateDialogDefaults } from 'boot/i18n'
 import bus from 'components/bus'
-import events from 'src/constants/events'
+import { EVENTS as events } from 'src/utils/eventsConst'
 import { version } from '../../package.json'
 import { checkUpdate, needUpdate, openLogFiles, openSqliteFile, openThemeFolder, refreshThemeFolder } from 'src/ApiInvoker'
 import helper from 'src/utils/helper'
@@ -768,7 +768,7 @@ import DatabaseClient from 'src/utils/DatabaseClient'
 import CloudSyncService from 'src/services/CloudSyncService'
 import SessionStorageService from 'src/services/SessionStorageService'
 import PortkeyService from 'src/services/PortkeyService'
-import { NOTE_ORDER_TYPES } from 'src/constants/noteOrderTypes'
+import { NOTE_ORDER_TYPES } from 'src/utils/noteOrderTypesConst'
 import {
   RUNE_CATEGORIES,
   ECHO_CATEGORIES,
@@ -776,7 +776,7 @@ import {
   DEFAULT_ECHO_CATEGORY,
   getRuneCategoryValue,
   getEchoCategoryValue
-} from 'src/constants/runeEchoCategories'
+} from 'src/utils/runeEchoCategoriesConst'
 
 const SYNC_REASON_MESSAGES = {
   not_logged_in: 'offlineMode',

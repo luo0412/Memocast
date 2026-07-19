@@ -5,7 +5,7 @@
  **/
 import FormData from 'form-data'
 import bus from 'components/bus'
-import events from 'src/constants/events'
+import { EVENTS as events } from 'src/utils/eventsConst'
 import NeetoError from 'app/share/error'
 /**
  * generate post header as well as body

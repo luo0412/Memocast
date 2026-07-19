@@ -44,8 +44,7 @@
 import { createNamespacedHelpers } from 'vuex'
 import helper from 'src/utils/helper'
 import bus from 'components/bus'
-import events from 'src/constants/events'
-
+import { EVENTS as events } from 'src/utils/eventsConst'
 const {
   mapGetters,
   mapState

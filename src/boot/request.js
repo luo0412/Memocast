@@ -1,6 +1,6 @@
 import axios from 'axios'
 import bus from 'components/bus'
-import events from 'src/constants/events'
+import { EVENTS as events } from 'src/utils/eventsConst'
 import NeetoError from 'app/share/error'
 import ServerFileStorage from 'src/utils/storage/ServerFileStorage'
 import { remoteRequest } from 'src/ApiInvoker'

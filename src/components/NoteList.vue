@@ -51,7 +51,7 @@ import { Loading, QSpinnerGears } from 'quasar'
 import LoadingComponent from './Loading'
 import helper from 'src/utils/helper'
 import bus from './bus'
-import events from 'src/constants/events'
+import { EVENTS as events } from 'src/utils/eventsConst'
 import { showContextMenu as showNoteItemContextMenu } from 'src/components/contextMenu/noteList'
 const { mapGetters: mapServerGetters, mapState: mapServerState, mapActions: mapServerActions } = createNamespacedHelpers('server')
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
