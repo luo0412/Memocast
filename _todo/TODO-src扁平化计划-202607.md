@@ -2,7 +2,7 @@
 
 > **起草日期**：2026-07-17
 > **决策日期**：2026-07-19（v0.2）
-> **状态**：✅ 决策已定 / 待执行，**未启动编码**
+> **状态**：✅ Phase 2-6 + common/ui 拍平全部完成；2026-07-19 commit 77faf32 落地
 > **目标**：在"不改业务代码"前提下，把 `src/` 和 `src-electron/` 的目录层级压平到统一上限；同时把 `@src/libs/muya` 提为独立顶层文件夹。
 > **范围**：仅做**路径 / 文件位置**调整，不改 `.vue`、`.js`、`.ts` 文件内部代码逻辑（除 import 路径字符串外）。
 > **决策快照**：A=A1 / B=B2.1（重命名解决 pngicon 同名冲突）/ C=C1（从 `src/` 起算）/ D=D1（i18n 拍平为 `<key>.js`）。
@@ -434,7 +434,8 @@ muya 当前的 retina 分辨率选择逻辑（CSS `@media` + 业务代码按 dev
 - [x] Phase 3：components/echo/ 上提（4 个文件 `git mv` + 7 个调用方 8 行 import 改写）
 - [x] Phase 4：i18n 拍平（en-us/zh-cn 各拍平到 7 个文件，547+16+15 keys；git tag backup-before-i18n-flatten-20260719-203000；babel AST 解析校验 [ALL OK]）
 - [x] Phase 5：src-electron i18n 拍平（73 keys × 2 语言，babel AST 校验 [ALL OK]，dev server hot reload 自动重启主进程 [OK]）
-- [ ] Phase 6：清理 + 验证（lint + build + dev + 截图核对图标）
+- [x] Phase 6：清理 + 验证（commit `643de98` utlis→utils 改名 + commit `2b9dc14` dialog/editor 拍平到 ui/）
+- [x] **Phase 6 补充**：用户指令拍平 `components/{common,ui}/` 到 `components/` 顶层（commit `77faf32`，44 文件 R + 11 文件 M，0 冲突）
 - [ ] 同步更新 `TODO-总览-202607.md` §2.1 路径表
 
 ---
@@ -450,3 +451,4 @@ muya 当前的 retina 分辨率选择逻辑（CSS `@media` + 业务代码按 dev
 | 2026-07-19 | v0.5（Phase 2 commit + Phase 3 完成） | commit `dc3da4b`（394 files / +430 / -327，git 自动识别 rename），worktree clean；Phase 3：`git mv` 4 个 echo 文件上提到 `components/ui/editor/`，改 7 个调用方 8 行 import（Header.vue / EchoFormDialog.vue 2 行 / EchoInstanceDialog.vue / SettingsDialog.vue / muya/lib/parser/index.js / store/actions.js / store/state.js），删空 echo 目录；git status：4 R + 7 M，共 11 条。 |
 | 2026-07-19 | v0.6（hotfix + Phase 4 完成） | (1) hotfix `26702af`：Muya.vue 4 行相对 import `./echo/X` → `./X`（webpack 编译时漏报的"模块找不到"，因为 Phase 3 grep 只查了 alias 路径没查相对路径）；(2) Phase 4：i18n 拍平到 `{lang}/{components,contextMenu,utils,errors,notification,other,index}.js`，每语种 547+16+15+11+11+96 = 696 keys；发现并消解 12 处隐性 key 冲突（用户决策：保留 SettingsDialog 长描述 / 'Doubao WebApp' / 'Cloud Sync' / 'Copy'）；bug fix：字符串里 `//` 误吃注释导致 15 个 entries 丢失；git tag `backup-before-i18n-flatten-20260719-203000`；babel AST 校验 `[ALL OK]`；git status：62 条（D 54 + M 2 + ?? 6）。 |
 | 2026-07-19 | v0.7（dev server 修复 + Phase 4 commit + Phase 5 完成） | (1) 用户报告 dev server 6 个 ENOENT 错误，**非真语法问题**：老 dev 进程在我删 components/ 目录时缓存了旧 import graph，hot reload 时按旧 graph 找文件；用户重启 dev server 后 `DONE Compiled successfully in 40179ms`，Electron 主进程启动 + 数据库初始化成功；commit `62eb3d8`（57 files / +469 / -709）；(2) Phase 5：src-electron/main-process/i18n 拍平到 5 个文件扁平（I18n.js / en-us.js / zh-cn.js / messages.js + 重写 index.js），73 keys × 2 语言，无 key 冲突；git tag `backup-before-electron-i18n-flatten-20260719-205000`；babel AST 校验 `[ALL OK]`；dev server hot reload 自动重启主进程 `[OK]`；git status：29 条（D 24 + M 1 + ?? 4）。 |
+| 2026-07-19 | v0.8（Phase 6 完成 + 通用拍平 common/ui） | (1) Phase 6 cleanup：`utlis` → `utils` 改名（api.js / electron-main.js / PicGoUtils.js 5 行 import）+ `components/ui/dialog` 和 `components/ui/editor` 拍平到 `components/ui/` 顶层（commit `643de98` + `2b9dc14`）；(2) **用户新指令**：`@src/components 的ui和common层级没必要 给我扁平化`；(3) `components/common/` (2 文件) 和 `components/ui/` (40 文件) 拍平到 `components/` 顶层；**0 名字冲突**；改写 import 路径 16 + 18 + 2 = 36 处（涉及 alias 形式 + 相对路径多深度，包括 `dialog/` `editor/` `echo/` 中间目录残留）；vendor muya `src/muya/lib/ui/...` 按 §1.2 不动；git tag `backup-before-common-ui-flatten-20260719-210500`；dev server hot reload：`DONE Compiled successfully`，Electron 启动 + Database 初始化 + Rune templates 准备成功；commit `77faf32`（53 files / 44 R + 11 M）。 |
