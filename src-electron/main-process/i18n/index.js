@@ -1,6 +1,6 @@
-import I18n from './lib'
+import I18n from './I18n'
 import Store from 'electron-store'
-import messages from './src'
+import messages from './messages'
 
 const ClientFileStorage = new Store({
   name: 'ClientFileStorage'
