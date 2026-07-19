@@ -34,7 +34,9 @@ module.exports = function (/* ctx */) {
 
     // https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-css
     css: [
-      'style.css'
+      // Quasar prepends 'src/css/' to every entry; use '~' to escape and
+      // point at the flattened src/assets/css/ instead.
+      { path: '~/src/assets/css/style.css' }
     ],
 
     // https://github.com/quasarframework/quasar/tree/dev/extras
