@@ -2,7 +2,7 @@ import { beginRules, inlineRules, inlineExtensionRules } from './rules'
 import { isLengthEven, union } from '../utils'
 import { findClosingBracket } from './marked/utils'
 import { getAttributes, parseSrcAndTitle, validateEmphasize, lowerPriority } from './utils'
-import { parseEchoAttrs } from 'src/components/ui/EchoRuntime'
+import { parseEchoAttrs } from 'src/components/EchoRuntime'
 
 // const CAN_NEST_RULES = ['strong', 'em', 'link', 'del', 'a_link', 'reference_link', 'html_tag']
 // disallowed html tags in https://github.github.com/gfm/#raw-html

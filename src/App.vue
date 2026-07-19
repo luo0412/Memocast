@@ -16,7 +16,7 @@ import { createNamespacedHelpers } from 'vuex'
 import bus from './components/bus'
 import events from './constants/events'
 import { checkUpdate } from './ApiInvoker'
-import OfflineSyncPromptDialog from './components/ui/OfflineSyncPromptDialog.vue'
+import OfflineSyncPromptDialog from './components/OfflineSyncPromptDialog.vue'
 
 const { RegisterErrorHandler } = ErrorHandler
 const { RegisterScheduleJobs } = ScheduleHandler

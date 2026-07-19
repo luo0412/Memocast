@@ -13,8 +13,8 @@ import { createNamespacedHelpers } from 'vuex'
 import { Transformer } from 'markmap-lib'
 import * as markmap from 'markmap-view'
 import { showContextMenu as showMarkMapContextMenu } from 'src/contextMenu/markMap'
-import bus from '../bus'
-import events from '../../constants/events'
+import bus from './bus'
+import events from '../constants/events'
 import MarkMapToolBar from './MarkMapToolBar'
 
 const transformer = new Transformer()

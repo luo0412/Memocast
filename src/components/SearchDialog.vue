@@ -38,7 +38,7 @@
 
 <script>
 import { createNamespacedHelpers } from 'vuex'
-import NoteItem from 'components/ui/NoteItem'
+import NoteItem from 'components/NoteItem'
 
 const {
   mapActions: mapServerActions,

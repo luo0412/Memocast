@@ -44,12 +44,12 @@
 </template>
 
 <script>
-import NoteItem from './ui/NoteItem'
-import CategoryDialog from './ui/dialog/CategoryDialog'
+import NoteItem from './NoteItem'
+import CategoryDialog from './CategoryDialog'
 import { createNamespacedHelpers } from 'vuex'
 import { Loading, QSpinnerGears } from 'quasar'
-import LoadingComponent from './ui/Loading'
-import helper from '../utils/helper'
+import LoadingComponent from './Loading'
+import helper from 'src/utils/helper'
 import bus from './bus'
 import events from 'src/constants/events'
 import { showContextMenu as showNoteItemContextMenu } from 'src/contextMenu/noteList'

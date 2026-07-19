@@ -413,7 +413,7 @@ import * as monaco from 'monaco-editor'
 import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY, getRuneCategoryValue } from 'src/constants/runeEchoCategories'
 import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
 import { createBlankTemplate, createInheritDemoTemplate } from './rune-templates'
-import CategoryPicker from 'components/common/CategoryPickerV2'
+import CategoryPicker from 'components/CategoryPickerV2'
 import RemoteRuneImportDialog from './RemoteRuneImportDialog'
 import runeTemplateService from 'src/services/RuneTemplateService'
 

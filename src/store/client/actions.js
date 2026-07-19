@@ -7,7 +7,7 @@ import { i18n } from 'boot/i18n'
 import _ from 'lodash'
 import { importImage, uploadImages } from 'src/ApiInvoker'
 import DatabaseClient from 'src/utils/DatabaseClient'
-import { BUILTIN_ECHO_CARDS, isBuiltinEcho } from 'components/ui/builtinEchoes'
+import { BUILTIN_ECHO_CARDS, isBuiltinEcho } from 'components/builtinEchoes'
 
 const applyQuickInsertColumns = (value) => {
   if (typeof document === 'undefined') return
