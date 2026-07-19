@@ -1,5 +1,5 @@
 import events from 'src/constants/events'
-import { packClickFunction } from 'src/contextMenu/utils'
+import { packClickFunction } from 'src/components/contextMenu/utils'
 
 export const openTierRanking = (menuItem, browserWindow) => {
   return packClickFunction(events.SIDE_DRAWER_CONTEXT_MENU.openTierRanking)

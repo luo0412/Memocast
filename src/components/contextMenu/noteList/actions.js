@@ -1,5 +1,5 @@
 import events from 'src/constants/events'
-import { packClickFunction } from 'src/contextMenu/utils'
+import { packClickFunction } from 'src/components/contextMenu/utils'
 
 export const rename = (menuItem, browserWindow) => {
   return packClickFunction(events.NOTE_ITEM_CONTEXT_MENU.rename)

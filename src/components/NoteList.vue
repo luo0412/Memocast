@@ -52,7 +52,7 @@ import LoadingComponent from './Loading'
 import helper from 'src/utils/helper'
 import bus from './bus'
 import events from 'src/constants/events'
-import { showContextMenu as showNoteItemContextMenu } from 'src/contextMenu/noteList'
+import { showContextMenu as showNoteItemContextMenu } from 'src/components/contextMenu/noteList'
 const { mapGetters: mapServerGetters, mapState: mapServerState, mapActions: mapServerActions } = createNamespacedHelpers('server')
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 export default {

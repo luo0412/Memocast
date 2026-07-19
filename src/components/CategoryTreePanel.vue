@@ -56,7 +56,7 @@
 
 <script>
 import { createNamespacedHelpers } from 'vuex'
-import { showContextMenu as showSideDrawerContextMenu } from 'src/contextMenu/sideDrawer'
+import { showContextMenu as showSideDrawerContextMenu } from 'src/components/contextMenu/sideDrawer'
 import TierRankingDialog from 'components/TierRankingDialog'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from './bus'

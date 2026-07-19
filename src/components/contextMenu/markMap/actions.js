@@ -1,5 +1,5 @@
 import events from 'src/constants/events'
-import { packClickFunction } from 'src/contextMenu/utils'
+import { packClickFunction } from 'src/components/contextMenu/utils'
 
 export const saveAsPNG = (menuItem, browserWindow) => {
   return packClickFunction(events.MARK_MAP_CONTEXT_MENU.saveAsPNG)

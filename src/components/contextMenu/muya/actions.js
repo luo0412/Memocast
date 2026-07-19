@@ -1,5 +1,5 @@
 import events from 'src/constants/events'
-import { packClickFunction } from 'src/contextMenu/utils'
+import { packClickFunction } from 'src/components/contextMenu/utils'
 
 export const copyAsMarkdown = (menuItem, browserWindow) => {
   return packClickFunction(events.EDIT_SHORTCUT_CALL.copyAsMarkdown, 'copyAsMarkdown')
