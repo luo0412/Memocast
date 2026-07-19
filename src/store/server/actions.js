@@ -175,7 +175,6 @@ export async function _getContent (kbGuid, docGuid) {
       downloadInfo: 1
     }
   })
-  console.timeEnd('FetchNote')
   const cacheKey = api.KnowledgeBaseApi.getCacheKey(kbGuid, docGuid)
   const note = ClientFileStorage.getCachedNote(info, cacheKey)
   let result

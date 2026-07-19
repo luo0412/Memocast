@@ -143,7 +143,7 @@ export default {
   runeBatchDelete: 'Batch Delete',
   runeBatchDeleteConfirm: 'Are you sure you want to delete {count} selected runes?',
   runeInheritFromPreviousLabel: 'Inherit previous line on insert',
-  runeInheritFromPreviousHint: 'When enabled, inserting this rune from the quick panel auto-fills its value from the previous non-empty line. The default template ships with a built-in demo.',
+  runeInheritFromPreviousHint: 'When enabled, inserting this rune from the quick panel auto-fills its value from the previous non-empty line.',
   selectedCount: '{count} selected',
   runeDragTip: 'Drag to reorder',
   runeNameRequired: 'Please enter a rune name',

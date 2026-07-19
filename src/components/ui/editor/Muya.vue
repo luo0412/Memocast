@@ -458,6 +458,9 @@ const RunePreviewRenderer = Vue.extend({
       type: Function,
       default: null
     }
+    // 注：SFC 自定义的 props（如 inheritFromPrevious）由 mountRuneVueHosts
+    // 通过三优先级合并写到 host.dataset，再按 Vue props 规则显式传入。
+    // 因此本渲染层不预先声明这些 prop，交给 Vue 自身的 props 解析决定要不要传。
   },
   computed: {
     rendererCtor () {
@@ -1052,7 +1055,6 @@ export default {
           const runeItems = (this.runeCards || [])
             .filter(rune => rune && (rune.name || rune.text || rune.label))
             .map(rune => {
-              const inheritFromPrevious = rune.inherit_from_previous === true || rune.inherit_from_previous === 1 || rune.inherit_from_previous === '1'
               return {
                 title: () => rune.name || rune.text || rune.label || 'Rune',
                 subTitle: () => rune.desc || rune.template || '',
@@ -1066,8 +1068,7 @@ export default {
                   runeTemplateId: rune.id,
                   runeName: (rune.name || rune.text || rune.label || '').trim(),
                   color: rune.color,
-                  insertContent: rune.template || '',
-                  inheritFromPrevious
+                  insertContent: rune.template || ''
                 }
               }
             })

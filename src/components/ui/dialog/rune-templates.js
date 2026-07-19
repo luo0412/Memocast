@@ -46,40 +46,34 @@ export default {
 
 // ===== inheritFromPrevious 演示模板 =====
 //
-// 这是「符文卡片」createRunePlaceholderHtml 的默认 demo 模板。
+// 这是新建符文 / 重置模板时的默认 SFC。
 //
-// 关键点：
-//   - 父组件会注入 props.value / props.runeId / props.nodeId / props.rune / props.onValueChange
-//   - 符文卡片在数据库里有一个 inherit_from_previous 字段（默认 0）
-//   - 当 inherit_from_previous = 1 时，从快捷面板 `@xxx` 插入该符文会自动把
-//     「上一非空行」的文本灌进 props.value（无需手动输入）
-//   - 用户可以在 SFC 里继续编辑 props.value，并通过 $emit('input', next) 把改动回写
+//   父组件会注入的 props（仅系统级）：
+//     - value                  当前实例的 data-rune-value
+//     - runeId                 符文卡片 id（稳定）
+//     - nodeId                 当前实例的 nodeId（同一卡片可以插入多次）
+//     - rune                   符文卡片定义（含 inherit_from_previous 等卡片级配置）
+//     - onValueChange          回写 value 的回调（一般不必直接用，$emit('input') 就够）
 //
-// 这个模板演示「读-改-写」三段式：默认把 value 渲染出来 + 可在输入框里继续编辑 +
-// 失焦时回写。同时用一个开关提示用户「这一行是从上一行继承来的」。
+//   SFC 自定义的 prop（如 inheritFromPrevious）走"三优先级合并"通道：
+//     1. host.dataset 已存在的 data-rune-prop-inherit-from-previous 最高
+//     2. 否则用本 SFC props.inheritFromPrevious.default
+//     3. 否则用 rune.inherit_from_previous（兜底）
+//
+//   mountRuneVueHosts 会按 Vue props 解析规则，把第 1/2/3 步算出来的"应当传入的值"
+//   显式传进 SFC；SFC 拿到什么值就跟 Vue 自己处理 props 一样 —— prop 有传入用传入值，
+//   没传入才用 props.default。这跟用户开发 Vue 组件的常规习惯一致。
+//
+//   $emit('update:inheritFromPrevious', next) 可以把开关变化冒泡给父组件；
+//   父组件当前不主动写回卡片（保留扩展点）。
 export const createInheritDemoTemplate = () => {
   return `<template>
   <div class="rune-inherit-demo">
-    <header class="rune-inherit-demo__header">
-      <span class="rune-inherit-demo__badge" :class="{ 'is-inherited': hasInherited }">
-        {{ hasInherited ? '已继承上一行' : '手动输入' }}
-      </span>
-      <span class="rune-inherit-demo__hint">
-        {{ hasInherited
-          ? 'value 来自上一行，可在下方继续修改'
-          : '开启符文卡片的 inherit_from_previous 后，下次插入会自动取上一行' }}
-      </span>
-    </header>
     <textarea
-      class="rune-inherit-demo__input"
       :value="text"
-      placeholder="这里的内容会在失焦时回写到 Markdown 的 data-rune-value"
+      :placeholder="placeholderText"
       @blur="handleBlur"
     />
-    <footer class="rune-inherit-demo__footer">
-      <span>字数：{{ text.length }}</span>
-      <span>runeId: {{ runeId || '-' }}</span>
-    </footer>
   </div>
 </template>
 
@@ -87,99 +81,62 @@ export const createInheritDemoTemplate = () => {
 export default {
   name: 'RuneInheritDemo',
   props: {
-    // 由父组件（Muya 渲染层）注入：
-    //   - value: 来自 data-rune-value，启用 inheritFromPrevious 时为「上一行」文本
-    //   - runeId / nodeId: 当前符文实例的稳定 id
-    //   - rune: 符文卡片定义（含 inherit_from_previous 等卡片级配置）
-    //   - onValueChange: 回写 value 的回调
-    value: {
-      type: [String, Number],
-      default: ''
-    },
+    value: { type: [String, Number], default: '' },
     runeId: { type: String, default: '' },
     nodeId: { type: String, default: '' },
-    rune: { type: Object, default: () => ({}) }
+    rune: { type: Object, default: () => ({}) },
+    // ★ 用户期望的"默认 false"语义在这里：
+    // 父组件没显式传 inheritFromPrevious 时，SFC 自动拿到 false。
+    // 如果父组件（host.dataset / muya 兜底）有显式值，会覆盖这里。
+    inheritFromPrevious: { type: [Boolean, Number, String], default: false },
+    onValueChange: { type: Function, default: null }
+  },
+  computed: {
+    placeholderText () {
+      return this._inheritFlagTrue
+        ? '父组件显式传入 inheritFromPrevious=true —— value 由 quickInsert 灌入上一非空行'
+        : 'SFC 自己用了 default: false —— value 不会自动继承上一行'
+    },
+    _inheritFlagTrue () {
+      return this.inheritFromPrevious === true || this.inheritFromPrevious === 1 || this.inheritFromPrevious === '1'
+    }
   },
   data() {
     return {
-      text: this.normalize(this.value)
+      text: this.value == null ? '' : String(this.value)
     }
   },
-  computed: {
-    // 真正的「继承自上一行」判定：
-    //   1. 符文卡片声明 inherit_from_previous === 1 / true / '1'
-    //   2. 当前 value 非空（说明确实被灌进来了）
-    hasInherited () {
-      const flag = this.rune && (
-        this.rune.inherit_from_previous === true ||
-        this.rune.inherit_from_previous === 1 ||
-        this.rune.inherit_from_previous === '1'
-      )
-      return Boolean(flag) && Boolean(this.text)
+  created () {
+    // ★ SFC 自行控制入口：当父组件没传、且 SFC 显式声明 default: false 时，
+    // 把上一行继承来的 value 清掉，并 $emit('input', '') 同步回 Markdown。
+    // 这是 Vue 自家 props 规则下"prop 没传就用 default"的延伸：
+    // 如果 SFC 拿到的 inheritFromPrevious=false，主动否决卡片级继承语义。
+    if (!this._inheritFlagTrue) {
+      this.text = ''
+      this.$emit('input', '')
     }
   },
   watch: {
-    value (next) {
-      const normalized = this.normalize(next)
-      if (normalized !== this.text) {
-        this.text = normalized
-      }
+    value(next) {
+      const s = next == null ? '' : String(next)
+      if (s !== this.text) this.text = s
+    },
+    inheritFromPrevious(next) {
+      this._lastInheritFlag = next
     }
   },
   methods: {
-    normalize (raw) {
-      if (raw == null) return ''
-      return String(raw)
-    },
-    handleBlur (event) {
+    handleBlur(event) {
       const next = event && event.target ? String(event.target.value || '') : ''
       this.text = next
       this.$emit('input', next)
-      if (typeof this.onValueChange === 'function') {
-        try { this.onValueChange(next) } catch (err) { console.warn('[RuneInheritDemo] onValueChange error', err) }
-      }
     }
   }
 }
 <\/script>
 
 <style lang="less" scoped>
-.rune-inherit-demo {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(126, 87, 194, 0.25);
-  background: rgba(126, 87, 194, 0.05);
-  font-family: inherit;
-  color: inherit;
-}
-.rune-inherit-demo__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.65);
-}
-.rune-inherit-demo__badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06);
-  color: rgba(0, 0, 0, 0.55);
-  font-weight: 600;
-}
-.rune-inherit-demo__badge.is-inherited {
-  background: rgba(126, 87, 194, 0.18);
-  color: #6A1B9A;
-}
-.rune-inherit-demo__hint {
-  flex: 1 1 auto;
-  min-width: 0;
-  line-height: 1.4;
-}
-.rune-inherit-demo__input {
+.rune-inherit-demo textarea {
   width: 100%;
   min-height: 60px;
   resize: vertical;
@@ -191,18 +148,10 @@ export default {
   font: inherit;
   font-size: 13px;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.rune-inherit-demo__input:focus {
+.rune-inherit-demo textarea:focus {
   border-color: #7E57C2;
   box-shadow: 0 0 0 2px rgba(126, 87, 194, 0.2);
-}
-.rune-inherit-demo__footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.45);
 }
 </style>`
 }

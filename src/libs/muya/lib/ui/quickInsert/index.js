@@ -76,7 +76,6 @@ const createRuneQuickInsertItem = (rune = {}) => {
   const desc = (rune.desc || '').trim()
   const template = typeof rune.template === 'string' ? rune.template : ''
   const searchText = [name, desc, template].filter(Boolean).join(' ')
-  const inheritFromPrevious = rune.inherit_from_previous === true || rune.inherit_from_previous === 1 || rune.inherit_from_previous === '1'
 
   return {
     title: () => name,
@@ -91,8 +90,7 @@ const createRuneQuickInsertItem = (rune = {}) => {
       runeTemplateId: id,
       runeName: name,
       color: rune.color || '#7E57C2',
-      insertContent: template,
-      inheritFromPrevious
+      insertContent: template
     }
   }
 }
@@ -102,6 +100,70 @@ const escapeHtmlAttribute = (value = '') => String(value)
   .replace(/"/g, '&quot;')
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;')
+
+// 解析 SFC 字符串里的 props 块，只关心 inheritFromPrevious 这一项的 default。
+// 用来给 quickInsert 判断"插入瞬间这条符文是否默认开启继承"。
+// 不读 meta.inheritFromPrevious / runeCards.inherit_from_previous ——
+// 卡片级开关不再决定行为，行为完全交给 SFC props.default。
+const quickInheritDefaultFromTemplate = (template = '') => {
+  if (typeof template !== 'string' || !template) return undefined
+  const scriptMatch = template.match(/<script[^>]*>([\s\S]*?)<\/script>/i)
+  if (!scriptMatch) return undefined
+  const body = scriptMatch[1]
+  const exportMatch = body.match(/export\s+default\s+([\s\S]*?)\n\}\s*(?:;|$)/m)
+  if (!exportMatch) return undefined
+  const exportBody = exportMatch[1]
+  const propsIdx = exportBody.indexOf('props')
+  if (propsIdx < 0) return undefined
+  const propsStart = exportBody.indexOf('{', propsIdx)
+  if (propsStart < 0) return undefined
+  // 大括号配对，拿到整个 props 对象字面量
+  let depth = 0
+  let propsEnd = -1
+  for (let i = propsStart; i < exportBody.length; i++) {
+    const ch = exportBody[i]
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) { propsEnd = i; break }
+    }
+  }
+  if (propsEnd <= propsStart) return undefined
+  const propsBody = exportBody.slice(propsStart + 1, propsEnd)
+
+  // 在 propsBody 里找 inheritFromPrevious 这一项对应的字面量 { ... }，
+  // 用大括号配对精确切出"它的 default 值"。
+  // 例: '... inheritFromPrevious: { type: ..., default: false }, ...'
+  const nameIdx = propsBody.search(/inheritFromPrevious/)
+  if (nameIdx < 0) return undefined
+  const colonIdx = propsBody.indexOf(':', nameIdx)
+  if (colonIdx < 0) return undefined
+  const braceStart = propsBody.indexOf('{', colonIdx)
+  if (braceStart < 0) return undefined
+  let d = 1
+  let i = braceStart + 1
+  for (; i < propsBody.length; i++) {
+    const ch = propsBody[i]
+    if (ch === '{') d++
+    else if (ch === '}') {
+      d--
+      if (d === 0) break
+    }
+  }
+  if (d !== 0) return undefined
+  const propBlock = propsBody.slice(braceStart + 1, i) // '{ type:..., default: false }' → ' type:..., default: false '
+  const defMatch = propBlock.match(/\bdefault\s*:\s*([^,}]+)/)
+  if (!defMatch) return undefined
+  let defRaw = defMatch[1].trim()
+  // 去除尾随逗号或空白
+  defRaw = defRaw.replace(/[,\s]+$/, '')
+  try {
+    // eslint-disable-next-line no-new-func
+    return new Function(`return (${defRaw});`)()
+  } catch (_e) {
+    return undefined
+  }
+}
 
 const reorderRenderObj = (obj = {}, preferredSections = []) => {
   const ordered = {}
@@ -128,6 +190,12 @@ const createRunePlaceholderHtml = (item = {}, displayText = '', runeValue = '') 
   const runeId = uuidv4()
   const nodeId = `rune-${getUniqueId()}`
 
+  // ★ 占位符 div 只携带 4 个 data-rune-* 系统级属性（name/id/node-id/value）。
+  // SFC props 的处理全部交给 mountRuneVueHosts：
+  //   - 用户手写在 Markdown 里的 data-rune-prop-*（最高优先级）
+  //   - rune 卡片级字段按 snake→camel 命中 SFC prop 名（卡片级默认值）
+  //   - SFC props.default（兜底）
+  // 这样保持 Markdown 体积不膨胀，且三优先级合并逻辑只在渲染时跑一次。
   return `<div data-rune-name="${escapeHtmlAttribute(runeName)}" data-rune-id="${escapeHtmlAttribute(runeId)}" data-rune-node-id="${escapeHtmlAttribute(nodeId)}" data-rune-value="${escapeHtmlAttribute(normalizedRuneValue)}">${escapeHtmlAttribute(text)}</div>`
 }
 
@@ -458,20 +526,14 @@ class QuickInsert extends BaseScrollFloat {
   }
 
   getRuneInheritFromPreviousEnabled (item = {}) {
-    if (!item) return false
-    const meta = item.meta || {}
-    if (meta && Object.prototype.hasOwnProperty.call(meta, 'inheritFromPrevious')) {
-      return meta.inheritFromPrevious === true
-    }
-    const name = String(meta.runeName || item.label || '').trim()
-    if (!name) return false
-    const runeCards = (this.muya && this.muya.options && Array.isArray(this.muya.options.runeCards))
-      ? this.muya.options.runeCards
-      : []
-    const match = runeCards.find(card => card && String(card.name || '').trim() === name)
-    if (!match) return false
-    const value = match.inherit_from_previous
-    return value === true || value === 1 || value === '1'
+    // 唯一真理来源：SFC 自身的 props.inheritFromPrevious.default
+    //   - true  → 插入瞬间去读上一行，灌进 data-rune-value
+    //   - false/undefined → 不读，runeValue 留空
+    // 卡片级开关（meta.inheritFromPrevious / runeCards[*].inherit_from_previous）
+    // 已弃用 —— 行为完全交给 SFC。
+    const template = String(item?.meta?.insertContent || '')
+    const def = quickInheritDefaultFromTemplate(template)
+    return def === true
   }
 
   insertRuneTemplate(item) {
