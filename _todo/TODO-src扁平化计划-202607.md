@@ -423,7 +423,7 @@ muya 当前的 retina 分辨率选择逻辑（CSS `@media` + 业务代码按 dev
 - [x] Phase 2.5：sanity-check-imports.js 静态校验 `[ALL OK]`
 - [x] Phase 2.6-2.7：临时脚本删除（mv-muya.js / rename-pngicon.js / rewrite-pngicon-imports.js / sanity-check-imports.js）
 - [x] Phase 3：components/echo/ 上提（4 个文件 `git mv` + 7 个调用方 8 行 import 改写）
-- [ ] Phase 4：i18n 拍平
+- [x] Phase 4：i18n 拍平（en-us/zh-cn 各拍平到 7 个文件，547+16+15 keys；git tag backup-before-i18n-flatten-20260719-203000；babel AST 解析校验 [ALL OK]）
 - [ ] Phase 5：src-electron 拍平（建议单独拆 PR）
 - [ ] Phase 6：清理 + 验证（lint + build + dev + 截图核对图标）
 - [ ] 同步更新 `TODO-总览-202607.md` §2.1 路径表
@@ -439,3 +439,4 @@ muya 当前的 retina 分辨率选择逻辑（CSS `@media` + 业务代码按 dev
 | 2026-07-19 | v0.3（Phase 1 完成） | git tag `backup-before-src-flatten-20260719-180108` + 双份 `cp -a` 副本落地（`%USERPROFILE%\coolma-flatten-backup-20260719-180435\`）；Phase 1 Checklist 已勾 |
 | 2026-07-19 | v0.4（Phase 2 完成） | muya 整体迁移：(1) `src/libs/muya` → `src/muya`（copy+rm，因 Windows 跨目录 EPERM），(2) pngicon 49 子目录拍平到 145 扁平 PNG（含 `table@2x.png` → `table-2.png` 特例），(3) 业务代码 14 行 import 重写（Muya.vue + PptPreviewDialog.vue），(4) muya 内部 11 个文件 78 行 pngicon import 重写（quickInsert / linkTools / imageToolbar / frontMenu / formatPicker / footnoteTool / renderInlines:image / renderToolBar / renderIcon / renderCopyButton / renderContainerEditIcon），(5) sanity-check 全绿，临时脚本全部清理；git status：395 条改动（D 390 + M 4 + ?? 1）。**Phase 2 已就绪待 commit，但暂不自动 commit，按用户节奏走**。 |
 | 2026-07-19 | v0.5（Phase 2 commit + Phase 3 完成） | commit `dc3da4b`（394 files / +430 / -327，git 自动识别 rename），worktree clean；Phase 3：`git mv` 4 个 echo 文件上提到 `components/ui/editor/`，改 7 个调用方 8 行 import（Header.vue / EchoFormDialog.vue 2 行 / EchoInstanceDialog.vue / SettingsDialog.vue / muya/lib/parser/index.js / store/actions.js / store/state.js），删空 echo 目录；git status：4 R + 7 M，共 11 条。 |
+| 2026-07-19 | v0.6（hotfix + Phase 4 完成） | (1) hotfix `26702af`：Muya.vue 4 行相对 import `./echo/X` → `./X`（webpack 编译时漏报的"模块找不到"，因为 Phase 3 grep 只查了 alias 路径没查相对路径）；(2) Phase 4：i18n 拍平到 `{lang}/{components,contextMenu,utils,errors,notification,other,index}.js`，每语种 547+16+15+11+11+96 = 696 keys；发现并消解 12 处隐性 key 冲突（用户决策：保留 SettingsDialog 长描述 / 'Doubao WebApp' / 'Cloud Sync' / 'Copy'）；bug fix：字符串里 `//` 误吃注释导致 15 个 entries 丢失；git tag `backup-before-i18n-flatten-20260719-203000`；babel AST 校验 `[ALL OK]`；git status：62 条（D 54 + M 2 + ?? 6）。 |
