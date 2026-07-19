@@ -370,6 +370,15 @@ muya 当前的 retina 分辨率选择逻辑（CSS `@media` + 业务代码按 dev
 2. `yarn run lint` + `yarn run build` + `yarn run dev` 完整跑一遍。
 3. 删除 `_temp/mv-muya.js`、`_temp/rename-pngicon.js`。
 4. 截图核对所有编辑器图标（含 retina 屏）。
+5. **Phase 6 实际执行结果**（2026-07-19）：
+ - 6a：`_temp/` 已经是 `.gitignore` 内的内容，**不动**（包含历史任务产物：blog deploy、echo 备份、cross-out 等）；本次任务自己产生的脚本此前都已清理。
+ - 6b：跑 `_temp/depth-audit.js`，43 处 depth>2。分类：
+   - **A 类**（业务代码）：`src/components/ui/dialog/` (27) + `src/components/ui/editor/` (9)。**不在本次 TODO 范围**，单独立项等用户决策。
+   - **B 类**（muya 内部 38 处）：按 TODO §1.2「muya 作为整体迁移、保留其内部结构」决定保留。
+   - **C 类**（main-process 3 处）：按 TODO §3「保留合理的 1 层业务子目录」决定保留。
+ - 6c：跳过（`node_modules` 和 `.hidden/` 已排除；`muya` 等 vendor 内部不算）。
+ - 6d：dev server 已运行 PID 3448（20:36:00 起），hot reload 自动重启主进程，已验证。
+ - 6e：决策点见下表（utlis typo、uncommitted backup dir、release notes）。
 
 ---
 
