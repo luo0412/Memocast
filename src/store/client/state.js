@@ -1,6 +1,6 @@
 import { DEFAULT_NOTE_ORDER_TYPE } from 'src/utils/noteOrderTypesConst'
 import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/utils/calendarDateBasisConst'
-import { BUILTIN_ECHO_CARDS } from 'components/builtinEchoes'
+import { BUILTIN_ECHO_CARDS } from 'components/echo/builtinEchoes'
 
 export default function () {
   return {

@@ -1,5 +1,5 @@
 import { i18n } from 'boot/i18n'
-import bus from 'src/components/bus'
+import bus from 'src/components/common/bus'
 import { EVENTS as events } from 'src/utils/eventsConst'
 
 class NeetoError extends Error {

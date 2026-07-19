@@ -1,5 +1,5 @@
 import axios from 'axios'
-import bus from 'components/bus'
+import bus from 'components/common/bus'
 import { EVENTS as events } from 'src/utils/eventsConst'
 import NeetoError from 'app/share/error'
 

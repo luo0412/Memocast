@@ -1,4 +1,4 @@
-import * as contextMenu from './actions'
+import * as contextMenu from './actions.js'
 
 export const RENAME = {
   label: 'rename',

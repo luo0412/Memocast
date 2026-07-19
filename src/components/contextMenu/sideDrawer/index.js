@@ -9,7 +9,7 @@ import {
   COPY_MARKDOWN,
   DELETE,
   SEPARATOR
-} from './menuItems'
+} from './menuItems.js'
 import { i18n } from 'boot/i18n'
 import helper from 'src/utils/helper'
 import { popContextMenu } from 'src/ApiInvoker'

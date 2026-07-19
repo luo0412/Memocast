@@ -11,7 +11,7 @@ import { execRequest } from './service/request'
 import i18n from './i18n'
 import log from 'electron-log'
 
-const { uploadImagesByPicGo } = require('./3rd-part/PicGoUtils')
+const { uploadImagesByPicGo } = require('./utils/PicGoUtils')
 
 const {
   ipcMain,

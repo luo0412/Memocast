@@ -240,24 +240,24 @@
 </template>
 
 <script>
-import NoteList from '../components/NoteList.vue'
-import CategoryTreePanel from '../components/CategoryTreePanel.vue'
-import CalendarPanel from '../components/CalendarPanel.vue'
-import bus from 'components/bus'
+import NoteList from '../components/note/NoteList.vue'
+import CategoryTreePanel from '../components/category/CategoryTreePanel.vue'
+import CalendarPanel from '../components/calendar/CalendarPanel.vue'
+import bus from 'components/common/bus'
 import { EVENTS as events } from 'src/utils/eventsConst'
 import helper from 'src/utils/helper'
 import { createNamespacedHelpers } from 'vuex'
-import NoteOutlineDrawer from 'components/NoteOutlineDrawer.vue'
+import NoteOutlineDrawer from 'components/note/NoteOutlineDrawer.vue'
 import { initLoadingPageMixins } from '../mixins'
-import Loading from 'components/Loading.vue'
-import Monaco from 'components/Monaco.vue'
-import Muya from 'components/Muya.vue'
-import MarkMapDialog from '../components/MarkMapDialog.vue'
-import PptPreviewDialog from '../components/PptPreviewDialog.vue'
-import Illustration from 'components/Illustration.vue'
-import ImportDialog from 'components/ImportDialog.vue'
-import BlogDeployDialog from 'components/BlogDeployDialog.vue'
-import BlogDeployProgressDialog from 'components/BlogDeployProgressDialog.vue'
+import Loading from 'components/common/Loading.vue'
+import Monaco from 'components/monaco/Monaco.vue'
+import Muya from 'components/muya/Muya.vue'
+import MarkMapDialog from '../components/markmap/MarkMapDialog.vue'
+import PptPreviewDialog from '../components/preview/PptPreviewDialog.vue'
+import Illustration from 'components/common/Illustration.vue'
+import ImportDialog from 'components/import/ImportDialog.vue'
+import BlogDeployDialog from 'components/blog/BlogDeployDialog.vue'
+import BlogDeployProgressDialog from 'components/blog/BlogDeployProgressDialog.vue'
 
 const {
   mapGetters: mapServerGetters,
@@ -265,7 +265,7 @@ const {
   mapActions: mapServerActions
 } = createNamespacedHelpers('server')
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
-// import Sidebar from '../components/Sidebar'
+// import Sidebar from '../components/layout'
 export default {
   name: 'PageIndex',
   mixins: [initLoadingPageMixins],

@@ -10,7 +10,7 @@ import {
   INSERT_AFTER,
   FORMAT_DOCUMENT_BY_PANGU,
   GENERATE_MINDMAP
-} from './menuItems'
+} from './menuItems.js'
 import { i18n } from 'boot/i18n'
 import { popContextMenu } from 'src/ApiInvoker'
 

@@ -4,7 +4,7 @@
  * @Date: 9/20/2020 10:50 AM
  **/
 import FormData from 'form-data'
-import bus from 'components/bus'
+import bus from 'components/common/bus'
 import { EVENTS as events } from 'src/utils/eventsConst'
 import NeetoError from 'app/share/error'
 /**

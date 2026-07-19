@@ -1,4 +1,4 @@
-import * as contextMenu from './actions'
+import * as contextMenu from './actions.js'
 
 export const CUT = {
   label: 'cut',
