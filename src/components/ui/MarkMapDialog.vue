@@ -22,7 +22,7 @@
 </template>
 
 <script>
-import MarkMap from '../editor/MarkMap'
+import MarkMap from './MarkMap'
 export default {
   name: 'MarkMapDialog',
   components: { MarkMap },

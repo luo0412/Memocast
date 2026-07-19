@@ -1,5 +1,5 @@
 // eslint-disable-next-line import/named
-import { isBase64, saveFileInTempPath } from '../utlis/helper'
+import { isBase64, saveFileInTempPath } from '../utils/helper'
 import path from 'path'
 
 const axios = require('axios')

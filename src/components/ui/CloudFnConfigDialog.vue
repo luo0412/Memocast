@@ -127,7 +127,7 @@
 
 <script>
 import cloud from 'src/services/cloud/CloudFunctionProvider'
-import BspAppDemoDialog from 'components/ui/dialog/BspAppDemoDialog'
+import BspAppDemoDialog from 'components/ui/BspAppDemoDialog'
 
 export default {
   name: 'CloudFnConfigDialog',
