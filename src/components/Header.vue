@@ -286,7 +286,7 @@
 <script>
 import LoginDialog from './ui/dialog/LoginDialog'
 import SettingsDialog from './ui/dialog/SettingsDialog'
-import { decodeEchoPayload } from 'components/ui/editor/echo/EchoRuntime'
+import { decodeEchoPayload } from 'components/ui/editor/EchoRuntime'
 import { createNamespacedHelpers } from 'vuex'
 import helper from 'src/utils/helper'
 import debounce from 'lodash/debounce'

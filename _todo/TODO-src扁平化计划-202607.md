@@ -422,7 +422,7 @@ muya 当前的 retina 分辨率选择逻辑（CSS `@media` + 业务代码按 dev
 - [x] Phase 2.4：muya 内部 11 个文件、78 行 pngicon import 重写
 - [x] Phase 2.5：sanity-check-imports.js 静态校验 `[ALL OK]`
 - [x] Phase 2.6-2.7：临时脚本删除（mv-muya.js / rename-pngicon.js / rewrite-pngicon-imports.js / sanity-check-imports.js）
-- [ ] Phase 3：components/echo/ 上提
+- [x] Phase 3：components/echo/ 上提（4 个文件 `git mv` + 7 个调用方 8 行 import 改写）
 - [ ] Phase 4：i18n 拍平
 - [ ] Phase 5：src-electron 拍平（建议单独拆 PR）
 - [ ] Phase 6：清理 + 验证（lint + build + dev + 截图核对图标）
@@ -438,3 +438,4 @@ muya 当前的 retina 分辨率选择逻辑（CSS `@media` + 业务代码按 dev
 | 2026-07-19 | v0.2（决策已定） | 4 项决策全部拍板（A1 / B2.1 / C1 / D1）；B2 → B2.1 是新增的"重命名解决同名冲突"分支；§3 草图、§3.4 muya 细则（含 pngicon 拍平 + 70+ 行 import 改动表）、§4 Phase 2 步骤同步更新；TODO Checklist 决策项打勾 |
 | 2026-07-19 | v0.3（Phase 1 完成） | git tag `backup-before-src-flatten-20260719-180108` + 双份 `cp -a` 副本落地（`%USERPROFILE%\coolma-flatten-backup-20260719-180435\`）；Phase 1 Checklist 已勾 |
 | 2026-07-19 | v0.4（Phase 2 完成） | muya 整体迁移：(1) `src/libs/muya` → `src/muya`（copy+rm，因 Windows 跨目录 EPERM），(2) pngicon 49 子目录拍平到 145 扁平 PNG（含 `table@2x.png` → `table-2.png` 特例），(3) 业务代码 14 行 import 重写（Muya.vue + PptPreviewDialog.vue），(4) muya 内部 11 个文件 78 行 pngicon import 重写（quickInsert / linkTools / imageToolbar / frontMenu / formatPicker / footnoteTool / renderInlines:image / renderToolBar / renderIcon / renderCopyButton / renderContainerEditIcon），(5) sanity-check 全绿，临时脚本全部清理；git status：395 条改动（D 390 + M 4 + ?? 1）。**Phase 2 已就绪待 commit，但暂不自动 commit，按用户节奏走**。 |
+| 2026-07-19 | v0.5（Phase 2 commit + Phase 3 完成） | commit `dc3da4b`（394 files / +430 / -327，git 自动识别 rename），worktree clean；Phase 3：`git mv` 4 个 echo 文件上提到 `components/ui/editor/`，改 7 个调用方 8 行 import（Header.vue / EchoFormDialog.vue 2 行 / EchoInstanceDialog.vue / SettingsDialog.vue / muya/lib/parser/index.js / store/actions.js / store/state.js），删空 echo 目录；git status：4 R + 7 M，共 11 条。 |

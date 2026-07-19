@@ -56,7 +56,7 @@
 </template>
 
 <script>
-import { decodeEchoPayload, encodeEchoPayload } from 'components/ui/editor/echo/EchoRuntime'
+import { decodeEchoPayload, encodeEchoPayload } from 'components/ui/editor/EchoRuntime'
 
 export default {
   name: 'EchoInstanceDialog',
