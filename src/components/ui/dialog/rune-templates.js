@@ -44,6 +44,169 @@ export default {
 </style>`
 }
 
+// ===== inheritFromPrevious 演示模板 =====
+//
+// 这是「符文卡片」createRunePlaceholderHtml 的默认 demo 模板。
+//
+// 关键点：
+//   - 父组件会注入 props.value / props.runeId / props.nodeId / props.rune / props.onValueChange
+//   - 符文卡片在数据库里有一个 inherit_from_previous 字段（默认 0）
+//   - 当 inherit_from_previous = 1 时，从快捷面板 `@xxx` 插入该符文会自动把
+//     「上一非空行」的文本灌进 props.value（无需手动输入）
+//   - 用户可以在 SFC 里继续编辑 props.value，并通过 $emit('input', next) 把改动回写
+//
+// 这个模板演示「读-改-写」三段式：默认把 value 渲染出来 + 可在输入框里继续编辑 +
+// 失焦时回写。同时用一个开关提示用户「这一行是从上一行继承来的」。
+export const createInheritDemoTemplate = () => {
+  return `<template>
+  <div class="rune-inherit-demo">
+    <header class="rune-inherit-demo__header">
+      <span class="rune-inherit-demo__badge" :class="{ 'is-inherited': hasInherited }">
+        {{ hasInherited ? '已继承上一行' : '手动输入' }}
+      </span>
+      <span class="rune-inherit-demo__hint">
+        {{ hasInherited
+          ? 'value 来自上一行，可在下方继续修改'
+          : '开启符文卡片的 inherit_from_previous 后，下次插入会自动取上一行' }}
+      </span>
+    </header>
+    <textarea
+      class="rune-inherit-demo__input"
+      :value="text"
+      placeholder="这里的内容会在失焦时回写到 Markdown 的 data-rune-value"
+      @blur="handleBlur"
+    />
+    <footer class="rune-inherit-demo__footer">
+      <span>字数：{{ text.length }}</span>
+      <span>runeId: {{ runeId || '-' }}</span>
+    </footer>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'RuneInheritDemo',
+  props: {
+    // 由父组件（Muya 渲染层）注入：
+    //   - value: 来自 data-rune-value，启用 inheritFromPrevious 时为「上一行」文本
+    //   - runeId / nodeId: 当前符文实例的稳定 id
+    //   - rune: 符文卡片定义（含 inherit_from_previous 等卡片级配置）
+    //   - onValueChange: 回写 value 的回调
+    value: {
+      type: [String, Number],
+      default: ''
+    },
+    runeId: { type: String, default: '' },
+    nodeId: { type: String, default: '' },
+    rune: { type: Object, default: () => ({}) }
+  },
+  data() {
+    return {
+      text: this.normalize(this.value)
+    }
+  },
+  computed: {
+    // 真正的「继承自上一行」判定：
+    //   1. 符文卡片声明 inherit_from_previous === 1 / true / '1'
+    //   2. 当前 value 非空（说明确实被灌进来了）
+    hasInherited () {
+      const flag = this.rune && (
+        this.rune.inherit_from_previous === true ||
+        this.rune.inherit_from_previous === 1 ||
+        this.rune.inherit_from_previous === '1'
+      )
+      return Boolean(flag) && Boolean(this.text)
+    }
+  },
+  watch: {
+    value (next) {
+      const normalized = this.normalize(next)
+      if (normalized !== this.text) {
+        this.text = normalized
+      }
+    }
+  },
+  methods: {
+    normalize (raw) {
+      if (raw == null) return ''
+      return String(raw)
+    },
+    handleBlur (event) {
+      const next = event && event.target ? String(event.target.value || '') : ''
+      this.text = next
+      this.$emit('input', next)
+      if (typeof this.onValueChange === 'function') {
+        try { this.onValueChange(next) } catch (err) { console.warn('[RuneInheritDemo] onValueChange error', err) }
+      }
+    }
+  }
+}
+<\/script>
+
+<style lang="less" scoped>
+.rune-inherit-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(126, 87, 194, 0.25);
+  background: rgba(126, 87, 194, 0.05);
+  font-family: inherit;
+  color: inherit;
+}
+.rune-inherit-demo__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+}
+.rune-inherit-demo__badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.55);
+  font-weight: 600;
+}
+.rune-inherit-demo__badge.is-inherited {
+  background: rgba(126, 87, 194, 0.18);
+  color: #6A1B9A;
+}
+.rune-inherit-demo__hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.4;
+}
+.rune-inherit-demo__input {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(126, 87, 194, 0.35);
+  background: rgba(255, 255, 255, 0.9);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.rune-inherit-demo__input:focus {
+  border-color: #7E57C2;
+  box-shadow: 0 0 0 2px rgba(126, 87, 194, 0.2);
+}
+.rune-inherit-demo__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.45);
+}
+</style>`
+}
+
 // ===== 输入框模板：blur 时触发 $emit('input') =====
 export const createInputTemplate = () => {
   return `<template>

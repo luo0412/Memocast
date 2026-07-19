@@ -142,6 +142,8 @@ export default {
   runeCardDeleteConfirm: '确定要删除该符文吗？',
   runeBatchDelete: '批量删除',
   runeBatchDeleteConfirm: '确定要删除已选的 {count} 个符文吗？',
+  runeInheritFromPreviousLabel: '插入时自动继承上一行内容',
+  runeInheritFromPreviousHint: '开启后，从快捷面板插入该符文时会自动读取上一非空行的文本作为初始 value。默认模板已自带演示。',
   selectedCount: '已选 {count} 项',
   runeDragTip: '拖拽可调整顺序',
   runeNameRequired: '请填写符文名称',

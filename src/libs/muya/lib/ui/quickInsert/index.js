@@ -76,6 +76,7 @@ const createRuneQuickInsertItem = (rune = {}) => {
   const desc = (rune.desc || '').trim()
   const template = typeof rune.template === 'string' ? rune.template : ''
   const searchText = [name, desc, template].filter(Boolean).join(' ')
+  const inheritFromPrevious = rune.inherit_from_previous === true || rune.inherit_from_previous === 1 || rune.inherit_from_previous === '1'
 
   return {
     title: () => name,
@@ -90,7 +91,8 @@ const createRuneQuickInsertItem = (rune = {}) => {
       runeTemplateId: id,
       runeName: name,
       color: rune.color || '#7E57C2',
-      insertContent: template
+      insertContent: template,
+      inheritFromPrevious
     }
   }
 }
@@ -455,6 +457,23 @@ class QuickInsert extends BaseScrollFloat {
     return null
   }
 
+  getRuneInheritFromPreviousEnabled (item = {}) {
+    if (!item) return false
+    const meta = item.meta || {}
+    if (meta && Object.prototype.hasOwnProperty.call(meta, 'inheritFromPrevious')) {
+      return meta.inheritFromPrevious === true
+    }
+    const name = String(meta.runeName || item.label || '').trim()
+    if (!name) return false
+    const runeCards = (this.muya && this.muya.options && Array.isArray(this.muya.options.runeCards))
+      ? this.muya.options.runeCards
+      : []
+    const match = runeCards.find(card => card && String(card.name || '').trim() === name)
+    if (!match) return false
+    const value = match.inherit_from_previous
+    return value === true || value === 1 || value === '1'
+  }
+
   insertRuneTemplate(item) {
     const { contentState } = this.muya
     const displayText = this.getRuneDisplayText(item)
@@ -475,12 +494,19 @@ class QuickInsert extends BaseScrollFloat {
     const atPosition = this.getAtTriggerPosition()
     const isInlineAt = atPosition !== null && atPosition > 1
 
-    let previousLine, runeValue, insertContent, finalText
+    // 默认不读取上一行；只有当符文自身声明 inheritFromPrevious: true 时才读取。
+    const inheritEnabled = this.getRuneInheritFromPreviousEnabled(item)
+    let previousLine = null
+    let runeValue = ''
+
+    let insertContent, finalText
 
     if (isInlineAt) {
       // For inline @, get value from previous line and preserve text before @
-      previousLine = this.getPreviousNonEmptyLine()
-      runeValue = previousLine?.isPlainText ? previousLine.text : ''
+      if (inheritEnabled) {
+        previousLine = this.getPreviousNonEmptyLine()
+        runeValue = previousLine?.isPlainText ? previousLine.text : ''
+      }
       insertContent = typeof createRunePlaceholderHtml === 'function'
         ? createRunePlaceholderHtml(item, displayText, runeValue)
         : `<div data-rune-name="${escapeHtmlAttribute(item?.meta?.runeName || 'Rune')}" data-rune-id="${uuidv4()}" data-rune-node-id="rune-${getUniqueId()}" data-rune-value="${escapeHtmlAttribute(String(runeValue).trim())}">${escapeHtmlAttribute(displayText)}</div>`
@@ -488,8 +514,10 @@ class QuickInsert extends BaseScrollFloat {
       finalText = textBeforeAt + insertContent
     } else {
       // Original behavior for line-start @
-      previousLine = isFirstInsertionFromQuickInsert ? this.getPreviousNonEmptyLine() : null
-      runeValue = previousLine?.isPlainText ? previousLine.text : ''
+      if (inheritEnabled && isFirstInsertionFromQuickInsert) {
+        previousLine = this.getPreviousNonEmptyLine()
+        runeValue = previousLine?.isPlainText ? previousLine.text : ''
+      }
       insertContent = typeof createRunePlaceholderHtml === 'function'
         ? createRunePlaceholderHtml(item, displayText, runeValue)
         : `<div data-rune-name="${escapeHtmlAttribute(item?.meta?.runeName || 'Rune')}" data-rune-id="${uuidv4()}" data-rune-node-id="rune-${getUniqueId()}" data-rune-value="${escapeHtmlAttribute(String(runeValue).trim())}">${escapeHtmlAttribute(displayText)}</div>`
@@ -502,6 +530,7 @@ class QuickInsert extends BaseScrollFloat {
       hasExistingRunePlaceholder,
       isFirstInsertionFromQuickInsert,
       isInlineAt,
+      inheritEnabled,
       currentBlock,
       parentBlock,
       grandParentBlock,
@@ -516,7 +545,7 @@ class QuickInsert extends BaseScrollFloat {
       insertContentPreview: insertContent.slice(0, 160)
     })
 
-    if (isFirstInsertionFromQuickInsert && !isInlineAt && previousLine?.isPlainText && previousLine.removeTarget && this.block) {
+    if (isFirstInsertionFromQuickInsert && !isInlineAt && inheritEnabled && previousLine?.isPlainText && previousLine.removeTarget && this.block) {
       contentState.removeBlock(previousLine.removeTarget)
     }
 

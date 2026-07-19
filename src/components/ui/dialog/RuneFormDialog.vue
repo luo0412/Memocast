@@ -130,6 +130,19 @@
                 />
               </div>
             </div>
+
+            <div class='rune-form-field rune-form-field--tight'>
+              <div class='rune-form-label'>继承行为</div>
+              <q-toggle
+                v-model='inheritFromPrevious'
+                :label='$t("runeInheritFromPreviousLabel")'
+                color='primary'
+                dense
+              />
+              <div class='rune-form-hint'>
+                {{ $t('runeInheritFromPreviousHint') }}
+              </div>
+            </div>
           </div>
 
           <div class='rune-form-editor-wrap'>
@@ -201,6 +214,14 @@
 
 .rune-form-toolbar {
   flex: 0 0 auto;
+}
+
+.rune-form-hint {
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.65;
+  margin-top: 4px;
+  word-break: break-word;
 }
 
 .rune-form-body {
@@ -391,7 +412,7 @@
 import * as monaco from 'monaco-editor'
 import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY, getRuneCategoryValue } from 'src/constants/runeEchoCategories'
 import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
-import { createBlankTemplate } from './rune-templates'
+import { createBlankTemplate, createInheritDemoTemplate } from './rune-templates'
 import CategoryPicker from 'components/common/CategoryPickerV2'
 import RemoteRuneImportDialog from './RemoteRuneImportDialog'
 import runeTemplateService from 'src/services/RuneTemplateService'
@@ -470,8 +491,10 @@ export default {
         power: 50,
         color: '#7E57C2',
         icon: 'whatshot',
-        template: createBlankTemplate(),
-        category: DEFAULT_RUNE_CATEGORY
+        template: createInheritDemoTemplate(),
+        category: DEFAULT_RUNE_CATEGORY,
+        // 默认开启 inheritFromPrevious，让新建符文立刻展示「上一行继承」演示。
+        inherit_from_previous: 1
       },
       selectedPresetKey: null,
       categoryPickerTree: [],
@@ -539,6 +562,16 @@ export default {
     },
     resolvedPowerLabel () {
       return this.isEchoMode ? this.$t('echoCardPower') : this.$t('runeCardPower')
+    },
+    inheritFromPrevious: {
+      get () {
+        const value = this.form && this.form.inherit_from_previous
+        return value === true || value === 1 || value === '1'
+      },
+      set (next) {
+        if (!this.form) return
+        this.form.inherit_from_previous = next ? 1 : 0
+      }
     },
     categoryPickerOption () {
       const groups = new Map()
@@ -624,8 +657,9 @@ export default {
             power: 50,
             color: '#7E57C2',
             icon: 'whatshot',
-            template: createBlankTemplate(),
-            category: this.defaultCategory || DEFAULT_RUNE_CATEGORY
+            template: createInheritDemoTemplate(),
+            category: this.defaultCategory || DEFAULT_RUNE_CATEGORY,
+            inherit_from_previous: 1
           }
           console.log('\n[RuneFormDialog.rune watcher] Initialized new rune form:', {
             id: this.form.id,
@@ -807,7 +841,7 @@ export default {
           if (c && c.clientWidth > 40 && c.clientHeight > 120) {
             this._monacoRo.disconnect()
             this._monacoRo = null
-            this._createMonacoEditor(this.form.template || createBlankTemplate())
+            this._createMonacoEditor(this.form.template || createInheritDemoTemplate())
           }
         })
       })
@@ -817,7 +851,7 @@ export default {
         if (this._monacoRo) {
           this._monacoRo.disconnect()
           this._monacoRo = null
-          this.$nextTick(() => this._createMonacoEditor(this.form.template || createBlankTemplate()))
+          this.$nextTick(() => this._createMonacoEditor(this.form.template || createInheritDemoTemplate()))
         }
       }, 1200)
     },
@@ -876,7 +910,7 @@ export default {
       })
     },
     resetTemplate () {
-      const nextTemplate = createBlankTemplate()
+      const nextTemplate = createInheritDemoTemplate()
       this.form.template = nextTemplate
       this.selectedPresetKey = null
       if (this.monacoEditor && this.monacoReady) {

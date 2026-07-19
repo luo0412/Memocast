@@ -642,17 +642,21 @@ export default {
       template TEXT,
       category TEXT DEFAULT 'general',
       sort_order INTEGER DEFAULT 0,
+      inherit_from_previous INTEGER DEFAULT 0,
       created_at INTEGER,
       updated_at INTEGER
     )
   `)
 
-  // 兼容旧库:为已存在的 runes 表补充 category / sort_order 列
+  // 兼容旧库:为已存在的 runes 表补充 category / sort_order / inherit_from_previous 列
   try {
     db.run('ALTER TABLE runes ADD COLUMN category TEXT DEFAULT \'general\'')
   } catch (error) {}
   try {
     db.run('ALTER TABLE runes ADD COLUMN sort_order INTEGER DEFAULT 0')
+  } catch (error) {}
+  try {
+    db.run('ALTER TABLE runes ADD COLUMN inherit_from_previous INTEGER DEFAULT 0')
   } catch (error) {}
 
   // 符文名称全局唯一（不区分大小写，去除首尾空白）
@@ -2445,13 +2449,14 @@ function registerDatabaseHandlers() {
       const template = rune.template || (existing ? '' : createDefaultRuneTemplate())
       const category = typeof rune.category === 'string' && rune.category.trim() ? rune.category.trim() : 'general'
       const sortOrder = Number.isFinite(Number(rune.sort_order)) ? Number(rune.sort_order) : 0
+      const inheritFromPrevious = rune.inherit_from_previous === true || rune.inherit_from_previous === 1 || rune.inherit_from_previous === '1' ? 1 : 0
       if (existing) {
-        await db.run(`UPDATE runes SET name = ?, "desc" = ?, power = ?, color = ?, icon = ?, template = ?, category = ?, sort_order = ?, updated_at = ? WHERE id = ?`, [
-          name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, category, sortOrder, now, rune.id
+        await db.run(`UPDATE runes SET name = ?, "desc" = ?, power = ?, color = ?, icon = ?, template = ?, category = ?, sort_order = ?, inherit_from_previous = ?, updated_at = ? WHERE id = ?`, [
+          name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, category, sortOrder, inheritFromPrevious, now, rune.id
         ])
       } else {
-        await db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, template, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [rune.id, name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, category, sortOrder, now, now])
+        await db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, template, category, sort_order, inherit_from_previous, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [rune.id, name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, category, sortOrder, inheritFromPrevious, now, now])
       }
       saveDatabase()
       return { success: true, data: execOne('SELECT * FROM runes WHERE id = ?', [rune.id]) }
@@ -2500,8 +2505,9 @@ function registerDatabaseHandlers() {
       for (const rune of list) {
         const category = typeof rune.category === 'string' && rune.category.trim() ? rune.category.trim() : 'general'
         const sortOrder = Number.isFinite(Number(rune.sort_order)) ? Number(rune.sort_order) : 0
-        await db.run(`INSERT OR REPLACE INTO runes (id, name, "desc", power, color, icon, template, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [rune.id, rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', rune.template || '', category, sortOrder, rune.created_at || now, now])
+        const inheritFromPrevious = rune.inherit_from_previous === true || rune.inherit_from_previous === 1 || rune.inherit_from_previous === '1' ? 1 : 0
+        await db.run(`INSERT OR REPLACE INTO runes (id, name, "desc", power, color, icon, template, category, sort_order, inherit_from_previous, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [rune.id, rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', rune.template || '', category, sortOrder, inheritFromPrevious, rune.created_at || now, now])
       }
       saveDatabase()
       return { success: true }

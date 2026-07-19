@@ -101,13 +101,11 @@ module.exports = function (/* ctx */) {
           }
         })
 
-        // Monaco editor: use monaco-editor-webpack-plugin to bundle workers
+        // Monaco editor: bundle the workers required by every language used in the app
         const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin')
         cfg.plugins.push(new MonacoWebpackPlugin({
-          // 只保留 Markdown 编辑器必需的语言支持
-          // ⚠️ 关键：完全排除 typescript/javascript 以防止 worker 加载错误
-          languages: ['markdown', 'yaml', 'json', 'html', 'css'],
-          // 排除可能依赖 TS worker 的 features
+          // JavaScript uses Monaco's TypeScript language service and shares its worker
+          languages: ['markdown', 'yaml', 'json', 'html', 'css', 'typescript'],
           features: [
             // ─── 核心功能（必需）─
             'bracketMatching',
@@ -128,7 +126,6 @@ module.exports = function (/* ctx */) {
             'linesOperations',
             'links',
             'multicursor',
-            // ─── 排除 parameterHints（依赖 TS worker）─
             // 'parameterHints',
             'quickCommand',
             'quickOutline',

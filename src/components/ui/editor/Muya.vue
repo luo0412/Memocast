@@ -359,6 +359,13 @@ const createRuneRendererCtor = (rune = {}) => {
   const styleText = styles.map(style => style.content || '').join('\n')
   const componentOptions = evalRuneScript(script)
   const baseData = typeof componentOptions.data === 'function' ? componentOptions.data : () => ({})
+  const declaredPropNames = Array.isArray(componentOptions.props)
+    ? componentOptions.props
+      .map(propName => String(propName || '').trim())
+      .filter(Boolean)
+    : (componentOptions.props && typeof componentOptions.props === 'object'
+      ? Object.keys(componentOptions.props)
+      : [])
   if (!compileTemplateToFunctions) {
     console.warn('[Muya.createRuneRendererCtor] compileToFunctions unavailable, skip renderer', {
       runeId: rune?.id || '',
@@ -374,22 +381,38 @@ const createRuneRendererCtor = (rune = {}) => {
     ...componentOptions,
     name: componentOptions.name || 'RunePreviewRenderer',
     props: {
-      runeId: {
-        type: String,
-        default: ''
-      },
-      nodeId: {
-        type: String,
-        default: ''
-      },
-      rune: {
-        type: Object,
-        default: null
-      },
-      value: {
-        type: String,
-        default: ''
-      }
+      ...(Array.isArray(componentOptions.props)
+        ? declaredPropNames.reduce((props, propName) => {
+          props[propName] = null
+          return props
+        }, {})
+        : (componentOptions.props && typeof componentOptions.props === 'object'
+          ? componentOptions.props
+          : {})),
+      ...(declaredPropNames.includes('runeId') ? {} : {
+        runeId: {
+          type: String,
+          default: ''
+        }
+      }),
+      ...(declaredPropNames.includes('nodeId') ? {} : {
+        nodeId: {
+          type: String,
+          default: ''
+        }
+      }),
+      ...(declaredPropNames.includes('rune') ? {} : {
+        rune: {
+          type: Object,
+          default: null
+        }
+      }),
+      ...(declaredPropNames.includes('value') ? {} : {
+        value: {
+          type: String,
+          default: ''
+        }
+      })
     },
     data () {
       return {
@@ -1028,22 +1051,26 @@ export default {
         quickInsertProvider: () => {
           const runeItems = (this.runeCards || [])
             .filter(rune => rune && (rune.name || rune.text || rune.label))
-            .map(rune => ({
-              title: () => rune.name || rune.text || rune.label || 'Rune',
-              subTitle: () => rune.desc || rune.template || '',
-              label: `rune:${rune.id}`,
-              shortCut: '',
-              icon: rune.icon,
-              color: rune.color,
-              searchText: [rune.name, rune.text, rune.label, rune.desc, rune.template].filter(Boolean).join(' '),
-              meta: {
-                type: 'rune',
-                runeTemplateId: rune.id,
-                runeName: (rune.name || rune.text || rune.label || '').trim(),
+            .map(rune => {
+              const inheritFromPrevious = rune.inherit_from_previous === true || rune.inherit_from_previous === 1 || rune.inherit_from_previous === '1'
+              return {
+                title: () => rune.name || rune.text || rune.label || 'Rune',
+                subTitle: () => rune.desc || rune.template || '',
+                label: `rune:${rune.id}`,
+                shortCut: '',
+                icon: rune.icon,
                 color: rune.color,
-                insertContent: rune.template || ''
+                searchText: [rune.name, rune.text, rune.label, rune.desc, rune.template].filter(Boolean).join(' '),
+                meta: {
+                  type: 'rune',
+                  runeTemplateId: rune.id,
+                  runeName: (rune.name || rune.text || rune.label || '').trim(),
+                  color: rune.color,
+                  insertContent: rune.template || '',
+                  inheritFromPrevious
+                }
               }
-            }))
+            })
           const echoItems = (this.echoCards || [])
             .filter(echo => echo && echo.name)
             .map(echo => ({
