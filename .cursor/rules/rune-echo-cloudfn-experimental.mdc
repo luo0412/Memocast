@@ -1,0 +1,133 @@
+---
+description: 符文 / 回响 / 云函数 处于试验阶段 — 不用考虑兼容性、不背历史包袱、永远按最新方案重构
+alwaysApply: true
+---
+
+# 符文（Rune）/ 回响（Echo）/ 云函数（Cloud Function）试验阶段规则
+
+> 这三个特性目前都在快速试错和方案迭代期，**不属于稳定功能**。所有 agent 在编写、修改、重构相关代码时必须按本规则执行。
+
+## 1. 适用范围
+
+| 特性 | 相关文件 |
+|------|----------|
+| **符文（Rune）** | `src/components/ui/editor/Muya.vue` 的 `createRuneRendererCtor` / `RunePreviewRenderer`、`src/components/ui/dialog/RuneFormDialog.vue`、`src/components/ui/dialog/RuneCard.vue`、`src/components/ui/dialog/rune-templates.js`、`src/boot/rune-deps.js`、`src/constants/runeEchoCategories.js` 等所有 rune 相关代码 |
+| **回响（Echo）** | `src/components/ui/editor/echo/` 整个目录（`EchoRuntime.js`、`EchoRegistry.js`、`builtinEchoes.js`、`builtin-echo-shared.js`）、`src/components/ui/dialog/EchoFormDialog.vue`、`src/libs/muya/lib/parser/render/renderInlines/echoAnno.js`、`src/libs/muya/lib/parser/rules.js` 中的 `echo_anno` 规则等所有 echo 相关代码 |
+| **云函数（Cloud Function）** | `src/utils/cloud-router.js`、`src/services/cloud/` 整个目录（`CloudFunctionProvider.js`、`VkFilesService.js`、`BspAppDemoService.js` 等）、`src/components/ui/dialog/CloudFnConfigDialog.vue`、`_todo/TODO-云函数调研存档-*.md` 及所有 `cloud.invoke(...)` 调用点 |
+
+## 2. 核心原则（一句话）
+
+> **保持代码简洁，按最新方案来，不要被历史包袱绊住；只在数据读取时防御一下，别让旧数据引起报错。**
+
+## 3. 具体规则
+
+### 3.1 不考虑兼容性 / 不背历史包袱
+
+- **不要**为了保留"老字段 / 老枚举值 / 老分支"而在代码里写 `if (kind === 'old-name') ... else (kind === 'new-name')` 之类的兼容分支。
+- **不要**为"将来可能回滚"留 dead code / feature flag / `legacyXxx` 兼容层。
+- **不要**保留已被弃用的命名、参数、返回值结构 —— 反正都没有外部调用方（试验阶段），直接删。
+- 已经做过重命名的（如 `kind: 'rune'` → `kind: 'echo-chant'`），**继续往前走**，不要回头给老数据留逃生通道。
+
+### 3.2 维持代码简洁
+
+- 优先选最直接、最短、最少抽象的实现路径。
+- 不要为了"扩展性"加 `xxxStrategy.js` / `xxxFactory.js` / `xxxAdapter.js` 之类的中间层。
+- 不要写"未来可能需要"的占位 hook / 接口预留。
+- 重复的样板代码 > 不必要的间接抽象。
+
+### 3.3 永远按最新方案处理
+
+- 用户/用户当前讨论中给出的方案 = 最新方案，照做，不要再追问"那老的怎么办"。
+- 如果老代码里已有的实现和最新方案冲突，**直接重写**，不要去兼容老逻辑。
+- 文档、注释、命名都要跟着新方案走，不要保留对老方案的引用。
+
+### 3.4 大胆重构（在不影响现有功能的前提下）
+
+- 可以在以下条件**全部满足**时直接动手重构：
+  1. 改动**不会影响用户已正常使用的主流程**（笔记 CRUD、Muya 编辑、同步、设置等稳定功能）。
+  2. 改动**只发生在本规则 §1 列出的三个特性的代码范围内**。
+  3. 改动**有清晰的最新方案**作为目标态（不是"先拆出去再说"那种无目的重构）。
+- 重构前**不必**单独征求同意，按本规则默认放行。
+- 如果改动会**牵连到**笔记/同步/编辑器核心等稳定模块，**停下来**和用户确认边界。
+
+### 3.5 唯一硬性约束 —— 别被历史数据引起报错
+
+这是**唯一**不能妥协的红线：
+
+- **读取路径必须有防御**：渲染 / 解析 / 加载 echo、rune、云端数据时，对**未知字段、未知枚举值、未知 shape**要 graceful 降级（忽略、跳过、fallback），**不允许抛错 / 白屏 / crash**。
+  - 例：遍历 `BUILTIN_ECHO_CARDS` 时，遇到 `kind` 不在 `['echo', 'echo-chant', 'echo-tbd']` 集合里 → 跳过该条，记一次 warn，不要 throw。
+  - 例：`renderToHtml(token, echo)` 拿到 `echo.definition` 为 `null` / `undefined` → 输出占位空 span 而不是崩溃。
+  - 例：`CloudFunctionProvider.invoke` 拿到服务端返回的旧字段名（如 `returnCode` / `code` / `result` 三种形态）→ `unwrap` 里继续兼容多种返回包络（这部分已经在做，保留即可）。
+  - 例：Muya 解析 `@xxx{}(...)` 时，`xxx` 是历史遗留的、当前已删除的 echo id → 解析失败时降级为普通文本，不要让整个段落解析失败。
+- **写入路径可以激进**：序列化 / 落库 / 持久化时按最新方案来，不要为旧数据写补丁代码。
+- **迁移只在数据层做、且只做一次性**：
+  - 旧数据 → 新数据 的转换（如 `kind: 'rune'` → `kind: 'echo-chant'`）可以在 `migrateLegacyXxx` 这类**启动期**钩子里跑一次，写完即销毁。
+  - **不要**在 hot path（每次渲染 / 每次调用）里加 `migrateIfNeeded` 兼容分支。
+
+## 4. 禁止的反模式（反面教材）
+
+```javascript
+// ❌ 禁止：保留旧枚举值兼容分支
+if (kind === 'rune') {
+  // 兼容老数据
+} else if (kind === 'echo-chant') {
+  // 新方案
+}
+
+// ✅ 正确：只认新枚举，遇到未知跳过
+if (kind === 'echo-chant') { /* 新方案 */ }
+else if (kind === 'echo-tbd') { /* 兜底 */ }
+else if (kind === 'echo') { /* 普通 echo */ }
+// 其他 kind → 跳过，记 warn，不抛错
+```
+
+```javascript
+// ❌ 禁止：为未来扩展加抽象层
+class RuneStrategyFactory {
+  createRune (kind, opts) {
+    switch (kind) {
+      case 'vue-sfc': return new VueSfcRuneStrategy(opts)
+      // 将来可能有 web-component rune、iframe rune、wasm rune ...
+    }
+  }
+}
+
+// ✅ 正确：直接写，方案定了再扩
+function createRuneRendererCtor (rune) { /* Vue SFC + Vue.extend */ }
+```
+
+```javascript
+// ❌ 禁止：每次渲染都做迁移
+function renderEcho (echo) {
+  if (echo.kind === 'rune') echo.kind = 'echo-chant'  // 老数据迁移
+  // ...
+}
+
+// ✅ 正确：迁移只在启动期做一次，渲染期只做防御
+// (启动钩子里)
+// echoRegistry.all().forEach(e => { if (e.kind === 'rune') e.kind = 'echo-chant' })
+// (渲染期)
+function renderEcho (echo) {
+  if (!['echo', 'echo-chant', 'echo-tbd'].includes(echo.kind)) {
+    console.warn('[echo] unknown kind, skip:', echo.kind)
+    return null  // graceful skip
+  }
+}
+```
+
+## 5. 自检清单（每次写代码前默念）
+
+1. 这个改动是 rune / echo / 云函数相关吗？
+2. 是不是在写老数据兼容分支？→ 删掉，改成渲染期 graceful skip。
+3. 是不是在加抽象层为"将来可能需要"？→ 删掉，直接写。
+4. 是不是在保留旧命名 / 旧枚举值？→ 改成最新命名，必要时在启动钩子里做一次性迁移。
+5. 读取路径对未知 shape 是否 graceful 降级？→ 没做的话补上。
+6. 这个改动会不会牵连稳定功能？→ 会的话**停下来问用户**。
+
+## 6. 与其它规则的关系
+
+- **本规则优先于**通用的"代码兼容性"直觉——这三个特性不在通用兼容性考量范围内。
+- **`safe-shell.mdc`** 仍然适用：破坏性操作前先备份。
+- **`vue-dialog-component.mdc`** 仍然适用：rune / echo / 云函数涉及的 dialog（`RuneFormDialog` / `EchoFormDialog` / `CloudFnConfigDialog`）还是要拆独立组件。
+- **`plugin-vue-version.mdc`** 仍然适用：动到 `_plugins/` 子项目时仍要按 Vue 版本识别写法。
+- **`package-manager.mdc`** 仍然适用：依赖用 yarn。
