@@ -1,6 +1,6 @@
 ---
 description: Safe shell / filesystem rules to prevent destructive accidents
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Safe Shell & Filesystem Rules

@@ -1,9 +1,11 @@
-# Memocast `src/` 与 `src-electron/` 目录扁平化方案（设计稿）
+# Memocast `src/` 与 `src-electron/` 目录扁平化方案（决策已定）
 
 > **起草日期**：2026-07-17
-> **状态**：📐 设计稿 / 待决策，未启动编码
+> **决策日期**：2026-07-19（v0.2）
+> **状态**：✅ 决策已定 / 待执行，**未启动编码**
 > **目标**：在"不改业务代码"前提下，把 `src/` 和 `src-electron/` 的目录层级压平到统一上限；同时把 `@src/libs/muya` 提为独立顶层文件夹。
 > **范围**：仅做**路径 / 文件位置**调整，不改 `.vue`、`.js`、`.ts` 文件内部代码逻辑（除 import 路径字符串外）。
+> **决策快照**：A=A1 / B=B2.1（重命名解决 pngicon 同名冲突）/ C=C1（从 `src/` 起算）/ D=D1（i18n 拍平为 `<key>.js`）。
 
 ---
 
@@ -93,9 +95,15 @@
 
 | 方案 | 怎么做 | 风险 |
 | --- | --- | --- |
-| **B1 推荐（暂缓）** | muya 视为"vendor 静态资产"，放到 `src/assets/muya-vendor/` 旁边，**不再要求三层**；只把 muya 从 `libs/` 提出来 | 与用户原话"最多三层"存在张力，需要你确认"三层是否包含 vendor" |
-| B2 | 把 `muya/lib/assets/pngicon/<name>/<icon>.png` 拍平为 `muya/assets/pngicon/<name>.png`（变成 3 层，但 pngicon 子目录仍是 1 层多文件） | 需要改 muya 自身代码（PNG 路径拼接方式），破坏"不改代码"前提 |
+| B1 | muya 视为"vendor 静态资产"，放到 `src/assets/muya-vendor/` 旁边，**不再要求三层**；只把 muya 从 `libs/` 提出来 | 与用户原话"最多三层"存在张力，需要你确认"三层是否包含 vendor" |
+| **B2.1 ✅ 已选** | 把 `muya/lib/assets/pngicon/<name>/<n>.png` 拍平为 `muya/lib/assets/pngicon/<name>-<n>.png`（重命名解决同名冲突），9 个 muya 内部 config 文件、约 70+ 行 import 同步改写 | 改 muya 自身代码，破坏"不改代码"前提；改完后需要重测 retina 分辨率映射 |
 | B3 | 把 `pngicon/<name>/` 合并为 `pngicon/<name>.png` 同级存放（仍是 4 层） | **依旧违规**，等于没做 |
+
+**B2.1 选型依据**（2026-07-19 调研）：
+- 现状：pngicon 有 45 个子目录，44 个目录里都是 `1.png` / `2.png` / `3.png`（retina 1x/2x/3x），1 个目录（`table/`）是 `table.png` / `table@2x.png` / `table@3x.png`。
+- 直接拍平 `pngicon/<n>.png` 会导致 44 个 `2.png` 全部同名冲突。
+- 改重命名为 `<name>-<n>.png` 后，全树深 ≤ 3 层（`src/muya/lib/assets/pngicon/<file>.png`），且每个文件名唯一。
+- 影响范围：muya 内部 9 个文件、约 70+ 行 import 需要同步改；其它业务代码不动。
 
 ### 决策 C："最多三层"从哪一级数起？
 
@@ -114,9 +122,9 @@
 
 ---
 
-## 3. 拟定方案（按决策 A1 + B1 + C1 + D1 推进时的目录草图）
+## 3. 拟定方案（按决策 A1 + B2.1 + C1 + D1 推进）
 
-> ⚠️ 本节**仅在用户拍板决策 A/B/C/D 后**才作为最终落地方案。下面是"如果都选推荐项"的样子。
+> 2026-07-19 拍板：决策 A → A1，决策 B → B2.1（新增重命名方案），决策 C → C1，决策 D → D1。下面是按此最终落地的目录草图与代码改动表。
 
 ### 3.1 顶层结构对比
 
@@ -126,7 +134,8 @@ src/                                  src/
 ├─ libs/                              ├─ muya/               ← 决策 A1
 │  └─ muya/                           │  ├─ lib/
 │     ├─ lib/                         │  ├─ themes/
-│     └─ themes/                      │  └─ assets/          ← 决策 B1：muya 自带的图标/字体落地
+│     └─ themes/                      │  └─ lib/assets/pngicon/   ← 决策 B2.1：pngicon 拍平到单层
+│        (含 pngicon/<name>/<1|2|3>.png)│     └─ <name>-<1|2|3>.png
 ├─ components/                        ├─ components/
 │  ├─ common/                         │  ├─ common/
 │  ├─ ui/                             │  ├─ ui/               ← 决策 D1 之后只剩 3 层
@@ -179,9 +188,9 @@ src-electron/                         src-electron/
 | `components/ui/editor/echo/builtin-echo-shared.js` | `components/ui/editor/builtin-echo-shared.js` | 同上（保留 kebab-case） |
 | `components/Header.vue` 等顶层 `.vue` | 不动 | 已在第 2 层 |
 
-> 同时考虑把 `components/ui/editor/{Muya,Monaco,MarkMap}.vue` 上提到新建的 `components/editor/` 下，让"编辑器"成为独立顶层模块。但这会牵涉到所有 `pages/`、`layouts/` 的 import 路径，**取决于决策 A**（如果 muya 也走 `src/editor/muya/`，则业务 editor 应同步迁到 `src/editor/`）。
+> 同时考虑把 `components/ui/editor/{Muya,Monaco,MarkMap}.vue` 上提到新建的 `components/editor/` 下，让"编辑器"成为独立顶层模块。但这会牵涉到所有 `pages/`、`layouts/` 的 import 路径，**取决于决策 A**（如果 muya 也走 `src/editor/muya/`，则业务 editor 应同步迁到 `src/editor/`）。当前按 A1，**这一改动不在本轮范围内**，留作后续 TODO。
 
-### 3.3 i18n/ 拍平细则
+### 3.3 i18n/ 拍平细则（D1）
 
 | 旧路径 | 新路径 | 备注 |
 | --- | --- | --- |
@@ -192,26 +201,100 @@ src-electron/                         src-electron/
 
 > 拍平后所有语言包在 `src/i18n/<lang>/index.js` 一处 require 即可；不再有深层 `components/ui/` 目录。
 
-### 3.4 muya 迁移细则
+### 3.4 muya 迁移 + pngicon 拍平细则（A1 + B2.1）
+
+#### 3.4.1 目录上提
 
 ```
 旧：src/libs/muya/{lib,themes}
 新：src/muya/{lib,themes}
 ```
 
-**唯一需要改的代码**：
+#### 3.4.2 pngicon 拍平（B2.1）
+
+```
+旧：src/libs/muya/lib/assets/pngicon/<name>/<1|2|3>.png    （共 45 个目录）
+新：src/muya/lib/assets/pngicon/<name>-<1|2|3>.png         （共 135 个扁平 PNG）
+特例：旧 table/table.png、table/table@2x.png、table/table@3x.png
+     → 新 table-1.png、table-2.png、table-3.png（去掉 `@2x/@3x` 后缀，与其它命名对齐）
+```
+
+**重命名脚本**（_temp/rename-pngicon.js，仅产物，落地时按 `safe-shell.mdc` §2 写独立脚本）：
+
+```js
+// _temp/rename-pngicon.js
+const fs = require('fs')
+const path = require('path')
+const root = path.resolve(__dirname, '..')
+const base = path.join(root, 'src/muya/lib/assets/pngicon')
+
+const special = {
+  table: {
+    'table.png': 'table-1.png',
+    'table@2x.png': 'table-2.png',
+    'table@3x.png': 'table-3.png'
+  }
+}
+
+fs.readdirSync(base, { withFileTypes: true })
+  .filter(d => d.isDirectory())
+  .forEach(({ name }) => {
+    const dir = path.join(base, name)
+    const map = special[name]
+    fs.readdirSync(dir).forEach(file => {
+      const newName = map ? map[file] : `${name}-${file}`
+      const src = path.join(dir, file)
+      const dst = path.join(base, newName)
+      console.log('rename:', src, '→', dst)
+      fs.renameSync(src, dst)
+    })
+    fs.rmdirSync(dir)
+  })
+```
+
+#### 3.4.3 受影响的 import 改动（70+ 行）
+
+**业务代码侧**（共 2 个文件、14 行）：
 
 ```diff
 - import Muya from 'src/libs/muya/lib'
 - import 'src/libs/muya/themes/default.css'
 - import TablePicker from 'src/libs/muya/lib/ui/tablePicker'
-- ... (共 12 处)
 + import Muya from 'src/muya/lib'
 + import 'src/muya/themes/default.css'
 + import TablePicker from 'src/muya/lib/ui/tablePicker'
 ```
 
-> 涉及文件：`src/components/ui/editor/Muya.vue`（13 行）、`src/components/ui/dialog/PptPreviewDialog.vue`（1 行）。
+涉及文件：
+- `src/components/ui/editor/Muya.vue`（13 行）
+- `src/components/ui/dialog/PptPreviewDialog.vue`（1 行）
+
+**muya 内部 config 文件侧**（共 12 个文件、约 70+ 行 import）：
+
+按 `pngicon/<name>/<n>.png` → `pngicon/<name>-<n>.png` 批量重写（特例：`pngicon/table/table@2x.png` → `pngicon/table-2.png`）。
+
+| 文件 | 原 import 形态 | 新 import 形态 |
+| --- | --- | --- |
+| `src/muya/lib/ui/linkTools/config.js` | `import unlinkIcon from '../../assets/pngicon/unlink/2.png'` | `import unlinkIcon from '../../assets/pngicon/unlink-2.png'` |
+| 同上 | `import linkJumpIcon from '../../assets/pngicon/link_jump/2.png'` | `import linkJumpIcon from '../../assets/pngicon/link_jump-2.png'` |
+| `src/muya/lib/ui/frontMenu/config.js` | 4 行 | 同形态重命名 |
+| `src/muya/lib/ui/quickInsert/config.js` | 22 行 | 同形态重命名 |
+| `src/muya/lib/ui/footnoteTool/index.js` | 1 行 | 同形态重命名 |
+| `src/muya/lib/ui/imageToolbar/config.js` | 7 行（含 `3.png`） | 同形态重命名 |
+| `src/muya/lib/ui/formatPicker/config.js` | 11 行 | 同形态重命名 |
+| `src/muya/lib/parser/render/renderBlock/renderIcon.js` | 23 行 | 同形态重命名 |
+| `src/muya/lib/parser/render/renderBlock/renderToolBar.js` | 5 行（含 `table@2x.png` 特例 → `table-2.png`） | 同形态重命名 |
+| `src/muya/lib/parser/render/renderBlock/renderContainerEditIcon.js` | 1 行 | 同形态重命名 |
+| `src/muya/lib/parser/render/renderBlock/renderCopyButton.js` | 1 行 | 同形态重命名 |
+| `src/muya/lib/parser/render/renderInlines/image.js` | 3 行 | 同形态重命名 |
+
+> 实测总数（按 grep 输出整理）：约 70+ 行 import，分散在 12 个 muya 内部文件里。落地时按文件用 `StrReplace replace_all` 批量改写。
+
+#### 3.4.4 muya 内部 retina 分辨率映射（不改）
+
+muya 当前的 retina 分辨率选择逻辑（CSS `@media` + 业务代码按 devicePixelRatio 选取对应 PNG）**不在 import 字符串里**，所以 pngicon 拍平后业务代码读取方式不变；只需确认重命名后 `1.png` / `2.png` / `3.png` 的语义仍对应 1x / 2x / 3x。
+
+> **待 Phase 6 验证**：用 `yarn run dev` 起项目，肉眼/截图核对所有 toolbar / quickInsert / formatPicker 图标是否正常显示（含 retina 屏验证）。
 
 ### 3.5 src-electron 拍平细则
 
@@ -236,20 +319,29 @@ src-electron/                         src-electron/
 2. `git tag backup-before-flatten-20260717-<HHMMSS>`。
 3. `cp -a src src.bak.flatten / cp -a src-electron src-electron.bak.flatten`（双保险）。
 
-### Phase 2：muya 迁移（影响面最小，**先做**）
+### Phase 2：muya 迁移（A1 + B2.1，影响面中等，**先做**）
 
-1. 在 `_temp/` 写一个 Node 脚本 `mv-muya.js`，**只用字面路径** `src/libs/muya` → `src/muya`：
+按以下顺序每一步都单独验证：
+
+1. **目录上提**：在 `_temp/` 写独立脚本 `_temp/mv-muya.js`，**只用字面路径** `src/libs/muya` → `src/muya`：
    ```js
    // _temp/mv-muya.js
    const fs = require('fs')
    const path = require('path')
-   const root = path.resolve(__dirname, '..') // 仓库根
+   const root = path.resolve(__dirname, '..')
    fs.renameSync(path.join(root, 'src/libs/muya'), path.join(root, 'src/muya'))
    console.log('moved:', 'src/libs/muya → src/muya')
    ```
-2. 运行：`node _temp/mv-muya.js`。
-3. 全局替换 14 行 import 字符串（`src/libs/muya` → `src/muya`）。
-4. `yarn run dev` 或 `yarn run lint` 自检；预期无报错。
+2. 运行：`node _temp/mv-muya.js`，确认目录树（`Glob src/muya/**`）。
+3. **pngicon 拍平**：运行 `_temp/rename-pngicon.js`（见 §3.4.2）。脚本只动 `src/muya/lib/assets/pngicon/` 内的 PNG 文件名，不动其它资源。
+4. **业务代码 import 重写**（2 个文件 14 行）：
+   - `src/components/ui/editor/Muya.vue`：`src/libs/muya` → `src/muya`（13 行）
+   - `src/components/ui/dialog/PptPreviewDialog.vue`：同上（1 行）
+5. **muya 内部 import 重写**（12 个文件约 70+ 行）：
+   - 在 12 个文件里分别 `StrReplace replace_all`，把 `pngicon/<name>/<n>.png` → `pngicon/<name>-<n>.png`。
+   - 特例 `src/muya/lib/parser/render/renderBlock/renderToolBar.js`：`pngicon/table/table@2x.png` → `pngicon/table-2.png`。
+6. `yarn run dev` 或 `yarn run lint` 自检；预期图标全部正常显示、无 import 报错。
+7. 截图核对 toolbar / quickInsert / formatPicker / imageToolbar / linkTools / footnoteTool / frontMenu / renderIcon / renderToolBar / renderContainerEditIcon / renderCopyButton / image 12 处图标。
 
 ### Phase 3：components/echo/ 上提
 
@@ -257,7 +349,7 @@ src-electron/                         src-electron/
 2. `rmdir src/components/ui/editor/echo`（空目录）。
 3. 改 4 个文件对外 `export` 路径不变（仍在 `src/components/ui/editor/`），因此 import 不用动。
 
-### Phase 4：i18n 拍平
+### Phase 4：i18n 拍平（D1）
 
 1. 把 `src/i18n/en-us/components/ui/*.js` 合并为 `src/i18n/en-us/components-ui.js`（或 `<key>.js`）。
 2. 同步处理 `zh-cn/`。
@@ -276,7 +368,8 @@ src-electron/                         src-electron/
 
 1. 删除 `src.bak.flatten/`、`src-electron.bak.flatten/`（**确认 git tag 备份可用**后再删）。
 2. `yarn run lint` + `yarn run build` + `yarn run dev` 完整跑一遍。
-3. 删除 `_temp/mv-muya.js`。
+3. 删除 `_temp/mv-muya.js`、`_temp/rename-pngicon.js`。
+4. 截图核对所有编辑器图标（含 retina 屏）。
 
 ---
 
@@ -316,16 +409,23 @@ src-electron/                         src-electron/
 
 ## 8. TODO Checklist（落地时打勾）
 
-- [ ] **决策 A 拍板**：muya 提到 `src/muya/`
-- [ ] **决策 B 拍板**：muya vendor 资源是否豁免三层
-- [ ] **决策 C 拍板**：层数从 `src/` 起算还是各子树自算
-- [ ] **决策 D 拍板**：i18n 拍平 or 保留
-- [ ] Phase 1：备份 + git tag
-- [ ] Phase 2：muya 迁移
+- [x] **决策 A 拍板**：muya 提到 `src/muya/`（A1）
+- [x] **决策 B 拍板**：muya pngicon 拍平 + 重命名（B2.1）
+- [x] **决策 C 拍板**：层数从 `src/` 起算（C1）
+- [x] **决策 D 拍板**：i18n 拍平为 `<key>.js`（D1）
+- [x] Phase 1：备份 + git tag（执行前须 git status clean）
+   - git tag: `backup-before-src-flatten-20260719-180108`（钉在 `a5228b1`）
+   - cp -a: `%USERPROFILE%\coolma-flatten-backup-20260719-180435\{src,src-electron}`
+- [x] Phase 2.1：mv src/libs/muya → src/muya（实际 copy+rm，因 Windows EPERM）
+- [x] Phase 2.2：pngicon 拍平重命名脚本（49 个子目录 → 145 个扁平 PNG，含 table 特例）
+- [x] Phase 2.3：业务代码 import 重写（Muya.vue 13 行 + PptPreviewDialog.vue 1 行 = 14 行）
+- [x] Phase 2.4：muya 内部 11 个文件、78 行 pngicon import 重写
+- [x] Phase 2.5：sanity-check-imports.js 静态校验 `[ALL OK]`
+- [x] Phase 2.6-2.7：临时脚本删除（mv-muya.js / rename-pngicon.js / rewrite-pngicon-imports.js / sanity-check-imports.js）
 - [ ] Phase 3：components/echo/ 上提
 - [ ] Phase 4：i18n 拍平
-- [ ] Phase 5：src-electron 拍平
-- [ ] Phase 6：清理 + 验证
+- [ ] Phase 5：src-electron 拍平（建议单独拆 PR）
+- [ ] Phase 6：清理 + 验证（lint + build + dev + 截图核对图标）
 - [ ] 同步更新 `TODO-总览-202607.md` §2.1 路径表
 
 ---
@@ -335,3 +435,6 @@ src-electron/                         src-electron/
 | 日期 | 版本 | 变更 |
 | --- | --- | --- |
 | 2026-07-17 | v0.1（草案） | 初稿：实测深度 + 决策项 A/B/C/D + 拟定方案 |
+| 2026-07-19 | v0.2（决策已定） | 4 项决策全部拍板（A1 / B2.1 / C1 / D1）；B2 → B2.1 是新增的"重命名解决同名冲突"分支；§3 草图、§3.4 muya 细则（含 pngicon 拍平 + 70+ 行 import 改动表）、§4 Phase 2 步骤同步更新；TODO Checklist 决策项打勾 |
+| 2026-07-19 | v0.3（Phase 1 完成） | git tag `backup-before-src-flatten-20260719-180108` + 双份 `cp -a` 副本落地（`%USERPROFILE%\coolma-flatten-backup-20260719-180435\`）；Phase 1 Checklist 已勾 |
+| 2026-07-19 | v0.4（Phase 2 完成） | muya 整体迁移：(1) `src/libs/muya` → `src/muya`（copy+rm，因 Windows 跨目录 EPERM），(2) pngicon 49 子目录拍平到 145 扁平 PNG（含 `table@2x.png` → `table-2.png` 特例），(3) 业务代码 14 行 import 重写（Muya.vue + PptPreviewDialog.vue），(4) muya 内部 11 个文件 78 行 pngicon import 重写（quickInsert / linkTools / imageToolbar / frontMenu / formatPicker / footnoteTool / renderInlines:image / renderToolBar / renderIcon / renderCopyButton / renderContainerEditIcon），(5) sanity-check 全绿，临时脚本全部清理；git status：395 条改动（D 390 + M 4 + ?? 1）。**Phase 2 已就绪待 commit，但暂不自动 commit，按用户节奏走**。 |
