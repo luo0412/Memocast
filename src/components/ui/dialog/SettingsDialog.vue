@@ -86,6 +86,15 @@
 
                     <!-- 数据库 -->
                     <SettingsSectionContent v-if='generalSubTab === "database"' :title="$t('generalDatabase')" accent-color='red-7'>
+                      <div class='setting-item--row fa-align-center'>
+                        <span>{{ $t('openSqliteFile') }}</span>
+                        <q-btn
+                          class='fab-btn' flat round dense size='sm'
+                          color='red-7' icon='open_in_new'
+                          @click='openSqliteFileHandler'
+                        />
+                      </div>
+                      <q-separator class='q-my-md' />
                       <div>
                         <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
                           <span>{{ $t('resetSqlite') }}</span>
@@ -429,12 +438,22 @@
                   <div class='general-settings-panel'>
                     <!-- 配置 -->
                     <SettingsSectionContent v-if='cloudFnSubTab === "config"' :title="$t('cloudFnConfig')" accent-color='blue-7'>
+                      <template v-slot:actions>
+                        <q-btn flat dense size='sm' icon='help_outline' @click='openCloudFnHelp'>
+                          <q-tooltip>{{ $t('cloudFunctionDoc') }}</q-tooltip>
+                        </q-btn>
+                      </template>
                       <cloud-fn-config-dialog />
                     </SettingsSectionContent>
 
                     <!-- 导航中心 -->
                     <SettingsSectionContent v-if='cloudFnSubTab === "navigation"' :title="$t('cloudFnNavigation')" accent-color='blue-7'>
-                      <NavigationDialog v-model='navigationDialogVisible' @go-config='onNavigationGoConfig' />
+                      <q-banner rounded dense class='bg-blue-1 text-blue-10 q-mb-md'>
+                        <template v-slot:avatar>
+                          <q-icon name='info_outline' color='blue-7' />
+                        </template>
+                        {{ $t('navigationCenterHint') }}
+                      </q-banner>
                       <div class='text-center q-pa-lg'>
                         <q-btn color='blue-7' unelevated icon='explore' :label="$t('openNavigationCenter')" @click='openNavigationDialog' />
                       </div>
@@ -503,10 +522,10 @@
                       <template v-slot:actions>
                         <q-btn v-if='!isCurrentEchoCategoryBuiltin' dense flat no-caps :label="echoSelected.length > 0 ? $t('selectedCount', { count: echoSelected.length }) : $t('echoCardAdd')" :color='echoSelected.length > 0 ? "negative" : "cyan-7"' :icon='echoSelected.length > 0 ? "delete_sweep" : "add"' size='sm' @click='echoSelected.length > 0 ? confirmBatchDeleteEcho() : openAddEcho()' />
                       </template>
-                      <div v-if='isCurrentEchoCategoryBuiltin' class='text-caption text-grey-6 q-mb-sm'>
+                      <div v-if='isCurrentEchoCategoryBuiltin && isProd' class='text-caption text-grey-6 q-mb-sm'>
                         <q-icon name='info' size='xs' /> {{ $t('echoBuiltinCategoryHint') }}
                       </div>
-                      <div v-else class='text-caption text-grey-6 q-mb-sm'>
+                      <div v-else-if='!isCurrentEchoCategoryBuiltin' class='text-caption text-grey-6 q-mb-sm'>
                         <q-icon name='drag_indicator' size='xs' /> {{ $t('echoDragTip') }}
                       </div>
                       <div class='rune-grid'>
@@ -534,6 +553,7 @@
                             :disable-delete='echo.isBuiltin'
                             :disable-drag='echo.isBuiltin'
                             :is-builtin='echo.isBuiltin'
+                            :view-only='echo.isBuiltin && isProd'
                             :i18n-desc-key='echoI18nDescKey(echo)'
                             @edit='openEditEcho'
                             @delete='confirmDeleteEcho'
@@ -742,7 +762,7 @@ import { i18n, updateDialogDefaults } from 'boot/i18n'
 import bus from 'components/bus'
 import events from 'src/constants/events'
 import { version } from '../../../../package.json'
-import { checkUpdate, needUpdate, openLogFiles, openThemeFolder, refreshThemeFolder } from 'src/ApiInvoker'
+import { checkUpdate, needUpdate, openLogFiles, openSqliteFile, openThemeFolder, refreshThemeFolder } from 'src/ApiInvoker'
 import helper from 'src/utils/helper'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import CloudSyncService from 'src/services/CloudSyncService'
@@ -877,6 +897,9 @@ export default {
     }
   },
   computed: {
+    isProd () {
+      return process.env.PROD === true
+    },
     languageOptions: function () {
       return i18n.availableLocales.map(l => i18n.t(l))
     },
@@ -1196,6 +1219,17 @@ export default {
     themeHelpHandler: function () {
       this.$q.electron.shell.openExternal('https://www.tanknee.cn/Memocast/docs/tutorial-development/create-theme')
     },
+    openCloudFnHelp: function () {
+      window.open('https://vkdoc.fsq.pub/client/pages/callFunctionForUrl.html', '_blank')
+    },
+    openNavigationDialog: function () {
+      this.navigationDialogVisible = true
+    },
+    onNavigationGoConfig: function () {
+      this.navigationDialogVisible = false
+      this.tab = 'cloudFn'
+      this.cloudFnSubTab = 'config'
+    },
     updateAvailableHandler: function (info) {
       console.log(info)
       if (this.checkingNotify && this.checkingNotify instanceof Function) {
@@ -1254,6 +1288,9 @@ export default {
     },
     openLogFilesHandler: function () {
       openLogFiles()
+    },
+    openSqliteFileHandler: function () {
+      openSqliteFile()
     },
     createEmptyAiModelForm () {
       return {
@@ -1673,13 +1710,6 @@ export default {
         await this.loadAiSkillConfigs()
         this.$q.notify({ message: this.$t('aiSkillDeleted'), type: 'positive', position: 'top' })
       })
-    },
-    openNavigationDialog () {
-      this.navigationDialogVisible = true
-    },
-    onNavigationGoConfig () {
-      this.navigationDialogVisible = false
-      this.tab = 'cloudFn'
     },
 
     resetSqliteHandler: async function () {

@@ -40,8 +40,7 @@
         no-caps
         unelevated
         size='sm'
-        :label="isBuiltin ? resolvedViewLabel : resolvedEditLabel"
-        :icon='isBuiltin ? undefined : undefined'
+        :label="viewOnly ? resolvedViewLabel : resolvedEditLabel"
         :color='isBuiltin ? "white" : undefined'
         class='rune-card-footer-btn'
         @click='$emit("edit", rune)'
@@ -109,6 +108,10 @@ export default {
       default: false
     },
     isBuiltin: {
+      type: Boolean,
+      default: false
+    },
+    viewOnly: {
       type: Boolean,
       default: false
     },

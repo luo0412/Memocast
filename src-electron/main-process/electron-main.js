@@ -888,6 +888,10 @@ export default {
     for (const builtinEcho of BUILTIN_ECHO_CARDS) {
       if (!builtinEcho || !builtinEcho.id) continue
       const builtinId = String(builtinEcho.id)
+      // 2026-07：sync seed 不再硬编码 'builtin'，改用 BUILTIN_ECHO_CARDS 的 category 字段，
+      // 让 showy / builtin 等分类一次写到位，依赖前端 loadEchoes 兜底回填的"硬编码 + 迁移回填"
+      // 旧逻辑会在每次启动把 category 反复重写为 'builtin'。
+      const builtinCategory = builtinEcho.category || 'builtin'
       const existing = execOne('SELECT id, created_at FROM echoes WHERE id = ?', [builtinId])
       if (existing) {
         // 已存在 → 强制覆盖，保留 id / created_at
@@ -910,7 +914,7 @@ export default {
             builtinEcho.icon || 'graphic_eq',
             builtinEcho.anno_source,
             'anno',
-            'builtin',
+            builtinCategory,
             Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
             now,
             builtinId
@@ -929,7 +933,7 @@ export default {
             builtinEcho.icon || 'graphic_eq',
             builtinEcho.anno_source,
             'anno',
-            'builtin',
+            builtinCategory,
             Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
             now,
             now

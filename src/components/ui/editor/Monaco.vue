@@ -92,7 +92,19 @@ export default {
         accessibilitySupport: 'on',
         // Ensure Monaco uses the correct clipboard operations in Electron
         automaticClipboardScrollMode: 'toCursor',
-        multiCursorPaste: 'all'
+        multiCursorPaste: 'all',
+        // 禁用可能触发 worker 加载的功能
+        'semanticHighlighting.enabled': false,
+        // 限制 hover 行为以避免 worker 加载
+        hover: {
+          enabled: true,
+          delay: 500,
+          sticky: true
+        },
+        // 禁用 inlay hints（会触发 TS worker）
+        inlayHints: {
+          enabled: 'off'
+        }
       })
 
       // Track note change state via content change (replaces onKeyDown)

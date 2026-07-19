@@ -316,6 +316,10 @@ export default {
       shell.showItemInFolder(log.transports.file.resolvePath())
     }).catch(err => throw err)
 
+    handleApi('open-sqlite-file', async (e) => {
+      shell.showItemInFolder(path.join(app.getPath('userData'), 'memocast.db'))
+    }).catch(err => throw err)
+
     handleApi('get-app-path', async (e) => {
       return app.getAppPath()
     }).catch(err => throw err)

@@ -71,6 +71,7 @@ export default {
   seconds: 'Seconds',
   never: 'Never',
   openLogFiles: 'Open Log Files',
+  openSqliteFile: 'Open SQLite File',
   runeManagement: 'Rune Management',
   runeSectionTitle: 'My Runes',
   echoManagement: 'Echo Management',

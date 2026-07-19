@@ -124,8 +124,11 @@ export default {
 
 .category-tabs ::v-deep(.q-tabs__content .q-tab__content) {
   min-height: 30px;
+  flex-direction: row !important;
+  align-items: center !important;
   justify-content: flex-start !important;
   text-align: left !important;
+  padding-left: 2px;
 }
 
 .category-tab {
@@ -141,16 +144,25 @@ export default {
 }
 
 .category-tab ::v-deep(.q-tab__content) {
+  flex-direction: row !important;
+  align-items: center !important;
   justify-content: flex-start !important;
   text-align: left !important;
 }
 
 .category-tab ::v-deep(.q-tab__icon) {
   margin-right: 4px;
+  min-width: 16px;
+  text-align: left;
 }
 
 .category-tab ::v-deep(.q-tab__label) {
   text-align: left !important;
+}
+
+.category-tab-label {
+  text-align: left;
+  white-space: nowrap;
 }
 
 .category-tab-badge {

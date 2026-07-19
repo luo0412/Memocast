@@ -28,10 +28,10 @@ async function main () {
     updated_at INTEGER
   )`)
 
-  // 用 require 直接拉 main 端的 builtin-echoes（CJS 版，含 11 个最新）
+  // 用 require 直接拉 main 端的 builtin-echoes（CJS 版，含 16 个最新）
   const builtinEchoes = require('../src-electron/main-process/service/builtin-echoes.js')
   const BUILTIN_ECHO_CARDS = builtinEchoes.BUILTIN_ECHO_CARDS
-  if (!Array.isArray(BUILTIN_ECHO_CARDS) || BUILTIN_ECHO_CARDS.length !== 11) {
+  if (!Array.isArray(BUILTIN_ECHO_CARDS) || BUILTIN_ECHO_CARDS.length !== 16) {
     console.log('FAIL: BUILTIN_ECHO_CARDS count', BUILTIN_ECHO_CARDS && BUILTIN_ECHO_CARDS.length)
     process.exit(1)
   }
@@ -72,6 +72,8 @@ async function main () {
   for (const builtinEcho of BUILTIN_ECHO_CARDS) {
     if (!builtinEcho || !builtinEcho.id) continue
     const builtinId = String(builtinEcho.id)
+    // 2026-07：与 electron-main.js 同步，使用 builtinEcho.category 而不是硬编码 'builtin'
+    const builtinCategory = builtinEcho.category || 'builtin'
     const existing = execOne('SELECT id, created_at FROM echoes WHERE id = ?', [builtinId])
     if (existing) {
       db.run(
@@ -85,7 +87,7 @@ async function main () {
           builtinEcho.color || '#26A69A',
           builtinEcho.icon || 'graphic_eq',
           builtinEcho.anno_source,
-          'anno', 'builtin',
+          'anno', builtinCategory,
           Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
           now, builtinId
         ]
@@ -94,7 +96,7 @@ async function main () {
     } else {
       db.run(
         `INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [builtinId, builtinEcho.name, builtinEcho.desc || '', builtinEcho.color || '#26A69A', builtinEcho.icon || 'graphic_eq', builtinEcho.anno_source, 'anno', 'builtin', Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0, now, now]
+        [builtinId, builtinEcho.name, builtinEcho.desc || '', builtinEcho.color || '#26A69A', builtinEcho.icon || 'graphic_eq', builtinEcho.anno_source, 'anno', builtinCategory, Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0, now, now]
       )
       insertedCount += 1
     }
@@ -110,8 +112,8 @@ async function main () {
     }
   }
 
-  check('inserted=0（全部 11 个原本就存在）', insertedCount === 0, { insertedCount })
-  check('updated=11', updatedCount === 11, { updatedCount })
+  check('inserted=0（全部 16 个原本就存在）', insertedCount === 0, { insertedCount })
+  check('updated=16', updatedCount === 16, { updatedCount })
 
   let inheritHit = 0
   let legacyMarker = 0
@@ -125,7 +127,9 @@ async function main () {
     if (row.anno_source === ec.anno_source) inheritHit += 1
     if (String(row.anno_source).indexOf('LEGACY_OLD_STAMP_AT_TEST_TIME') >= 0) legacyMarker += 1
     if (row.name !== ec.name) check(`name 没被覆盖 ${ec.id}`, false, { old: row.name, expect: ec.name })
-    if (row.category !== 'builtin') check(`category 没被覆盖 ${ec.id}`, false, { got: row.category })
+    // 2026-07：与 BUILTIN_ECHO_CARDS 的 category 字段对齐（builtin 或 showy），不再统一校验为 'builtin'
+    const expectedCategory = ec.category || 'builtin'
+    if (row.category !== expectedCategory) check(`category 没被覆盖 ${ec.id}`, false, { got: row.category, expect: expectedCategory })
     if (row.icon !== (ec.icon || 'graphic_eq')) check(`icon 没被覆盖 ${ec.id}`, false, { got: row.icon, expect: ec.icon })
     if (row.color !== (ec.color || '#26A69A')) check(`color 没被覆盖 ${ec.id}`, false, { got: row.color, expect: ec.color })
     // created_at 应保留原 100（不应被覆盖为 now）
@@ -133,12 +137,12 @@ async function main () {
     // updated_at 应被刷新为 now
     if (row.updated_at !== now) updatedAtRefreshed = false
   }
-  check('所有 11 个内置回响的 anno_source 与代码侧一致', inheritHit === 11, { inheritHit, total })
+  check('所有 16 个内置回响的 anno_source 与代码侧一致', inheritHit === 16, { inheritHit, total })
   check('所有 anno_source 都不含老 LEGACY_OLD_STAMP 残留', legacyMarker === 0, { legacyMarker })
   check('所有 created_at 都保留旧值 100', createdAtKept)
   check('所有 updated_at 都被刷成 now', updatedAtRefreshed)
 
-  // === 二次覆盖：再跑一次，应该 inserted=0, updated=11（幂等） ===
+  // === 二次覆盖：再跑一次，应该 inserted=0, updated=16（幂等） ===
   insertedCount = 0; updatedCount = 0
   for (const builtinEcho of BUILTIN_ECHO_CARDS) {
     const builtinId = String(builtinEcho.id)
@@ -146,9 +150,9 @@ async function main () {
     if (existing) { db.run(`UPDATE echoes SET anno_source = ?, updated_at = ? WHERE id = ?`, [builtinEcho.anno_source, now + 1, builtinId]); updatedCount += 1 }
     else { insertedCount += 1 }
   }
-  check('二次覆盖：inserted=0, updated=11（幂等）', insertedCount === 0 && updatedCount === 11, { insertedCount, updatedCount })
+  check('二次覆盖：inserted=0, updated=16（幂等）', insertedCount === 0 && updatedCount === 16, { insertedCount, updatedCount })
 
-  // === 再来一次走 INSERT 分支：删除一行后跑，应该 inserted=1, updated=10 ===
+  // === 再来一次走 INSERT 分支：删除一行后跑，应该 inserted=1, updated=15 ===
   db.run('DELETE FROM echoes WHERE id = ?', ['__builtin_nice__'])
   insertedCount = 0; updatedCount = 0
   for (const builtinEcho of BUILTIN_ECHO_CARDS) {
@@ -156,14 +160,15 @@ async function main () {
     const existing = execOne('SELECT id FROM echoes WHERE id = ?', [builtinId])
     if (existing) { db.run(`UPDATE echoes SET anno_source = ?, updated_at = ? WHERE id = ?`, [builtinEcho.anno_source, now + 2, builtinId]); updatedCount += 1 }
     else {
+      const builtinCategory = builtinEcho.category || 'builtin'
       db.run(
         `INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [builtinId, builtinEcho.name, builtinEcho.desc || '', builtinEcho.color || '#26A69A', builtinEcho.icon || 'graphic_eq', builtinEcho.anno_source, 'anno', 'builtin', Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0, now + 2, now + 2]
+        [builtinId, builtinEcho.name, builtinEcho.desc || '', builtinEcho.color || '#26A69A', builtinEcho.icon || 'graphic_eq', builtinEcho.anno_source, 'anno', builtinCategory, Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0, now + 2, now + 2]
       )
       insertedCount += 1
     }
   }
-  check('nice 被删后：inserted=1, updated=10', insertedCount === 1 && updatedCount === 10, { insertedCount, updatedCount })
+  check('nice 被删后：inserted=1, updated=15', insertedCount === 1 && updatedCount === 15, { insertedCount, updatedCount })
 
   console.log('\n=== summary: pass')
 }

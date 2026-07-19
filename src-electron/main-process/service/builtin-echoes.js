@@ -5,17 +5,31 @@ const { banner, handlerExampleDoc, handlerAndExampleDoc, handlerPrelude } = requ
 // 用于设置弹框展示、layout 初始化以及运行时合并 echoCards。
 //
 // === 内部结构 ===
-//   每个 rune anno_source 由以下几段组成：
-//     - banner 注释（描述这个 rune 做什么 / 影响谁 / 怎么传参）
+//   每个 echo-chant anno_source 由以下几段组成：
+//     - banner 注释（描述这个 echo 做什么 / 影响谁 / 怎么传参）
 //     - render(context)         决定回响卡片外观 + 写入 attrs 默认值
-//     - handlerExample 字段     apply(chantNode, container, meta) 模板；
+//     - handlerExample 字段     apply(chantNode, scopeContainer, meta) 模板；
 //                              字段名带 Example 后缀，运行时不会自动注册为 handler。
 //                              把字段名改成 handler 即可接管运行时副作用。
+//
+// === 分类约定（2026-07 调整）===
+//   16 个内置回响分成两类：
+//     - builtin（内置）：共 7 个 —— nice / peek / ignore / ad / diff / ref / todo
+//                       都是「标记 / 排版 / 引用 / 待办」类的"基础内置"。
+//     - showy（炫技）：  共 9 个 —— 生生不息 / 破万法 / 天行健 / 双生花 / 夺心魄
+//                       / 强运 / 替罪 / 招灾 / 离析，都是"高级回响"，有运行时副作用。
+//   用户自定义的回响默认归 marker（标记）或 typography（排版）分类。
 //
 // === 共享代码 ===
 //   banner() 与 handlerExampleDoc() 都从 './builtin-echo-shared' 导入，
 //   三个工具函数（__resolveScopeContainer / __safeQueryAll / __withAttrs）
 //   自动嵌入到 handlerExample 顶部，模仿者可直接使用。
+//
+// === jQuery 集成（2026-07 改造）===
+//   apply 函数体里所有 DOM 调用都改用 jQuery 形式：$(node).addClass / .attr /
+//   .css / .removeClass / .on / .off / .clone / .append / .before 等。
+//   编译器（HANDLER_PRELUDE_SOURCE）会注入 `const $ = window.jQuery`，直接用即可，
+//   无需在函数体里再写 const $ = ...。
 // ============================================================================
 
 // 默认 echo 的 anno_source 直接复用 EchoRuntime 内置版本（避免双源漂移）
@@ -83,10 +97,10 @@ const createNiceAnnoSource = () => `export default {
     }
   },
 
+  // === 后渲染钩子：domElement 已插入到 DOM ===
+  // 直接用 jQuery 操作节点，简洁明了。
   afterRender (node, domElement, ancestors) {
-    if (domElement && domElement.classList) {
-      domElement.classList.add('ag-echo-default-mounted')
-    }
+    $(domElement).addClass('ag-echo-default-mounted')
   }
 }`
 
@@ -130,7 +144,7 @@ const createGrowthAnnoSource = () => `export default {
   ${handlerExampleDoc([
     '【示例模式】apply(chantNode, scopeContainer, meta) 返回 cleanup？',
     '   __resolveScopeContainer(node, scope)  按 4 种 scope 取目标容器',
-    '   __safeQueryAll(root, sel)             容错 querySelectorAll',
+    '   __safeQueryAll(root, sel)             容错 querySelectorAll（jQuery 版）',
     '   __withAttrs(meta, defaults)           meta.attrs 默认值合并'
   ])}
     const attrs = __withAttrs(meta, { scope: 'siblings', trigger: 'auto' })
@@ -138,19 +152,19 @@ const createGrowthAnnoSource = () => `export default {
     const container = __resolveScopeContainer(chantNode, attrs.scope)
     if (!container) return () => {}
 
-    const targets = __safeQueryAll(container, targetSelector)
-    targets.forEach((node, i) => {
-      node.classList.add('ag-rune-growth-target')
+    const $targets = __safeQueryAll(container, targetSelector)
+    $targets.each((i, el) => {
+      $(el).addClass('ag-rune-growth-target')
       if (attrs.trigger === 'auto') {
-        node.style.setProperty('--ag-rune-growth-delay', (Math.min(i, 8) * 120) + 'ms')
+        $(el).css('--ag-rune-growth-delay', (Math.min(i, 8) * 120) + 'ms')
       }
     })
-    chantNode.classList.add('ag-rune-growth-active')
+    $(chantNode).addClass('ag-rune-growth-active')
 
     // 必须返回 cleanup：下一次重渲染 / 卸载时被调用，撤销副作用
     return () => {
-      targets.forEach(node => node.classList.remove('ag-rune-growth-target'))
-      chantNode.classList.remove('ag-rune-growth-active')
+      $targets.each((_i, el) => $(el).removeClass('ag-rune-growth-target'))
+      $(chantNode).removeClass('ag-rune-growth-active')
     }
   }
 }`
@@ -192,23 +206,21 @@ const createShatterAnnoSource = () => `export default {
     const attrs = __withAttrs(meta, { target: 'line' })
     const useBlockScope = attrs.target === 'block'
     const container = useBlockScope
-      ? (chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || chantNode.parentElement)
+      ? ($(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement)
       : __resolveScopeContainer(chantNode, 'siblings')
     if (!container) return () => {}
 
-    const echoes = __safeQueryAll(container, '[data-echo-inline="true"]').filter(n => n !== chantNode)
-    echoes.forEach(n => {
-      n.setAttribute('data-shatter-disabled', 'true')
-      n.classList.add('ag-rune-shatter-disabled')
+    const $echoes = __safeQueryAll(container, '[data-echo-inline="true"]').filter((_i, n) => n !== chantNode)
+    $echoes.each((_i, n) => {
+      $(n).attr('data-shatter-disabled', 'true').addClass('ag-rune-shatter-disabled')
     })
-    chantNode.classList.add('ag-rune-shatter-active')
+    $(chantNode).addClass('ag-rune-shatter-active')
 
     return () => {
-      echoes.forEach(n => {
-        n.removeAttribute('data-shatter-disabled')
-        n.classList.remove('ag-rune-shatter-disabled')
+      $echoes.each((_i, n) => {
+        $(n).removeAttr('data-shatter-disabled').removeClass('ag-rune-shatter-disabled')
       })
-      chantNode.classList.remove('ag-rune-shatter-active')
+      $(chantNode).removeClass('ag-rune-shatter-active')
     }
   }
 }`
@@ -247,24 +259,24 @@ const createSkywalkAnnoSource = () => `export default {
     '【示例模式】document scope：记忆原值，cleanup 还原'
   ])}
     const attrs = __withAttrs(meta, { theme: 'auto', layout: 'enhanced' })
-    const documentRoot = chantNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || scopeContainer || document.body
+    const documentRoot = $(chantNode).closest('[data-echo-document], .mu-editor, article, [data-doc-id]').get(0) || scopeContainer || document.body
     if (!documentRoot) return () => {}
 
     // 记忆原值，cleanup 还原
+    const $root = $(documentRoot)
     const prev = {
-      theme: documentRoot.getAttribute('data-skywalk-theme'),
-      layout: documentRoot.getAttribute('data-skywalk-layout')
+      theme: $root.attr('data-skywalk-theme') || null,
+      layout: $root.attr('data-skywalk-layout') || null
     }
-    documentRoot.setAttribute('data-skywalk-theme', attrs.theme)
-    documentRoot.setAttribute('data-skywalk-layout', attrs.layout)
-    chantNode.classList.add('ag-rune-skywalk-active')
+    $root.attr('data-skywalk-theme', attrs.theme).attr('data-skywalk-layout', attrs.layout)
+    $(chantNode).addClass('ag-rune-skywalk-active')
 
     return () => {
-      if (prev.theme === null) documentRoot.removeAttribute('data-skywalk-theme')
-      else documentRoot.setAttribute('data-skywalk-theme', prev.theme)
-      if (prev.layout === null) documentRoot.removeAttribute('data-skywalk-layout')
-      else documentRoot.setAttribute('data-skywalk-layout', prev.layout)
-      chantNode.classList.remove('ag-rune-skywalk-active')
+      if (prev.theme === null) $root.removeAttr('data-skywalk-theme')
+      else $root.attr('data-skywalk-theme', prev.theme)
+      if (prev.layout === null) $root.removeAttr('data-skywalk-layout')
+      else $root.attr('data-skywalk-layout', prev.layout)
+      $(chantNode).removeClass('ag-rune-skywalk-active')
     }
   }
 }`
@@ -316,12 +328,13 @@ const createTwinbloomAnnoSource = () => `export default {
     '  - 用 __resolveScopeContainer(., source) 直接复用 4 种 scope 的解析',
     '  - 给克隆块加 outline + 标记条，cleanup 时一并移除'
   ])}
+    const $rune = $(chantNode)
     const attrs = __withAttrs(meta, { source: 'prev-block', placeholder: '双生节点' })
     const source = String(attrs.source || 'prev-block').toLowerCase()
     const placeholder = attrs.placeholder || '双生节点'
 
     // 拿当前 block（chantNode 所在的 paragraph / heading 等）
-    const block = chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || chantNode.parentElement
+    const block = $rune.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
     if (!block || !block.parentElement) return () => {}
 
     // 决定克隆源：
@@ -335,74 +348,83 @@ const createTwinbloomAnnoSource = () => `export default {
         insertTarget = block  // 插入到当前 block 之后
       }
     } else if (source === 'next-block') {
-      const next = block.nextElementSibling
-      if (next && next !== block) {
-        sourceNode = next
-        insertTarget = block  // 插入到当前 block 之前（= 插到 insertTarget 之前）
+      const $next = $(block).next()
+      if ($next.length && $next.get(0) !== block) {
+        sourceNode = $next.get(0)
+        insertTarget = block
       }
     } else {
-      // clone-self：克隆当前 block，插入到当前之后
       sourceNode = block
       insertTarget = block
     }
 
-    // 防重入：检查上一次插入的克隆
-    const twinId = chantNode.getAttribute('data-rune-id') || 'twinbloom'
+    const twinId = $rune.attr('data-rune-id') || 'twinbloom'
     const sentinel = 'data-twinbloom-of'
     let cloned = null
     let insertedBefore = (source === 'next-block')
     let existedBefore = false
     {
-      const neighbor = insertedBefore ? insertTarget.previousElementSibling : insertTarget.nextElementSibling
-      if (neighbor && neighbor.getAttribute(sentinel) === twinId) {
-        cloned = neighbor
+      const $neighbor = $(insertTarget)[insertedBefore ? 'prev' : 'next']()
+      if ($neighbor.length && $neighbor.attr(sentinel) === twinId) {
+        cloned = $neighbor.get(0)
         existedBefore = true
       }
     }
     if (!cloned) {
-      cloned = sourceNode.cloneNode(true)
-      cloned.setAttribute(sentinel, twinId)
-      cloned.setAttribute('data-twinbloom-source', source)
-      cloned.classList.add('ag-rune-twinbloom-clone')
-      // ★ 关键：用 style 直接加 outline / padding，让用户**直观看到克隆**，
-      //   不会与源 block 混淆；并把段落标只读防止误编辑
-      cloned.setAttribute('contenteditable', 'false')
-      cloned.style.outline = '2px dashed #8E24AA'
-      cloned.style.outlineOffset = '2px'
-      cloned.style.position = cloned.style.position || 'relative'
-      cloned.style.padding = cloned.style.padding || '8px 12px'
-      cloned.style.borderRadius = cloned.style.borderRadius || '6px'
-      cloned.style.background = 'rgba(142,36,170,0.06)'
+      const $clone = $(sourceNode).clone(true)
+      cloned = $clone.get(0)
+      $(cloned)
+        .attr(sentinel, twinId)
+        .attr('data-twinbloom-source', source)
+        .addClass('ag-rune-twinbloom-clone')
+        .attr('contenteditable', 'false')
+        .css({
+          'outline': '2px dashed #8E24AA',
+          'outline-offset': '2px',
+          'position': $(cloned).css('position') || 'relative',
+          'padding': $(cloned).css('padding') || '8px 12px',
+          'border-radius': $(cloned).css('border-radius') || '6px',
+          'background': 'rgba(142,36,170,0.06)'
+        })
 
       // 在克隆块顶部追加一张 "🌸 双生花 · 双生节点" 标记条（仅一次）
-      if (!cloned.querySelector('[data-twinbloom-badge]')) {
-        const badge = document.createElement('div')
-        badge.setAttribute('data-twinbloom-badge', twinId)
-        badge.textContent = '🌸 双生花 · ' + placeholder
-        badge.style.cssText = 'font-size:11px;color:#8E24AA;padding:2px 8px;background:rgba(142,36,170,.12);border:1px solid rgba(142,36,170,.4);border-radius:4px;display:inline-block;margin-bottom:6px;'
-        cloned.insertBefore(badge, cloned.firstChild)
+      if (!$(cloned).find('[data-twinbloom-badge]').length) {
+        const $badge = $('<div></div>')
+          .attr('data-twinbloom-badge', twinId)
+          .text('🌸 双生花 · ' + placeholder)
+          .css({
+            'font-size': '11px',
+            'color': '#8E24AA',
+            'padding': '2px 8px',
+            'background': 'rgba(142,36,170,.12)',
+            'border': '1px solid rgba(142,36,170,.4)',
+            'border-radius': '4px',
+            'display': 'inline-block',
+            'margin-bottom': '6px'
+          })
+        $(cloned).prepend($badge)
       }
 
       // 若克隆源是 prev-block 但 prev-block 全空，用 placeholder 文本填充
-      if (source === 'prev-block' && !(cloned.textContent || '').trim()) {
-        cloned.textContent = placeholder
+      if (source === 'prev-block' && !$(cloned).text().trim()) {
+        $(cloned).text(placeholder)
       }
 
       // 插入：
       //   insertedBefore=true 时插入到 insertTarget 之前；否则插入到 insertTarget 之后
       if (insertedBefore) {
-        block.parentElement.insertBefore(cloned, insertTarget)
+        $(insertTarget).before($(cloned))
       } else {
-        block.parentElement.insertBefore(cloned, insertTarget.nextSibling)
+        $(insertTarget).after($(cloned))
       }
     }
-    chantNode.classList.add('ag-rune-twinbloom-active')
+    $(chantNode).addClass('ag-rune-twinbloom-active')
 
     return () => {
       if (!existedBefore && cloned && cloned.parentElement) {
-        cloned.parentElement.removeChild(cloned)
+        $(cloned).remove()
       }
-      chantNode.classList.remove('ag-rune-twinbloom-active')
+      $(chantNode).removeClass('ag-rune-twinbloom-active')
     }
   }
 }`
@@ -445,22 +467,21 @@ const createMindstealAnnoSource = () => `export default {
     const container = __resolveScopeContainer(chantNode, 'siblings')
     if (!container) return () => {}
 
-    const candidates = __safeQueryAll(container, '[data-rune-id]')
-      .filter(n => n !== chantNode)
-      .filter(n => !targets || targets.includes(n.getAttribute('data-rune-id')))
+    const $candidates = __safeQueryAll(container, '[data-rune-id]')
+      .filter((_i, n) => n !== chantNode)
+      .filter((_i, n) => !targets || targets.includes($(n).attr('data-rune-id')))
 
-    candidates.forEach(n => {
-      n.setAttribute('data-mindsteal-mode', attrs.mode)
-      if (attrs.mode === 'disable') n.style.setProperty('animation', 'none', 'important')
+    $candidates.each((_i, n) => {
+      $(n).attr('data-mindsteal-mode', attrs.mode)
+      if (attrs.mode === 'disable') $(n).css('animation', 'none', 'important')
     })
-    chantNode.classList.add('ag-rune-mindsteal-active')
+    $(chantNode).addClass('ag-rune-mindsteal-active')
 
     return () => {
-      candidates.forEach(n => {
-        n.removeAttribute('data-mindsteal-mode')
-        n.style.removeProperty('animation')
+      $candidates.each((_i, n) => {
+        $(n).removeAttr('data-mindsteal-mode').css('animation', '')
       })
-      chantNode.classList.remove('ag-rune-mindsteal-active')
+      $(chantNode).removeClass('ag-rune-mindsteal-active')
     }
   }
 }`
@@ -470,7 +491,7 @@ const createMindstealAnnoSource = () => `export default {
 // ============================================================================
 const createLuckyAnnoSource = () => `export default {
   ${banner([
-    '【强运 / lucky】 —— 点击触发 AI 校对，是"事件型 rune"样板',
+    '【强运 / lucky】 —— 点击触发 AI 校对，是"事件型 echo-chant"样板',
     '事件流：handler 给节点加 role=button / tabindex=0；点击时调用',
     '  window.__memocastEchoChantHandlers.lucky({chantNode, meta})，由应用层注册回调',
     '示例：@强运{model: "gpt-4o-mini", action: "ai-proofread"}(一键润色)',
@@ -502,15 +523,16 @@ const createLuckyAnnoSource = () => `export default {
     '   callback 走 window.__memocastEchoChantHandlers.lucky（应用层注册）'
   ])}
     const attrs = __withAttrs(meta, { label: '点击触发 AI 校对' })
-    chantNode.style.cursor = 'pointer'
-    chantNode.setAttribute('role', 'button')
-    chantNode.setAttribute('tabindex', '0')
-    chantNode.setAttribute('title', attrs.label)
-    chantNode.classList.add('ag-rune-lucky-active')
+    const $rune = $(chantNode)
+    $rune.css('cursor', 'pointer')
+      .attr('role', 'button')
+      .attr('tabindex', '0')
+      .attr('title', attrs.label)
+      .addClass('ag-rune-lucky-active')
 
     const trigger = async (ev) => {
       ev.preventDefault(); ev.stopPropagation()
-      chantNode.classList.add('ag-rune-lucky-loading')
+      $rune.addClass('ag-rune-lucky-loading')
       try {
         const handler = (typeof window !== 'undefined')
           ? (window.__memocastEchoChantHandlers && window.__memocastEchoChantHandlers.lucky)
@@ -518,21 +540,17 @@ const createLuckyAnnoSource = () => `export default {
         if (typeof handler === 'function') await handler({ chantNode, meta, scopeContainer })
         else console.info('[lucky] no window.__memocastEchoChantHandlers.lucky registered')
       } catch (err) { console.error('[lucky] handler failed:', err) }
-      finally { chantNode.classList.remove('ag-rune-lucky-loading') }
+      finally { $rune.removeClass('ag-rune-lucky-loading') }
     }
     const onClick = (ev) => trigger(ev)
     const onKey = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') trigger(ev) }
-    chantNode.addEventListener('click', onClick)
-    chantNode.addEventListener('keydown', onKey)
+    $rune.on('click', onClick).on('keydown', onKey)
 
     return () => {
-      chantNode.removeEventListener('click', onClick)
-      chantNode.removeEventListener('keydown', onKey)
-      chantNode.classList.remove('ag-rune-lucky-active', 'ag-rune-lucky-loading')
-      chantNode.style.cursor = ''
-      chantNode.removeAttribute('role')
-      chantNode.removeAttribute('tabindex')
-      chantNode.removeAttribute('title')
+      $rune.off('click', onClick).off('keydown', onKey)
+        .removeClass('ag-rune-lucky-active ag-rune-lucky-loading')
+        .css('cursor', '')
+        .removeAttr('role').removeAttr('tabindex').removeAttr('title')
     }
   }
 }`
@@ -543,8 +561,6 @@ const createLuckyAnnoSource = () => `export default {
 //   - 监听 window.error 与 ag:rune:error 事件，
 //     一旦后续 rune 抛错 / DOM 异常，把它转成 ag-rune-scapegoat-injured（红边 + 错误描述）
 //   - handler 清理时移除监听并清掉 standby/injured 状态。
-// ============================================================================
-// 8. 替罪（scapegoat）：echo-chant（防灾）
 // ============================================================================
 const createScapegoatAnnoSource = () => `export default {
   ${banner([
@@ -581,26 +597,22 @@ const createScapegoatAnnoSource = () => `export default {
   ])},
     const block = __resolveScopeContainer(chantNode, 'block')
     if (!block) return () => {}
+    const $block = $(block)
 
     const intensity = Number(meta && meta.attrs && meta.attrs.intensity) || 0
     if (intensity > 0) {
-      block.classList.add('ag-rune-scapegoat-injured')
-      block.setAttribute('data-scapegoat-error', (meta && meta.attrs && meta.attrs.error) || 'pre-injured by intensity')
+      $block.addClass('ag-rune-scapegoat-injured').attr('data-scapegoat-error', (meta && meta.attrs && meta.attrs.error) || 'pre-injured by intensity')
     } else {
-      block.classList.add('ag-rune-scapegoat-standby')
+      $block.addClass('ag-rune-scapegoat-standby')
     }
 
     const onError = (event) => {
-      block.classList.remove('ag-rune-scapegoat-standby')
-      block.classList.add('ag-rune-scapegoat-injured')
-      block.setAttribute('data-scapegoat-error', (event && event.message) || 'unknown error')
+      $block.removeClass('ag-rune-scapegoat-standby').addClass('ag-rune-scapegoat-injured').attr('data-scapegoat-error', (event && event.message) || 'unknown error')
     }
     const onRuneError = (event) => {
       const detail = event && event.detail
       if (!detail) return
-      block.classList.remove('ag-rune-scapegoat-standby')
-      block.classList.add('ag-rune-scapegoat-injured')
-      block.setAttribute('data-scapegoat-rune-error', String(detail.runeId || 'unknown'))
+      $block.removeClass('ag-rune-scapegoat-standby').addClass('ag-rune-scapegoat-injured').attr('data-scapegoat-rune-error', String(detail.runeId || 'unknown'))
     }
     if (typeof window !== 'undefined') {
       window.addEventListener('error', onError, true)
@@ -612,9 +624,9 @@ const createScapegoatAnnoSource = () => `export default {
         window.removeEventListener('error', onError, true)
         window.removeEventListener('ag:rune:error', onRuneError)
       }
-      block.classList.remove('ag-rune-scapegoat-standby', 'ag-rune-scapegoat-injured')
-      block.removeAttribute('data-scapegoat-error')
-      block.removeAttribute('data-scapegoat-rune-error')
+      $block.removeClass('ag-rune-scapegoat-standby ag-rune-scapegoat-injured')
+        .removeAttr('data-scapegoat-error')
+        .removeAttr('data-scapegoat-rune-error')
     }
   }
 }`
@@ -663,13 +675,14 @@ const createCalamityAnnoSource = () => `export default {
       Number(meta && meta.attrs && meta.attrs.intensity) || 0.3))
 
     const textHosts = __safeQueryAll(container, 'p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, dd, dt')
-      .filter(el => el && el !== chantNode && (el.textContent || '').trim().length >= 2)
+      .filter((_i, el) => el && el !== chantNode && $(el).text().trim().length >= 2)
+      .get()
     const targetCount = Math.max(1, Math.floor(textHosts.length * intensity))
     const picked = __sampleShuffle(textHosts, targetCount)
 
-    picked.forEach((el) => el.classList && el.classList.add('ag-rune-calamity-gothic'))
+    picked.forEach((el) => $(el).addClass('ag-rune-calamity-gothic'))
     return () => {
-      picked.forEach((el) => el.classList && el.classList.remove('ag-rune-calamity-gothic'))
+      picked.forEach((el) => $(el).removeClass('ag-rune-calamity-gothic'))
     }
   }
 }`
@@ -708,17 +721,291 @@ const createDisperseAnnoSource = () => `export default {
     '【示例模式】block scope 写 data-disperse-density；CSS 据此调整 line-height/margin'
   ])}
     const attrs = __withAttrs(meta, { density: 'loose' })
-    const block = chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || chantNode.parentElement
+    const block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
     if (!block) return () => {}
+    const $block = $(block)
 
-    const previous = block.getAttribute('data-disperse-density')
-    block.setAttribute('data-disperse-density', attrs.density)
-    chantNode.classList.add('ag-rune-disperse-active')
+    const previous = $block.attr('data-disperse-density') || null
+    $block.attr('data-disperse-density', attrs.density)
+    $(chantNode).addClass('ag-rune-disperse-active')
 
     return () => {
-      if (previous === null) block.removeAttribute('data-disperse-density')
-      else block.setAttribute('data-disperse-density', previous)
-      chantNode.classList.remove('ag-rune-disperse-active')
+      if (previous === null) $block.removeAttr('data-disperse-density')
+      else $block.attr('data-disperse-density', previous)
+      $(chantNode).removeClass('ag-rune-disperse-active')
+    }
+  }
+}`
+
+// ============================================================================
+// 11. peek：高亮展示内容，折叠展开
+// ============================================================================
+const createPeekAnnoSource = () => `export default {
+  ${banner([
+    '【peek】 —— 高亮展示内容，支持折叠展开',
+    '参数：collapsed=true|false（默认 false），level=1-3（高亮强度）',
+    'CSS 钩子：ag-rune-peek, ag-rune-peek-collapsed',
+    '示例：@peek{collapsed: true}(折叠展示)'
+  ])},
+  kind: 'echo-chant',
+  runeId: 'peek',
+  version: 1,
+  name: 'peek',
+
+  render (context = {}) {
+    const attrs = context.attrs || {}
+    const prompt = context.prompt || ''
+    return {
+      type: 'card',
+      icon: attrs.icon || context.echo?.icon || 'visibility',
+      color: attrs.color || context.echo?.color || '#FF7043',
+      title: attrs.title || context.echo?.name || 'peek',
+      description: attrs.desc || context.echo?.desc || '高亮展示内容，支持折叠展开',
+      prompt,
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'peek', collapsed: attrs.collapsed === true, level: attrs.level || 1, inheritFromPrevious: false },
+      html: '<span class="ag-rune ag-rune--peek" data-rune-id="peek">peek</span>'
+    }
+  },
+
+  ${handlerExampleDoc([
+    '【示例模式】添加高亮 class，可交互折叠'
+  ])}
+    const attrs = __withAttrs(meta, { collapsed: false, level: 1 })
+    const $rune = $(chantNode)
+    const level = Math.max(1, Math.min(3, Number(attrs.level) || 1))
+    $rune.addClass('ag-rune-peek ag-rune-peek-level-' + level)
+    if (attrs.collapsed) $rune.addClass('ag-rune-peek-collapsed')
+    return () => {
+      $rune.removeClass('ag-rune-peek ag-rune-peek-collapsed ag-rune-peek-level-1 ag-rune-peek-level-2 ag-rune-peek-level-3')
+    }
+  }
+}`
+
+// ============================================================================
+// 12. ignore：标记为可忽略内容
+// ============================================================================
+const createIgnoreAnnoSource = () => `export default {
+  ${banner([
+    '【ignore】 —— 标记为可忽略内容，视觉淡化',
+    '参数：opacity=0.1-1（淡化透明度，默认 0.4）',
+    'CSS 钩子：ag-rune-ignore',
+    '示例：@ignore{opacity: 0.3}(淡化次要内容)'
+  ])},
+  kind: 'echo-chant',
+  runeId: 'ignore',
+  version: 1,
+  name: 'ignore',
+
+  render (context = {}) {
+    const attrs = context.attrs || {}
+    const prompt = context.prompt || ''
+    return {
+      type: 'card',
+      icon: attrs.icon || context.echo?.icon || 'visibility_off',
+      color: attrs.color || context.echo?.color || '#90A4AE',
+      title: attrs.title || context.echo?.name || 'ignore',
+      description: attrs.desc || context.echo?.desc || '标记为可忽略内容，视觉淡化',
+      prompt,
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'ignore', opacity: attrs.opacity || 0.4, inheritFromPrevious: false },
+      html: '<span class="ag-rune ag-rune--ignore" data-rune-id="ignore">ignore</span>'
+    }
+  },
+
+  ${handlerExampleDoc([
+    '【示例模式】降低透明度'
+  ])}
+    const attrs = __withAttrs(meta, { opacity: 0.4 })
+    const block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
+    if (!block) return () => {}
+    const $block = $(block)
+    const prevOpacity = $block.css('opacity') || '1'
+    $block.addClass('ag-rune-ignore').css('opacity', attrs.opacity)
+    return () => {
+      $block.removeClass('ag-rune-ignore').css('opacity', prevOpacity)
+    }
+  }
+}`
+
+// ============================================================================
+// 13. ad：插入广告占位或标注
+// ============================================================================
+const createAdAnnoSource = () => `export default {
+  ${banner([
+    '【ad】 —— 插入广告占位或标注为广告内容',
+    '参数：type=banner|inline|sidebar（默认 banner）',
+    'CSS 钩子：ag-rune-ad, ag-rune-ad-banner, ag-rune-ad-inline, ag-rune-ad-sidebar',
+    '示例：@ad{type: "inline"}(内联广告标注)'
+  ])},
+  kind: 'echo-chant',
+  runeId: 'ad',
+  version: 1,
+  name: 'ad',
+
+  render (context = {}) {
+    const attrs = context.attrs || {}
+    const prompt = context.prompt || ''
+    return {
+      type: 'card',
+      icon: attrs.icon || context.echo?.icon || 'campaign',
+      color: attrs.color || context.echo?.color || '#FFB300',
+      title: attrs.title || context.echo?.name || 'ad',
+      description: attrs.desc || context.echo?.desc || '插入广告占位或标注为广告内容',
+      prompt,
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'ad', type: attrs.type || 'banner', inheritFromPrevious: false },
+      html: '<span class="ag-rune ag-rune--ad" data-rune-id="ad">ad</span>'
+    }
+  },
+
+  ${handlerExampleDoc([
+    '【示例模式】添加广告标记样式'
+  ])}
+    const attrs = __withAttrs(meta, { type: 'banner' })
+    const block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
+    if (!block) return () => {}
+    const $block = $(block)
+    const adType = String(attrs.type || 'banner').toLowerCase()
+    $block.addClass('ag-rune-ad ag-rune-ad-' + adType)
+    return () => {
+      $block.removeClass('ag-rune-ad ag-rune-ad-banner ag-rune-ad-inline ag-rune-ad-sidebar')
+    }
+  }
+}`
+
+// ============================================================================
+// 14. diff：标记差异对比
+// ============================================================================
+const createDiffAnnoSource = () => `export default {
+  ${banner([
+    '【diff】 —— 标记差异对比内容',
+    '参数：mode=add|remove|change（默认 change）',
+    'CSS 钩子：ag-rune-diff, ag-rune-diff-add, ag-rune-diff-remove, ag-rune-diff-change',
+    '示例：@diff{mode: "add"}(新增内容)'
+  ])},
+  kind: 'echo-chant',
+  runeId: 'diff',
+  version: 1,
+  name: 'diff',
+
+  render (context = {}) {
+    const attrs = context.attrs || {}
+    const prompt = context.prompt || ''
+    return {
+      type: 'card',
+      icon: attrs.icon || context.echo?.icon || 'difference',
+      color: attrs.color || context.echo?.color || '#7E57C2',
+      title: attrs.title || context.echo?.name || 'diff',
+      description: attrs.desc || context.echo?.desc || '标记差异对比内容',
+      prompt,
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'diff', mode: attrs.mode || 'change', inheritFromPrevious: false },
+      html: '<span class="ag-rune ag-rune--diff" data-rune-id="diff">diff</span>'
+    }
+  },
+
+  ${handlerExampleDoc([
+    '【示例模式】添加 diff 标记样式'
+  ])}
+    const attrs = __withAttrs(meta, { mode: 'change' })
+    const block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
+    if (!block) return () => {}
+    const $block = $(block)
+    const diffMode = String(attrs.mode || 'change').toLowerCase()
+    $block.addClass('ag-rune-diff ag-rune-diff-' + diffMode)
+    return () => {
+      $block.removeClass('ag-rune-diff ag-rune-diff-add ag-rune-diff-remove ag-rune-diff-change')
+    }
+  }
+}`
+
+// ============================================================================
+// 15. ref：标记为参考资料
+// ============================================================================
+const createRefAnnoSource = () => `export default {
+  ${banner([
+    '【ref】 —— 标记为参考资料，可跳转链接',
+    '参数：url=外部链接（可选），title=标题（可选）',
+    'CSS 钩子：ag-rune-ref',
+    '示例：@ref{url: "https://..."}(参考资料)'
+  ])},
+  kind: 'echo-chant',
+  runeId: 'ref',
+  version: 1,
+  name: 'ref',
+
+  render (context = {}) {
+    const attrs = context.attrs || {}
+    const prompt = context.prompt || ''
+    return {
+      type: 'card',
+      icon: attrs.icon || context.echo?.icon || 'link',
+      color: attrs.color || context.echo?.color || '#29B6F6',
+      title: attrs.title || context.echo?.name || 'ref',
+      description: attrs.desc || context.echo?.desc || '标记为参考资料，可跳转链接',
+      prompt,
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'ref', url: attrs.url || '', inheritFromPrevious: false },
+      html: '<span class="ag-rune ag-rune--ref" data-rune-id="ref">ref</span>'
+    }
+  },
+
+  ${handlerExampleDoc([
+    '【示例模式】添加参考标记样式，可点击跳转'
+  ])}
+    const attrs = __withAttrs(meta, { url: '', title: '' })
+    const $rune = $(chantNode)
+    $rune.addClass('ag-rune-ref')
+    if (attrs.url) {
+      $rune.css('cursor', 'pointer')
+      $rune.on('click', (e) => {
+        e.preventDefault()
+        window.open(attrs.url, '_blank')
+      })
+    }
+    return () => {
+      $rune.removeClass('ag-rune-ref').css('cursor', '').off('click')
+    }
+  }
+}`
+
+// ============================================================================
+// 16. todo：标记待办事项
+// ============================================================================
+const createTodoAnnoSource = () => `export default {
+  ${banner([
+    '【todo】 —— 标记待办事项，可交互勾选',
+    '参数：checked=true|false（默认 false）',
+    'CSS 钩子：ag-rune-todo, ag-rune-todo-checked',
+    '示例：@todo{checked: false}(待完成事项)'
+  ])},
+  kind: 'echo-chant',
+  runeId: 'todo',
+  version: 1,
+  name: 'todo',
+
+  render (context = {}) {
+    const attrs = context.attrs || {}
+    const prompt = context.prompt || ''
+    return {
+      type: 'card',
+      icon: attrs.icon || context.echo?.icon || 'check_box',
+      color: attrs.color || context.echo?.color || '#26A69A',
+      title: attrs.title || context.echo?.name || 'todo',
+      description: attrs.desc || context.echo?.desc || '标记待办事项，可交互勾选',
+      prompt,
+      attrs: { ...attrs, kind: 'echo-chant', runeId: 'todo', checked: attrs.checked === true, inheritFromPrevious: false },
+      html: '<span class="ag-rune ag-rune--todo" data-rune-id="todo">todo</span>'
+    }
+  },
+
+  ${handlerExampleDoc([
+    '【示例模式】添加待办标记样式'
+  ])}
+    const attrs = __withAttrs(meta, { checked: false })
+    const block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
+    if (!block) return () => {}
+    const $block = $(block)
+    $block.addClass('ag-rune-todo')
+    if (attrs.checked) $block.addClass('ag-rune-todo-checked')
+    return () => {
+      $block.removeClass('ag-rune-todo ag-rune-todo-checked')
     }
   }
 }`
@@ -727,21 +1014,25 @@ const createDisperseAnnoSource = () => `export default {
 // 对外导出
 // ============================================================================
 const BUILTIN_ECHO_CARDS = Object.freeze([
+  // ===== 内置（基础） =====
   Object.freeze({
     id: '__builtin_nice__',
     name: 'nice',
     desc: '标记为赞的内容',
     icon: 'thumb_up',
     color: '#4CAF50',
+    category: 'builtin',
     anno_source: createNiceAnnoSource(),
     isBuiltin: true
   }),
+  // ===== 炫技（高级回响） =====
   Object.freeze({
     id: '__builtin_growth__',
     name: '生生不息',
     desc: '给附近符合条件的元素加上生长的动画特效',
     icon: 'park',
     color: '#43A047',
+    category: 'showy',
     anno_source: createGrowthAnnoSource(),
     isBuiltin: true
   }),
@@ -751,6 +1042,7 @@ const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '使附近一行或一个块的回响作用都失效',
     icon: 'block',
     color: '#E53935',
+    category: 'showy',
     anno_source: createShatterAnnoSource(),
     isBuiltin: true
   }),
@@ -760,6 +1052,7 @@ const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '强化排版并指定某种主题',
     icon: 'auto_awesome',
     color: '#1E88E5',
+    category: 'showy',
     anno_source: createSkywalkAnnoSource(),
     isBuiltin: true
   }),
@@ -769,15 +1062,17 @@ const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '复制前/后一个 block 并生成占位副本',
     icon: 'local_florist',
     color: '#8E24AA',
+    category: 'showy',
     anno_source: createTwinbloomAnnoSource(),
     isBuiltin: true
   }),
   Object.freeze({
     id: '__builtin_mindsteal__',
     name: '夺心魄',
-    desc: '使附近符合条件的符文叠加或篡改某种制定的效果',
+    desc: '使附近符合条件的咏唱叠加或篡改某种制定的效果',
     icon: 'psychology',
     color: '#F4511E',
+    category: 'showy',
     anno_source: createMindstealAnnoSource(),
     isBuiltin: true
   }),
@@ -787,15 +1082,17 @@ const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '点击后触发 AI 识别当前 Markdown 的错别字并修正',
     icon: 'casino',
     color: '#FB8C00',
+    category: 'showy',
     anno_source: createLuckyAnnoSource(),
     isBuiltin: true
   }),
   Object.freeze({
     id: '__builtin_scapegoat__',
     name: '替罪',
-    desc: '在作用域内接住后续 rune / DOM 抛出的错误，并以受伤态提示',
+    desc: '在作用域内接住后续 echo / DOM 抛出的错误，并以受伤态提示',
     icon: 'shield',
     color: '#6D4C41',
+    category: 'showy',
     anno_source: createScapegoatAnnoSource(),
     isBuiltin: true
   }),
@@ -805,6 +1102,7 @@ const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '在作用域内随机给文字片段染上哥特渐变彩',
     icon: 'thunderstorm',
     color: '#5E35B1',
+    category: 'showy',
     anno_source: createCalamityAnnoSource(),
     isBuiltin: true
   }),
@@ -814,7 +1112,69 @@ const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '使附近的元素使用更加宽松的排版',
     icon: 'call_split',
     color: '#00897B',
+    category: 'showy',
     anno_source: createDisperseAnnoSource(),
+    isBuiltin: true
+  }),
+  // ===== 内置基础回响（标记类：peek / ignore / ad / diff / ref / todo） =====
+  Object.freeze({
+    id: '__builtin_peek__',
+    name: 'peek',
+    desc: '高亮展示内容，支持折叠展开',
+    icon: 'visibility',
+    color: '#FF7043',
+    category: 'builtin',
+    anno_source: createPeekAnnoSource(),
+    isBuiltin: true
+  }),
+  Object.freeze({
+    id: '__builtin_ignore__',
+    name: 'ignore',
+    desc: '标记为可忽略内容，视觉淡化',
+    icon: 'visibility_off',
+    color: '#90A4AE',
+    category: 'builtin',
+    anno_source: createIgnoreAnnoSource(),
+    isBuiltin: true
+  }),
+  Object.freeze({
+    id: '__builtin_ad__',
+    name: 'ad',
+    desc: '插入广告占位或标注为广告内容',
+    icon: 'campaign',
+    color: '#FFB300',
+    category: 'builtin',
+    anno_source: createAdAnnoSource(),
+    isBuiltin: true
+  }),
+  Object.freeze({
+    id: '__builtin_diff__',
+    name: 'diff',
+    desc: '标记差异对比内容',
+    icon: 'difference',
+    color: '#7E57C2',
+    category: 'builtin',
+    anno_source: createDiffAnnoSource(),
+    isBuiltin: true
+  }),
+  Object.freeze({
+    id: '__builtin_ref__',
+    name: 'ref',
+    desc: '标记为参考资料，可跳转链接',
+    icon: 'link',
+    color: '#29B6F6',
+    category: 'builtin',
+    anno_source: createRefAnnoSource(),
+    isBuiltin: true
+  }),
+  Object.freeze({
+    id: '__builtin_todo__',
+    name: 'todo',
+    desc: '标记待办事项，可交互勾选',
+    icon: 'check_box',
+    color: '#26A69A',
+    category: 'builtin',
+    anno_source: createTodoAnnoSource(),
     isBuiltin: true
   })
 ])
@@ -823,7 +1183,7 @@ const getDefaultEchoAnnoSource = createDefaultEchoAnnoSource
 
 const isBuiltinEcho = (echo = {}) => Boolean(echo && echo.isBuiltin)
 
-// 10 个符文元信息集中导出，方便外部按 runeId 查找
+// 10 个 echo-chant 内置 id 集中导出，方便外部按 runeId 查找
 const BUILTIN_ECHO_CHANT_IDS = Object.freeze([
   'growth',
   'shatter',
@@ -833,7 +1193,13 @@ const BUILTIN_ECHO_CHANT_IDS = Object.freeze([
   'lucky',
   'scapegoat',
   'calamity',
-  'disperse'
+  'disperse',
+  'peek',
+  'ignore',
+  'ad',
+  'diff',
+  'ref',
+  'todo'
 ])
 
 const isBuiltinEchoChantId = (runeId = '') => BUILTIN_ECHO_CHANT_IDS.includes(String(runeId || '').trim())

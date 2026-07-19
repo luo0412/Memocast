@@ -12,7 +12,7 @@
         <q-icon name='graphic_eq' color='teal-5' size='1.5em' />
         <q-toolbar-title>
           <span class='text-weight-bold non-selectable'>
-            {{ isBuiltin ? ($t('echoCardView') || '查看回响') : (isEditing ? $t('echoCardEdit') : $t('echoCardAdd')) }}
+            {{ isReadonly ? ($t('echoCardView') || '查看回响') : (isEditing ? $t('echoCardEdit') : $t('echoCardAdd')) }}
           </span>
         </q-toolbar-title>
         <q-btn flat round dense icon='close' v-close-popup />
@@ -28,8 +28,8 @@
                 dense
                 outlined
                 :placeholder="$t('echoCardName')"
-                :disable='isBuiltin'
-                :readonly='isBuiltin'
+                :disable='isReadonly'
+                :readonly='isReadonly'
                 class='echo-form-input echo-form-input--compact'
               />
             </div>
@@ -43,8 +43,8 @@
                 type='textarea'
                 autogrow
                 :placeholder="$t('echoCardDesc')"
-                :disable='isBuiltin'
-                :readonly='isBuiltin'
+                :disable='isReadonly'
+                :readonly='isReadonly'
                 class='echo-form-input echo-form-input--compact'
               />
             </div>
@@ -87,7 +87,7 @@
                 option-value='value'
                 emit-value
                 map-options
-                :disable='isBuiltin'
+                :disable='isReadonly'
                 class='echo-form-input echo-form-input--compact'
               >
                 <template v-slot:selected-item='scope'>
@@ -118,10 +118,10 @@
                   class='color-dot'
                   :class="[
                     { selected: form.color === c.value },
-                    isBuiltin ? 'color-dot--readonly' : ''
+                    isReadonly ? 'color-dot--readonly' : ''
                   ]"
                   :style='{ background: c.value }'
-                  @click='!isBuiltin && (form.color = c.value)'
+                  @click='!isReadonly && (form.color = c.value)'
                 />
               </div>
             </div>
@@ -142,7 +142,7 @@
               <div class='row items-center no-wrap q-gutter-xs'>
                 <div class='echo-form-label q-mb-none'>
                   Anno 源码
-                  <span v-if='isBuiltin' class='echo-form-readonly-tag'>{{ $t('echoBuiltinReadonlyTag') || '只读' }}</span>
+                  <span v-if='isReadonly' class='echo-form-readonly-tag'>{{ $t('echoBuiltinReadonlyTag') || '只读' }}</span>
                 </div>
                 <q-icon name='info' size='14px' class='echo-form-info-icon'>
                   <q-tooltip anchor='top middle' self='bottom middle' :offset='[0, 6]'>
@@ -152,7 +152,7 @@
               </div>
               <q-btn v-if='!isBuiltin' flat dense no-caps size='sm' color='teal-5' icon='refresh' label='重置模板' @click='resetTemplate' />
             </div>
-            <div ref='editorContainer' class='echo-monaco-editor' :class="{ 'echo-monaco-editor--readonly': isBuiltin }" :style='monacoEditorStyle' />
+            <div ref='editorContainer' class='echo-monaco-editor' :class="{ 'echo-monaco-editor--readonly': isReadonly }" :style='monacoEditorStyle' />
           </div>
         </div>
       </q-card-section>
@@ -163,9 +163,9 @@
           flat
           dense
           no-caps
-          :color='isBuiltin ? "primary" : "primary"'
-          :icon='isBuiltin ? "check" : undefined'
-          :label='isBuiltin ? ($t("close") || "关闭") : $t("ok")'
+          :color='isReadonly ? "primary" : "primary"'
+          :icon='isReadonly ? "check" : undefined'
+          :label='isReadonly ? ($t("close") || "关闭") : $t("ok")'
           @click='onPrimaryClick'
         />
       </q-card-actions>
@@ -504,6 +504,12 @@ export default {
     isBuiltin () {
       return Boolean(this.echo && this.echo.isBuiltin)
     },
+    isProd () {
+      return process.env.PROD === true
+    },
+    isReadonly () {
+      return this.isBuiltin && this.isProd
+    },
     monacoEditorStyle () {
       return { height: `${this.monacoEditorHeight}px` }
     }
@@ -771,15 +777,13 @@ export default {
         tabSize: 2,
         // ✅ 与 RuneFormDialog 保持一致：编辑器内长行自动软换行
         wordWrap: 'on',
-        readOnly: this.isBuiltin,
+        readOnly: this.isReadonly,
         theme: 'Memocast-Dark'
       })
       this._setupMonacoClipboard()
       this.monacoReady = true
       this.monacoEditor.onDidChangeModelContent(() => {
-        // 内置回响不可编辑，但 readOnly 已经会拦截写入；
-        // 这里再额外防御一次：避免 Monaco 在只读状态下意外事件触发
-        if (this.isBuiltin) return
+        if (this.isReadonly) return
         this.form.anno_source = this.monacoEditor.getValue()
       })
     },
@@ -794,16 +798,14 @@ export default {
       }
     },
     onPrimaryClick () {
-      if (this.isBuiltin) {
-        // 内置回响不提交任何修改，仅关闭弹框
+      if (this.isReadonly) {
         if (this.dialog) this.dialog.hide()
         return
       }
       this.submit()
     },
     submit () {
-      // 内置回响不可编辑：直接拦截提交，避免任何路径绕过 UI 把修改写回 store / DB
-      if (this.isBuiltin) {
+      if (this.isReadonly) {
         if (this.dialog) this.dialog.hide()
         return
       }

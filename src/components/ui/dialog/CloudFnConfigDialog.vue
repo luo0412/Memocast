@@ -1,18 +1,5 @@
 <template>
   <div class='cloudfn-config'>
-    <div class='row items-center no-wrap q-mb-xs panel-title'>
-      <div class='panel-title-bar bg-blue-7' />
-      <span class='text-subtitle2 text-weight-medium'>{{ $t('cloudFunction') }}</span>
-      <q-space />
-      <q-btn
-        flat dense size='sm' icon='help_outline'
-        @click='helpHandler'
-      >
-        <q-tooltip>{{ helpText }}</q-tooltip>
-      </q-btn>
-    </div>
-    <q-separator class='q-my-sm server-section-separator' />
-
     <div class='cloudfn-form'>
       <div class='text-caption text-grey-6 q-mb-sm'>
         {{ $t('cloudFunctionIntro') }}
@@ -134,41 +121,18 @@
       </q-banner>
     </div>
 
-    <q-separator class='q-my-sm server-section-separator' />
-
-    <div class='navigation-section'>
-      <div class='row items-center no-wrap q-mb-xs panel-title'>
-        <div class='panel-title-bar bg-blue-7' />
-        <span class='text-subtitle2 text-weight-medium'>{{ $t('navigationCenter') }}</span>
-      </div>
-      <q-separator class='q-my-sm server-section-separator' />
-      <div class='text-caption text-grey-6 q-mb-sm'>
-        {{ $t('navigationCenterHint') }}
-      </div>
-      <q-btn
-        unelevated
-        class='navigation-open-btn'
-        icon='explore'
-        :label="$t('openNavigationCenter')"
-        @click='openNavigationDialog'
-      />
-    </div>
-
     <bsp-app-demo-dialog v-model='demoDialogOpen' />
-    <navigation-dialog v-model='navigationDialogVisible' @go-config='onNavigationGoConfig' />
   </div>
 </template>
 
 <script>
 import cloud from 'src/services/cloud/CloudFunctionProvider'
 import BspAppDemoDialog from 'components/ui/dialog/BspAppDemoDialog'
-import NavigationDialog from 'components/ui/dialog/NavigationDialog'
 
 export default {
   name: 'CloudFnConfigDialog',
   components: {
-    BspAppDemoDialog,
-    NavigationDialog
+    BspAppDemoDialog
   },
   data () {
     return {
@@ -188,9 +152,7 @@ export default {
         { label: 'app-plus', value: 'app-plus' },
         { label: 'mp-weixin', value: 'mp-weixin' }
       ],
-      helpText: '云函数（vk-router url 化）的 baseUrl 形如 https://xxx.bspapp.com/http/router',
-      demoDialogOpen: false,
-      navigationDialogVisible: false
+      demoDialogOpen: false
     }
   },
   created () {
@@ -238,18 +200,8 @@ export default {
         this.testing = false
       }
     },
-    helpHandler () {
-      window.open('https://vkdoc.fsq.pub/client/pages/callFunctionForUrl.html', '_blank')
-    },
     openDemo () {
       this.demoDialogOpen = true
-    },
-    openNavigationDialog () {
-      this.navigationDialogVisible = true
-    },
-    onNavigationGoConfig () {
-      this.navigationDialogVisible = false
-      this.$emit('go-config')
     }
   }
 }
@@ -263,38 +215,4 @@ export default {
   max-width: 560px;
 }
 
-/* 与 SettingsDialog 中其他 tab 的 section 标题保持一致尺寸 */
-.panel-title-bar {
-  width: 3px;
-  min-height: 1rem;
-  border-radius: 1px;
-  margin-right: 8px;
-  flex-shrink: 0;
-}
-
-/* 与 .server-section-separator 保持一致间距 */
-.server-section-separator {
-  margin-top: 8px;
-  margin-bottom: 14px;
-}
-
-.navigation-section {
-  margin-top: 8px;
-  padding: 4px 2px 8px;
-}
-
-.navigation-open-btn {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #ffffff;
-  width: 100%;
-  max-width: 360px;
-}
-
-.navigation-open-btn:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-}
-
-.bg-blue-7 {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-}
 </style>

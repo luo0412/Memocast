@@ -14,6 +14,7 @@ export default {
   loadTheme: 'load-theme',
   openThemeFolder: 'open-theme-folder',
   openLogFiles: 'open-log-files',
+  openSqliteFile: 'open-sqlite-file',
   refreshThemeFolder: 'refresh-theme-folder',
   getLocalFileData: 'get-local-file-data',
   saveUploadedImage: 'save-uploaded-image',

@@ -19,6 +19,7 @@ module.exports = function (/* ctx */) {
     // --> boot files are part of "main.js"
     // https://quasar.dev/quasar-cli/boot-files
     boot: [
+      'monaco-env',
       'i18n',
       'request',
       'element-ui',
@@ -104,8 +105,9 @@ module.exports = function (/* ctx */) {
         const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin')
         cfg.plugins.push(new MonacoWebpackPlugin({
           // 只保留 Markdown 编辑器必需的语言支持
-          // 注意：不要包含 typescript/javascript，它们会触发 web worker 中的 loadForeignModule 错误
+          // ⚠️ 关键：完全排除 typescript/javascript 以防止 worker 加载错误
           languages: ['markdown', 'yaml', 'json', 'html', 'css'],
+          // 排除可能依赖 TS worker 的 features
           features: [
             // ─── 核心功能（必需）─
             'bracketMatching',
@@ -126,7 +128,8 @@ module.exports = function (/* ctx */) {
             'linesOperations',
             'links',
             'multicursor',
-            'parameterHints',
+            // ─── 排除 parameterHints（依赖 TS worker）─
+            // 'parameterHints',
             'quickCommand',
             'quickOutline',
             'referenceSearch',

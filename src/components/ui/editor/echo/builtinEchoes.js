@@ -13,6 +13,14 @@ import { banner, handlerExampleDoc, handlerAndExampleDoc, handlerPrelude } from 
 //                              字段名带 Example 后缀，运行时不会自动注册为 handler。
 //                              把字段名改成 handler 即可接管运行时副作用。
 //
+// === 分类约定（2026-07 调整）===
+//   16 个内置回响分成两类：
+//     - builtin（内置）：共 7 个 —— nice / peek / ignore / ad / diff / ref / todo
+//                       都是「标记 / 排版 / 引用 / 待办」类的"基础内置"。
+//     - showy（炫技）：  共 9 个 —— 生生不息 / 破万法 / 天行健 / 双生花 / 夺心魄
+//                       / 强运 / 替罪 / 招灾 / 离析，都是"高级回响"，有运行时副作用。
+//   用户自定义的回响默认归 marker（标记）或 typography（排版）分类。
+//
 // === 共享代码 ===
 //   banner() 与 handlerExampleDoc() 都从 './builtin-echo-shared' 导入，
 //   三个工具函数（__resolveScopeContainer / __safeQueryAll / __withAttrs）
@@ -1081,14 +1089,14 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
     anno_source: createDisperseAnnoSource(),
     isBuiltin: true
   }),
-  // ===== 待实装模板（marker 分类） =====
+  // ===== 内置基础回响（标记类：peek / ignore / ad / diff / ref / todo） =====
   Object.freeze({
     id: '__builtin_peek__',
     name: 'peek',
     desc: '高亮展示内容，支持折叠展开',
     icon: 'visibility',
     color: '#FF7043',
-    category: 'marker',
+    category: 'builtin',
     anno_source: createPeekAnnoSource(),
     isBuiltin: true
   }),
@@ -1098,7 +1106,7 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '标记为可忽略内容，视觉淡化',
     icon: 'visibility_off',
     color: '#90A4AE',
-    category: 'marker',
+    category: 'builtin',
     anno_source: createIgnoreAnnoSource(),
     isBuiltin: true
   }),
@@ -1108,7 +1116,7 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '插入广告占位或标注为广告内容',
     icon: 'campaign',
     color: '#FFB300',
-    category: 'marker',
+    category: 'builtin',
     anno_source: createAdAnnoSource(),
     isBuiltin: true
   }),
@@ -1118,7 +1126,7 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '标记差异对比内容',
     icon: 'difference',
     color: '#7E57C2',
-    category: 'marker',
+    category: 'builtin',
     anno_source: createDiffAnnoSource(),
     isBuiltin: true
   }),
@@ -1128,7 +1136,7 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '标记为参考资料，可跳转链接',
     icon: 'link',
     color: '#29B6F6',
-    category: 'marker',
+    category: 'builtin',
     anno_source: createRefAnnoSource(),
     isBuiltin: true
   }),
@@ -1138,7 +1146,7 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
     desc: '标记待办事项，可交互勾选',
     icon: 'check_box',
     color: '#26A69A',
-    category: 'marker',
+    category: 'builtin',
     anno_source: createTodoAnnoSource(),
     isBuiltin: true
   })

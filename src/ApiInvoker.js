@@ -90,6 +90,10 @@ async function openLogFiles () {
   return ipcRenderer.invoke(channels.openLogFiles)
 }
 
+async function openSqliteFile () {
+  return ipcRenderer.invoke(channels.openSqliteFile)
+}
+
 async function refreshThemeFolder () {
   return ipcRenderer.invoke(channels.refreshThemeFolder)
 }
@@ -167,6 +171,7 @@ export {
   loadTheme,
   openThemeFolder,
   openLogFiles,
+  openSqliteFile,
   refreshThemeFolder,
   getLocalFileData,
   saveUploadedImage,

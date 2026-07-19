@@ -71,6 +71,7 @@ export default {
   seconds: '秒',
   never: '永不',
   openLogFiles: '打开日志文件',
+  openSqliteFile: '打开sqlite文件',
   runeManagement: '符文管理',
   runeSectionTitle: '我的符文',
   echoManagement: '回响管理',
