@@ -1,3 +1,6 @@
+/*input{
+  min-width: 360px;
+}*/
 .city-picker-input {
     opacity: 0 !important;
     top: -9999px;
@@ -7,33 +10,37 @@
 
 .city-picker-span {
     position: relative;
-    display: block;
+    display: inline-block;
     outline: 0;
     -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
-    border-bottom: 1px solid #ccc;
+   /* border: 1px solid #ccc;*/
+      border: 1px solid #e6e6e6;
     background-color: #fff;
     color: #ccc;
+    width: 100%;
     cursor: pointer;
+    border-radius: 0 2px 2px 0;
 }
 
 .city-picker-span > .placeholder {
     color: #aaa;
+    padding-left:10px;
 }
 
 .city-picker-span > .arrow {
     position: absolute;
     top: 50%;
-    right: 8px;
+    right: 30px;
     width: 10px;
     margin-top: -3px;
     height: 5px;
-    background: url(../images/drop-arrow.png) -10px -25px no-repeat;
+    background: url(drop-arrow.png) -10px -25px no-repeat;
 }
 
-.city-picker-span.focus,
+/*.city-picker-span.focus,
 .city-picker-span.open {
     border-bottom-color: #46A4FF;
-}
+}*/
 
 .city-picker-span.open > .arrow {
     background-position: -10px -10px;
@@ -42,6 +49,7 @@
 .city-picker-span > .title > span {
     color: #333;
     padding: 5px;
+    font-size: 14px;
     border-radius: 3px;
 }
 
@@ -60,16 +68,19 @@
     display: none;
     min-width: 330px;
     margin-bottom: 20px;
+   
 }
 
 .city-select-wrap {
-    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0px 5px rgba(0, 0, 0, 0.2);
+     border: 1px solid #ddd;
 }
 
 .city-select-tab {
     border-bottom: 1px solid #ccc;
     background: #f0f0f0;
     font-size: 13px;
+    line-height: 22px;
 }
 
 .city-select-tab > a {
@@ -89,7 +100,8 @@
 .city-select-tab > a.active {
     background: #fff;
     border-bottom: 1px solid #fff;
-    color: #46A4FF;
+    /*color: #46A4FF;*/
+    color: #f58664;
 }
 
 .city-select-tab > a:first-child {
@@ -104,8 +116,7 @@
     width: 100%;
     min-height: 10px;
     background-color: #fff;
-    padding: 10px 15px;
-	box-sizing: border-box;
+    padding: 10px 0px;
 }
 
 .city-select {
@@ -152,11 +163,23 @@
 .city-select a:focus {
     background-color: #f1f8ff;
     border-radius: 2px;
-    color: #46A4FF;
+    color: #f58664;
 }
 
 .city-select a.active {
-    background-color: #46A4FF;
+    background-color: #f58664;
     color: #fff;
     border-radius: 2px;
+}
+
+.icon_ca {
+    background: url(/content/images/icon_ca.png) no-repeat center;
+    width: 15px;
+    height: 15px;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    margin-top: -7px;
+    z-index: 99;
+    cursor: pointer;
 }

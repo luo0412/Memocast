@@ -1,39 +1,18 @@
-/*!
- * CityPicker v@VERSION
- * https://github.com/tshi0912/citypicker
- *
- * Copyright (c) 2015-@YEAR Tao Shi
- * Released under the MIT license
- *
- * Date: @DATE
- */
-
-(function (factory) {
-    if (typeof define === 'function' && define.amd) {
-        // AMD. Register as anonymous module.
-        define(['jquery', 'ChineseDistricts'], factory);
-    } else if (typeof exports === 'object') {
-        // Node / CommonJS
-        factory(require('jquery'), require('ChineseDistricts'));
-    } else {
-        // Browser globals.
-        factory(jQuery, ChineseDistricts);
-    }
-})(function ($, ChineseDistricts) {
-
+layui.define(['jquery'], function (exports) {
+    var $ = layui.$;
     'use strict';
-
     if (typeof ChineseDistricts === 'undefined') {
         throw new Error('The file "city-picker.data.js" must be included first!');
     }
-
     var NAMESPACE = 'citypicker';
     var EVENT_CHANGE = 'change.' + NAMESPACE;
-    var PROVINCE = 'province';
-    var CITY = 'city';
-    var DISTRICT = 'district';
 
-    function CityPicker(element, options) {
+    // 城市选择类
+    var CityPicker = function (element, options) {
+        this.PROVINCE = 'provinceId';
+        this.CITY = 'cityId';
+        this.DISTRICT = 'districtId';
+
         this.$element = $(element);
         this.$dropdown = null;
         this.options = $.extend({}, CityPicker.DEFAULTS, $.isPlainObject(options) && options);
@@ -41,27 +20,22 @@
         this.dems = [];
         this.needBlur = false;
         this.init();
-    }
+    };
 
     CityPicker.prototype = {
         constructor: CityPicker,
-
         init: function () {
-
-            this.codeRender();
-
             this.defineDems();
-
             this.render();
-
             this.bind();
-
             this.active = true;
-        },
-
-        codeRender: function(){
-            var code = this.$element.attr('code');
-            if(code!==undefined && code !== '' && !isNaN(Number(code))) this.$element.val($.fn.citypicker.getAddressbyCodeId(code));
+            var _this = this;
+            $(".icon_ca").on('click', function () {
+                $("#" + this.PROVINCE).val();
+                $("#" + this.CITY).val();
+                $("#" + this.DISTRICT).val();
+                _this.reset();
+            });
         },
 
         render: function () {
@@ -69,21 +43,21 @@
                 placeholder = this.$element.attr('placeholder') || this.options.placeholder,
                 textspan = '<span class="city-picker-span" style="' +
                     this.getWidthStyle(p.width) + 'height:' +
-                    p.height + 'px;line-height:' + (p.height - 1) + 'px;">' +
+                    (p.height - 2) + 'px;line-height:' + (p.height - 1) + 'px;">' +
                     (placeholder ? '<span class="placeholder">' + placeholder + '</span>' : '') +
-                    '<span class="title"></span><div class="arrow"></div>' + '</span>',
+                    '<span class="title"></span><div class="arrow"></div>' + '<i class="icon_ca"></i></span>',
 
                 dropdown = '<div class="city-picker-dropdown" style="left:0px;top:100%;' +
                     this.getWidthStyle(p.width, true) + '">' +
                     '<div class="city-select-wrap">' +
                     '<div class="city-select-tab">' +
-                    '<a class="active" data-count="province">省份</a>' +
-                    (this.includeDem('city') ? '<a data-count="city">城市</a>' : '') +
-                    (this.includeDem('district') ? '<a data-count="district">区县</a>' : '') + '</div>' +
+                    '<a class="active" data-count="' + this.PROVINCE + '">省份</a>' +
+                    (this.includeDem(this.CITY) ? '<a data-count="' + this.CITY + '">城市</a>' : '') +
+                    (this.includeDem(this.DISTRICT) ? '<a data-count="' + this.DISTRICT + '">区县</a>' : '') + '</div>' +
                     '<div class="city-select-content">' +
-                    '<div class="city-select province" data-count="province"></div>' +
-                    (this.includeDem('city') ? '<div class="city-select city" data-count="city"></div>' : '') +
-                    (this.includeDem('district') ? '<div class="city-select district" data-count="district"></div>' : '') +
+                    '<div class="city-select province ' + this.PROVINCE + '" data-count="' + this.PROVINCE + '"></div>' +
+                    (this.includeDem(this.CITY) ? '<div class="city-select ' + this.CITY + '" data-count="' + this.CITY + '"></div>' : '') +
+                    (this.includeDem(this.DISTRICT) ? '<div class="city-select ' + this.DISTRICT + '" data-count="' + this.DISTRICT + '"></div>' : '') +
                     '</div></div>';
 
             this.$element.addClass('city-picker-input');
@@ -114,14 +88,24 @@
                 }
                 this.output(type);
             }, this));
-            this.tab(PROVINCE);
+            this.tab(this.PROVINCE);
             this.feedText();
             this.feedVal();
         },
 
         defineDems: function () {
             var stop = false;
-            $.each([PROVINCE, CITY, DISTRICT], $.proxy(function (i, type) {
+            if (this.options.provincename !== "") {
+                this.PROVINCE = this.options.provincename;
+            }
+            if (this.options.cityname !== "") {
+                this.CITY = this.options.cityname;
+            }
+            if (this.options.districtname !== "") {
+                this.DISTRICT = this.options.districtname;
+            }
+
+            $.each([this.PROVINCE, this.CITY, this.DISTRICT], $.proxy(function (i, type) {
                 if (!stop) {
                     this.dems.push(type);
                 }
@@ -198,7 +182,6 @@
 
         bind: function () {
             var $this = this;
-
             $(document).on('click', (this._mouteclick = function (e) {
                 var $target = $(e.target);
                 var $dropdown, $span, $input;
@@ -266,7 +249,7 @@
                     });
                     $(this).trigger(EVENT_CHANGE);
                     $this.feedText();
-                    $this.feedVal(true);
+                    $this.feedVal();
                     if (last) {
                         $this.close();
                     }
@@ -279,25 +262,24 @@
             }).on('mousedown', function () {
                 $this.needBlur = false;
             });
-
-            if (this.$province) {
-                this.$province.on(EVENT_CHANGE, (this._changeProvince = $.proxy(function () {
-                    this.output(CITY);
-                    this.output(DISTRICT);
-                    this.tab(CITY);
+            if (this['$' + this.PROVINCE]) {
+                this['$' + this.PROVINCE].on(EVENT_CHANGE, (this._changeProvince = $.proxy(function () {
+                    this.output(this.CITY);
+                    this.output(this.DISTRICT);
+                    this.tab(this.CITY);
                 }, this)));
             }
 
-            if (this.$city) {
-                this.$city.on(EVENT_CHANGE, (this._changeCity = $.proxy(function () {
-                    this.output(DISTRICT);
-                    this.tab(DISTRICT);
+            if (this['$' + this.CITY]) {
+                this['$' + this.CITY].on(EVENT_CHANGE, (this._changeCity = $.proxy(function () {
+                    this.output(this.DISTRICT);
+                    this.tab(this.DISTRICT);
                 }, this)));
             }
         },
 
         open: function (type) {
-            type = type || PROVINCE;
+            type = type || this.PROVINCE;
             this.$dropdown.show();
             this.$textspan.addClass('open').addClass('focus');
             this.tab(type);
@@ -325,15 +307,15 @@
             this.$dropdown.off('click');
             this.$dropdown.off('mousedown');
 
-            if (this.$province) {
-                this.$province.off(EVENT_CHANGE, this._changeProvince);
+            if (this['$' + this.PROVINCE]) {
+                this['$' + this.PROVINCE].off(EVENT_CHANGE, this._changeProvince);
             }
 
             if (this.$city) {
                 this.$city.off(EVENT_CHANGE, this._changeCity);
             }
         },
-
+        // 动态添加的input无法删除，切换请求有问题
         getText: function () {
             var text = '';
             this.$dropdown.find('.city-select')
@@ -342,7 +324,7 @@
                         type = $(this).data('count');
                     if (item) {
                         text += ($(this).hasClass('province') ? '' : '/') + '<span class="select-item" data-count="' +
-                            type + '" data-code="' + item.code + '">' + item.address + '</span>';
+                            type + '" data-code="' + item.code + '">' + item.address + '</span><input type="hidden" id="' + type + '" name="' + type + '" value="' + item.code + '"  />';
                     }
                 });
             return text;
@@ -356,23 +338,15 @@
             var text = this.getText();
             if (text) {
                 this.$textspan.find('>.placeholder').hide();
+                // this.$textspan.find('>.title').siblings('input').val('');
+                //this.$textspan.find('>.title').children().remove();
+                this.$textspan.find('>.title').children("input").val('');
                 this.$textspan.find('>.title').html(this.getText()).show();
             } else {
+
                 this.$textspan.find('>.placeholder').text(this.getPlaceHolder()).show();
                 this.$textspan.find('>.title').html('').hide();
             }
-        },
-
-        getCode: function (count) {
-            var obj = {}, arr = [];
-            this.$textspan.find('.select-item')
-                .each(function () {
-                    var code = $(this).data('code');
-                    var count = $(this).data('count');
-                    obj[count] = code;
-                    arr.push(code);
-                });
-            return count ? obj[count] : arr.join('/');
         },
 
         getVal: function () {
@@ -387,15 +361,16 @@
             return text;
         },
 
-        feedVal: function (trigger) {
+        feedVal: function () {
             this.$element.val(this.getVal());
-            if(trigger) {
-                this.$element.trigger('cp:updated');
-            }
         },
 
         output: function (type) {
             var options = this.options;
+            var PROVINCE = this.PROVINCE;
+            var CITY = this.CITY;
+            var DISTRICT = this.DISTRICT;
+
             //var placeholders = this.placeholders;
             var $select = this['$' + type];
             var data = type === PROVINCE ? {} : [];
@@ -415,8 +390,8 @@
 
             code = (
                 type === PROVINCE ? 86 :
-                    type === CITY ? this.$province && this.$province.find('.active').data('code') :
-                        type === DISTRICT ? this.$city && this.$city.find('.active').data('code') : code
+                    type === CITY ? this['$' + PROVINCE] && this['$' + PROVINCE].find('.active').data('code') :
+                        type === DISTRICT ? this['$' + CITY] && this['$' + CITY].find('.active').data('code') : code
             );
 
             districts = $.isNumeric(code) ? ChineseDistricts[code] : null;
@@ -455,13 +430,13 @@
                     }
                 });
             }
-
             $select.html(type === PROVINCE ? this.getProvinceList(data) :
                 this.getList(data, type));
             $select.data('item', matched);
         },
 
         getProvinceList: function (data) {
+            var PROVINCE = this.PROVINCE;
             var list = [],
                 $this = this,
                 simple = this.options.simple;
@@ -477,7 +452,7 @@
                         ' class="' +
                         (m.selected ? ' active' : '') +
                         '">' +
-                        ( simple ? $this.simplize(m.address, PROVINCE) : m.address) +
+                        (simple ? $this.simplize(m.address, PROVINCE) : m.address) +
                         '</a>');
                 });
                 list.push('</dd></dl>');
@@ -500,7 +475,7 @@
                     ' class="' +
                     (n.selected ? ' active' : '') +
                     '">' +
-                    ( simple ? $this.simplize(n.address, type) : n.address) +
+                    (simple ? $this.simplize(n.address, type) : n.address) +
                     '</a>');
             });
             list.push('</dd></dl>');
@@ -510,12 +485,12 @@
 
         simplize: function (address, type) {
             address = address || '';
-            if (type === PROVINCE) {
+            if (type === this.PROVINCE) {
                 return address.replace(/[省,市,自治区,壮族,回族,维吾尔]/g, '');
-            } else if (type === CITY) {
+            } else if (type === this.CITY) {
                 return address.replace(/[市,地区,回族,蒙古,苗族,白族,傣族,景颇族,藏族,彝族,壮族,傈僳族,布依族,侗族]/g, '')
                     .replace('哈萨克', '').replace('自治州', '').replace(/自治县/, '');
-            } else if (type === DISTRICT) {
+            } else if (type === this.DISTRICT) {
                 return address.length > 2 ? address.replace(/[市,区,县,旗]/g, '') : address;
             }
         },
@@ -537,6 +512,10 @@
             this.$element.val(null).trigger('change');
         },
 
+        setValue: function (address) {  //河南省/信阳市/新县
+            this.$element.val(address).trigger('change');
+        }, 
+
         destroy: function () {
             this.unbind();
             this.$element.removeData(NAMESPACE).removeClass('city-picker-input');
@@ -545,14 +524,18 @@
         }
     };
 
+    // 默认值和参数
     CityPicker.DEFAULTS = {
         simple: false,
         responsive: false,
         placeholder: '请选择省/市/区',
-        level: 'district',
-        province: '',
-        city: '',
-        district: ''
+        level: 'district',// 级别
+        provincename: '',//input hidden 的值
+        cityname: '',//input hidden 的值
+        districtname: '',//input hidden 的值
+        province: '河南省',// 默认省份名称
+        city: '',// 默认地市名称
+        district: ''// 默认区县名称
     };
 
     CityPicker.setDefaults = function (options) {
@@ -565,22 +548,18 @@
     // Register as jQuery plugin
     $.fn.citypicker = function (option) {
         var args = [].slice.call(arguments, 1);
-
         return this.each(function () {
             var $this = $(this);
             var data = $this.data(NAMESPACE);
             var options;
             var fn;
-
             if (!data) {
                 if (/destroy/.test(option)) {
                     return;
                 }
-
                 options = $.extend({}, $this.data(), $.isPlainObject(option) && option);
                 $this.data(NAMESPACE, (data = new CityPicker(this, options)));
             }
-
             if (typeof option === 'string' && $.isFunction(fn = data[option])) {
                 fn.apply(data, args);
             }
@@ -596,52 +575,11 @@
         return this;
     };
 
-    // 根据code查询地址
-    $.fn.citypicker.getAddressbyCodeId = function(code_id){
-    	var city = ChineseDistricts;
-    	var code = city[''+code_id];
-    	var addr = '';
-    	var province = '';
-    	var province_code = '';
-    	var city_str = '';
-    	var county = '';
-    	if(code_id.substring(0,2)==='44'){
-    		province = '广东省';
-    		province_code = '440000';
-    	}else{
-    		$.each(city['86'], function(i,item) {
-    				$.each(item, function(j,index) {
-    					if(index['code']===code_id.substring(0,2)+'0000'){
-    						province = index['address'];
-    						province_code = index['code'];
-    						return false;
-    					}
-    				});
-    		});
-    	}
-    	if(code_id.substring(2,4).indexOf('00')==-1){
-    		var city_code = code_id.substring(0,4)+'00';
-    		 city_str = city[province_code][city_code];
-    	}
-    	if(code===undefined){
-    		//440103
-    		code = code_id.substring(0,4)+"00";
-    		if(city[code] == null) return;
-    		addr = city[code][code_id];
-    		return addr = province+'/'+city_str+'/'+addr;
-    	}else{
-    		if(code_id.substring(2,4).indexOf('00')!=-1){
-    			//440000
-    			return addr = province;
-    		}else{
-    			//440100
-    			var city_city = city[code_id.substring(0,2)+'0000'];
-    			return addr = province +'/'+city_city[code_id];
-    		}
-        }
-    }
+   // 自动扫描机制注释掉
+    //$(function () {
+    //    $('[data-toggle="city-picker"]').citypicker();
+    //});
 
-    $(function () {
-        $('[data-toggle="city-picker"]').citypicker();
-    });
+
+    exports('citypicker', CityPicker);
 });
