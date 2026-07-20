@@ -149,14 +149,13 @@
             <div class='row items-center justify-between q-mb-xs'>
               <div class='rune-form-label q-mb-none'>模板内容</div>
               <div class='row items-center no-wrap q-gutter-xs'>
-                <cascader-panel-picker
-                  v-model='cascaderValue'
-                  :data='cascaderData'
-                  :level='2'
-                  placeholder='选择分类 / 模板'
+                <category-picker
+                  v-model='selectedPresetKey'
+                  :option='categoryPickerOption'
+                  type='object'
+                  :show-all-levels='true'
                   :show-child-count='true'
-                  popover-width='320'
-                  separator='/'
+                  placeholder='选择分类 / 模板'
                   class='preset-template-picker'
                   @change='onPresetPicked'
                 />
@@ -414,8 +413,8 @@ import * as monaco from 'monaco-editor'
 import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY, getRuneCategoryValue } from 'src/utils/runeEchoCategoriesConst'
 import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
 import { createBlankTemplate, createInheritDemoTemplate } from './rune-templates.js'
-import CascaderPanelPicker from 'components/cityPicker/CascaderPanelPicker'
 import RemoteRuneImportDialog from './RemoteRuneImportDialog.vue'
+import CategoryPicker from 'components/category/CategoryPickerV2'
 import runeTemplateService from 'src/services/RuneTemplateService'
 
 const createUuid = () => {
@@ -454,7 +453,7 @@ export default {
     event: 'input'
   },
   components: {
-    CascaderPanelPicker,
+    CategoryPicker,
     RemoteRuneImportDialog
   },
   props: {
@@ -498,9 +497,7 @@ export default {
         inherit_from_previous: 1
       },
       selectedPresetKey: null,
-      cascaderValue: '',
-      cascaderData: [],
-      _templateMap: {},
+      categoryPickerTree: [],
       remoteImportDialogVisible: false,
       remoteImportUrl: '',
       remoteImportCategory: '',
@@ -574,6 +571,42 @@ export default {
       set (next) {
         if (!this.form) return
         this.form.inherit_from_previous = next ? 1 : 0
+      }
+    },
+    categoryPickerOption () {
+      const groups = new Map()
+      const i18nMap = {}
+      for (const opt of (this.runeCategoryOptions || [])) {
+        i18nMap[opt.value] = opt.label
+      }
+      for (const row of (this.categoryPickerTree || [])) {
+        const key = (row && row.category_key) || 'general'
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key).push(row)
+      }
+      const tree = []
+      for (const [key, items] of groups.entries()) {
+        const children = items.map(item => ({
+          key: 'tpl::' + item.id,
+          title: item.name || item.id,
+          desc: item.desc || '',
+          _isCategory: false,
+          _templateRow: item,
+          children: []
+        }))
+        tree.push({
+          key: 'cat::' + key,
+          title: i18nMap[key] || key,
+          _isCategory: true,
+          _templateRow: null,
+          children
+        })
+      }
+      tree.sort((a, b) => String(a.title).localeCompare(String(b.title)))
+      return {
+        datas: tree,
+        fieldNames: { key: 'key', title: 'title', children: 'children' },
+        selectable: (node) => !!(node && node.value && node.value._isCategory === false)
       }
     }
   },
@@ -879,7 +912,6 @@ export default {
       const nextTemplate = createInheritDemoTemplate()
       this.form.template = nextTemplate
       this.selectedPresetKey = null
-      this.cascaderValue = ''
       if (this.monacoEditor && this.monacoReady) {
         this.monacoEditor.setValue(nextTemplate)
       }
@@ -890,7 +922,10 @@ export default {
         return
       }
       this.selectedPresetKey = picked
-      // CascaderPanelPicker 的 change 事件
+      // 兼容新旧形态：
+      //  - 旧 CategoryPicker：picked 本身就是叶子数据对象（带 _templateRow / _isCategory）
+      //  - 新 CategoryPicker（heyui 复刻）：picked 是规范化节点，原始数据挂在 picked.value
+      const raw = (picked && picked.value) || picked
       const row = raw && raw._templateRow
       if (!row) {
         // 点中分类节点本身，只下钻，不替换编辑器内容
@@ -921,85 +956,15 @@ export default {
           return opt ? opt.label : key
         }
         const grouped = await runeTemplateService.listGroupedByCategory(resolver, force)
-        // 构建 CascaderPanelPicker 所需的树形数据
-        const i18nMap = {}
-        for (const opt of (this.runeCategoryOptions || [])) {
-          i18nMap[opt.value] = opt.label
+        const flat = []
+        for (const g of (grouped || [])) {
+          for (const it of (g.items || [])) flat.push(it)
         }
-        // 维护模板 ID -> 原始数据的映射
-        this._templateMap = {}
-        const cascader = []
-        for (const group of (grouped || [])) {
-          const categoryKey = group.key || 'general'
-          const children = (group.items || []).map(item => {
-            this._templateMap['tpl_' + item.id] = item
-            return {
-              code: 'tpl_' + item.id,
-              name: item.name || item.id,
-              children: null
-            }
-          })
-          if (children.length > 0) {
-            cascader.push({
-              code: 'cat_' + categoryKey,
-              name: i18nMap[categoryKey] || categoryKey,
-              children
-            })
-          }
-        }
-        cascader.sort((a, b) => String(a.name).localeCompare(String(b.name)))
-        this.cascaderData = cascader
+        this.categoryPickerTree = flat
       } catch (e) {
         console.warn('[RuneFormDialog] loadTemplatePicker failed:', e && e.message)
-        this.cascaderData = []
-        this._templateMap = {}
+        this.categoryPickerTree = []
       }
-    },
-    onPresetPicked (value, selectedObj) {
-      // CascaderPanelPicker 的 change 事件：value 是路径字符串，selectedObj 是选中对象数组
-      if (!value || !selectedObj || selectedObj.length < 2) {
-        return
-      }
-      const categoryItem = selectedObj[0]
-      const templateItem = selectedObj[1]
-      if (!templateItem) return
-
-      // 从 cascaderData 中查找对应的模板原始数据
-      const templateRow = this.findTemplateByCode(templateItem.code)
-      if (!templateRow) {
-        console.warn('[RuneFormDialog] onPresetPicked: template not found by code:', templateItem.code)
-        return
-      }
-
-      if (templateRow.name && !this.form.name) this.form.name = templateRow.name
-      if (templateRow.desc && !this.form.desc) this.form.desc = templateRow.desc
-      if (templateRow.category_key) this.form.category = templateRow.category_key
-
-      const nextTemplate = templateRow.template || createBlankTemplate()
-      this.form.template = nextTemplate
-      if (this.monacoEditor && this.monacoReady) {
-        this.monacoEditor.setValue(nextTemplate)
-        this.$nextTick(() => {
-          if (this.monacoEditor) this.monacoEditor.focus()
-        })
-      }
-    },
-    findTemplateByCode (code) {
-      // code 格式为 'tpl_' + id
-      if (!code || !code.startsWith('tpl_')) return null
-      const templateId = code.slice(4)
-      // 从 cascaderData 遍历查找
-      for (const cat of this.cascaderData) {
-        if (cat.children) {
-          const found = cat.children.find(t => t.code === code)
-          if (found) {
-            // 需要返回原始模板数据，临时挂载在 name 属性上用于查找
-            // 改用 data-raw 属性方式
-            return this._templateMap && this._templateMap[templateId]
-          }
-        }
-      }
-      return null
     },
     openRemoteImportDialog () {
       this.remoteImportError = ''
@@ -1022,15 +987,14 @@ export default {
         await this.loadTemplatePicker(true)
         const newRow = res.data
         if (newRow) {
-          const categoryKey = newRow.category_key || this.form.category || DEFAULT_RUNE_CATEGORY
-          const categoryLabel = this.runeCategoryOptions.find(o => o.value === categoryKey)?.label || categoryKey
-          this.cascaderValue = categoryLabel + ' / ' + (newRow.name || newRow.id)
-          this.$nextTick(() => {
-            this.onPresetPicked(this.cascaderValue, [
-              { code: 'cat_' + categoryKey, name: categoryLabel },
-              { code: 'tpl_' + newRow.id, name: newRow.name }
-            ])
-          })
+          this.selectedPresetKey = {
+            key: 'tpl::' + newRow.id,
+            title: newRow.name,
+            _isCategory: false,
+            _templateRow: newRow,
+            children: []
+          }
+          this.onPresetPicked(this.selectedPresetKey)
         }
         this.remoteImportDialogVisible = false
       } catch (e) {
