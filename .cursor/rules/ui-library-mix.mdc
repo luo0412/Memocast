@@ -1,0 +1,248 @@
+---
+description: Element-UI / Quasar / Ant Design Vue / HeyUI 混用规范
+alwaysApply: true
+---
+
+# UI 库混用规范
+
+本项目使用多种 UI 库（Element-UI、Quasar、Ant Design Vue、HeyUI），混用是**正常现象**，无需规避。根据 Feature / Component 类型决定优先使用哪个库。
+
+---
+
+## 1. 优先级总览
+
+| 优先级 | UI 库 | 适用场景 |
+|--------|-------|----------|
+| **1st** | **Quasar** | Electron 主进程、窗口管理、系统级组件、跨平台桌面 UI |
+| **2nd** | **Element-UI** | 笔记编辑区、Markdown 内容、Muya 编辑器、表单、表格、导航等**通用组件** |
+| **3rd** | **Ant Design Vue** | 仅当 Element-UI 缺少关键功能时使用（如特殊日期范围选择、树形表格） |
+| **Last** | **HeyUI** | 仅 `Category`、`CategoryPicker` 分类选择组件（其他场景不用） |
+
+---
+
+## 2. 按 Feature 划分
+
+### 2.1 Electron / 主进程 / 窗口管理
+
+**优先 Quasar**
+
+- `q-btn`、`q-icon`、`q-menu`、`q-dialog`、`q-tooltip`
+- `q-tabs`、`q-toolbar`、`q-layout`
+- 窗口控制栏（最小化/最大化/关闭）
+- 系统托盘、通知
+
+```html
+<!-- ✅ 正确：窗口相关用 Quasar -->
+<q-btn flat round icon="close" @click="closeWindow" />
+<q-dialog v-model="showDialog">
+  <q-card>...</q-card>
+</q-dialog>
+
+<!-- ❌ 错误：窗口相关不要用 Element-UI -->
+<el-button icon="el-icon-close">关闭</el-button>
+```
+
+### 2.2 笔记编辑区 / Muya 编辑器
+
+**优先 Element-UI**
+
+- `el-dialog`、`el-popover`、`el-tooltip`
+- `el-form`、`el-input`、`el-select`、`el-switch`
+- 编辑器内浮层、快捷菜单
+
+```html
+<!-- ✅ 正确：编辑器区域用 Element-UI -->
+<el-popover placement="top" trigger="click">
+  <div class="format-toolbar">
+    <el-button size="mini" @click="bold">B</el-button>
+  </div>
+</el-popover>
+
+<!-- ❌ 错误：编辑器内不要引入 Quasar 组件 -->
+<q-btn dense flat>B</q-btn>
+```
+
+### 2.3 设置面板 / 配置页
+
+**优先 Element-UI**
+
+- 表单组件（`el-form`、`el-input-number`、`el-switch`）
+- 按钮、标签、弹框等通用组件
+
+**HeyUI 仅用于分类选择**
+
+- 当需要树形分类选择器时，使用 `Category`、`CategoryPicker`
+- 其他场景不用 HeyUI
+
+```html
+<!-- ✅ 正确：设置页用 Element-UI -->
+<el-form-item label="同步间隔">
+  <el-input-number v-model="interval" />
+</el-form-item>
+<el-button type="primary" @click="save">保存</el-button>
+
+<!-- ✅ 正确：分类选择用 HeyUI -->
+<CategoryPicker v-model="selectedCategory" />
+```
+
+### 2.4 数据展示 / 表格
+
+**优先 Element-UI**
+
+- `el-table`、`el-pagination`
+- `el-tag`（用于状态标签）
+
+**仅当需要树形表格时才考虑 Ant Design Vue**
+
+```html
+<!-- ✅ 正确：通用表格用 Element-UI -->
+<el-table :data="tableData">
+  <el-table-column prop="title" label="标题" />
+  <el-table-column label="状态">
+    <template slot-scope="{ row }">
+      <el-tag :type="row.active ? 'success' : 'info'">
+        {{ row.active ? '启用' : '停用' }}
+      </el-tag>
+    </template>
+  </el-table-column>
+</el-table>
+```
+
+### 2.5 实验性功能 / Rune / Echo / CloudFn
+
+**优先 Element-UI**（与编辑器区域一致）
+
+- 符文表单、回响配置、云函数设置
+- 独立弹框/抽屉用 `el-drawer`、`el-dialog`
+
+---
+
+## 3. 按组件类型划分
+
+### 3.1 Dialog / Drawer
+
+| 场景 | 推荐库 |
+|------|--------|
+| 编辑器内浮层 | `el-dialog` |
+| 设置抽屉 | `el-drawer` |
+| Electron 窗口内弹框 | `q-dialog` |
+| 全局确认框 | `MessageBox.confirm` (Element-UI) |
+
+### 3.2 Button
+
+| 场景 | 推荐库 |
+|------|--------|
+| 笔记内容区按钮 | `el-button` |
+| Electron 主进程按钮 | `q-btn` |
+| 设置页按钮 | `el-button` |
+| 操作菜单项 | `el-button` |
+
+### 3.3 Form 组件
+
+**统一使用 Element-UI**
+
+- `el-form`、`el-form-item`
+- `el-input`、`el-select`、`el-switch`、`el-slider`
+- `el-radio-group`、`el-checkbox-group`
+- `el-input-number`、`el-color-picker`
+
+**分类选择使用 HeyUI**
+
+- `Category`、`CategoryPicker`（仅此场景用 HeyUI）
+
+```html
+<!-- ✅ 正确：表单区域统一用 Element-UI -->
+<el-form :model="form" :rules="rules" label-width="100px">
+  <el-form-item label="名称">
+    <el-input v-model="form.name" />
+  </el-form-item>
+  <el-form-item label="分类">
+    <CategoryPicker v-model="form.categoryId" />
+  </el-form-item>
+</el-form>
+```
+
+### 3.4 Navigation
+
+| 场景 | 推荐库 |
+|------|--------|
+| 侧边导航栏 | Quasar `q-list` + `q-item` |
+| 标签页 | `el-tabs` |
+| 面包屑 | `el-breadcrumb` |
+| 分页 | `el-pagination` |
+
+### 3.5 Feedback 组件
+
+| 场景 | 推荐库 |
+|------|--------|
+| Message 提示 | `this.$message` (Element-UI) |
+| Notification 通知 | `this.$notify` (Element-UI) |
+| Loading | `el-loading` 或 `q-spinna` |
+| Progress | `el-progress` 或 `q-linear-progress` |
+
+---
+
+## 4. 混用原则
+
+### 4.1 同区域一致性
+
+同一 Feature 区域内尽量保持 UI 库统一，避免同一弹框内混用不同库的基础组件。
+
+```html
+<!-- ❌ 避免：同一 dialog 内混用 -->
+<el-dialog title="设置">
+  <el-form-item label="名称">
+    <q-input v-model="name" />  <!-- ❌ Quasar input 混入 -->
+  </el-form-item>
+</el-dialog>
+```
+
+### 4.2 全局基础组件
+
+全局注册的组件（如 `Message`、`Notification`、`Loading`）统一使用 Element-UI，无需切换。
+
+```javascript
+// ✅ 全局反馈统一用 Element-UI
+this.$message.success('保存成功')
+this.$notify({ title: '提示', message: '操作完成' })
+```
+
+### 4.3 样式隔离
+
+混用时注意样式变量是否冲突：
+
+- Quasar 使用自己的 CSS 变量（`--q-color-*`）
+- Element-UI 使用 `--el-color-*`
+- 如需覆盖，单独写 scoped 样式或用 `!important`
+
+```scss
+/* 在 Element-UI 区域内使用 Quasar 组件时 */
+.my-section {
+  ::v-deep .q-btn {
+    /* 单独覆盖 Quasar 按钮样式 */
+    background: var(--el-color-primary);
+  }
+}
+```
+
+---
+
+## 5. 快速决策表
+
+遇到组件选择时，按顺序问自己：
+
+1. **是 Electron 窗口/系统级 UI 吗？** → 用 **Quasar**
+2. **需要树形分类选择（Category/CategoryPicker）吗？** → 用 **HeyUI**（仅此场景）
+3. **其他所有场景** → 用 **Element-UI**
+4. **Element-UI 真的做不到吗？** → 用 **Ant Design Vue**
+
+---
+
+## 6. 迁移指引
+
+当需要将现有组件从 A 库迁移到 B 库时：
+
+1. 确认该 Feature 区域的目标 UI 库（按上表）
+2. 检查迁移是否有样式/交互回归风险
+3. 优先迁移 Dialog、Drawer、Form 等核心交互组件
+4. 不强求一次性迁移完毕，允许渐进式改造

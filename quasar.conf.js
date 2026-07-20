@@ -29,14 +29,16 @@ module.exports = function (/* ctx */) {
       'electron-clipboard',
       'jxgraph',
       'rune-deps',
-      'hel-micro-renderer'
+      'hel-micro-renderer',
+      'heyui'
     ],
 
     // https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-css
     css: [
       // Quasar prepends 'src/css/' to every entry; use '~' to escape and
       // point at the flattened src/assets/css/ instead.
-      { path: '~/src/assets/css/style.css' }
+      { path: '~/src/assets/css/style.css' },
+      { path: '~/src/css/heyui.css' }
     ],
 
     // https://github.com/quasarframework/quasar/tree/dev/extras

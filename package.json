@@ -89,6 +89,7 @@
     "flowchart.js": "^1.13.0",
     "github-markdown-css": "^3.0.1",
     "hel-micro": "^4.15.3",
+    "heyui": "^1.28.0",
     "html-tags": "^3.1.0",
     "html2canvas": "^1.0.0-rc.7",
     "joplin-turndown-plugin-gfm": "^1.0.12",

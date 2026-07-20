@@ -43,7 +43,7 @@
         :label="viewOnly ? resolvedViewLabel : resolvedEditLabel"
         :color='isBuiltin ? "white" : undefined'
         class='rune-card-footer-btn'
-        @click='$emit("edit", rune)'
+        @click.stop='$emit("edit", rune)'
       />
       <q-btn
         v-if='!disableDelete'
@@ -51,7 +51,7 @@
         :label="resolvedDeleteLabel"
         color='red-3'
         class='rune-card-footer-btn-right'
-        @click='$emit("delete", rune)'
+        @click.stop='$emit("delete", rune)'
       />
       <span v-else class='rune-card-footer-spacer' />
     </div>

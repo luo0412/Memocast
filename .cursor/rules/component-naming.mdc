@@ -1,0 +1,299 @@
+---
+description: Vue/JS/CSS 文件名与引用命名规范
+alwaysApply: true
+---
+
+# 文件名与引用命名规范（小驼峰 + 语义前缀/后缀）
+
+## 核心原则
+
+1. **文件名优先使用小驼峰（lowerCamelCase）**，除非有无法抗拒的技术限制
+2. **JS 文件名须与所在文件夹呈前缀/后缀关系**——文件夹名是语义类别，文件名须携带同类语义词
+3. **CSS/样式文件**同样遵循语义前缀/后缀约定
+
+---
+
+## 1. JS 文件夹与文件命名（前后缀关系）
+
+### 规则
+
+JS 文件名**必须**与所在文件夹呈现前缀或后缀关系：
+- 文件夹名 = 语义类别（如 `const`、`utils`、`services`、`mixins`）
+- 文件名 = 同类语义词作为前缀或后缀
+
+### 正确示例
+
+```
+✅ utils/
+    ├── dateUtil.js              （util 是 utils 的后缀）
+    ├── stringUtil.js
+    └── fileUtil.js
+
+✅ const/
+    ├── appConst.js              （const 是后缀）
+    ├── noteConst.js
+    └── userConst.js
+
+✅ services/
+    ├── noteService.js
+    ├── syncService.js
+    └── authService.js
+
+✅ mixins/
+    ├── editorMixin.js
+    └── dialogMixin.js
+
+✅ helpers/
+    ├── xxxHelper.js              （helper 是后缀）
+    └── yyyHelper.js
+```
+
+### 错误示例
+
+```
+❌ utils/
+    ├── format.js                 （没有 utils 语义词）
+    └── config.js                 （文件名与文件夹无关联）
+
+❌ const/
+    ├── values.js                 （与 const 无关）
+    └── keys.js                   （与 const 无关）
+
+❌ services/
+    ├── note.js                   （文件名没有 service 后缀）
+    └── data.js                   （与 services 无关）
+```
+
+### 前缀或后缀的选择
+
+- **后缀优先**：大多数情况用 `xxxUtil.js`、`xxxConst.js`、`xxxService.js`
+- **前缀可接受**：`xxxHelper.js` 或 `xxxUtils.js` 均可，但同一目录下保持一致
+- **特殊情况**：若文件只有一个核心词，可用前缀，如 `arrayUtils.js`（强调数组工具）
+
+---
+
+## 2. CSS/SCSS 文件命名
+
+CSS 文件同样遵循小驼峰 + 语义后缀：
+
+```
+styles/
+├── common.scss
+├── variables.scss
+├── mixins.scss
+└── utils.scss
+
+components/
+├── button/
+│   ├── button.scss
+│   └── buttonTheme.scss
+└── card/
+    ├── card.scss
+    └── cardStyles.scss
+```
+
+### 错误示例
+
+```
+❌ styles/
+    ├── MAIN.css
+    └── colors.scss              （大写 + 无语义后缀）
+
+❌ components/button/
+    ├── BTN.scss
+    └── primary.scss              （无语义关联）
+```
+
+---
+
+## 3. Vue 组件文件名
+
+### 小驼峰（优先）
+
+```
+userCard.vue
+articleList.vue
+noteEditor.vue
+settingsDialog.vue
+cloudFnConfig.vue
+echoFormDialog.vue
+runeCard.vue
+```
+
+### 组件文件的文件夹与文件名关系
+
+```
+components/
+├── userCard/
+│   └── userCard.vue             （文件夹 = 文件名）
+├── settingsDialog/
+│   ├── settingsDialog.vue       （文件夹 = 文件名）
+│   └── settingsDialog.scss
+└── modals/
+    ├── aModal.vue                （modals 语义前缀）
+    ├── bModal.vue
+    └── confirmModal.vue
+```
+
+### 何时可以用其他命名
+
+- **大驼峰（PascalCase）**：仅在以下情况才允许：
+  - Vue 框架内部强制要求的场景（如 `KeepAlive`、`TransitionGroup` 等内置组件名）
+  - 装饰器/HOC 包装的场景（如 `withAuth.js`）
+  - 与第三方 UI 库约定冲突时（如 Element-UI 的 `ElButton` 包装）
+- **kebab-case**：仅在以下情况才允许：
+  - 路由配置中需要动态拼接的场景
+  - 某些 require.context 场景需要
+
+### 反面教材
+
+```
+❌ user-card.vue      （kebab-case，不推荐）
+❌ UserCard.vue       （PascalCase，除非必要不用）
+❌ user_card.vue      （snake_case，禁止）
+✅ userCard.vue       （小驼峰，优先推荐）
+```
+
+---
+
+## 4. 组件引用命名
+
+### 导入时
+
+```javascript
+// ❌ 错误：PascalCase 或 kebab-case
+import UserCard from './userCard.vue'      // 大驼峰引用
+import UserCard from './user-card.vue'     // kebab-case 引用
+import USER_CARD from './userCard.vue'     // 全大写下划线，禁止
+
+// ✅ 正确：小驼峰
+import userCard from './userCard.vue'
+import noteEditor from './noteEditor.vue'
+import settingsDialog from './settingsDialog.vue'
+```
+
+### 模板中使用时
+
+```html
+<!-- ❌ 错误 -->
+<UserCard />
+<user-card />
+<USER_CARD />
+
+<!-- ✅ 正确：小驼峰 -->
+<userCard />
+<noteEditor />
+<settingsDialog />
+```
+
+### 组件注册时（局部注册）
+
+```javascript
+// ❌ 错误
+components: {
+  UserCard,
+  'user-card': userCard,
+}
+
+// ✅ 正确
+components: {
+  userCard,
+  noteEditor,
+  settingsDialog,
+}
+```
+
+---
+
+## 5. Props 和事件命名配合
+
+文件名用小驼峰后，props 和事件也保持一致的命名风格：
+
+```html
+<!-- ✅ 子组件 props 用小驼峰 -->
+<template>
+  <el-dialog :visible.sync="visible" :title="dialogTitle">
+    <!-- ... -->
+  </el-dialog>
+</template>
+
+<script>
+export default {
+  name: 'settingsDialog',  // 组件名也用小驼峰
+  props: {
+    visible: Boolean,
+    dialogTitle: String,
+  },
+};
+</script>
+```
+
+---
+
+## 6. 统一引用约定
+
+当引用时，始终使用小驼峰形式：
+
+```javascript
+// ✅ 统一小驼峰
+import userCard from '@/components/userCard.vue';
+import settingsDialog from '@/components/settingsDialog/settingsDialog.vue';
+import dateUtil from '@/utils/dateUtil.js';
+import noteConst from '@/const/noteConst.js';
+
+// ✅ 模板中统一小驼峰
+<userCard :user="currentUser" />
+<settingsDialog :visible.sync="showSettings" />
+<aModal v-if="showModal" />
+```
+
+---
+
+## 7. 完整目录结构示例
+
+```
+src/
+├── components/
+│   ├── userCard/
+│   │   ├── userCard.vue
+│   │   └── userCard.scss
+│   ├── noteEditor/
+│   │   ├── noteEditor.vue
+│   │   └── noteEditor.scss
+│   └── modals/
+│       ├── aModal.vue
+│       └── confirmModal.vue
+├── utils/
+│   ├── dateUtil.js
+│   ├── stringUtil.js
+│   └── fileUtil.js
+├── const/
+│   ├── appConst.js
+│   ├── noteConst.js
+│   └── userConst.js
+├── services/
+│   ├── noteService.js
+│   ├── syncService.js
+│   └── authService.js
+├── mixins/
+│   ├── editorMixin.js
+│   └── dialogMixin.js
+├── helpers/
+│   ├── formatHelper.js
+│   └── validationHelper.js
+└── styles/
+    ├── common.scss
+    ├── variables.scss
+    └── mixins.scss
+```
+
+---
+
+## 8. 例外情况（必须使用 PascalCase）
+
+- Vue 内置组件：`KeepAlive`、`Transition`、`TransitionGroup`、`Suspense`
+- 异步组件配合 `v-if` 使用时：`component :is="() => import('./Foo.vue')"`
+- JSX/TSX 文件中的组件（React 约定）
+- 第三方库明确要求的组件名（如 `VueDraggable`）
+
+除上述明确列出的场景外，**一律使用小驼峰**。

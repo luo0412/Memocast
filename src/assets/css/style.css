@@ -283,3 +283,25 @@ body
 
 /* 多符文运行时样式（Echo 体系的 echo-chant 子分类，与 EchoRuntime.js ECHO_CHANT_HANDLERS 配套） */
 @import './rune.css';
+
+/* ========== HEYUI IN QUASAR DIALOG Z-INDEX FIX ========== */
+/* 确保 heyui 组件在 q-dialog 内能正确显示下拉/弹出层 */
+.h-categorypicker-dropdown,
+.h-categorypicker-group,
+.h-dropdown-menu,
+.h-categorypicker-content,
+.h-categorypicker-mask,
+.h-categorypicker-panel,
+.h-select-dropdown,
+.h-tree-select-dropdown,
+.h-date-picker-dropdown,
+.v--modal,
+.v-modal {
+  position: fixed !important;
+  z-index: 99999 !important;
+}
+
+/* 覆盖 heyui 默认的 z-index */
+.h-categorypicker-mask {
+  z-index: 99998 !important;
+}
