@@ -2479,7 +2479,10 @@ export default {
     if (Array.isArray(savedDeps) && savedDeps.length > 0) {
       this.cdnDeps = savedDeps
     } else {
-      // 默认添加 jQuery / layui
+      // 默认添加 jQuery / layui / city-picker
+      // 注意：script 之间的依赖关系（如 city-picker.js 依赖 city-picker.data.js）
+      // 现在由 boot/cdn-deps.js 通过 onload 链式调度保证，与本数组顺序无关；
+      // 但默认顺序仍按依赖关系组织，避免视觉混淆。
       const newId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
       this.cdnDeps = [
         {
@@ -2505,6 +2508,13 @@ export default {
         },
         {
           id: newId(),
+          name: 'city-picker data',
+          url: 'https://tshi0912.github.io/city-picker/js/city-picker.data.js',
+          enabled: true,
+          applyToBlog: false
+        },
+        {
+          id: newId(),
           name: 'city-picker JS',
           url: 'https://tshi0912.github.io/city-picker/js/city-picker.js',
           enabled: true,
@@ -2512,8 +2522,8 @@ export default {
         },
         {
           id: newId(),
-          name: 'city-picker data',
-          url: 'https://tshi0912.github.io/city-picker/js/city-picker.data.js',
+          name: 'city-picker CSS',
+          url: 'https://tshi0912.github.io/city-picker/css/city-picker.css',
           enabled: true,
           applyToBlog: false
         }

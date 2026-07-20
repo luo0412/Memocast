@@ -526,8 +526,6 @@ export default {
       cityPickerPlaceholder: '点击选择省/市/区',
       cityPickerReady: false,
       _cityPickerPollTimer: null,
-      _cityPickerRo: null,
-      _cityPickerInitChecked: false,
       form: {
         id: '',
         name: '',
@@ -830,7 +828,11 @@ export default {
      *   - city-picker.js / city-picker.data.js 由 src/boot/cdn-deps.js 通过 <script> 标签注入，
      *     属于异步资源，load 完毕前 window.citypicker / window.jQuery 可能不存在。
      *   - 输入框节点 #rune-city-picker-input 在 q-dialog（QPortal）真正打开后才出现在 DOM。
-     *   - 因此采用 "轮询 + 短超时兜底" 策略：每 80ms 检查一次，最多等 ~5s。成功一次即退出，失败也不抛错。
+     *   - 因此采用 "轮询 + 自愈" 策略：每 80ms 检查一次，直到 dialog 关闭才停。
+     *     失败不会抛错；如果发现 city-picker.js 的 IIFE 已经执行过（说明 data 已就绪）但
+     *     $.fn.citypicker 仍未注册（典型症状：data 比 JS 晚到，IIFE 抛 "ChineseDistricts must be included first"
+     *     后再也找不到），就手动把那条坏掉的 <script> 删掉，重新挂一次 —— 此时 window.ChineseDistricts
+     *     已经在了，新挂的 script 会顺利注册 $.fn.citypicker。
      */
     _scheduleCityPickerInit () {
       if (this.cityPickerReady) {
@@ -843,7 +845,7 @@ export default {
         this._cityPickerPollTimer = null
       }
       let attempt = 0
-      const maxAttempts = 64 // 64 * 80ms ≈ 5.1s，覆盖慢网络
+      let selfHealAttempted = false
       const tryInit = () => {
         attempt += 1
         if (!this.value) {
@@ -859,15 +861,56 @@ export default {
           this._initCityPicker(inputEl, $)
           return
         }
-        if (attempt >= maxAttempts) {
-          console.warn('[RuneFormDialog] city-picker 初始化超时未就绪：input=',
-            !!inputEl, 'jQuery=', !!$, 'citypicker=', hasCitypicker)
-          this._cityPickerPollTimer = null
-          return
+        // 自愈：detect "city-picker.js 已执行但 IIFE 抛错" 的典型烂状态
+        // 触发条件（必须全部满足才动手）：
+        //   1. data 文件已加载（ChineseDistricts 全局存在）
+        //   2. <head> 里能找到城市选择器 JS 的 <script> 标签
+        //   3. 但 $.fn.citypicker 仍未注册（说明 IIFE 已抛错）
+        // 动作：手动删除坏掉的 <script> 标签并重新挂一条，data 已经在全局，新 script 这次会成功注册。
+        if (!selfHealAttempted && window.ChineseDistricts && this._hasCityPickerJsScriptTag()) {
+          selfHealAttempted = true
+          this._selfHealCityPickerScript()
         }
+        // 每 80ms 重试，直到 dialog 关闭（_destroyCityPicker 会清掉 timer）
         this._cityPickerPollTimer = setTimeout(tryInit, 80)
       }
       this._cityPickerPollTimer = setTimeout(tryInit, 0)
+    },
+    _hasCityPickerJsScriptTag () {
+      const scripts = document.querySelectorAll('head script[data-cdn-name]')
+      for (const el of scripts) {
+        const name = el.getAttribute('data-cdn-name') || ''
+        const src = el.src || ''
+        if (/city-picker\.js/i.test(src) || /city[\s_-]?picker/i.test(name)) {
+          // 过滤掉 "city-picker data" 这条记录
+          if (/data/i.test(name) || /city-picker\.data/i.test(src)) continue
+          return el
+        }
+      }
+      return null
+    },
+    /**
+     * 移除坏掉的 city-picker.js <script> 标签并重新挂一条。
+     * 此时 window.ChineseDistricts 已存在，新 script 执行时 IIFE 不会再抛错，$.fn.citypicker 会正常注册。
+     * 只触发一次（selfHealAttempted 标志），避免无限重挂。
+     */
+    _selfHealCityPickerScript () {
+      const badScript = this._hasCityPickerJsScriptTag()
+      if (!badScript) return
+      const url = badScript.src
+      console.warn('[RuneFormDialog] city-picker.js 自愈：移除坏掉的 <script> 并重新挂载，URL=', url)
+      try {
+        badScript.parentNode && badScript.parentNode.removeChild(badScript)
+      } catch (e) {
+        console.warn('[RuneFormDialog] 移除旧 script 失败：', e && e.message)
+      }
+      const fresh = document.createElement('script')
+      fresh.src = url
+      fresh.setAttribute('data-cdn-name', 'city-picker JS')
+      fresh.setAttribute('data-self-heal', 'rune-form-dialog')
+      fresh.onload = () => console.log('[RuneFormDialog] 自愈后的 city-picker.js 已加载：', url)
+      fresh.onerror = (e) => console.warn('[RuneFormDialog] 自愈后的 city-picker.js 加载失败：', e)
+      document.head.appendChild(fresh)
     },
     _findCityPickerInput () {
       // input 是原生节点，不随响应式变更，先用 ref 拿 DOM 拿不到就回退到 querySelector

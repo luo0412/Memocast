@@ -6,6 +6,13 @@
  * - .css → <link rel="stylesheet">
  * - .woff2 / .woff / .ttf / .otf / .eot → <link rel="stylesheet"> (font-face 自动生成)
  * - 其他扩展名 → 尝试作为样式表加载
+ *
+ * 加载顺序：
+ * - stylesheet 与 font（不阻塞 JS）并行注入，浏览器自行调度。
+ * - script 之间保持 deps 数组的顺序依次注入：上一个 script onload 后再注入下一个，
+ *   避免 city-picker.js 比 city-picker.data.js 先到达导致 IIFE 抛
+ *   "The file city-picker.data.js must be included first!" 而 $.fn.citypicker 永远不注册。
+ *   (async=true 会让浏览器按网络到达顺序执行，破坏依赖关系，故此处不用 async。)
  */
 import bus from 'src/components/common/bus'
 
@@ -36,27 +43,41 @@ function removeInjectedResources () {
 }
 
 /**
- * 注入脚本
+ * 注入脚本（同步、不 async，按 onload 链式调用）
+ * 返回 Promise，resolve 表示脚本执行完毕（成功或失败都 resolve，避免中断链）
  */
 function injectScript (dep) {
-  const url = dep.url
-  const existing = document.querySelector(`head script[src="${url}"]`)
-  if (existing) {
-    console.log('[CdnDepsBoot] Already injected script:', url)
-    return
-  }
+  return new Promise((resolve) => {
+    const url = dep.url
+    const existing = document.querySelector(`head script[src="${url}"]`)
+    if (existing) {
+      console.log('[CdnDepsBoot] Already injected script:', url)
+      // 已存在视为就绪，直接 resolve（不需要等待再次 onload）
+      resolve()
+      return
+    }
 
-  const script = document.createElement('script')
-  script.src = url
-  script.async = true
-  script.defer = true
-  setCommonAttrs(script, dep)
+    const script = document.createElement('script')
+    script.src = url
+    // 不设 async，让浏览器按 appendChild 顺序执行（defer 与 async 互斥，且 defer 也按顺序），
+    // 但出于跨环境安全，配合下方 onload 链式调度确保严格顺序。
+    setCommonAttrs(script, dep)
 
-  script.onload = () => console.log('[CdnDepsBoot] Script loaded:', url)
-  script.onerror = () => console.error('[CdnDepsBoot] Script failed:', url)
+    const done = (ok) => {
+      if (ok) {
+        console.log('[CdnDepsBoot] Script loaded:', url)
+      } else {
+        console.error('[CdnDepsBoot] Script failed:', url)
+      }
+      resolve()
+    }
 
-  document.head.appendChild(script)
-  console.log('[CdnDepsBoot] Injected script:', dep.name, '->', url)
+    script.onload = () => done(true)
+    script.onerror = () => done(false)
+
+    document.head.appendChild(script)
+    console.log('[CdnDepsBoot] Injected script:', dep.name, '->', url)
+  })
 }
 
 /**
@@ -142,14 +163,18 @@ function setCommonAttrs (el, dep) {
 }
 
 /**
- * 根据类型注入资源
+ * 按依赖顺序串行注入：script 之间保持 deps 数组顺序，stylesheet/font 与 script 并行。
+ * 这样 city-picker.data.js 一定在 city-picker.js 之前到达并执行，
+ * 避免 IIFE 因 ChineseDistricts 未定义抛错而使 $.fn.citypicker 永远不注册。
  */
-function injectResource (dep) {
+async function injectResourceInOrder (deps, index) {
+  if (index >= deps.length) return
+  const dep = deps[index]
   const type = getResourceType(dep.url)
 
   switch (type) {
     case 'script':
-      injectScript(dep)
+      await injectScript(dep)
       break
     case 'stylesheet':
       injectStylesheet(dep)
@@ -160,6 +185,8 @@ function injectResource (dep) {
     default:
       injectStylesheet(dep)
   }
+
+  return injectResourceInOrder(deps, index + 1)
 }
 
 /**
@@ -185,8 +212,10 @@ function loadAndInjectCdnDeps () {
       return
     }
 
-    console.log('[CdnDepsBoot] Injecting', enabledDeps.length, 'CDN deps...')
-    enabledDeps.forEach(injectResource)
+    console.log('[CdnDepsBoot] Injecting', enabledDeps.length, 'CDN deps in order...')
+    injectResourceInOrder(enabledDeps, 0).catch(err => {
+      console.error('[CdnDepsBoot] Error injecting CDN deps:', err)
+    })
   } catch (err) {
     console.error('[CdnDepsBoot] Error loading CDN deps:', err)
   }

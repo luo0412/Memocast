@@ -315,3 +315,7 @@ body
 .h-categorypicker-mask {
   z-index: 99998 !important;
 }
+
+.city-picker-dropdown {
+  left: -100px;
+}
