@@ -159,6 +159,10 @@
                   class='preset-template-picker'
                   @change='onPresetPicked'
                 />
+                <div ref='cityPickerMount' class='rune-city-picker-mount'>
+                  <!-- city-picker 会在 value=true 且 city-picker JS / data 加载完毕后初始化到这个容器里 -->
+                  <input id='rune-city-picker-input' readonly type='text' :placeholder='cityPickerPlaceholder' />
+                </div>
                 <q-btn
                   flat
                   dense
@@ -356,6 +360,39 @@
   max-width: 240px;
 }
 
+.rune-city-picker-mount {
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.rune-city-picker-mount input {
+  width: 170px;
+  height: 28px;
+  font-size: 12px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid #c0c0c0;
+  background: #fff;
+  color: rgba(0, 0, 0, 0.85);
+  outline: none;
+  cursor: pointer;
+}
+
+.rune-city-picker-mount input:hover {
+  border-color: #7E57C2;
+}
+
+.rune-city-picker-mount input:focus {
+  border-color: #7E57C2;
+  box-shadow: 0 0 0 2px rgba(126, 87, 194, 0.2);
+}
+
+.body--dark .rune-city-picker-mount input {
+  background: #34383e;
+  border-color: #4a4a4a;
+  color: rgba(255, 255, 255, 0.85);
+}
+
 .preset-template-label {
   font-size: 12px;
   color: #7E57C2;
@@ -484,6 +521,13 @@ export default {
       _dialogRo: null,
       _windowResizeHandler: null,
       monacoEditorHeight: 250,
+      // city-picker 状态：依赖 boot/cdn-deps.js 注入 window.jQuery / window.citypicker，
+      // 输入框则在 dialog 真正挂载（q-dialog 走 QPortal，懒渲染）后才出现在 DOM 里。
+      cityPickerPlaceholder: '点击选择省/市/区',
+      cityPickerReady: false,
+      _cityPickerPollTimer: null,
+      _cityPickerRo: null,
+      _cityPickerInitChecked: false,
       form: {
         id: '',
         name: '',
@@ -619,6 +663,10 @@ export default {
           this.scheduleMonacoInit()
           this.loadTemplatePicker(true)
           this._scheduleDialogHeightInstall()
+          // city-picker 输入框在 q-dialog 内（QPortal 懒渲染），
+          // 仅当 value=true 时才出现在 DOM 里。同时 city-picker.js / city-picker.data.js
+          // 是 CDN 异步加载，需要轮询等待窗口就绪。
+          this._scheduleCityPickerInit()
         } else {
           this.clearMonacoInitTimer()
           this.uninstallDialogHeightListener()
@@ -626,6 +674,8 @@ export default {
             clearTimeout(this._dialogHeightPollTimer)
             this._dialogHeightPollTimer = null
           }
+          // 关闭时销毁 jQuery 插件挂在 DOM 上的事件监听器，避免残留
+          this._destroyCityPicker()
         }
       }
     },
@@ -673,6 +723,9 @@ export default {
     console.log('[RuneFormDialog] mounted, value=', this.value, '$refs.dialog=', !!this.$refs.dialog, 'clientHeight=', this.$refs.dialog && this.$refs.dialog.clientHeight)
     this.dialog = this.$refs.dialog
     this.scheduleMonacoInit()
+    // city-picker 同样走"mounted + watch 双保险"：如果一开始就 value=true，
+    // mounted 这边比 watch.immediate 稍早一步能去抢 DOM
+    this._scheduleCityPickerInit()
     // mounted 是组件挂载完毕的最早时机（DOM 已就绪），立即安装 dialog 高度监听，
     // 这样在 watch.immediate 之前能抢先拿到正确的 clientHeight。
     this.$nextTick(() => {
@@ -693,6 +746,7 @@ export default {
       clearTimeout(this._dialogHeightPollTimer)
       this._dialogHeightPollTimer = null
     }
+    this._destroyCityPicker()
     this.disposeMonaco()
   },
   methods: {
@@ -770,6 +824,115 @@ export default {
         window.removeEventListener('resize', this._windowResizeHandler)
         this._windowResizeHandler = null
       }
+    },
+    /**
+     * city-picker 初始化调度：
+     *   - city-picker.js / city-picker.data.js 由 src/boot/cdn-deps.js 通过 <script> 标签注入，
+     *     属于异步资源，load 完毕前 window.citypicker / window.jQuery 可能不存在。
+     *   - 输入框节点 #rune-city-picker-input 在 q-dialog（QPortal）真正打开后才出现在 DOM。
+     *   - 因此采用 "轮询 + 短超时兜底" 策略：每 80ms 检查一次，最多等 ~5s。成功一次即退出，失败也不抛错。
+     */
+    _scheduleCityPickerInit () {
+      if (this.cityPickerReady) {
+        // 已初始化过就跳过；避免 dialog 反复开关导致多次绑定事件
+        this._refreshCityPickerValue()
+        return
+      }
+      if (this._cityPickerPollTimer) {
+        clearTimeout(this._cityPickerPollTimer)
+        this._cityPickerPollTimer = null
+      }
+      let attempt = 0
+      const maxAttempts = 64 // 64 * 80ms ≈ 5.1s，覆盖慢网络
+      const tryInit = () => {
+        attempt += 1
+        if (!this.value) {
+          // 期间用户已关掉 dialog，直接退出
+          this._cityPickerPollTimer = null
+          return
+        }
+        const inputEl = this._findCityPickerInput()
+        const $ = (typeof window !== 'undefined' && window.$) || (typeof window !== 'undefined' && window.jQuery)
+        const hasCitypicker = !!(($ && $.fn && $.fn.citypicker) || (typeof window !== 'undefined' && window.citypicker))
+        if (inputEl && $ && hasCitypicker) {
+          this._cityPickerPollTimer = null
+          this._initCityPicker(inputEl, $)
+          return
+        }
+        if (attempt >= maxAttempts) {
+          console.warn('[RuneFormDialog] city-picker 初始化超时未就绪：input=',
+            !!inputEl, 'jQuery=', !!$, 'citypicker=', hasCitypicker)
+          this._cityPickerPollTimer = null
+          return
+        }
+        this._cityPickerPollTimer = setTimeout(tryInit, 80)
+      }
+      this._cityPickerPollTimer = setTimeout(tryInit, 0)
+    },
+    _findCityPickerInput () {
+      // input 是原生节点，不随响应式变更，先用 ref 拿 DOM 拿不到就回退到 querySelector
+      if (this.$refs.cityPickerMount) {
+        const inner = this.$refs.cityPickerMount.querySelector('input')
+        if (inner) return inner
+      }
+      // 兜底：从 document 里找（同名 input 在 q-dialog 里可能存在多个，但也只会一个匹配）
+      const fallback = document.getElementById('rune-city-picker-input')
+      return fallback || null
+    },
+    _initCityPicker (inputEl, $) {
+      // city-picker 插件本身要求容器为 relative 定位的元素；我们的 div.rune-city-picker-mount
+      // 已经是 relative，这里再保险一层。
+      const container = inputEl.parentElement
+      if (container && getComputedStyle(container).position === 'static') {
+        container.style.position = 'relative'
+      }
+      // 防止外部多次触发导致重复绑定：先尝试 destroy
+      try {
+        if ($ && $.fn && $.fn.citypicker && $(inputEl).data && $(inputEl).data('citypicker')) {
+          $(inputEl).citypicker('destroy')
+        }
+      } catch (_) { /* noop */ }
+
+      // 完全等同用户给的 demo：
+      //   $("#city-picker2").citypicker({
+      //     province: "江苏省",
+      //     city: "常州市",
+      //     district: "溧阳市"
+      //   });
+      $(inputEl).citypicker({
+        province: '江苏省',
+        city: '常州市',
+        district: '溧阳市'
+      })
+      this.cityPickerReady = true
+      console.log('[RuneFormDialog] city-picker initialized on', inputEl)
+    },
+    _refreshCityPickerValue () {
+      // 第二次打开 dialog 时，把 picker 重新同步到初始值
+      const inputEl = this._findCityPickerInput()
+      const $ = window.$ || window.jQuery
+      if (!inputEl || !$ || !$.fn || !$.fn.citypicker) return
+      try {
+        const v = $(inputEl).data('citypicker') ? $(inputEl).citypicker('getValue') : null
+        if (!v || !v.province) {
+          $(inputEl).citypicker('reset')
+        }
+      } catch (_) { /* noop */ }
+    },
+    _destroyCityPicker () {
+      if (this._cityPickerPollTimer) {
+        clearTimeout(this._cityPickerPollTimer)
+        this._cityPickerPollTimer = null
+      }
+      const inputEl = this._findCityPickerInput()
+      const $ = window.$ || window.jQuery
+      if (inputEl && $ && $.fn && $.fn.citypicker) {
+        try {
+          // destroy 会移除插件注入的 .city-picker-dropdown 等节点和事件监听器
+          $(inputEl).citypicker('destroy')
+        } catch (_) { /* noop */ }
+      }
+      this.cityPickerReady = false
     },
     recomputeMonacoHeight () {
       const dialogEl = this._resolveDialogElement()

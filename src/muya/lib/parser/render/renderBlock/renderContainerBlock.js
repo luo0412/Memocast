@@ -115,6 +115,10 @@ export default function renderContainerBlock (parent, block, activeBlocks, match
         const isLastRow = () => {
           if (renderingRowContainer.type === 'thead') {
             return tableRow === 0
+          } else if (!parent) {
+            // Recursive partial-render passes parent = null; no DOM sibling
+            // info → don't claim this is the last row.
+            return false
           } else {
             return !parent.nextSibling
           }

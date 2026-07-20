@@ -197,7 +197,7 @@ export default {
   cdnDepsUrl: 'CDN 地址',
   cdnDepsUrlPlaceholder: '例如 https://cdn.jsdelivr.net/npm/jquery/dist/jquery.min.js',
   cdnDepsEnabled: '启用',
-  cdnDepsApplyToBlog: '同时应用于 VuePress 博客部署',
+  cdnDepsApplyToBlog: 'Vuepress注入',
   cdnDepsDeleteConfirm: '确定删除该 CDN 依赖？',
   cdnDepsSaveSuccess: 'CDN 依赖已保存',
   cdnDepsSaveFailed: 'CDN 依赖保存失败',

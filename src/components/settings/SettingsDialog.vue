@@ -443,23 +443,24 @@
                       </div>
                       <div v-else class='cdn-deps-list'>
                         <div v-for='dep in cdnDeps' :key='dep.id' class='cdn-dep-item q-pa-sm q-mb-xs rounded-borders'>
-                          <div class='row items-start q-col-gutter-sm'>
-                            <div class='col-4'>
+                          <div class='row items-start q-col-gutter-sm no-wrap'>
+                            <div class='col-3'>
                               <q-input dense v-model='dep.name' :label="$t('cdnDepsName')" :placeholder="$t('cdnDepsNamePlaceholder')" />
                             </div>
-                            <div class='col-6'>
+                            <div class='col-3'>
                               <q-input dense v-model='dep.url' :label="$t('cdnDepsUrl')" :placeholder="$t('cdnDepsUrlPlaceholder')" />
                             </div>
                             <div class='col-2'>
                               <div class='text-caption text-grey-6 q-mb-xs'>{{ $t('cdnDepsEnabled') }}</div>
                               <q-toggle dense v-model='dep.enabled' color='green-7' />
                             </div>
-                          </div>
-                          <div class='row items-center q-col-gutter-sm q-mt-sm'>
-                            <div class='col'>
-                              <q-checkbox dense v-model='dep.applyToBlog' color='green-7' :label="$t('cdnDepsApplyToBlog')" />
+                            <div class='col-3'>
+                              <div class='text-caption text-grey-6 q-mb-xs'>{{ $t('cdnDepsApplyToBlog') }}</div>
+                              <q-checkbox dense v-model='dep.applyToBlog' color='green-7' />
                             </div>
-                            <q-btn flat dense round icon='delete' color='negative' size='sm' @click='deleteCdnDep(dep.id)' />
+                            <div class='col-1 text-right'>
+                              <q-btn flat dense round icon='delete' color='negative' size='sm' @click='deleteCdnDep(dep.id)' />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -973,7 +974,7 @@ export default {
     },
     // ✅ 已移除 autoSaveGapLabel！不再需要
     // autoSaveGapLabel: function () { ... },
-    
+
     localRuneCards: {
       get () {
         return this.runeCards
@@ -1240,7 +1241,7 @@ export default {
     },
     // ✅ 已移除 autoSaveGapChangeHandler！不再需要
     // autoSaveGapChangeHandler: function (value) { ... },
-    
+
     checkUpdateHandler: function () {
       checkUpdate().then(() => {
         this.checkingNotify = this.$q.notify({
@@ -2478,14 +2479,45 @@ export default {
     if (Array.isArray(savedDeps) && savedDeps.length > 0) {
       this.cdnDeps = savedDeps
     } else {
-      // 默认添加 jQuery
-      this.cdnDeps = [{
-        id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
-        name: 'jQuery',
-        url: 'https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js',
-        enabled: true,
-        applyToBlog: false
-      }]
+      // 默认添加 jQuery / layui
+      const newId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
+      this.cdnDeps = [
+        {
+          id: newId(),
+          name: 'jQuery',
+          url: 'https://cdn.jsdelivr.net/npm/jquery@1/dist/jquery.min.js',
+          enabled: true,
+          applyToBlog: false
+        },
+        {
+          id: newId(),
+          name: 'layui CSS',
+          url: '//unpkg.com/layui@2.13.8/dist/css/layui.css',
+          enabled: true,
+          applyToBlog: false
+        },
+        {
+          id: newId(),
+          name: 'layui JS',
+          url: '//unpkg.com/layui@2.13.8/dist/layui.js',
+          enabled: true,
+          applyToBlog: false
+        },
+        {
+          id: newId(),
+          name: 'city-picker JS',
+          url: 'https://tshi0912.github.io/city-picker/js/city-picker.js',
+          enabled: true,
+          applyToBlog: false
+        },
+        {
+          id: newId(),
+          name: 'city-picker data',
+          url: 'https://tshi0912.github.io/city-picker/js/city-picker.data.js',
+          enabled: true,
+          applyToBlog: false
+        }
+      ]
     }
     // 初始化云同步状态
     CloudSyncService.addListener(this.onCloudSyncStatusChange)

@@ -9585,10 +9585,10 @@ joplin-turndown-plugin-gfm@^1.0.12:
   resolved "https://mirrors.cloud.tencent.com/npm/joplin-turndown-plugin-gfm/-/joplin-turndown-plugin-gfm-1.0.12.tgz"
   integrity sha512-qL4+1iycQjZ1fs8zk3jSRk7cg3ROBUHk7GKtiLAQLFzLPKErnILUvz5DLszSQvz3s1sTjPbywLDISVUtBY6HaA==
 
-jquery@^4.0.0:
-  version "4.0.0"
-  resolved "https://mirrors.cloud.tencent.com/npm/jquery/-/jquery-4.0.0.tgz#95c33ac29005ff72ec444c5ba1cf457e61404fbb"
-  integrity sha512-TXCHVR3Lb6TZdtw1l3RTLf8RBWVGexdxL6AC8/e0xZKEpBflBsjh9/8LXw+dkNFuOyW9B7iB3O1sP7hS0Kiacg==
+jquery@1:
+  version "1.12.4"
+  resolved "https://mirrors.cloud.tencent.com/npm/jquery/-/jquery-1.12.4.tgz#01e1dfba290fe73deba77ceeacb0f9ba2fec9e0c"
+  integrity sha512-UEVp7PPK9xXYSk8xqXCJrkXnKZtlgWkd2GsAQbMRFK6S/ePU2JN5G2Zum8hIVjzR3CpdfSqdqAzId/xd4TJHeg==
 
 "js-tokens@^3.0.0 || ^4.0.0", js-tokens@^4.0.0:
   version "4.0.0"
