@@ -422,6 +422,48 @@
                         </div>
                       </div>
                     </SettingsSectionContent>
+
+                    <!-- CDN 依赖 -->
+                    <SettingsSectionContent v-if='serverSubTab === "cdn"' :title="$t('cdnDepsTitle')" accent-color='green-7'>
+                      <q-banner rounded dense class='bg-green-1 text-green-10 q-mb-md'>
+                        <template v-slot:avatar>
+                          <q-icon name='info_outline' color='green-7' />
+                        </template>
+                        {{ $t('cdnDepsHint') }}
+                      </q-banner>
+                      <!-- 操作按钮 -->
+                      <div class='q-mb-md row q-gutter-sm'>
+                        <q-btn outline color='green-7' icon='add' :label="$t('cdnDepsAdd')" @click='addCdnDep' />
+                        <q-btn unelevated color='green-7' icon='save' :label="$t('cdnDepsSave')" :loading='cdnDepsSaving' @click='saveCdnDeps' />
+                      </div>
+                      <!-- CDN 依赖列表 -->
+                      <div v-if='cdnDeps.length === 0' class='text-center q-pa-md text-grey-6'>
+                        <q-icon name='link_off' size='2rem' />
+                        <div class='q-mt-sm'>{{ $t('noData') }}</div>
+                      </div>
+                      <div v-else class='cdn-deps-list'>
+                        <div v-for='dep in cdnDeps' :key='dep.id' class='cdn-dep-item q-pa-sm q-mb-xs rounded-borders'>
+                          <div class='row items-start q-col-gutter-sm'>
+                            <div class='col-4'>
+                              <q-input dense v-model='dep.name' :label="$t('cdnDepsName')" :placeholder="$t('cdnDepsNamePlaceholder')" />
+                            </div>
+                            <div class='col-6'>
+                              <q-input dense v-model='dep.url' :label="$t('cdnDepsUrl')" :placeholder="$t('cdnDepsUrlPlaceholder')" />
+                            </div>
+                            <div class='col-2'>
+                              <div class='text-caption text-grey-6 q-mb-xs'>{{ $t('cdnDepsEnabled') }}</div>
+                              <q-toggle dense v-model='dep.enabled' color='green-7' />
+                            </div>
+                          </div>
+                          <div class='row items-center q-col-gutter-sm q-mt-sm'>
+                            <div class='col'>
+                              <q-checkbox dense v-model='dep.applyToBlog' color='green-7' :label="$t('cdnDepsApplyToBlog')" />
+                            </div>
+                            <q-btn flat dense round icon='delete' color='negative' size='sm' @click='deleteCdnDep(dep.id)' />
+                          </div>
+                        </div>
+                      </div>
+                    </SettingsSectionContent>
                   </div>
                 </div>
               </q-tab-panel>
@@ -758,6 +800,7 @@ import NavigationDialog from 'components/navigation/NavigationDialog'
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
 import { backfillEchoAnnotationsInMarkdown } from 'components/echo/EchoRuntime'
+import { debounce } from 'src/muya/lib/utils'
 import { i18n, updateDialogDefaults } from 'boot/i18n'
 import bus from 'components/common/bus'
 import { EVENTS as events } from 'src/utils/eventsConst'
@@ -885,7 +928,10 @@ export default {
       },
       aiSkillFormNameError: '',
       aiSkillFormContentError: '',
-      navigationDialogVisible: false
+      navigationDialogVisible: false,
+      // CDN 依赖
+      cdnDeps: [],
+      cdnDepsSaving: false
     }
   },
   watch: {
@@ -1037,7 +1083,8 @@ export default {
     serverSubTabOptions () {
       return [
         { value: 'sync', label: this.$t('cloudSync'), icon: 'cloud_sync' },
-        { value: 'image', label: this.$t('cloudImage'), icon: 'image' }
+        { value: 'image', label: this.$t('cloudImage'), icon: 'image' },
+        { value: 'cdn', label: this.$t('cloudCdnDeps'), icon: 'link' }
       ]
     },
     // 云函数二级分类选项
@@ -1221,6 +1268,56 @@ export default {
     },
     openCloudFnHelp: function () {
       window.open('https://vkdoc.fsq.pub/client/pages/callFunctionForUrl.html', '_blank')
+    },
+    // CDN 依赖管理
+    addCdnDep: function () {
+      const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
+      this.cdnDeps.push({
+        id,
+        name: '',
+        url: '',
+        enabled: true,
+        applyToBlog: false
+      })
+    },
+    deleteCdnDep: function (id) {
+      this.$q.dialog({
+        title: this.$t('confirm'),
+        message: this.$t('cdnDepsDeleteConfirm'),
+        ok: { label: this.$t('confirm'), color: 'negative' },
+        cancel: { label: this.$t('cancel'), flat: true }
+      }).onOk(() => {
+        const idx = this.cdnDeps.findIndex(d => d.id === id)
+        if (idx !== -1) {
+          this.cdnDeps.splice(idx, 1)
+        }
+      })
+    },
+    saveCdnDeps: async function () {
+      this.cdnDepsSaving = true
+      try {
+        // 持久化到 SQLite（主进程持久化）
+        await DatabaseClient.cdnDeps.saveAll(this.cdnDeps)
+        // 同步写到 localStorage（boot 层通过 bus.$emit 触发重新注入，读的正是 localStorage）
+        localStorage.setItem('v__2_client_cdnDeps', JSON.stringify(this.cdnDeps))
+        // 触发 boot 层刷新
+        bus.$emit('cdnDepsChanged')
+        this.$q.notify({
+          message: this.$t('cdnDepsSaveSuccess'),
+          type: 'positive',
+          position: 'top',
+          timeout: 1500
+        })
+      } catch (err) {
+        console.error('[Settings] saveCdnDeps error:', err)
+        this.$q.notify({
+          message: this.$t('cdnDepsSaveFailed') || '保存失败',
+          type: 'negative',
+          position: 'top'
+        })
+      } finally {
+        this.cdnDepsSaving = false
+      }
     },
     openNavigationDialog: function () {
       this.navigationDialogVisible = true
@@ -2368,7 +2465,7 @@ export default {
     ]),
     ...mapClientMutations({ UPDATE_SYNC_STATUS: 'update_sync_status' })
   },
-  mounted () {
+  async mounted () {
     bus.$on(events.UPDATE_EVENTS.updateAvailable, this.updateAvailableHandler)
     bus.$on(events.UPDATE_EVENTS.updateNotAvailable, this.updateUnavailableHandler)
     bus.$on(events.UPDATE_EVENTS.updateError, this.updateErrorHandler)
@@ -2376,6 +2473,9 @@ export default {
     this.loadEchoes()
     this.loadAiModelConfigs()
     this.loadAiSkillConfigs()
+    // 初始化 CDN 依赖（从 SQLite 加载）
+    const savedDeps = await DatabaseClient.cdnDeps.getAll()
+    this.cdnDeps = Array.isArray(savedDeps) ? savedDeps : []
     // 初始化云同步状态
     CloudSyncService.addListener(this.onCloudSyncStatusChange)
     this.refreshCloudSyncStatus()
@@ -2667,6 +2767,22 @@ export default {
 
 .general-settings-panel::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* CDN 依赖列表样式 */
+.cdn-deps-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.cdn-dep-item {
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.body--dark .cdn-dep-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 /* 符文/回响二级分类布局:左侧垂直 tab,右侧网格 */

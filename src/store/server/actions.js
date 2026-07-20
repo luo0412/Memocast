@@ -2477,7 +2477,7 @@ export default {
     })
   },
 
-  async blogDeploy ({ state, dispatch }, { category, config: passedConfig } = {}) {
+  async blogDeploy ({ state, dispatch, rootState }, { category, config: passedConfig } = {}) {
     let config = passedConfig
 
     // 每次都弹出配置弹框让用户确认
@@ -2553,7 +2553,8 @@ export default {
         sftpConfig: config.sftp,
         customBuildCommand: config.customBuildCommand,
         base: config.base,
-        packageManager: config.packageManager
+        packageManager: config.packageManager,
+        cdnDeps: state.rootState?.client?.cdnDeps || []
       })
 
       if (result.error) {

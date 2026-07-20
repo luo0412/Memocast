@@ -1,0 +1,124 @@
+---
+description: Settings 弹框数据存储规范
+alwaysApply: true
+---
+
+# Settings 弹框数据存储规范（SQLite 优先）
+
+## 核心原则
+
+> **Settings 弹框（`SettingsDialog.vue`）内的所有配置项，能存 SQLite 就存 SQLite，优先使用 `app_state` 表，禁止用 localStorage / sessionStorage / electron-store 等非数据库存储。**
+
+---
+
+## 1. 为什么优先 SQLite
+
+| 存储方式 | 可查询性 | 可同步性 | 类型安全 | 迁移友好 |
+|---------|---------|---------|---------|---------|
+| **SQLite (`app_state`)** | ✅ 支持 SQL 查询 | ✅ 可参与同步链路 | ✅ 有 schema | ✅ ALTER TABLE |
+| localStorage | ❌ 纯字符串 K-V | ❌ 无法同步 | ❌ 全是字符串 | ❌ 无迁移机制 |
+| electron-store | ❌ JSON 文件 | ❌ 难以同步 | ❌ 无类型 | ❌ 需手动迁移 |
+| Vuex / Pinia 内存 | ❌ 仅运行时 | ❌ 重启丢失 | ❌ 无持久化 | ❌ — |
+
+`app_state` 表是专为应用级配置设计的，和笔记/分类共享同一套 SQLite 实例，所有配置都在同一个事务上下文里。
+
+---
+
+## 2. `app_state` 表用法
+
+### 2.1 表结构
+
+```sql
+CREATE TABLE IF NOT EXISTS app_state (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT NOT NULL UNIQUE,
+  value TEXT,                          -- JSON 字符串化
+  updated_at INTEGER
+);
+```
+
+### 2.2 读写 API（DatabaseClient）
+
+```javascript
+import DatabaseClient from 'src/utils/DatabaseClient'
+
+// 读取
+const val = await DatabaseClient.appState.get('my-setting-key')
+const parsed = val ? JSON.parse(val) : defaultValue
+
+// 写入
+await DatabaseClient.appState.set('my-setting-key', JSON.stringify(newValue))
+```
+
+### 2.3 命名约定
+
+settings 相关 key 统一加 `setting/` 前缀，格式：`setting/<category>/<name>`
+
+```
+setting/editor/fontSize
+setting/editor/lineHeight
+setting/sync/autoSyncInterval
+setting/cloudFn/lastInvokeTime
+```
+
+---
+
+## 3. 允许使用非 SQLite 存储的例外
+
+以下场景允许使用其他存储，但**必须先确认是否真的无法用 SQLite**：
+
+| 场景 | 允许的替代方案 | 要求 |
+|-----|--------------|------|
+| **敏感凭据**（Token、Secret） | electron-store（加密）或主进程内存 | 禁止写入 SQLite 明文 |
+| **临时 UI 状态**（弹框位置、分栏宽度） | 内存或组件内 `data()` | 重启可接受丢失 |
+| **三方 SDK 强制要求**（如某 SDK 只支持 IndexedDB） | 跟随 SDK 默认 | 做好 fallback |
+
+---
+
+## 4. 迁移指引
+
+### 4.1 从 electron-store 迁移到 SQLite
+
+1. 在 `electron-main.js` 启动时读取 electron-store 旧值
+2. 写入 `app_state` 表
+3. 删除 electron-store 对应 key
+
+```javascript
+// electron-main.js 迁移逻辑示例
+async function migrateSettingsToAppState() {
+  const oldValue = electronStore.get('some-setting')
+  if (oldValue !== undefined) {
+    await dbClient.appState.set('setting/editor/fontSize', JSON.stringify(oldValue))
+    electronStore.delete('some-setting')
+  }
+}
+```
+
+### 4.2 从 localStorage 迁移到 SQLite
+
+1. 在渲染进程启动时检测 localStorage 中的 settings key
+2. 调用 `DatabaseClient.appState.set` 写入 SQLite
+3. 清除 localStorage 对应 key
+
+---
+
+## 5. 自检清单
+
+在 SettingsDialog 或相关 store 文件中新增/修改配置时：
+
+1. **这个配置是持久化的吗？** → 必须在重启后保留
+2. **SQLite (`app_state`) 能存下这个值吗？** → 几乎任何 JSON 序列化值都能存
+3. **有没有必须用 electron-store / localStorage 的硬性理由？** → 没有就别用
+4. **key 命名带 `setting/` 前缀了吗？** → 必须
+5. **存之前 JSON.stringify 了么？** → `app_state.value` 是 TEXT 类型
+
+---
+
+## 6. 相关文件
+
+| 文件 | 角色 |
+|------|------|
+| `src-electron/main-process/electron-main.js` | 数据库初始化、IPC Handlers |
+| `src/utils/DatabaseClient.js` | `appState.get/set` API |
+| `src/components/settings/SettingsDialog.vue` | 设置弹框主入口 |
+| `src/store/client/state.js` | 客户端状态管理（可作为 UI 层缓存，持久化走 SQLite） |

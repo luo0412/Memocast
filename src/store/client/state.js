@@ -55,6 +55,9 @@ export default function () {
       total: 0,
       synced: 0,
       pending: 0
-    }
+    },
+    // CDN 依赖配置：用于笔记软件静态资源 + 可选注入到博客 index.html
+    // 每项结构: { id, name, url, enabled, applyToBlog }
+    cdnDeps: []
   }
 }

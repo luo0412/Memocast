@@ -1992,6 +1992,42 @@ function registerDatabaseHandlers() {
     }
   })
 
+  // CDN 依赖持久化
+  const CDN_DEPS_KEY = 'v__2_client_cdnDeps'
+
+  ipcMain.handle('db:getCdnDeps', async () => {
+    try {
+      const row = execOne('SELECT value FROM app_state WHERE key = ?', [CDN_DEPS_KEY])
+      if (!row) return []
+      try {
+        return JSON.parse(row.value)
+      } catch (parseError) {
+        return []
+      }
+    } catch (error) {
+      log.error('[DB] getCdnDeps error:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle('db:saveCdnDeps', async (event, deps) => {
+    try {
+      if (!Array.isArray(deps)) deps = []
+      const now = Date.now()
+      const serialized = JSON.stringify(deps)
+      await db.run(
+        `INSERT INTO app_state (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        [CDN_DEPS_KEY, serialized, now]
+      )
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] saveCdnDeps error:', error)
+      return false
+    }
+  })
+
   // 记录待同步的删除日志
   ipcMain.handle('db:logPendingDelete', async (event, { noteId, docGuid = null, kbGuid = null }) => {
     try {

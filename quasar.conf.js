@@ -29,7 +29,8 @@ module.exports = function (/* ctx */) {
       'electron-clipboard',
       'jxgraph',
       'rune-deps',
-      'hel-micro-renderer'
+      'hel-micro-renderer',
+      'cdn-deps'
     ],
 
     // https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-css

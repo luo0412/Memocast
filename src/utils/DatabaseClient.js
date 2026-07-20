@@ -394,6 +394,16 @@ const echoes = {
   }
 }
 
+const cdnDeps = {
+  async getAll() {
+    return await invoke('db:getCdnDeps')
+  },
+
+  async saveAll(deps) {
+    return await invoke('db:saveCdnDeps', deps)
+  }
+}
+
 const DatabaseClient = {
   notes,
   tags,
@@ -404,7 +414,8 @@ const DatabaseClient = {
   aiSkills,
   runes,
   runeTemplates,
-  echoes
+  echoes,
+  cdnDeps
 }
 
 export default DatabaseClient

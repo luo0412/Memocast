@@ -842,7 +842,7 @@ function detectBlogTheme (blogDir) {
   return 'default'
 }
 
-async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpConfig, customBuildCommand, baseOverride, packageManager) {
+async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpConfig, customBuildCommand, baseOverride, packageManager, cdnDeps) {
   // —— 防御性守卫 —— 
   if (!blogDir || typeof blogDir !== 'string') {
     console.error('[BlogDeploy] blogDir is missing or invalid:', blogDir)
@@ -1100,6 +1100,15 @@ async function execBlogBuild (blogDir, githubConfig, event, themeOverride, sftpC
       return { error: buildResult.error }
     }
 
+    // 6. 注入 CDN 依赖到 index.html（仅注入 applyToBlog=true 且 enabled=true 的项）
+    sendProgress(webContents, 'inject', 'Injecting CDN dependencies...', 80)
+    try {
+      await injectCdnDepsToIndexHtml(blogDir, cdnDeps)
+      console.log('[BlogDeploy] CDN deps injected to index.html')
+    } catch (cdnErr) {
+      console.warn('[BlogDeploy] CDN injection warning (non-blocking):', cdnErr.message)
+    }
+
     // 4. 触发 GitHub Actions（若配置了）
     if (githubConfig?.token && githubConfig?.owner && githubConfig?.workflowId) {
       sendProgress(webContents, 'trigger', 'Triggering GitHub Actions...', 85)
@@ -1354,6 +1363,57 @@ function cancelBlogBuild () {
       console.warn('Failed to kill child process:', e)
     }
     currentProcess = null
+  }
+}
+
+/**
+ * 注入 CDN 依赖到 index.html
+ * 仅注入 enabled=true 且 applyToBlog=true 的项
+ * @param {string} blogDir - 博客目录
+ * @param {Array<{id,name,url,enabled,applyToBlog}>} cdnDeps - CDN 依赖列表
+ */
+async function injectCdnDepsToIndexHtml (blogDir, cdnDeps) {
+  if (!cdnDeps || !Array.isArray(cdnDeps) || cdnDeps.length === 0) {
+    return
+  }
+
+  // 过滤出需要注入的项：enabled=true 且 applyToBlog=true
+  const toInject = cdnDeps.filter(dep => dep.enabled && dep.applyToBlog && dep.url)
+  if (toInject.length === 0) {
+    console.log('[BlogDeploy] No CDN deps to inject')
+    return
+  }
+
+  const indexHtmlPath = path.join(blogDir, '.vuepress/dist/index.html')
+  const html404Path = path.join(blogDir, '.vuepress/dist/404.html')
+
+  // 读取 index.html
+  if (!fs.existsSync(indexHtmlPath)) {
+    console.warn('[BlogDeploy] index.html not found:', indexHtmlPath)
+    return
+  }
+
+  let indexHtml = fs.readFileSync(indexHtmlPath, 'utf-8')
+
+  // 生成 CDN script 标签
+  const scriptTags = toInject.map(dep => {
+    const name = dep.name || 'cdn-dep'
+    return `  <!-- CDN Dep: ${name} -->\n  <script src="${dep.url}"></script>`
+  }).join('\n')
+
+  // 注入到 </head> 之前
+  indexHtml = indexHtml.replace('</head>', `\n${scriptTags}\n</head>`)
+
+  // 写回 index.html
+  fs.writeFileSync(indexHtmlPath, indexHtml, 'utf-8')
+  console.log(`[BlogDeploy] Injected ${toInject.length} CDN deps to index.html`)
+
+  // 同时处理 404.html
+  if (fs.existsSync(html404Path)) {
+    let html404 = fs.readFileSync(html404Path, 'utf-8')
+    html404 = html404.replace('</head>', `\n${scriptTags}\n</head>`)
+    fs.writeFileSync(html404Path, html404, 'utf-8')
+    console.log('[BlogDeploy] Injected CDN deps to 404.html')
   }
 }
 

@@ -1,10 +1,23 @@
 import runSanitize from './dompurify'
-import { URL_REG, DATA_URL_REG, IMAGE_EXT_REG } from '../config'
 
+// 延迟导入 config 中的常量，避免循环依赖
 const ID_PREFIX = 'ag-'
 let id = 0
 
 const TIMEOUT = 1500
+
+// 使用 Promise 缓存 config 常量
+let _configPromise = null
+const loadConfig = () => {
+  if (!_configPromise) {
+    _configPromise = import('../config').then(m => ({
+      URL_REG: m.URL_REG,
+      DATA_URL_REG: m.DATA_URL_REG,
+      IMAGE_EXT_REG: m.IMAGE_EXT_REG
+    }))
+  }
+  return _configPromise
+}
 
 export const getUniqueId = () => `${ID_PREFIX}${id++}`
 
@@ -250,7 +263,9 @@ export const checkImageContentType = url => {
  * @param {string} src Image url
  * @param {string} baseUrl Base path; used on desktop to fix the relative image path.
  */
-export const getImageInfo = (src, baseUrl = window.DIRNAME) => {
+export const getImageInfo = async (src, baseUrl = window.DIRNAME) => {
+  const config = await loadConfig()
+  const { URL_REG, DATA_URL_REG, IMAGE_EXT_REG } = config
   const imageExtension = IMAGE_EXT_REG.test(src)
   const isUrl = URL_REG.test(src)
 
