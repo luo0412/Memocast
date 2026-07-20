@@ -2473,9 +2473,20 @@ export default {
     this.loadEchoes()
     this.loadAiModelConfigs()
     this.loadAiSkillConfigs()
-    // 初始化 CDN 依赖（从 SQLite 加载）
+    // 初始化 CDN 依赖（从 SQLite 加载，空时添加 jQuery 默认值）
     const savedDeps = await DatabaseClient.cdnDeps.getAll()
-    this.cdnDeps = Array.isArray(savedDeps) ? savedDeps : []
+    if (Array.isArray(savedDeps) && savedDeps.length > 0) {
+      this.cdnDeps = savedDeps
+    } else {
+      // 默认添加 jQuery
+      this.cdnDeps = [{
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+        name: 'jQuery',
+        url: 'https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js',
+        enabled: true,
+        applyToBlog: false
+      }]
+    }
     // 初始化云同步状态
     CloudSyncService.addListener(this.onCloudSyncStatusChange)
     this.refreshCloudSyncStatus()
