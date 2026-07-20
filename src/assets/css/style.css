@@ -301,6 +301,16 @@ body
   z-index: 99999 !important;
 }
 
+/* ========== ELEMENT-UI POPPER IN QUASAR DIALOG Z-INDEX FIX ========== */
+/* 确保 el-popover/el-popper 在 q-dialog 内能正确显示 */
+.el-popper,
+.el-popover,
+.el-select-dropdown,
+.el-autocomplete-suggestion {
+  position: fixed !important;
+  z-index: 99999 !important;
+}
+
 /* 覆盖 heyui 默认的 z-index */
 .h-categorypicker-mask {
   z-index: 99998 !important;

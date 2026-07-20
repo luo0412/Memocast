@@ -14,7 +14,7 @@
 3. 内置模板没有持久化——每次清掉 `rune_templates` 表都得重新手动补齐。
 
 目标：
-- 提供一个"分类下钻 + 模板二级"的公共选择器 `CategoryPicker`（仿 heyui v1）。
+- 提供一个"分类下钻 + 模板二级"的公共选择器 `CategoryPicker`。
 - 让 `RuneFormDialog` 通过 `CategoryPicker` 选内置 / 用户已导入的预设模板。
 - 支持把 GitHub URL（blob / raw 形式都识别）→ 自动转 raw 抓取 → 解析 front-matter 注释 →
   写入 SQLite `rune_templates` 表。
@@ -45,7 +45,7 @@
 
 ## 2. 公共组件 `CategoryPicker.vue`
 
-仿 heyui v1 `category-picker`：
+基于 Element-UI `el-popover` 的分类下钻选择器：
 - `el-popover` 触发，弹层内是 面包屑 + 一级分类列表 / 二级模板列表 两级 drill-down。
 - 分类节点"不可直接选中"，只下钻；模板节点才触发 `@change` 并关闭弹层。
 - 支持懒加载 `option.getDatas(node, ok, fail)` / `option.getTotalDatas`。

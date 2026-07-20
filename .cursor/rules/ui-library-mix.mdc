@@ -1,11 +1,11 @@
 ---
-description: Element-UI / Quasar / Ant Design Vue / HeyUI 混用规范
+description: Element-UI / Quasar / Ant Design Vue 混用规范
 alwaysApply: true
 ---
 
 # UI 库混用规范
 
-本项目使用多种 UI 库（Element-UI、Quasar、Ant Design Vue、HeyUI），混用是**正常现象**，无需规避。根据 Feature / Component 类型决定优先使用哪个库。
+本项目使用多种 UI 库（Element-UI、Quasar、Ant Design Vue），混用是**正常现象**，无需规避。根据 Feature / Component 类型决定优先使用哪个库。
 
 ---
 
@@ -16,7 +16,6 @@ alwaysApply: true
 | **1st** | **Quasar** | Electron 主进程、窗口管理、系统级组件、跨平台桌面 UI |
 | **2nd** | **Element-UI** | 笔记编辑区、Markdown 内容、Muya 编辑器、表单、表格、导航等**通用组件** |
 | **3rd** | **Ant Design Vue** | 仅当 Element-UI 缺少关键功能时使用（如特殊日期范围选择、树形表格） |
-| **Last** | **HeyUI** | 仅 `Category`、`CategoryPicker` 分类选择组件（其他场景不用） |
 
 ---
 
@@ -69,10 +68,7 @@ alwaysApply: true
 - 表单组件（`el-form`、`el-input-number`、`el-switch`）
 - 按钮、标签、弹框等通用组件
 
-**HeyUI 仅用于分类选择**
-
-- 当需要树形分类选择器时，使用 `Category`、`CategoryPicker`
-- 其他场景不用 HeyUI
+- 分类选择使用 `CategoryPicker`（位于 `src/components/category/CategoryPicker.vue`）
 
 ```html
 <!-- ✅ 正确：设置页用 Element-UI -->
@@ -80,9 +76,6 @@ alwaysApply: true
   <el-input-number v-model="interval" />
 </el-form-item>
 <el-button type="primary" @click="save">保存</el-button>
-
-<!-- ✅ 正确：分类选择用 HeyUI -->
-<CategoryPicker v-model="selectedCategory" />
 ```
 
 ### 2.4 数据展示 / 表格
@@ -146,9 +139,9 @@ alwaysApply: true
 - `el-radio-group`、`el-checkbox-group`
 - `el-input-number`、`el-color-picker`
 
-**分类选择使用 HeyUI**
+**分类选择使用本地 CategoryPicker 组件**
 
-- `Category`、`CategoryPicker`（仅此场景用 HeyUI）
+- `CategoryPicker`（位于 `src/components/category/CategoryPicker.vue`）用于树形分类选择
 
 ```html
 <!-- ✅ 正确：表单区域统一用 Element-UI -->
@@ -232,7 +225,7 @@ this.$notify({ title: '提示', message: '操作完成' })
 遇到组件选择时，按顺序问自己：
 
 1. **是 Electron 窗口/系统级 UI 吗？** → 用 **Quasar**
-2. **需要树形分类选择（Category/CategoryPicker）吗？** → 用 **HeyUI**（仅此场景）
+2. **需要树形分类选择吗？** → 用 **CategoryPicker**（本地组件）
 3. **其他所有场景** → 用 **Element-UI**
 4. **Element-UI 真的做不到吗？** → 用 **Ant Design Vue**
 
