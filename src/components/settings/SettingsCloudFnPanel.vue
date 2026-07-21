@@ -1,0 +1,104 @@
+<template>
+  <div class='settings-cloudfn-panel-layout'>
+    <CategoryTabs
+      v-model='subTab'
+      :tabs='subTabOptions'
+      color-theme='info'
+    />
+    <q-separator vertical class='settings-dialog-sep' />
+    <div class='settings-cloudfn-panel'>
+      <!-- 配置 -->
+      <SettingsSectionContent v-if='subTab === "config"' :title="$t('cloudFnConfig')" accent-color='blue-7'>
+        <template v-slot:actions>
+          <q-btn flat dense size='sm' icon='help_outline' @click='openCloudFnHelp'>
+            <q-tooltip>{{ $t('cloudFunctionDoc') }}</q-tooltip>
+          </q-btn>
+        </template>
+        <cloud-fn-config-dialog />
+      </SettingsSectionContent>
+
+      <!-- 导航中心 -->
+      <SettingsSectionContent v-if='subTab === "navigation"' :title="$t('cloudFnNavigation')" accent-color='blue-7'>
+        <q-banner rounded dense class='bg-blue-1 text-blue-10 q-mb-md'>
+          <template v-slot:avatar>
+            <q-icon name='info_outline' color='blue-7' />
+          </template>
+          {{ $t('navigationCenterHint') }}
+        </q-banner>
+        <div class='text-center q-pa-lg'>
+          <q-btn color='blue-7' unelevated icon='explore' :label="$t('openNavigationCenter')" @click='$emit("open-navigation-dialog")' />
+        </div>
+      </SettingsSectionContent>
+    </div>
+  </div>
+</template>
+
+<script>
+import CategoryTabs from 'components/category/CategoryTabs'
+import SettingsSectionContent from 'components/settings/SettingsSectionContent'
+import CloudFnConfigDialog from 'components/cloud/CloudFnConfigDialog'
+
+export default {
+  name: 'SettingsCloudFnPanel',
+  components: {
+    CategoryTabs,
+    SettingsSectionContent,
+    CloudFnConfigDialog
+  },
+  props: {},
+  data () {
+    return {
+      subTab: 'config'
+    }
+  },
+  computed: {
+    subTabOptions () {
+      return [
+        { value: 'config', label: this.$t('cloudFnConfig'), icon: 'settings' },
+        { value: 'navigation', label: this.$t('cloudFnNavigation'), icon: 'explore' }
+      ]
+    }
+  },
+  methods: {
+    openCloudFnHelp: function () {
+      window.open('https://vkdoc.fsq.pub/client/pages/callFunctionForUrl.html', '_blank')
+    }
+  }
+}
+</script>
+
+<style scoped>
+.settings-cloudfn-panel-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+  height: calc(70vh - 52px);
+}
+
+.settings-cloudfn-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  padding: 0 6px 4px 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 120, 0.45) transparent;
+}
+
+.settings-cloudfn-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-cloudfn-panel::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.35);
+  border-radius: 999px;
+}
+
+.settings-cloudfn-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-dialog-sep {
+  flex-shrink: 0;
+}
+</style>
