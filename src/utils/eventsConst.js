@@ -45,14 +45,16 @@ export const EVENTS = Object.freeze({
   EDITOR_SCROLL: 'editor.scroll',
   NOTE_ITEM_CONTEXT_MENU: Object.freeze({
     rename: 'note.item.context.menu.rename',
-    copy: 'note.item.context.menu.copy',
-    move: 'note.item.context.menu.',
+    copyNote: 'note.item.context.menu.copyNote',
+    copyMarkdownContent: 'note.item.context.menu.copyMarkdownContent',
+    move: 'note.item.context.menu.move',
     exportNote: Object.freeze({
       markdown: 'note.item.context.menu.export.markdown',
       png: 'note.item.context.menu.export.png'
     }),
     flomo: 'note.item.context.menu.flomo',
-    delete: 'note.item.context.menu.delete'
+    delete: 'note.item.context.menu.delete',
+    openTierRankingForNote: 'note.item.context.menu.open.tier.ranking.for.note'
   }),
   SIDE_DRAWER_CONTEXT_MENU: Object.freeze({
     renameCategory: 'side.drawer.context.menu.rename.category',
@@ -65,6 +67,7 @@ export const EVENTS = Object.freeze({
     exportToBlog: 'side.drawer.context.menu.export.to.blog',
     copyMarkdown: 'side.drawer.context.menu.copy.markdown',
     openTierRanking: 'side.drawer.context.menu.open.tier.ranking',
+    openTierRankingForCategory: 'side.drawer.context.menu.open.tier.ranking.for.category',
     openImport: 'side.drawer.context.menu.open.import'
   }),
   TAG_TREEMAP_RESIZE: 'tag.treemap.resize',

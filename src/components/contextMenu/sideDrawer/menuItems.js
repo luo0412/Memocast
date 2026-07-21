@@ -6,6 +6,12 @@ export const OPEN_TIER_RANKING = {
   click: contextMenu.openTierRanking()
 }
 
+export const OPEN_TIER_RANKING_FOR_CATEGORY = {
+  label: 'openTierRankingForCategory',
+  id: 'openTierRankingForCategoryMenuItem',
+  click: contextMenu.openTierRankingForCategory()
+}
+
 export const RENAME = {
   label: 'rename',
   id: 'renameCategoryMenuItem',

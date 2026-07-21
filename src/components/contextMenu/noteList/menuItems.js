@@ -6,10 +6,16 @@ export const RENAME = {
   click: contextMenu.rename()
 }
 
-export const COPY = {
-  label: 'copy',
+export const COPY_NOTE = {
+  label: 'copyNote',
   id: 'copyNoteMenuItem',
-  click: contextMenu.copy()
+  click: contextMenu.copyNote()
+}
+
+export const COPY_MARKDOWN_CONTENT = {
+  label: 'copyMarkdownContent',
+  id: 'copyMarkdownContentMenuItem',
+  click: contextMenu.copyMarkdownContent()
 }
 
 export const MOVE = {
@@ -33,6 +39,12 @@ export const EXPORT = {
       click: contextMenu.exportAsPNG()
     }
   ]
+}
+
+export const OPEN_TIER_RANKING_FOR_NOTE = {
+  label: 'openTierRankingForNote',
+  id: 'openTierRankingForNoteMenuItem',
+  click: contextMenu.openTierRankingForNote()
 }
 
 export const DELETE = {

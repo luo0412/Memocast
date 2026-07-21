@@ -40,12 +40,15 @@
     </q-card>
     <CategoryDialog ref='categoryDialog' :note-info='rightClickNoteItem' :label='categoryDialogLabel'
                     :handler='categoryDialogHandler' />
+    <TierRankingDialog ref="tierRankingDialog" />
   </div>
 </template>
 
 <script>
 import NoteItem from './NoteItem.vue'
 import CategoryDialog from '../category/CategoryDialog.vue'
+import TierRankingDialog from '../ranking/TierRankingDialog.vue'
+import DatabaseClient from 'src/utils/DatabaseClient'
 import { createNamespacedHelpers } from 'vuex'
 import { Loading, QSpinnerGears } from 'quasar'
 import LoadingComponent from '../common/Loading.vue'
@@ -57,11 +60,12 @@ const { mapGetters: mapServerGetters, mapState: mapServerState, mapActions: mapS
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 export default {
   name: 'NoteList',
-  components: { Loading, NoteItem, CategoryDialog, Loading: LoadingComponent },
+  components: { Loading, NoteItem, CategoryDialog, TierRankingDialog, Loading: LoadingComponent },
   data () {
     return {
       categoryDialogLabel: '',
-      categoryDialogHandler: () => {}
+      categoryDialogHandler: () => {},
+      tierRankingNoteDocGuid: '' // 缓存当前右键点击的笔记 docGuid
     }
   },
   computed: {
@@ -180,6 +184,15 @@ export default {
       this.categoryDialogHandler = this.copyNote
       this.$refs.categoryDialog.toggle()
     },
+    copyMarkdownContentHandler: async function () {
+      const noteField = this.rightClickNoteItem
+      if (!noteField) return
+      const note = await DatabaseClient.notes.getByDocGuid(noteField.docGuid)
+      if (!note) return
+      const markdownContent = note.content || ''
+      this.$q.electron.clipboard.writeText(markdownContent)
+      this.$q.notify({ message: this.$t('noteContentCopied'), type: 'positive' })
+    },
     moveNoteHandler: function () {
       this.categoryDialogLabel = 'moveToAnotherCategory'
       this.categoryDialogHandler = this.moveNote
@@ -194,7 +207,27 @@ export default {
     noteItemContextMenuHandler: function (e, noteField) {
       const isCurrentNote = noteField.docGuid === this.currentNote?.info?.docGuid
       this.setRightClickNoteItem(noteField)
-      showNoteItemContextMenu(e, isCurrentNote)
+      // 缓存 docGuid 用于从夯到拉
+      this.tierRankingNoteDocGuid = noteField.docGuid
+      showNoteItemContextMenu(e, isCurrentNote, { docGuid: noteField.docGuid })
+    },
+    /**
+     * 打开笔记的从夯到拉排行榜（从夯到拉）
+     */
+    openTierRankingForNoteHandler: async function (eventData) {
+      const docGuid = eventData?.noteData?.docGuid || this.tierRankingNoteDocGuid
+      if (!docGuid) {
+        this.$q.notify({ message: '未选择笔记', color: 'warning' })
+        return
+      }
+      // 读取笔记内容
+      const note = await DatabaseClient.notes.getByDocGuid(docGuid)
+      const noteContent = note?.content || ''
+      this.$refs.tierRankingDialog.toggle({
+        mode: 'note',
+        contextKey: docGuid,
+        noteContent
+      })
     },
     ...mapServerActions([
       'deleteCategory',
@@ -214,11 +247,19 @@ export default {
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.exportCategory.markdown, this.exportCategoryHandler)
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.delete, this.deleteCategoryHandler)
     bus.$on(events.NOTE_ITEM_CONTEXT_MENU.rename, this.renameNoteHandler)
-    bus.$on(events.NOTE_ITEM_CONTEXT_MENU.copy, this.copyNoteHandler)
+    bus.$on(events.NOTE_ITEM_CONTEXT_MENU.copyNote, this.copyNoteHandler)
+    bus.$on(events.NOTE_ITEM_CONTEXT_MENU.copyMarkdownContent, this.copyMarkdownContentHandler)
     bus.$on(events.NOTE_ITEM_CONTEXT_MENU.move, this.moveNoteHandler)
     bus.$on(events.NOTE_SHORTCUT_CALL.exportNoteAsMarkdown, this.exportNoteAsMdHandler)
     bus.$on(events.NOTE_SHORTCUT_CALL.exportNoteAsPNG, this.exportNoteAsPngHandler)
     bus.$on(events.NOTE_ITEM_CONTEXT_MENU.delete, this.deleteNoteHandler)
+    // 从夯到拉相关事件
+    bus.$on(events.NOTE_ITEM_CONTEXT_MENU.openTierRankingForNote, this.openTierRankingForNoteHandler)
+  },
+  beforeDestroy () {
+    bus.$off(events.NOTE_ITEM_CONTEXT_MENU.copyNote, this.copyNoteHandler)
+    bus.$off(events.NOTE_ITEM_CONTEXT_MENU.copyMarkdownContent, this.copyMarkdownContentHandler)
+    bus.$off(events.NOTE_ITEM_CONTEXT_MENU.openTierRankingForNote, this.openTierRankingForNoteHandler)
   }
 }
 </script>

@@ -411,8 +411,25 @@ export default {
     tagTreemapContextMenuHandler: function (e) {
       e.preventDefault()
     },
-    openTierRankingHandler: function () {
-      this.$refs.tierRankingDialog.toggle()
+    openTierRankingForCategoryHandler: function (eventData) {
+      // 文件夹模式：从右键菜单触发，category 从 eventData 获取
+      const category = eventData?.category || this.rightClickCategoryItem || this.currentCategory || ''
+      this.$refs.tierRankingDialog.toggle({
+        mode: 'category',
+        contextKey: category
+      })
+    },
+    openTierRankingHandler: function (eventData) {
+      // 支持两种模式：带参数调用和默认调用
+      if (eventData && eventData.mode) {
+        this.$refs.tierRankingDialog.toggle(eventData)
+      } else {
+        // 默认模式：文件夹模式，上下文为当前右键点击的分类
+        this.$refs.tierRankingDialog.toggle({
+          mode: 'category',
+          contextKey: this.rightClickCategoryItem || this.currentCategory || ''
+        })
+      }
     },
     resizeTagTreemap () {
       if (this.tagChart && this.type === 'tag') {
@@ -424,6 +441,7 @@ export default {
   },
   mounted () {
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.openTierRanking, this.openTierRankingHandler)
+    bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.openTierRankingForCategory, this.openTierRankingForCategoryHandler)
     bus.$on(events.TAG_TREEMAP_RESIZE, this.resizeTagTreemap)
     DatabaseClient.appState.get(WORKSPACE_STATE_KEYS.expandedKeys)
       .then((keys) => {
@@ -441,6 +459,7 @@ export default {
   },
   beforeDestroy () {
     bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.openTierRanking, this.openTierRankingHandler)
+    bus.$off(events.SIDE_DRAWER_CONTEXT_MENU.openTierRankingForCategory, this.openTierRankingForCategoryHandler)
     bus.$off(events.TAG_TREEMAP_RESIZE, this.resizeTagTreemap)
     if (this.tagChart) {
       this.tagChart.dispose()

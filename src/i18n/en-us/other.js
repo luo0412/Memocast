@@ -36,6 +36,7 @@ export default {
   copyContent: 'Copy Content',
   copyNoteLink: 'Copy Note Link',
   noteLinkCopied: 'Note link copied',
+  noteContentCopied: 'Note content copied',
   defaultNoteTitle: '【{category}】New Note-{date}.md',
   notePrefix: 'Prefix',
   noteTitleBase: 'New Note',

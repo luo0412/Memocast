@@ -36,6 +36,7 @@ export default {
   copyContent: '复制内容',
   copyNoteLink: '复制笔记链接',
   noteLinkCopied: '笔记链接已复制',
+  noteContentCopied: '笔记内容已复制',
   defaultNoteTitle: '【{category}】新笔记-{date}.md',
   notePrefix: '前缀',
   noteTitleBase: '新笔记',

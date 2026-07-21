@@ -2,6 +2,17 @@
   <q-dialog ref='dialog' maximized class='tier-ranking-dialog'>
     <div class='tier-ranking-wrapper' @click.self='closeDialog'>
       <div class='tier-ranking-body'>
+        <!-- 模式切换栏 -->
+        <div class='mode-bar'>
+          <span class='mode-label'>当前: {{ modeLabel }}</span>
+          <span v-if='contextKey' class='context-label'>{{ contextKey }}</span>
+          <div class='mode-actions'>
+            <button v-if='mode === "note" && contextKey' type='button' class='fill-btn' @click='fillTierRankingToNote'>
+              💾 回填到笔记
+            </button>
+          </div>
+        </div>
+
         <div class='ranking-container'>
           <div
             v-for='(tier, tierIndex) in tiers'
@@ -188,10 +199,8 @@
 
 <script>
 import html2canvas from 'html2canvas'
-
-const DB_NAME = 'TierRankingDB'
-const DB_VERSION = 1
-const STORE_NAME = 'tierRankingState'
+import DatabaseClient from 'src/utils/DatabaseClient'
+import bus from '../common/bus.js'
 
 const DEFAULT_TIERS = [
   { id: 's', name: '夯', color: '#e74d5a' },
@@ -201,12 +210,16 @@ const DEFAULT_TIERS = [
   { id: 'd', name: '拉完了', color: '#747d8c' }
 ]
 
+const STORAGE_KEY_PREFIX = 'tierRanking/'
+
 let imageCounter = 0
 
 export default {
   name: 'TierRankingDialog',
   data () {
     return {
+      mode: 'category', // 'category' | 'note'
+      contextKey: '', // 文件夹路径 或 笔记 docGuid
       tiers: [],
       unassignedImages: [],
       fixedHeightSetting: false,
@@ -222,25 +235,34 @@ export default {
       draggingImage: null,
       draggingImageTierIndex: -1,
       draggingImageIndex: -1,
-      dragOverImageIndex: -1,
-      db: null
+      dragOverImageIndex: -1
+    }
+  },
+  computed: {
+    modeLabel () {
+      return this.mode === 'category' ? '文件夹模式' : '笔记模式'
     }
   },
   mounted () {
-    this.initDB().then(() => {
-      this.loadState()
-    }).catch(e => {
-      console.error('IndexedDB init failed:', e)
-      this.resetToDefault()
-    })
     document.addEventListener('keydown', this.onKeyDown)
   },
   beforeDestroy () {
     document.removeEventListener('keydown', this.onKeyDown)
   },
   methods: {
-    toggle () {
-      return this.$refs.dialog.toggle()
+    /**
+     * 打开弹框
+     * @param {Object} options
+     * @param {string} options.mode - 'category' | 'note'
+     * @param {string} options.contextKey - 文件夹路径 或 笔记 docGuid
+     * @param {string} options.noteContent - 笔记的 markdown 内容（仅 note 模式需要）
+     */
+    toggle (options = {}) {
+      const { mode = 'category', contextKey = '', noteContent = '' } = options
+      this.mode = mode
+      this.contextKey = contextKey
+      this.loadState(noteContent)
+      this.$refs.dialog.toggle()
     },
 
     closeDialog () {
@@ -249,60 +271,76 @@ export default {
       this.$refs.dialog.hide()
     },
 
-    // IndexedDB
-    initDB () {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION)
-        request.onerror = () => reject(request.error)
-        request.onsuccess = () => {
-          this.db = request.result
-          resolve(this.db)
+    /**
+     * 从 MD 内容提取图片 URL
+     */
+    extractImageUrls (markdown) {
+      if (!markdown) return []
+      const imageUrls = []
+      // 匹配 ![] 或 ![alt](url) 格式的图片
+      const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
+      let match
+      while ((match = imageRegex.exec(markdown)) !== null) {
+        const url = match[2]
+        // 只保留本地相对路径或 base64 图片
+        if (url && (url.startsWith('./') || url.startsWith('../') || url.startsWith('/') || url.startsWith('file://') || url.startsWith('data:'))) {
+          imageUrls.push({
+            id: 'extracted-' + imageUrls.length,
+            name: match[1] || '图片',
+            src: url,
+            extracted: true
+          })
         }
-        request.onupgradeneeded = (event) => {
-          const db = event.target.result
-          if (!db.objectStoreNames.contains(STORE_NAME)) {
-            db.createObjectStore(STORE_NAME, { keyPath: 'id' })
-          }
-        }
-      })
+      }
+      return imageUrls
     },
 
-    saveState () {
-      if (!this.db) return
+    // SQLite 存储
+    async loadState (noteContent = '') {
+      const storageKey = STORAGE_KEY_PREFIX + this.contextKey
+
+      try {
+        const stored = await DatabaseClient.appState.get(storageKey)
+        if (stored) {
+          const data = typeof stored === 'string' ? JSON.parse(stored) : stored
+          this.tiers = data.tiers || DEFAULT_TIERS.map(t => ({ ...t, images: [] }))
+          this.unassignedImages = data.unassignedImages || []
+          this.showImageNamesSetting = !!data.showImageNames
+          this.fixedHeightSetting = !!data.fixedHeight
+        } else {
+          this.resetToDefault()
+          // 如果是笔记模式，提取 MD 中的图片作为初始候选
+          if (this.mode === 'note' && noteContent) {
+            const extractedImages = this.extractImageUrls(noteContent)
+            if (extractedImages.length > 0) {
+              this.unassignedImages = extractedImages
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[TierRankingDialog] Load state failed:', e)
+        this.resetToDefault()
+        if (this.mode === 'note' && noteContent) {
+          const extractedImages = this.extractImageUrls(noteContent)
+          if (extractedImages.length > 0) {
+            this.unassignedImages = extractedImages
+          }
+        }
+      }
+    },
+
+    async saveState () {
+      const storageKey = STORAGE_KEY_PREFIX + this.contextKey
       const state = {
-        id: 1,
         tiers: this.tiers,
         unassignedImages: this.unassignedImages,
         showImageNames: !!this.showImageNamesSetting,
         fixedHeight: !!this.fixedHeightSetting
       }
-      const tx = this.db.transaction([STORE_NAME], 'readwrite')
-      const store = tx.objectStore(STORE_NAME)
-      store.put(state)
-    },
-
-    async loadState () {
-      if (!this.db) return
-      const tx = this.db.transaction([STORE_NAME], 'readonly')
-      const store = tx.objectStore(STORE_NAME)
-      const req = store.get(1)
-      req.onsuccess = () => {
-        if (req.result) {
-          const s = req.result.data || req.result
-          if (s.tiers && s.tiers.length > 0) {
-            this.tiers = s.tiers
-            this.unassignedImages = s.unassignedImages || []
-            this.showImageNamesSetting = !!s.showImageNames
-            this.fixedHeightSetting = !!s.fixedHeight
-          } else {
-            this.resetToDefault()
-          }
-        } else {
-          this.resetToDefault()
-        }
-      }
-      req.onerror = () => {
-        this.resetToDefault()
+      try {
+        await DatabaseClient.appState.set(storageKey, JSON.stringify(state))
+      } catch (e) {
+        console.error('[TierRankingDialog] Save state failed:', e)
       }
     },
 
@@ -328,7 +366,6 @@ export default {
 
     deleteTier (tierIndex) {
       const tier = this.tiers[tierIndex]
-      // Move images to unassigned
       tier.images.forEach(img => {
         this.unassignedImages.push(img)
       })
@@ -514,7 +551,6 @@ export default {
       e.stopPropagation()
       this.tierDragOverIndex = tierIndex
 
-      // 记录目标位置（如果拖拽到某个图片上）
       const targetImgEl = e.target.closest('.image-item')
       if (targetImgEl) {
         const targetImgId = targetImgEl.querySelector('img')?.alt
@@ -548,7 +584,6 @@ export default {
       const sourceTierIndex = this.draggingImageTierIndex
 
       if (sourceTierIndex === tierIndex) {
-        // 同一层级内排序
         const images = this.tiers[tierIndex].images
         const fromIndex = this.draggingImageIndex
         let toIndex = this.dragOverImageIndex
@@ -558,15 +593,12 @@ export default {
         }
 
         if (fromIndex !== toIndex) {
-          // 移除原位置
           images.splice(fromIndex, 1)
-          // 插入到新位置
           const insertIndex = toIndex > fromIndex ? toIndex : toIndex
           images.splice(insertIndex, 0, img)
           this.saveState()
         }
       } else {
-        // 跨层级移动
         this.moveImageToTier(tierIndex)
       }
 
@@ -589,7 +621,6 @@ export default {
         return
       }
 
-      // Remove from source
       if (sourceTierIndex === -1) {
         this.unassignedImages = this.unassignedImages.filter(i => i.id !== img.id)
       } else {
@@ -597,7 +628,6 @@ export default {
           this.tiers[sourceTierIndex].images.filter(i => i.id !== img.id)
       }
 
-      // Add to target
       this.tiers[tierIndex].images.push(img)
 
       this.tierDragOverIndex = -1
@@ -613,7 +643,6 @@ export default {
       const sourceTierIndex = this.draggingImageTierIndex
       if (!img) return
 
-      // Remove from source
       if (sourceTierIndex === -1) {
         this.unassignedImages = this.unassignedImages.filter(i => i.id !== img.id)
       } else {
@@ -621,7 +650,6 @@ export default {
           this.tiers[sourceTierIndex].images.filter(i => i.id !== img.id)
       }
 
-      // Add to target
       this.tiers[tierIndex].images.push(img)
 
       this.draggingImage = null
@@ -629,7 +657,6 @@ export default {
       this.saveState()
     },
 
-    // 拖到图库上方（移动到未分类）
     onGalleryDragOver (e) {
       if (!this.draggingImage) return
       e.preventDefault()
@@ -652,18 +679,15 @@ export default {
       const sourceTierIndex = this.draggingImageTierIndex
       if (!img) return
 
-      // Image is already in unassigned — no-op (prevents duplicate on same-area drop)
       if (sourceTierIndex === -1) {
         this.draggingImage = null
         this.draggingImageTierIndex = -1
         return
       }
 
-      // Remove from source tier
       this.tiers[sourceTierIndex].images =
         this.tiers[sourceTierIndex].images.filter(i => i.id !== img.id)
 
-      // Add to unassigned
       this.unassignedImages.push(img)
 
       this.draggingImage = null
@@ -687,7 +711,6 @@ export default {
       const sourceTierIndex = this.draggingImageTierIndex
       if (!img) return
 
-      // Remove from source
       if (sourceTierIndex === -1) {
         this.unassignedImages = this.unassignedImages.filter(i => i.id !== img.id)
       } else {
@@ -698,38 +721,6 @@ export default {
       this.draggingImage = null
       this.draggingImageTierIndex = -1
       this.saveState()
-    },
-
-    deleteSelectedImage () {
-      if (!this.draggingImage) return
-      const sourceTierIndex = this.draggingImageTierIndex
-      if (sourceTierIndex === -1) {
-        this.unassignedImages = this.unassignedImages.filter(i => i.id !== this.draggingImage.id)
-      } else {
-        this.tiers[sourceTierIndex].images =
-          this.tiers[sourceTierIndex].images.filter(i => i.id !== this.draggingImage.id)
-      }
-      this.draggingImage = null
-      this.draggingImageTierIndex = -1
-      this.saveState()
-    },
-
-    onImageClick (img) {
-      this.previewImage = img.src
-    },
-
-    onKeyDown (e) {
-      if (e.key === 'Escape') {
-        this.showHelp = false
-        this.showResetModal = false
-        this.previewImage = null
-        this.draggingImage = null
-        this.draggingImageTierIndex = -1
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (this.draggingImage) {
-          this.deleteSelectedImage()
-        }
-      }
     },
 
     // 固定高度
@@ -851,6 +842,58 @@ export default {
         console.error('截图失败:', err)
         this.$q.notify({ message: '截图失败: ' + err.message, color: 'negative' })
       }
+    },
+
+    /**
+     * 回填：从夯到拉导出图片到 MD 末尾
+     * 返回所有已排序图片的 Markdown 格式文本
+     */
+    exportTierRankingToMarkdown () {
+      const lines = []
+      lines.push('\n\n---\n')
+      lines.push('## 从夯到拉排行榜\n')
+
+      for (const tier of this.tiers) {
+        if (tier.images.length > 0) {
+          lines.push(`\n### ${tier.name}\n`)
+          for (const img of tier.images) {
+            // 保持原 URL（如果是提取的本地路径，直接用；如果是 base64，需要转换）
+            if (img.src.startsWith('data:')) {
+              // base64 图片，保持原样
+              lines.push(`![${img.name}](${img.src})\n`)
+            } else {
+              // 本地路径或 URL
+              lines.push(`![${img.name}](${img.src})\n`)
+            }
+          }
+        }
+      }
+
+      if (this.unassignedImages.length > 0) {
+        lines.push(`\n### 未分类\n`)
+        for (const img of this.unassignedImages) {
+          if (img.src.startsWith('data:')) {
+            lines.push(`![${img.name}](${img.src})\n`)
+          } else {
+            lines.push(`![${img.name}](${img.src})\n`)
+          }
+        }
+      }
+
+      return lines.join('')
+    },
+
+    /**
+     * 回填到笔记
+     */
+    fillTierRankingToNote () {
+      if (this.mode !== 'note') return
+
+      const markdownContent = this.exportTierRankingToMarkdown()
+      // 通过 bus 事件触发编辑器插入文本
+      bus.$emit('insert.text', markdownContent)
+      this.$q.notify({ message: '已回填到笔记', color: 'positive' })
+      this.closeDialog()
     }
   }
 }
@@ -899,6 +942,50 @@ export default {
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+}
+
+.mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #404040;
+  flex-shrink: 0;
+}
+
+.mode-label {
+  font-size: 14px;
+  color: #7dbece;
+  font-weight: 600;
+}
+
+.context-label {
+  font-size: 12px;
+  color: #999;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mode-actions {
+  margin-left: auto;
+}
+
+.fill-btn {
+  background: #4090f0;
+  border: none;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.fill-btn:hover {
+  background: #5090ff;
 }
 
 .ranking-container {

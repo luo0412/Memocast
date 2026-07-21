@@ -5,6 +5,10 @@ export const openTierRanking = (menuItem, browserWindow) => {
   return packClickFunction(events.SIDE_DRAWER_CONTEXT_MENU.openTierRanking)
 }
 
+export const openTierRankingForCategory = (menuItem, browserWindow) => {
+  return packClickFunction(events.SIDE_DRAWER_CONTEXT_MENU.openTierRankingForCategory)
+}
+
 export const renameCategory = (menuItem, browserWindow) => {
   return packClickFunction(events.SIDE_DRAWER_CONTEXT_MENU.renameCategory)
 }

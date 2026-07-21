@@ -782,6 +782,25 @@ export default {
         this.contentEditor.insertParagraph(location)
       }
     },
+    /**
+     * 插入文本到编辑器末尾（用于从夯到拉回填）
+     */
+    insertTextHandler: function (text) {
+      if (!text || !this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return
+      if (!this.active) return
+
+      const currentMarkdown = this.contentEditor.getMarkdown() || ''
+      const newMarkdown = currentMarkdown + text
+      const cursor = typeof this.contentEditor.getCursor === 'function' ? this.contentEditor.getCursor() : null
+      this.contentEditor.setMarkdown(newMarkdown, cursor, false)
+      this.updateContentsList(this.contentEditor.getTOC())
+      this.updateNoteState('changed')
+      this.$nextTick(() => {
+        if (typeof this.contentEditor.scrollToEnd === 'function') {
+          this.contentEditor.scrollToEnd()
+        }
+      })
+    },
     formatDocumentByPanguHandler: function () {
       if (this.active && this.enablePreviewEditor && this.contentEditor) {
         const before = this.contentEditor.getMarkdown()
@@ -1113,6 +1132,7 @@ export default {
       appBus.$on(appEvents.NOTE_SHORTCUT_CALL.save, this.saveHandler)
       appBus.$on(appEvents.ECHO_EVENTS.commitInstance, this.updateEchoPlaceholderPayload)
       appBus.$on(appEvents.ECHO_EVENTS.openInstanceEditor, this.updateEchoPlaceholderPayload)
+      appBus.$on(appEvents.INSERT_TEXT, this.insertTextHandler)
     })
   },
   beforeDestroy () {
@@ -1138,6 +1158,7 @@ export default {
     appBus.$off(appEvents.EDIT_SHORTCUT_CALL.formatDocumentByPangu)
     appBus.$off(appEvents.ECHO_EVENTS.commitInstance)
     appBus.$off(appEvents.ECHO_EVENTS.openInstanceEditor)
+    appBus.$off(appEvents.INSERT_TEXT)
   },
   watch: {
     currentNote: function (currentData) {

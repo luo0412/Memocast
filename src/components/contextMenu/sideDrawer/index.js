@@ -1,5 +1,6 @@
 import {
   OPEN_TIER_RANKING,
+  OPEN_TIER_RANKING_FOR_CATEGORY,
   // RENAME,
   CREATE_CATEGORY,
   CREATE_NOTE,
@@ -59,10 +60,11 @@ export const showContextMenu = (event, isCurrentCategory, category, isLogin, opt
     }
   }
 
-  // ✅ 第三组：从夯到拉/标签排行榜（独立组，加分隔线）
+  // ✅ 第三组：从夯到拉（独立组，加分隔线）
   if (isLogin) {
     ITEMS.push(SEPARATOR)
-    ITEMS.push(OPEN_TIER_RANKING)
+    // 文件夹模式：带文件夹路径参数
+    ITEMS.push(OPEN_TIER_RANKING_FOR_CATEGORY)
   }
 
   // ✅ 第四组：导出到博客（独立组，加分隔线）
@@ -89,6 +91,7 @@ export const showContextMenu = (event, isCurrentCategory, category, isLogin, opt
   popContextMenu({
     x: event.clientX,
     y: event.clientY,
-    menuItems: MENU_ITEM
+    menuItems: MENU_ITEM,
+    contextData: { category }
   }).then(console.log)
 }

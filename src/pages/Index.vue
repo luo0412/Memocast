@@ -226,7 +226,7 @@
               />
               <ImportDialog ref='importDialog' />
               <BlogDeployDialog ref='blogDeployDialog' @deploy='onBlogDeploy' @cancel='onBlogDeployCancel' />
-              <BlogDeployProgressDialog ref='blogDeployProgressDialog' @cancel='onBlogDeployProgressCancel' @rebuild='onBlogDeployRebuild' />
+              <BlogDeployProgressDialog ref='blogDeployProgressDialog' @rebuild='onBlogDeployRebuild' />
             </div>
           </div>
         </div>
@@ -599,10 +599,6 @@ export default {
       await this.$store.dispatch('server/blogDeploy', { config })
     },
     onBlogDeployCancel () {
-      this.$refs.blogDeployProgressDialog.onCancel()
-      this.$store.dispatch('server/cancelBlogDeploy')
-    },
-    onBlogDeployProgressCancel () {
       this.$refs.blogDeployProgressDialog.onCancel()
       this.$store.dispatch('server/cancelBlogDeploy')
     },
