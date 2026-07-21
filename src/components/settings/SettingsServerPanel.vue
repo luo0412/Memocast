@@ -392,8 +392,7 @@ export default {
 }
 
 .cdn-deps-list {
-  max-height: 400px;
-  overflow-y: auto;
+  /* 内容自然流出，由父容器 settings-server-panel 统一滚动 */
 }
 
 .cdn-dep-item {

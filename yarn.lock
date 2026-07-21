@@ -6816,6 +6816,11 @@ entities@~2.1.0:
   resolved "https://mirrors.cloud.tencent.com/npm/entities/-/entities-2.1.0.tgz"
   integrity sha512-hCx1oky9PFrJ611mf0ifBLBRW8lUUVRlFolb5gWRfIELabBlbp9xZvrqZLZAs+NxFnbfQoeGd8wDkygjg7U85w==
 
+enum-plus@^3.2.1:
+  version "3.2.1"
+  resolved "https://mirrors.cloud.tencent.com/npm/enum-plus/-/enum-plus-3.2.1.tgz#f0cb57b6116e6f11c23c1e9f3537e2baac4ed9c0"
+  integrity sha512-8ZbSFdNCFl0083hOa9ESElyL3RApV0gdYdj4uTayU02dcnRoIh38gwJzpG+8yOpjmmj0wLhmL0UBy+rF0L7lNQ==
+
 env-paths@^2.2.0, env-paths@^2.2.1:
   version "2.2.1"
   resolved "https://mirrors.cloud.tencent.com/npm/env-paths/-/env-paths-2.2.1.tgz"
@@ -9585,7 +9590,7 @@ joplin-turndown-plugin-gfm@^1.0.12:
   resolved "https://mirrors.cloud.tencent.com/npm/joplin-turndown-plugin-gfm/-/joplin-turndown-plugin-gfm-1.0.12.tgz"
   integrity sha512-qL4+1iycQjZ1fs8zk3jSRk7cg3ROBUHk7GKtiLAQLFzLPKErnILUvz5DLszSQvz3s1sTjPbywLDISVUtBY6HaA==
 
-jquery@1:
+jquery@1.12.4:
   version "1.12.4"
   resolved "https://mirrors.cloud.tencent.com/npm/jquery/-/jquery-1.12.4.tgz#01e1dfba290fe73deba77ceeacb0f9ba2fec9e0c"
   integrity sha512-UEVp7PPK9xXYSk8xqXCJrkXnKZtlgWkd2GsAQbMRFK6S/ePU2JN5G2Zum8hIVjzR3CpdfSqdqAzId/xd4TJHeg==
