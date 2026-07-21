@@ -128,7 +128,7 @@ export default {
   components: {
     SearchDialog,
     TagDialog: () => import('components/tag/TagDialog'),
-    SettingsDialog,
+    SettingsDialog: () => import('../settings/SettingsDialog.vue'),
     LoginDialog,
     ImDrawer,
     DoubaoChatDrawer,
@@ -210,7 +210,14 @@ export default {
 
     handleSettingsClick () {
       this.handleHighlight('settingsHighlight')
-      this.$refs.settingsDialog.toggle()
+      const dialog = this.$refs.settingsDialog
+      if (dialog) {
+        dialog.toggle()
+      } else {
+        this.$nextTick(() => {
+          this.$refs.settingsDialog?.toggle()
+        })
+      }
     },
 
     handleAiAssistantClick () {
@@ -239,7 +246,9 @@ export default {
     },
 
     handleAiProviderConfigRequest () {
-      this.$refs.settingsDialog.show({ toggle: false, openAiAdd: true })
+      this.$nextTick(() => {
+        this.$refs.settingsDialog?.show({ toggle: false, openAiAdd: true })
+      })
     },
 
     handleOpenEchoManager (payload = {}) {
@@ -261,7 +270,7 @@ export default {
     handleEchoDefinitionOpenFromInstance (payload = {}) {
       this.echoInstanceDialogVisible = false
       this.$nextTick(() => {
-        this.$refs.settingsDialog.show({
+        this.$refs.settingsDialog?.show({
           toggle: false,
           tab: 'echo',
           echoId: String(payload?.echoId || '').trim(),

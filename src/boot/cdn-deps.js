@@ -190,9 +190,25 @@ async function injectResourceInOrder (deps, index) {
 }
 
 /**
+ * 确保 window.jQuery 和 window.$ 挂载
+ */
+function ensureJQueryGlobals () {
+  if (typeof window.jQuery === 'undefined' && typeof window.$ !== 'undefined') {
+    window.jQuery = window.$
+    console.log('[CdnDepsBoot] Ensured window.jQuery = window.$')
+  } else if (typeof window.jQuery !== 'undefined' && typeof window.$ === 'undefined') {
+    window.$ = window.jQuery
+    console.log('[CdnDepsBoot] Ensured window.$ = window.jQuery')
+  }
+  if (typeof window.jQuery !== 'undefined') {
+    console.log('[CdnDepsBoot] jQuery version:', window.jQuery.fn.jquery)
+  }
+}
+
+/**
  * 加载并注入已启用的 CDN 依赖
  */
-function loadAndInjectCdnDeps () {
+async function loadAndInjectCdnDeps () {
   try {
     const raw = localStorage.getItem(CDN_DEPS_STORAGE_KEY)
     if (!raw) {
@@ -212,17 +228,36 @@ function loadAndInjectCdnDeps () {
       return
     }
 
-    console.log('[CdnDepsBoot] Injecting', enabledDeps.length, 'CDN deps in order...')
-    injectResourceInOrder(enabledDeps, 0).catch(err => {
-      console.error('[CdnDepsBoot] Error injecting CDN deps:', err)
-    })
+    // 优先加载 jQuery 和 jQuery Migrate（确保基础库就绪）
+    const jqueryDeps = enabledDeps.filter(dep =>
+      dep.name === 'jQuery' || dep.name === 'jQuery Migrate'
+    )
+    const otherDeps = enabledDeps.filter(dep =>
+      dep.name !== 'jQuery' && dep.name !== 'jQuery Migrate'
+    )
+
+    console.log('[CdnDepsBoot] Injecting', enabledDeps.length, 'CDN deps...')
+
+    // 1. 优先加载 jQuery 系列（串行）
+    if (jqueryDeps.length > 0) {
+      console.log('[CdnDepsBoot] Loading jQuery deps first...')
+      await injectResourceInOrder(jqueryDeps, 0)
+      ensureJQueryGlobals()
+    }
+
+    // 2. 再加载其他依赖
+    if (otherDeps.length > 0) {
+      console.log('[CdnDepsBoot] Loading other deps...')
+      injectResourceInOrder(otherDeps, 0).catch(err => {
+        console.error('[CdnDepsBoot] Error injecting CDN deps:', err)
+      })
+    }
   } catch (err) {
     console.error('[CdnDepsBoot] Error loading CDN deps:', err)
   }
 }
 
-export default () => {
-  // 启动时注入 CDN 资源
+export default async () => {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', loadAndInjectCdnDeps)
   } else {

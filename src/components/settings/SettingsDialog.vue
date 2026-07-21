@@ -222,7 +222,9 @@ export default {
       aiSkillsLoading: false,
       aiSkillConfigs: [],
       // CDN 依赖
-      cdnDeps: []
+      cdnDeps: [],
+      // 懒加载标志
+      _dataLoaded: false
     }
   },
   computed: {
@@ -266,6 +268,9 @@ export default {
     // ==================== Dialog 基础方法 ====================
     toggle: function () {
       this.refreshCloudSyncLoginState()
+      if (!this._dataLoaded) {
+        this.loadLazyData()
+      }
       return this.$refs.dialog.toggle()
     },
     show: function (options = {}) {
@@ -273,7 +278,19 @@ export default {
       if (options && typeof options === 'object') {
         this.applyOpenOptions(options)
       }
+      if (!this._dataLoaded) {
+        this.loadLazyData()
+      }
       return this.$refs.dialog.show()
+    },
+    loadLazyData: async function () {
+      if (this._dataLoaded) return
+      this._dataLoaded = true
+      this.loadRunes()
+      this.loadEchoes()
+      this.loadAiModelConfigs()
+      this.loadAiSkillConfigs()
+      await this.initCdnDeps()
     },
     applyOpenOptions: function (options = {}) {
       const { tab = '', echoId = '', echoName = '', openEchoEdit = false } = options
@@ -795,7 +812,8 @@ export default {
       const savedDeps = await DatabaseClient.cdnDeps.getAll()
       const newId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
       const builtInDeps = [
-        { id: newId(), name: 'jQuery', url: 'https://cdn.jsdelivr.net/npm/jquery@1/dist/jquery.min.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+        { id: newId(), name: 'jQuery', url: 'https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+        { id: newId(), name: 'jQuery Migrate', url: 'https://cdn.jsdelivr.net/npm/jquery-migrate@3/dist/jquery-migrate.min.js', enabled: true, applyToBlog: false, isBuiltIn: true },
         { id: newId(), name: 'layui CSS', url: '//unpkg.com/layui@2.13.8/dist/css/layui.css', enabled: true, applyToBlog: false, isBuiltIn: true },
         { id: newId(), name: 'layui JS', url: '//unpkg.com/layui@2.13.8/dist/layui.js', enabled: true, applyToBlog: false, isBuiltIn: true },
         { id: newId(), name: 'city-picker data', url: 'https://tshi0912.github.io/city-picker/js/city-picker.data.js', enabled: true, applyToBlog: false, isBuiltIn: true },
@@ -803,7 +821,7 @@ export default {
         { id: newId(), name: 'city-picker CSS', url: 'https://tshi0912.github.io/city-picker/css/city-picker.css', enabled: true, applyToBlog: false, isBuiltIn: true }
       ]
       if (Array.isArray(savedDeps) && savedDeps.length > 0) {
-        const existingBuiltInNames = ['jQuery', 'layui CSS', 'layui JS', 'city-picker data', 'city-picker JS', 'city-picker CSS']
+        const existingBuiltInNames = ['jQuery', 'jQuery Migrate', 'layui CSS', 'layui JS', 'city-picker data', 'city-picker JS', 'city-picker CSS']
         const customDeps = savedDeps.filter(d => !existingBuiltInNames.includes(d.name))
         const mergedBuiltIn = builtInDeps.map(bi => {
           const existing = savedDeps.find(d => d.name === bi.name)
@@ -820,11 +838,6 @@ export default {
     bus.$on(events.UPDATE_EVENTS.updateAvailable, this.updateAvailableHandler)
     bus.$on(events.UPDATE_EVENTS.updateNotAvailable, this.updateUnavailableHandler)
     bus.$on(events.UPDATE_EVENTS.updateError, this.updateErrorHandler)
-    this.loadRunes()
-    this.loadEchoes()
-    this.loadAiModelConfigs()
-    this.loadAiSkillConfigs()
-    await this.initCdnDeps()
   },
   beforeDestroy () {
     bus.$off(events.UPDATE_EVENTS.updateAvailable)

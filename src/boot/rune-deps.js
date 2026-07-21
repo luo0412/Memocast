@@ -10,20 +10,15 @@
  *   - 同时给 Vue.prototype.$jquery 暴露一份便于 Vue 组件使用。
  */
 import Vue from 'vue'
+import $ from 'jquery'
 import draggable from 'vuedraggable'
-import jquery from 'jquery'
 
-// jQuery 4.x 在 noConflict 模式下会收回 $, 这里直接赋值给 window 即可
-const $ = jquery
-const jQueryInstance = jquery
-
+// 挂载到 window，确保 layui / city-picker 等依赖能找到
 if (typeof window !== 'undefined') {
-  window.jQuery = jQueryInstance
-  window.$ = $
+  window.$ = window.jQuery = $
+  console.log('[rune-deps] jQuery mounted to window:', $.fn.jquery)
 }
 
 Vue.component('draggable', draggable)
-Vue.prototype.$jquery = $
-Vue.prototype.$ = $
 
 export default () => {}
