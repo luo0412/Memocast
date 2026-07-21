@@ -207,6 +207,8 @@ export default {
   cdnDepsPresetStaticfile: 'staticfile',
   cdnDepsPresetJsdelivr: 'jsDelivr',
   cdnDepsPresetCustom: 'Custom',
+  cdnDepsBuiltIn: 'Built-in (cannot delete)',
+  cdnDepsBuiltInCannotDelete: 'Built-in CDN dependencies cannot be deleted, but can be disabled or have their URL edited.',
   cloudSyncTotal: 'Total',
   cloudSyncLastSync: 'Last Sync',
   cloudSyncSyncing: 'Processing...',

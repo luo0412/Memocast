@@ -459,7 +459,10 @@
                               <q-checkbox dense v-model='dep.applyToBlog' color='green-7' />
                             </div>
                             <div class='col-1 text-right'>
-                              <q-btn flat dense round icon='delete' color='negative' size='sm' @click='deleteCdnDep(dep.id)' />
+                              <q-btn v-if='!dep.isBuiltIn' flat dense round icon='delete' color='negative' size='sm' @click='deleteCdnDep(dep.id)' />
+                              <q-icon v-else name='lock' color='grey-5' size='sm'>
+                                <q-tooltip>{{ $t('cdnDepsBuiltIn') }}</q-tooltip>
+                              </q-icon>
                             </div>
                           </div>
                         </div>
@@ -1282,6 +1285,15 @@ export default {
       })
     },
     deleteCdnDep: function (id) {
+      const dep = this.cdnDeps.find(d => d.id === id)
+      if (dep && dep.isBuiltIn) {
+        this.$q.notify({
+          message: this.$t('cdnDepsBuiltInCannotDelete'),
+          type: 'warning',
+          position: 'top'
+        })
+        return
+      }
       this.$q.dialog({
         title: this.$t('confirm'),
         message: this.$t('cdnDepsDeleteConfirm'),
@@ -2474,60 +2486,67 @@ export default {
     this.loadEchoes()
     this.loadAiModelConfigs()
     this.loadAiSkillConfigs()
-    // 初始化 CDN 依赖（从 SQLite 加载，空时添加 jQuery 默认值）
+    // 初始化 CDN 依赖（从 SQLite 加载，内置项不可删除但可禁用/编辑 URL）
     const savedDeps = await DatabaseClient.cdnDeps.getAll()
+    const newId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
+    // 内置 CDN 依赖（不可删除，可禁用，可编辑 URL）
+    const builtInDeps = [
+      {
+        id: newId(),
+        name: 'jQuery',
+        url: 'https://cdn.jsdelivr.net/npm/jquery@1/dist/jquery.min.js',
+        enabled: true,
+        applyToBlog: false,
+        isBuiltIn: true
+      },
+      {
+        id: newId(),
+        name: 'layui CSS',
+        url: '//unpkg.com/layui@2.13.8/dist/css/layui.css',
+        enabled: true,
+        applyToBlog: false,
+        isBuiltIn: true
+      },
+      {
+        id: newId(),
+        name: 'layui JS',
+        url: '//unpkg.com/layui@2.13.8/dist/layui.js',
+        enabled: true,
+        applyToBlog: false,
+        isBuiltIn: true
+      },
+      {
+        id: newId(),
+        name: 'city-picker data',
+        url: 'https://tshi0912.github.io/city-picker/js/city-picker.data.js',
+        enabled: true,
+        applyToBlog: false,
+        isBuiltIn: true
+      },
+      {
+        id: newId(),
+        name: 'city-picker JS',
+        url: 'https://tshi0912.github.io/city-picker/js/city-picker.js',
+        enabled: true,
+        applyToBlog: false,
+        isBuiltIn: true
+      }
+    ]
     if (Array.isArray(savedDeps) && savedDeps.length > 0) {
-      this.cdnDeps = savedDeps
-    } else {
-      // 默认添加 jQuery / layui / city-picker
-      // 注意：script 之间的依赖关系（如 city-picker.js 依赖 city-picker.data.js）
-      // 现在由 boot/cdn-deps.js 通过 onload 链式调度保证，与本数组顺序无关；
-      // 但默认顺序仍按依赖关系组织，避免视觉混淆。
-      const newId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
-      this.cdnDeps = [
-        {
-          id: newId(),
-          name: 'jQuery',
-          url: 'https://cdn.jsdelivr.net/npm/jquery@1/dist/jquery.min.js',
-          enabled: true,
-          applyToBlog: false
-        },
-        {
-          id: newId(),
-          name: 'layui CSS',
-          url: '//unpkg.com/layui@2.13.8/dist/css/layui.css',
-          enabled: true,
-          applyToBlog: false
-        },
-        {
-          id: newId(),
-          name: 'layui JS',
-          url: '//unpkg.com/layui@2.13.8/dist/layui.js',
-          enabled: true,
-          applyToBlog: false
-        },
-        {
-          id: newId(),
-          name: 'city-picker data',
-          url: 'https://tshi0912.github.io/city-picker/js/city-picker.data.js',
-          enabled: true,
-          applyToBlog: false
-        },
-        {
-          id: newId(),
-          name: 'city-picker JS',
-          url: 'https://tshi0912.github.io/city-picker/js/city-picker.js',
-          enabled: true,
-          applyToBlog: false
-        },
-        {
-          id: newId(),
-          name: 'city-picker CSS',
-          url: 'https://tshi0912.github.io/city-picker/css/city-picker.css',
-          enabled: true,
-          applyToBlog: false
+      // 已有数据，合并内置项（确保内置项存在且标记正确，保留用户对内置项 URL 的编辑）
+      const existingBuiltInNames = ['jQuery', 'layui CSS', 'layui JS', 'city-picker data', 'city-picker JS']
+      const customDeps = savedDeps.filter(d => !existingBuiltInNames.includes(d.name))
+      const mergedBuiltIn = builtInDeps.map(bi => {
+        const existing = savedDeps.find(d => d.name === bi.name)
+        if (existing) {
+          return { ...existing, isBuiltIn: true }
         }
-      ]
+        return bi
+      })
+      this.cdnDeps = [...mergedBuiltIn, ...customDeps]
+    } else {
+      // 首次初始化，直接使用内置默认项
+      this.cdnDeps = builtInDeps
     }
     // 初始化云同步状态
     CloudSyncService.addListener(this.onCloudSyncStatusChange)

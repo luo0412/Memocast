@@ -206,6 +206,8 @@ export default {
   cdnDepsPresetStaticfile: 'staticfile',
   cdnDepsPresetJsdelivr: 'jsDelivr',
   cdnDepsPresetCustom: '自定义',
+  cdnDepsBuiltIn: '内置（不可删除）',
+  cdnDepsBuiltInCannotDelete: '内置 CDN 依赖不可删除，但可以禁用或编辑其 URL。',
   cloudSyncTotal: '总计',
   cloudSyncLastSync: '上次同步',
   cloudSyncSyncing: '处理中...',

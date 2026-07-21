@@ -436,7 +436,7 @@ muya 当前的 retina 分辨率选择逻辑（CSS `@media` + 业务代码按 dev
 - [x] Phase 5：src-electron i18n 拍平（73 keys × 2 语言，babel AST 校验 [ALL OK]，dev server hot reload 自动重启主进程 [OK]）
 - [x] Phase 6：清理 + 验证（commit `643de98` utlis→utils 改名 + commit `2b9dc14` dialog/editor 拍平到 ui/）
 - [x] **Phase 6 补充**：用户指令拍平 `components/{common,ui}/` 到 `components/` 顶层（commit `77faf32`，44 文件 R + 11 文件 M，0 冲突）
-- [ ] 同步更新 `TODO-总览-202607.md` §2.1 路径表
+- [x] 同步更新 `TODO-总览-202607.md` §2.1 路径表（2026-07-21）
 
 ---
 

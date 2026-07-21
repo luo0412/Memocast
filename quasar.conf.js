@@ -329,7 +329,7 @@ module.exports = function (/* ctx */) {
           '!public/box-im/**/*',
           // ─── 排除 Muya 编辑器的多余图标资源 ───
           // 每个图标有 3 个尺寸 (1.png, 2.png, 3.png)，只保留 @2x 和 @3x
-          '!src/libs/muya/lib/assets/pngicon/**/1.png',
+          '!src/muya/lib/assets/pngicon/**/1.png',
           // 开发依赖裁剪
           '!node_modules/@babel/**/*',
           '!node_modules/babel*/*',

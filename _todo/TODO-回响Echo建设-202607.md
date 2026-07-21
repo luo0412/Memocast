@@ -37,8 +37,8 @@ isProject: false
   - 旧轨（兼容）：`render(context) → card`
   - 新轨（默认）：`render(node, ancestors) → card` + `afterRender(node, domElement, ancestors)`
   - 运行时按 `definition.render.length === 2` 启发式分派。
-- **运行时**：`EchoRuntime`（[src/components/ui/editor/echo/EchoRuntime.js](src/components/ui/editor/echo/EchoRuntime.js)）负责 `compileDefinition` / `render` / `renderToHtml` / `afterRender` 派发与 `echoChantHandlers` 动态注册/注销。
-- **注册表**：`EchoRegistry`（[src/components/ui/editor/echo/EchoRegistry.js](src/components/ui/editor/echo/EchoRegistry.js)）维护 `echoIdMap / echoMap`，`refresh(echoCards)` 由设置页保存触发。
+- **运行时**：`EchoRuntime`（[src/components/echo/EchoRuntime.js](src/components/echo/EchoRuntime.js)）负责 `compileDefinition` / `render` / `renderToHtml` / `afterRender` 派发与 `echoChantHandlers` 动态注册/注销。
+- **注册表**：`EchoRegistry`（[src/components/echo/EchoRegistry.js](src/components/echo/EchoRegistry.js)）维护 `echoIdMap / echoMap`，`refresh(echoCards)` 由设置页保存触发。
 - **内置 11 个**：`builtinEchoes.js` 提供 `BUILTIN_ECHO_CARDS`（11 个，其中 10 个 echo-chant + 1 个 echo nice）+ `BUILTIN_ECHO_CHANT_IDS` + `isBuiltinEcho` / `isBuiltinEchoChantId`。
 - **设置页**：[src/components/ui/dialog/SettingsDialog.vue](src/components/ui/dialog/SettingsDialog.vue) 内置分类面板已挂 `echoBuiltin*Desc` 描述；普通 echo 可拖拽 / 编辑 / 删除，内置 echo 只读且不可删。
 - **表单**：[src/components/ui/dialog/EchoFormDialog.vue](src/components/ui/dialog/EchoFormDialog.vue) 独立于 RuneFormDialog，使用 Monaco 编辑 `anno_source`，重置模板走 `createDefaultEchoAnnoSource`。
@@ -79,7 +79,7 @@ isProject: false
 
 ### 1.2 EchoRuntime 双轨签名 + render/afterRender 派发
 
-[src/components/ui/editor/echo/EchoRuntime.js](src/components/ui/editor/echo/EchoRuntime.js) 关键点：
+[src/components/echo/EchoRuntime.js](src/components/echo/EchoRuntime.js) 关键点：
 
 - `compileDefinition(echo)`：用 `safeEvalFactory` 把 `anno_source` 编译成可调用对象；缺 `handler` 时**自动复制** `handlerExample` 为 `handler`（`EchoRuntime.js:913`）。
 - `render(token, echo)`：分派 `render.length === 2 ? render(token, ancestors) : render(context)`；若存在 `afterRender` 则把它包成 `afterRenderHook` 注入 `normalized`（`EchoRuntime.js:1007-1030`）。
@@ -88,7 +88,7 @@ isProject: false
 
 ### 1.3 EchoRegistry 注册表
 
-[src/components/ui/editor/echo/EchoRegistry.js](src/components/ui/editor/echo/EchoRegistry.js)：
+[src/components/echo/EchoRegistry.js](src/components/echo/EchoRegistry.js)：
 
 - `refresh(echoCards)` 重建 `echoIdMap / echoMap`。
 - `getById / getByName / has / getAll / isBuiltin / canDelete` 为读侧 API。
@@ -105,7 +105,7 @@ isProject: false
 
 ### 1.5 `BUILTIN_ECHO_CARDS` / `BUILTIN_ECHO_CHANT_IDS`
 
-[src/components/ui/editor/echo/builtinEchoes.js](src/components/ui/editor/echo/builtinEchoes.js) 末尾集中导出：
+[src/components/echo/builtinEchoes.js](src/components/echo/builtinEchoes.js) 末尾集中导出：
 
 - `BUILTIN_ECHO_CARDS` —— 11 个 frozen 对象：`__builtin_nice__` / `__builtin_growth__` / `__builtin_shatter__` / `__builtin_skywalk__` / `__builtin_twinbloom__` / `__builtin_mindsteal__` / `__builtin_lucky__` / `__builtin_scapegoat__` / `__builtin_calamity__` / `__builtin_disperse__` / `__builtin_clock__`。
 - `BUILTIN_ECHO_CHANT_IDS` —— `['growth','shatter','skywalk','twinbloom','mindsteal','lucky','scapegoat','calamity','disperse','clock']`（10 个 runeId）。
@@ -116,7 +116,7 @@ isProject: false
 
 ## 2. 11 个内置回响 / 符文 参考
 
-> 实现位置：[src/components/ui/editor/echo/builtinEchoes.js](src/components/ui/editor/echo/builtinEchoes.js)（nice / scapegoat / calamity / clock 等为完整 `handler` 实装；其余为 `handlerExample` 模板，运行时自动复制为 `handler`）。
+> 实现位置：[src/components/echo/builtinEchoes.js](src/components/echo/builtinEchoes.js)（nice / scapegoat / calamity / clock 等为完整 `handler` 实装；其余为 `handlerExample` 模板，运行时自动复制为 `handler`）。
 > 样式位置：`src/css/rune.css` 中 `ag-rune-*` 段。
 
 ### 2.1 nice —— echo 默认模板（双轨签名示范）
@@ -251,10 +251,10 @@ isProject: false
 
 | 模块 | 路径 |
 |---|---|
-| 运行时（双轨签名 / 派发） | [src/components/ui/editor/echo/EchoRuntime.js](src/components/ui/editor/echo/EchoRuntime.js) |
-| 注册表 | [src/components/ui/editor/echo/EchoRegistry.js](src/components/ui/editor/echo/EchoRegistry.js) |
-| 11 内置 + 工具 | [src/components/ui/editor/echo/builtinEchoes.js](src/components/ui/editor/echo/builtinEchoes.js) |
-| 共享工具 / 模板片段 | [src/components/ui/editor/echo/builtin-echo-shared.js](src/components/ui/editor/echo/builtin-echo-shared.js) |
+| 运行时（双轨签名 / 派发） | [src/components/echo/EchoRuntime.js](src/components/echo/EchoRuntime.js) |
+| 注册表 | [src/components/echo/EchoRegistry.js](src/components/echo/EchoRegistry.js) |
+| 11 内置 + 工具 | [src/components/echo/builtinEchoes.js](src/components/echo/builtinEchoes.js) |
+| 共享工具 / 模板片段 | [src/components/echo/builtin-echo-shared.js](src/components/echo/builtin-echo-shared.js) |
 | 编辑器封装 | [src/components/ui/editor/Muya.vue](src/components/ui/editor/Muya.vue) |
 | 回响编辑表单 | [src/components/ui/dialog/EchoFormDialog.vue](src/components/ui/dialog/EchoFormDialog.vue) |
 | 设置页入口 | [src/components/ui/dialog/SettingsDialog.vue](src/components/ui/dialog/SettingsDialog.vue) |
