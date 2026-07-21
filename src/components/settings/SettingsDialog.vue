@@ -2530,11 +2530,19 @@ export default {
         enabled: true,
         applyToBlog: false,
         isBuiltIn: true
+      },
+      {
+        id: newId(),
+        name: 'city-picker CSS',
+        url: 'https://tshi0912.github.io/city-picker/css/city-picker.css',
+        enabled: true,
+        applyToBlog: false,
+        isBuiltIn: true
       }
     ]
     if (Array.isArray(savedDeps) && savedDeps.length > 0) {
       // 已有数据，合并内置项（确保内置项存在且标记正确，保留用户对内置项 URL 的编辑）
-      const existingBuiltInNames = ['jQuery', 'layui CSS', 'layui JS', 'city-picker data', 'city-picker JS']
+      const existingBuiltInNames = ['jQuery', 'layui CSS', 'layui JS', 'city-picker data', 'city-picker JS', 'city-picker CSS']
       const customDeps = savedDeps.filter(d => !existingBuiltInNames.includes(d.name))
       const mergedBuiltIn = builtInDeps.map(bi => {
         const existing = savedDeps.find(d => d.name === bi.name)
