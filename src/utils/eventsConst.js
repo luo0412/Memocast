@@ -80,5 +80,10 @@ export const EVENTS = Object.freeze({
     openManager: 'echo.events.open.manager',
     openInstanceEditor: 'echo.events.open.instance.editor',
     commitInstance: 'echo.events.commit.instance'
+  }),
+  UI_EVENTS: Object.freeze({
+    playFireEffect: 'ui.events.play.fire.effect',
+    playHeartEffect: 'ui.events.play.heart.effect',
+    playButterflyEffect: 'ui.events.play.butterfly.effect'
   })
 })

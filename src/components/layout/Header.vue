@@ -476,11 +476,33 @@ export default {
       }
       this.toggleChanged({ key: 'skin', value: nextSkin })
       this.applySkinThemeColor(nextSkin)
+
+      // 切换到哪吒皮肤时触发火焰效果
+      if (nextSkin === 'nezha') {
+        bus.$emit(events.UI_EVENTS.playFireEffect)
+      }
+      // 切换到白羊皮肤时触发爱心效果
+      if (nextSkin === 'baiyang') {
+        bus.$emit(events.UI_EVENTS.playHeartEffect)
+      }
+      // 切换到 INFP 皮肤时触发蝴蝶效果
+      if (nextSkin === 'infp') {
+        bus.$emit(events.UI_EVENTS.playButterflyEffect)
+      }
+
+      const skinColors = {
+        baiyang: { bg: 'rgba(64, 158, 255, 0.9)', text: '#fff' },
+        nezha: { bg: 'rgba(181, 129, 125, 0.95)', text: '#fff' },
+        infp: { bg: 'rgba(33, 181, 111, 0.9)', text: '#fff' }
+      }
+      const skinColor = skinColors[nextSkin] || { bg: 'rgba(64, 158, 255, 0.9)', text: '#fff' }
       this.$q.notify({
         message: this.$t('skinSwitched', { name: this.$t(`skin_${nextSkin}`) }),
         type: 'positive',
         position: 'top',
-        icon: 'check'
+        icon: 'check',
+        color: skinColor.bg,
+        textColor: skinColor.text
       })
     },
 
@@ -809,8 +831,12 @@ export default {
     }
   },
   beforeDestroy () {
-    this.handlePushSyncClick.cancel()
-    this.handlePullSyncClick.cancel()
+    if (this.handlePushSyncClick && this.handlePushSyncClick.cancel) {
+      this.handlePushSyncClick.cancel()
+    }
+    if (this.handlePullSyncClick && this.handlePullSyncClick.cancel) {
+      this.handlePullSyncClick.cancel()
+    }
     bus.$off(events.VIEW_SHORTCUT_CALL.switchView, this.switchViewHandler)
     bus.$off(events.ECHO_EVENTS.openManager, this.handleOpenEchoManager)
     bus.$off(events.ECHO_EVENTS.openInstanceEditor, this.handleOpenEchoManager)
