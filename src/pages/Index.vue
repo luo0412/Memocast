@@ -836,7 +836,7 @@ export default {
 .q-splitter.q-splitter--vertical.q-splitter--active > .q-splitter__separator.custom-splitter {
   background-color: var(--themeColor) !important;
   width: 3px !important;
-  box-shadow: 0 0 0 1px var(--themeColor30, rgba(33, 181, 111, 0.35));
+  box-shadow: 0 0 0 1px var(--themeColor30, rgba(64, 158, 255, 0.35));
 }
 
 .q-splitter.q-splitter--dark.q-splitter--vertical > .q-splitter__separator.custom-splitter {
@@ -859,7 +859,7 @@ export default {
 .q-splitter.q-splitter--horizontal.q-splitter--active > .q-splitter__separator.custom-splitter {
   background-color: var(--themeColor) !important;
   height: 3px !important;
-  box-shadow: 0 0 0 1px var(--themeColor30, rgba(33, 181, 111, 0.35));
+  box-shadow: 0 0 0 1px var(--themeColor30, rgba(64, 158, 255, 0.35));
 }
 
 .q-splitter.q-splitter--dark.q-splitter--horizontal > .q-splitter__separator.custom-splitter {
