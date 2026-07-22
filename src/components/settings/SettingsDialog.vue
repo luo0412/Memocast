@@ -292,22 +292,33 @@ export default {
       this.loadAiSkillConfigs()
       await this.initCdnDeps()
     },
-    applyOpenOptions: function (options = {}) {
-      const { tab = '', echoId = '', echoName = '', openEchoEdit = false } = options
-      if (tab) {
-        this.tab = tab
-      }
-      if (tab === 'echo' || openEchoEdit) {
-        const matchedEcho = (this.localEchoCards || []).find(item => {
-          if (!item) return false
-          if (echoId && item.id === echoId) return true
-          if (echoName && item.name === echoName) return true
-          return false
-        }) || null
-        if (openEchoEdit && matchedEcho) {
-          this.editingEcho = { ...matchedEcho }
-          this.openEchoFormDialog()
+    async applyOpenOptions (options = {}) {
+      const { tab = '', echoId = '', echoName = '', openEchoEdit = false, openAiAdd = false } = options
+      try {
+        if (tab) {
+          this.tab = tab
+        } else if (openAiAdd) {
+          this.tab = 'ai'
         }
+        if (tab === 'echo' || openEchoEdit) {
+          const matchedEcho = (this.localEchoCards || []).find(item => {
+            if (!item) return false
+            if (echoId && item.id === echoId) return true
+            if (echoName && item.name === echoName) return true
+            return false
+          }) || null
+          if (openEchoEdit && matchedEcho) {
+            this.editingEcho = { ...matchedEcho }
+            this.openEchoFormDialog()
+          }
+        }
+        if (openAiAdd) {
+          // 懒加载里包含 aiModelConfigs；先确保加载完，再打开新增弹框
+          await this.loadLazyData()
+          this.openAiModelDialog()
+        }
+      } catch (err) {
+        console.warn('[SettingsDialog] applyOpenOptions failed:', err)
       }
     },
 
@@ -493,10 +504,10 @@ export default {
       }
     },
     refreshCloudSyncLoginState () {
-      // Refresh sync status
+      this.refreshCloudSyncLoginStatus()
     },
     refreshCloudSyncLoginStatus () {
-      CloudSyncService.refreshSyncStatus()
+      CloudSyncService.init()
     },
 
     // ==================== Echo 面板事件 ====================

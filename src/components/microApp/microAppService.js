@@ -1,3 +1,5 @@
+import DatabaseClient from 'src/utils/DatabaseClient'
+
 /**
  * 微应用（聊天弹框里的 wujie 子应用）辅助工具
  *
@@ -9,6 +11,18 @@
  */
 
 export const MICRO_APPS_STORAGE_KEY = 'setting/microApps'
+const MICRO_APPS_PRESET_VERSION_KEY = 'setting/microApps/presetVersion'
+const MICRO_APPS_PRESET_VERSION = 1
+
+function parsePresetVersion (value) {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value
+    const version = Number(parsed)
+    return Number.isFinite(version) ? version : 0
+  } catch (_) {
+    return 0
+  }
+}
 
 /**
  * 是否处于开发模式（dev-server 启着的状态）
@@ -39,6 +53,16 @@ export function buildDefaultMicroApps () {
       url: 'https://luo0412.github.io/box-im/#/',
       devUrl: 'http://localhost:18080/',
       isDefault: true,
+      enabled: true,
+      isMobile: false
+    },
+    {
+      id: 'coolma',
+      name: 'coolma',
+      icon: 'el-icon-cloudy',
+      url: 'https://static-59728804-d890-4267-8e45-393e10b3c780.bspapp.com/',
+      devUrl: '',
+      isDefault: false,
       enabled: true,
       isMobile: false
     }
@@ -79,6 +103,45 @@ export function normalizeMicroApps (rawList) {
     }
     return item
   })
+}
+
+/**
+ * 把 buildDefaultMicroApps 里不在 currentList 的项目追加进去。
+ * 重复 id（用户已有同 id）一律不动用户那一份，仅添加缺失的预置项。
+ * 默认应用（isDefault）一律保持现状，不被预置覆盖。
+ */
+export function mergeDefaultMicroApps (currentList) {
+  const base = normalizeMicroApps(currentList)
+  const defaults = normalizeMicroApps(buildDefaultMicroApps())
+  const existingIds = new Set(base.map(a => a.id))
+  const additions = defaults.filter(d => !existingIds.has(d.id))
+  return normalizeMicroApps([...base, ...additions])
+}
+
+/**
+ * 若 SQLite 尚未写入当前预置版本对应的默认项，则把缺失的预置项追加进去。
+ * 用于已经初始化过老默认列表的旧用户也能拿到新预置（如新增 coolma）。
+ */
+export async function ensureDefaultMicroAppsMigrated () {
+  try {
+    const raw = await DatabaseClient.appState.get(MICRO_APPS_PRESET_VERSION_KEY)
+    const current = parsePresetVersion(raw)
+    if (current >= MICRO_APPS_PRESET_VERSION) return false
+
+    const stored = await DatabaseClient.microApps.getAll()
+    const merged = mergeDefaultMicroApps(stored)
+    if (Array.isArray(stored) && stored.length !== merged.length) {
+      await DatabaseClient.microApps.saveAll(merged)
+    }
+    await DatabaseClient.appState.set(
+      MICRO_APPS_PRESET_VERSION_KEY,
+      JSON.stringify(MICRO_APPS_PRESET_VERSION)
+    )
+    return Array.isArray(stored) && stored.length !== merged.length
+  } catch (err) {
+    console.warn('[microApp] ensureDefaultMicroAppsMigrated failed:', err)
+    return false
+  }
 }
 
 /**

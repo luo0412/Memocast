@@ -49,14 +49,34 @@ function encryptAiConfigApiKey(apiKey) {
   return CryptoJS.AES.encrypt(apiKey, getAiConfigEncryptionSecret()).toString()
 }
 
+// CryptoJS.AES.encrypt 输出固定以 'U2FsdGVkX1' 开头的 Base64 字符串（OpenSSL-compatible 格式）。
+// 用这个特征区分"真正的密文"和"老版本写入的明文 / 损坏数据"。
+const AES_CIPHERTEXT_PREFIX = 'U2FsdGVkX1'
+
+function looksLikeEncryptedValue (value) {
+  return typeof value === 'string' && value.startsWith(AES_CIPHERTEXT_PREFIX)
+}
+
 function decryptAiConfigApiKey(encryptedValue) {
   if (!encryptedValue) return ''
+
+  // 老库残留的明文 / 非密文格式：直接当明文返回，不抛错也不记 error。
+  // 这是防御式读取，向后兼容早期未加密版本写入的数据。
+  if (!looksLikeEncryptedValue(encryptedValue)) {
+    log.warn('[DB] decryptAiConfigApiKey: non-ciphertext value treated as plaintext', {
+      length: encryptedValue.length,
+      preview: encryptedValue.slice(0, 4)
+    })
+    return encryptedValue
+  }
 
   try {
     const bytes = CryptoJS.AES.decrypt(encryptedValue, getAiConfigEncryptionSecret())
     return bytes.toString(CryptoJS.enc.Utf8) || ''
   } catch (error) {
-    log.error('[DB] decryptAiConfigApiKey error:', error)
+    log.warn('[DB] decryptAiConfigApiKey: ciphertext present but decrypt failed', {
+      message: error && error.message
+    })
     return ''
   }
 }

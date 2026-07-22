@@ -49,10 +49,9 @@
 <script>
 import WujieVue from 'wujie-vue2'
 import DatabaseClient from 'src/utils/DatabaseClient'
-import bus from 'components/common/bus'
-import microAppHost from './microAppHost.vue'
 import {
   buildDefaultMicroApps,
+  ensureDefaultMicroAppsMigrated,
   normalizeMicroApps,
   pickDefaultApp
 } from './microAppService'

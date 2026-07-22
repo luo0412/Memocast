@@ -247,7 +247,7 @@ export default {
 
     handleAiProviderConfigRequest () {
       this.$nextTick(() => {
-        this.$refs.settingsDialog?.show({ toggle: false, openAiAdd: true })
+        this.$refs.settingsDialog?.show({ openAiAdd: true })
       })
     },
 
