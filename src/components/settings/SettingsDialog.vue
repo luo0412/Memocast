@@ -380,7 +380,9 @@ export default {
         ok: { label: this.$t('confirm'), color: 'purple-7' }
       }).onOk(async () => {
         try {
+          console.log('[RUNE-TPL] resetRunes -> clearAll')
           const result = await DatabaseClient.runeTemplates.clearAll()
+          console.log(`[RUNE-TPL] resetRunes clearAll result=${JSON.stringify(result)}`)
           if (result && result.success) {
             this.$q.notify({ message: this.$t('resetRunesSuccess', { count: result.count || 0, custom: result.customKept || 0 }), type: 'positive', position: 'top' })
             this.loadRunes()
@@ -671,15 +673,18 @@ export default {
     },
     openAddRune () {
       this.editingRune = null
+      console.log('[RUNE-TPL] openAddRune -> openRuneFormDialog')
       this.openRuneFormDialog()
     },
     openEditRune (rune) {
       this.editingRune = { ...rune }
+      console.log(`[RUNE-TPL] openEditRune id=${rune && rune.id} -> openRuneFormDialog`)
       this.openRuneFormDialog()
     },
     openRuneFormDialog () {
       this.runeFormKey += 1
       this.runeFormVisible = true
+      console.log(`[RUNE-TPL] RuneFormDialog opened key=${this.runeFormKey} editingRune=${this.editingRune ? this.editingRune.id : 'null'}`)
     },
     onRuneFormVisibleChange (visible) {
       this.runeFormVisible = visible

@@ -70,18 +70,18 @@
         </div>
       </SettingsSectionContent>
 
-      <!-- CDN 依赖 -->
-      <SettingsSectionContent v-if='subTab === "cdn"' :title="$t('cdnDepsTitle')" accent-color='green-7'>
+      <!-- CDN注入 -->
+      <SettingsSectionContent v-if='subTab === "cdn"' :title="$t('cdnInjectTitle')" accent-color='green-7'>
         <q-banner rounded dense class='bg-green-1 text-green-10 q-mb-md'>
           <template v-slot:avatar>
             <q-icon name='info_outline' color='green-7' />
           </template>
-          {{ $t('cdnDepsHint') }}
+          {{ $t('cdnInjectHint') }}
         </q-banner>
         <!-- 操作按钮 -->
         <div class='q-mb-md row q-gutter-sm'>
-          <q-btn outline color='green-7' icon='add' :label="$t('cdnDepsAdd')" @click='addCdnDep' />
-          <q-btn unelevated color='green-7' icon='save' :label="$t('cdnDepsSave')" :loading='cdnDepsSaving' @click='saveCdnDeps' />
+          <q-btn outline color='green-7' icon='add' :label="$t('cdnInjectAdd')" @click='addCdnDep' />
+          <q-btn unelevated color='green-7' icon='rocket_launch' :label="$t('cdnInject')" :loading='cdnDepsSaving' @click='saveCdnDeps' />
         </div>
         <!-- CDN 依赖列表 -->
         <div v-if='cdnDeps.length === 0' class='text-center q-pa-md text-grey-6'>
@@ -116,6 +116,9 @@
         </div>
       </SettingsSectionContent>
 
+      <!-- 个人信息 -->
+      <SettingsProfilePanel v-if='subTab === "profile"' />
+
       <!-- 微应用（聊天弹框内的 wujie 子应用） -->
       <SettingsMicroAppsPanel v-if='subTab === "microApps"' ref='microAppsPanel' />
     </div>
@@ -126,6 +129,7 @@
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
 import SettingsMicroAppsPanel from 'components/settings/SettingsMicroAppsPanel'
+import SettingsProfilePanel from 'components/settings/settingsProfilePanel'
 import SessionStorageService from 'src/services/SessionStorageService'
 import CloudSyncService from 'src/services/CloudSyncService'
 import DatabaseClient from 'src/utils/DatabaseClient'
@@ -136,7 +140,8 @@ export default {
   components: {
     CategoryTabs,
     SettingsSectionContent,
-    SettingsMicroAppsPanel
+    SettingsMicroAppsPanel,
+    SettingsProfilePanel
   },
   props: {
     cloudSyncProvider: {
@@ -213,8 +218,9 @@ export default {
       return [
         { value: 'sync', label: this.$t('cloudSync'), icon: 'cloud_sync' },
         { value: 'image', label: this.$t('cloudImage'), icon: 'image' },
-        { value: 'cdn', label: this.$t('cloudCdnDeps'), icon: 'link' },
-        { value: 'microApps', label: this.$t('microApps'), icon: 'apps' }
+        { value: 'cdn', label: this.$t('cloudCdnInject'), icon: 'link' },
+        { value: 'microApps', label: this.$t('microApps'), icon: 'apps' },
+        { value: 'profile', label: this.$t('cloudProfile'), icon: 'person' }
       ]
     }
   },

@@ -29,8 +29,12 @@ function invalidate () {
 
 async function ensureLoaded (force = false) {
   if (force) invalidate()
-  if (isFresh()) return cache
+  if (isFresh()) {
+    console.log(`[RUNE-TPL] ensureLoaded cache-hit list=${cache.list.length}`)
+    return cache
+  }
   const list = await DatabaseClient.runeTemplates.getAll()
+  console.log(`[RUNE-TPL] ensureLoaded ipc-returned list=${Array.isArray(list) ? list.length : 'non-array'}`)
   cache = { list: Array.isArray(list) ? list : [], grouped: null, cachedAt: Date.now() }
   return cache
 }

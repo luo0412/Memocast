@@ -4,6 +4,7 @@ export const EVENTS = Object.freeze({
   INSERT_IMAGE: 'insert.image',
   INSERT_IMAGES: 'insert.images',
   INSERT_TEXT: 'insert.text',
+  INSERT_AI_TEXT: 'insert.ai.text',
   SCROLL_TO_HEADER: 'scroll.to.header',
   SCROLL_DOWN: 'scroll.down',
   GENERATE_MINDMAP: 'generate.mindmap',

@@ -298,6 +298,55 @@ export default {
         editor.trigger('source', 'redo')
       }
     },
+    /**
+     * 把 AI 助手的整段回复追加到 Monaco 末尾。
+     * 由 appBus 事件 INSERT_AI_TEXT 触发，payload 为 { text }。
+     * 仅在 Monaco 处于当前激活编辑器时执行（避免 Muya/Monaco 同时挂载时双写）。
+     */
+    insertAiTextHandler: function (text) {
+      if (!this.active) return
+      if (!text || !this.contentEditor) return
+
+      const model = this.contentEditor.getModel()
+      if (!model) return
+
+      const lineCount = model.getLineCount()
+      const lastLineMaxColumn = model.getLineMaxColumn(lineCount)
+      const lastRange = {
+        startLineNumber: lineCount,
+        startColumn: lastLineMaxColumn,
+        endLineNumber: lineCount,
+        endColumn: lastLineMaxColumn
+      }
+
+      // 替换段前是否需要补换行：如果末尾不是空行，AI 段前先补一个换行避免粘在最后一行后面
+      const lastLineText = model.getLineContent(lineCount) || ''
+      const padding = lastLineText.length === 0 ? '' : '\n'
+      const insertText = `${padding}${text}`
+
+      this.contentEditor.executeEdits('insert-ai-text', [{
+        range: lastRange,
+        text: insertText,
+        forceMoveMarkers: true
+      }])
+
+      // 把光标移到追加段的尾部
+      const insertedLineCount = (insertText.match(/\n/g) || []).length
+      const finalLineNumber = lineCount + insertedLineCount
+      const finalColumn = insertedLineCount === 0
+        ? lastLineMaxColumn + insertText.length
+        : model.getLineMaxColumn(finalLineNumber)
+      this.contentEditor.setPosition({
+        lineNumber: finalLineNumber,
+        column: finalColumn
+      })
+      this.contentEditor.revealLine(finalLineNumber)
+      this.contentEditor.focus()
+
+      if (this.active) {
+        this.updateNoteState('changed')
+      }
+    },
     saveHandler: function () {
       if (this.active && this.contentEditor) {
         // ✅ 关键改进：优先使用 pendingSaveData（预捕获的最新内容）
@@ -419,15 +468,17 @@ export default {
     bus.$on(events.EDIT_SHORTCUT_CALL.pasteAsPlainText, this.editCopyPasteHandler)
     bus.$on(events.EDIT_SHORTCUT_CALL.undo, this.editCopyPasteHandler)
     bus.$on(events.EDIT_SHORTCUT_CALL.redo, this.editCopyPasteHandler)
+    bus.$on(events.INSERT_AI_TEXT, this.insertAiTextHandler)
   },
   beforeDestroy () {
     document.removeEventListener('keydown', this.handleGlobalKeyDown)
-    bus.$off(events.EDIT_SHORTCUT_CALL.save, this.saveHandler)
-    bus.$off(events.EDIT_SHORTCUT_CALL.copyAsMarkdown, this.editCopyPasteHandler)
-    bus.$off(events.EDIT_SHORTCUT_CALL.copyAsHtml, this.editCopyPasteHandler)
-    bus.$off(events.EDIT_SHORTCUT_CALL.pasteAsPlainText, this.editCopyPasteHandler)
-    bus.$off(events.EDIT_SHORTCUT_CALL.undo, this.editCopyPasteHandler)
-    bus.$off(events.EDIT_SHORTCUT_CALL.redo, this.editCopyPasteHandler)
+    bus.$off(events.EDIT_SHORTCUT_CALL.save)
+    bus.$off(events.EDIT_SHORTCUT_CALL.copyAsMarkdown)
+    bus.$off(events.EDIT_SHORTCUT_CALL.copyAsHtml)
+    bus.$off(events.EDIT_SHORTCUT_CALL.pasteAsPlainText)
+    bus.$off(events.EDIT_SHORTCUT_CALL.undo)
+    bus.$off(events.EDIT_SHORTCUT_CALL.redo)
+    bus.$off(events.INSERT_AI_TEXT)
     if (this._monacoClipboardDisposable && typeof this._monacoClipboardDisposable.dispose === 'function') {
       try { this._monacoClipboardDisposable.dispose() } catch (_) { /* noop */ }
     }

@@ -348,6 +348,10 @@ export default {
     _afterLoaded (datas) {
       this.categoryObj = {}
       this.categoryDatas = this._buildTree(datas, null, false, 0)
+      try {
+        const total = this.categoryDatas.reduce((s, n) => s + (n.children ? n.children.length : 0), 0)
+        console.log(`[RUNE-TPL] CategoryPicker._afterLoaded roots=${this.categoryDatas.length} total-leaves=${total} first-root=${this.categoryDatas[0] && this.categoryDatas[0].title}`)
+      } catch (_) { /* noop */ }
       this.parseValue()
     },
     /**

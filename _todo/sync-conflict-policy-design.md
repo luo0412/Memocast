@@ -1,0 +1,277 @@
+# 笔记同步冲突解决策略（Conflict Resolution Policy）
+
+> 历史脏笔记误推 → 重命名/编辑触发多条 dirty → "备份多份文件"。
+> 后续要把同步冲突的解决方式从硬编码拆成可插拔策略。
+
+---
+
+## 1. 现状（硬编码逻辑）
+
+文件：`src/services/SyncService.js` `pushToCloud()`
+
+```js
+// 现状
+let cloudDocGuid = null
+const hasCloudGuid = note.doc_guid && !note.doc_guid.startsWith('local_')
+
+if (hasCloudGuid) {
+  // 直接用云端 GUID 覆盖 updateDoc
+  await api.updateDoc(cloudDocGuid, { title, content, category, tags }, kbGuid)
+}
+
+if (!cloudDocGuid) {
+  // 没有云端 GUID → 查找同名同分类的云端笔记，找到就 update，找不到就 createDoc
+  matchedDoc = await findCloudNoteInCategory({ kbGuid, title, category })
+  if (matchedDoc) {
+    await api.updateDoc(...)
+  } else {
+    const created = await api.createDoc(...)
+    cloudDocGuid = created.guid
+  }
+}
+
+// 同步成功后清本地 dirty
+await DatabaseClient.notes.update(note.id, { doc_guid, kb_guid, server_modified }, { isSystemUpdate: true })
+```
+
+**问题**：
+- 本地 dirty 笔记一律以本地为准覆盖云端（隐式 policy = "本地永远覆盖线上"）；
+- 没有"以时间戳最新为准"的回退；
+- 没有"必须先拉取线上"的强制预览。
+
+---
+
+## 2. 目标策略（用户已提出的模式）
+
+| 策略 ID | 名称 | 行为 |
+|---|---|---|
+| `local-wins` | 本地永远覆盖线上 | 默认。直接 push 本地版本，云端被覆盖 |
+| `cloud-wins` | 永远先获取线上（限制必须登录） | pull-first；本地脏笔记只保留在本地、不推送 |
+| `latest-timestamp` | 时间戳最新为准 | 比较 `local_modified` vs `server_modified`，新的赢 |
+| `manual` | 手动 | 不自动同步，由用户在 UI 里逐条选择 |
+
+未来可加：
+- `merge`：尝试三路合并（暂不在 v1）。
+
+---
+
+## 3. 设计：Strategy Pattern
+
+### 3.1 目录
+
+```
+src/services/sync/
+├── policies/
+│   ├── index.js                  // registry + 工厂
+│   ├── localWinsPolicy.js        // 默认
+│   ├── cloudWinsPolicy.js
+│   ├── latestTimestampPolicy.js
+│   └── manualPolicy.js
+├── policyResolver.js             // 根据用户配置 + 当前状态选 policy
+└── policyContract.js             // 接口契约（jsdoc，无 class 抽象）
+```
+
+> 不用 class/interface/抽象层（按 rune/echo/cloudfn 规则：重复 > 间接抽象）。
+> 用 plain function + 统一命名 `resolve({ note, cloudNote, ctx }) → { action, payload }`。
+
+### 3.2 契约（policyContract.js）
+
+```js
+/**
+ * 每个 policy 必须导出：
+ *
+ * async preflight({ note, kbGuid, api, ctx })
+ *   - 推送前钩子：可选择先 pull、校验登录态、加载 cloud 端版本等
+ *   - 返回 { cloudNote: object|null, canPush: boolean, reason?: string }
+ *
+ * async resolve({ note, cloudNote, ctx })
+ *   - 核心决策：返回 { action: 'push'|'skip'|'pull'|'conflict', payload, reason }
+ *   - action=push 时 payload = { title, content, category, tags }
+ *
+ * async postApply({ note, cloudNote, actionResult, ctx })
+ *   - 推送后钩子：清 dirty / 写回 doc_guid / 触发 next sync 等
+ */
+```
+
+### 3.3 策略实现要点
+
+#### `localWinsPolicy`（默认，保持现状）
+
+```js
+async resolve({ note, cloudNote }) {
+  return {
+    action: 'push',
+    payload: {
+      title: note.title,
+      content: note.content,
+      category: note.category || OFFLINE_ROOT_CATEGORY,
+      tags: note.tags || ''
+    },
+    reason: 'local-wins-default'
+  }
+}
+```
+
+#### `cloudWinsPolicy`（必须登录）
+
+```js
+async preflight({ ctx }) {
+  if (!ctx.isLoggedIn) {
+    return { cloudNote: null, canPush: false, reason: 'cloud-wins-requires-login' }
+  }
+  const cloudNote = await api.getDoc(note.doc_guid, note.kb_guid)
+  return { cloudNote, canPush: false }
+}
+
+async resolve({ note, cloudNote }) {
+  return {
+    action: 'skip',
+    reason: 'cloud-wins-skip-local-dirty',
+    // 同时本地 dirty 应被清掉（不写回云端），避免反复提示
+  }
+}
+```
+
+#### `latestTimestampPolicy`
+
+```js
+async resolve({ note, cloudNote }) {
+  if (!cloudNote) {
+    return { action: 'push', payload: {...}, reason: 'no-cloud-version' }
+  }
+  const localMs = Number(note.local_modified) || 0
+  const cloudMs = Number(cloudNote.modifiedTime || cloudNote.server_modified) || 0
+  if (localMs >= cloudMs) {
+    return { action: 'push', payload: {...}, reason: `local-newer (Δ=${localMs - cloudMs}ms)` }
+  }
+  return {
+    action: 'pull',
+    payload: {
+      title: cloudNote.title,
+      content: cloudNote.content,
+      category: cloudNote.category,
+      tags: cloudNote.tags || ''
+    },
+    reason: `cloud-newer (Δ=${cloudMs - localMs}ms)`
+  }
+}
+```
+
+#### `manualPolicy`
+
+```js
+async resolve({ note }) {
+  // 收集到队列，UI 提供 ConflictDialog 让用户逐条选
+  return { action: 'conflict', reason: 'await-user-choice' }
+}
+```
+
+### 3.4 工厂 / 注册
+
+```js
+// policies/index.js
+import localWins from './localWinsPolicy'
+import cloudWins from './cloudWinsPolicy'
+import latestTimestamp from './latestTimestampPolicy'
+import manual from './manualPolicy'
+
+export const POLICY_REGISTRY = {
+  'local-wins': localWins,
+  'cloud-wins': cloudWins,
+  'latest-timestamp': latestTimestamp,
+  'manual': manual
+}
+
+export function getPolicy(id) {
+  return POLICY_REGISTRY[id] || POLICY_REGISTRY['local-wins']
+}
+```
+
+### 3.5 接入 pushToCloud
+
+```js
+import { getPolicy } from './sync/policies'
+import policyResolver from './sync/policyResolver'
+
+// 在 pushToCloud 里：
+for (const note of pendingNotes) {
+  const policy = getPolicy(currentPolicyId)  // 从 settings/categories 读
+  const ctx = { isLoggedIn, kbGuid, api, account }
+
+  const { cloudNote, canPush, reason: preflightReason } = await policy.preflight({ note, ctx })
+  if (!canPush) {
+    console.log(`[SyncService] ⏭️ skip push: ${note.title} (${preflightReason})`)
+    if (policy.id === 'cloud-wins') {
+      // cloud-wins 模式下，本地 dirty 要主动清掉，避免脏数据堆积
+      await DatabaseClient.notes.update(note.id, { ... }, { isSystemUpdate: true })
+    }
+    continue
+  }
+
+  const { action, payload, reason } = await policy.resolve({ note, cloudNote, ctx })
+
+  if (action === 'push') {
+    const created = await api.updateDoc(cloudDocGuid, payload, kbGuid) || await api.createDoc(...)
+    await DatabaseClient.notes.update(note.id, { doc_guid, kb_guid, server_modified: Date.now() }, { isSystemUpdate: true })
+  } else if (action === 'pull') {
+    await DatabaseClient.notes.update(note.id, payload, { isSystemUpdate: true })
+  } else if (action === 'skip') {
+    // 不推送
+  } else if (action === 'conflict') {
+    enqueueConflict(note, cloudNote, reason)
+  }
+}
+```
+
+### 3.6 配置入口
+
+- 存储：SQLite `app_state`，key = `setting/sync/conflictPolicy`
+- 读：`DatabaseClient.appState.get('setting/sync/conflictPolicy')`
+- 写：设置面板 → 云同步 → "冲突解决策略" 下拉
+- 默认值：`local-wins`
+
+### 3.7 UI 联动（设置面板）
+
+`SettingsSyncPanel.vue` 新增：
+
+```
+[冲突解决策略]
+○ 本地永远覆盖线上 (默认)
+○ 时间戳最新为准
+○ 永远先获取线上（需登录）
+○ 手动（每条询问）
+```
+
+切换后写入 `app_state`，无需重启。
+
+---
+
+## 4. 实施步骤（git diff 可分批）
+
+| # | 改动 | 文件 |
+|---|---|---|
+| 1 | 新建 `policies/` 4 个 policy 文件 + 工厂 + contract | `src/services/sync/policies/*` |
+| 2 | `policyResolver.js`：根据 app_state 选择 policy | `src/services/sync/policyResolver.js` |
+| 3 | 改 `SyncService.pushToCloud`：用 policy 替换内联决策 | `src/services/SyncService.js` |
+| 4 | 设置面板：新增策略下拉，写 `app_state` | `src/components/settings/SettingsSyncPanel.vue` |
+| 5 | （可选）`ConflictDialog.vue`：manual 模式逐条询问 | `src/components/sync/ConflictDialog.vue` |
+
+每一步都是独立 commit，可单独回滚。
+
+---
+
+## 5. 与现有规则的关系
+
+- **rune/echo/cloudfn 规则**：本规则是稳定模块（SyncService / Settings / DatabaseClient）改造，**会牵连同步主流程**，按规则 §3.4 "停下来和用户确认边界"。本次仅作为设计稿，不动手。
+- **sqlite-settings-storage 规则**：策略 ID 存 `setting/sync/conflictPolicy` 到 `app_state`，符合。
+- **ui-library-mix 规则**：设置面板下拉用 Element-UI `el-radio-group`。
+- **vue-dialog-component 规则**：manual 模式的 `ConflictDialog` 独立组件。
+
+---
+
+## 6. 待用户确认
+
+1. 策略 ID 命名 `local-wins` / `cloud-wins` / `latest-timestamp` / `manual` 是否 OK？
+2. `cloud-wins` 模式下"本地 dirty 直接清"这个行为是否接受？（用户原话是"永远先获取线上"，我理解是要把线上当唯一真理源；本地脏数据被冲掉是合理的）
+3. `manual` 模式是否需要 v1？可推迟到 v2。
+4. `latest-timestamp` 的时间字段用 `local_modified` 还是 `data_modified`？当前 SQLite 里两者语义不同（`data_modified`=内容改动、`local_modified`=任何本地更新）。

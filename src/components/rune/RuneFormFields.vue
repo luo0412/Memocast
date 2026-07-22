@@ -166,7 +166,6 @@ export default {
   },
   data () {
     return {
-      categoryOptions: RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) })),
       iconOptions: [
         { label: '火焰', value: 'whatshot' },
         { label: '冰霜', value: 'ac_unit' },
@@ -212,6 +211,14 @@ export default {
     },
     powerLabel () {
       return this.isEchoMode ? this.$t('echoCardPower') : this.$t('runeCardPower')
+    },
+    categoryOptions () {
+      const opts = RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) }))
+      if (opts.length) {
+        const missing = opts.filter(o => !o.label).map(o => o.value)
+        console.log(`[RUNE-TPL] RuneFormFields.categoryOptions size=${opts.length} first.label=${opts[0].label}` + (missing.length ? ` missing-labels=${missing.join(',')}` : ''))
+      }
+      return opts
     },
     formData: {
       get () {

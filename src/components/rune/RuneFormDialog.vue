@@ -129,8 +129,7 @@ export default {
       remoteImportUrl: '',
       remoteImportCategory: '',
       remoteImporting: false,
-      remoteImportError: '',
-      runeCategoryOptions: RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) }))
+      remoteImportError: ''
     }
   },
   computed: {
@@ -139,6 +138,9 @@ export default {
     },
     isEchoMode () {
       return this.mode === 'echo'
+    },
+    runeCategoryOptions () {
+      return RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) }))
     },
     resolvedAddTitle () {
       return this.isEchoMode ? this.$t('echoCardAdd') : this.$t('runeCardAdd')

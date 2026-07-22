@@ -999,10 +999,12 @@ export default {
   runeTemplateService = createRuneTemplateService({ db, execToObjects, execOne, saveDatabase, log })
   runeTemplateService.ensureSchema()
   const runeTplCount = execOne('SELECT COUNT(*) as count FROM rune_templates')
+  console.log(`[RUNE-TPL] seed-check: existing count=${runeTplCount ? runeTplCount.count : 'n/a'}`)
   if (runeTplCount && runeTplCount.count === 0) {
     try {
       const seedModule = require('./service/builtin-rune-templates')
       const list = (seedModule && seedModule.BUILTIN_RUNE_TEMPLATES) || []
+      console.log(`[RUNE-TPL] seed: builtin-list size=${list.length}`)
       if (list.length) {
         const now = Date.now()
         const rows = list.map((it, idx) => ({
@@ -1023,6 +1025,9 @@ export default {
         if (result && result.success) {
           saveDatabase()
           log.info(`[DB] Seeded ${result.count} built-in rune templates into rune_templates`)
+          console.log(`[RUNE-TPL] seed: saved ${result.count} rows`)
+        } else {
+          console.warn('[RUNE-TPL] seed: saveMany failed', result)
         }
       }
     } catch (seedError) {
@@ -1318,29 +1323,59 @@ function registerDatabaseHandlers() {
   })
 
   // 更新笔记
+  // dirty 标记规则：
+  //   - 仅当 title / content / category / tags 实际发生变化时（非系统更新）才置 dirty=1 + 更新时间戳
+  //   - 重复保存相同内容不会产生脏笔记，避免"仅上传"误推大量无变更笔记
+  //   - 非同步字段（doc_guid / kb_guid / server_modified）按调用方意图写入，但不会把 dirty 翻回 1
+  //   - isSystemUpdate=true 表示来自同步完成回写，强制 dirty=0
   ipcMain.handle('db:updateNote', async (event, { id, updates, isSystemUpdate = false }) => {
     try {
+      const current = execOne('SELECT * FROM notes WHERE id = ?', [id])
+      if (!current) {
+        console.warn(`[DB] updateNote: note ${id} not found`)
+        return null
+      }
+
       const fields = []
       const values = []
       const now = Date.now()
       const toStr = (v) => (v == null) ? '' : (typeof v === 'string') ? v : (typeof v === 'number') ? String(v) : JSON.stringify(v)
       const toNum = (v) => (v == null) ? now : (typeof v === 'number') ? v : parseInt(v, 10) || now
+      const normForCompare = (v) => (v == null) ? '' : String(v)
+      const normTagsForCompare = (v) => {
+        if (v == null) return ''
+        if (Array.isArray(v)) return v.join(',')
+        return String(v)
+      }
+
+      // 跟踪哪些"云同步相关字段"被调用方显式提交
+      const syncFieldKeys = []
+      const newSyncValues = {}
 
       if (updates.title !== undefined) {
         fields.push('title = ?')
         values.push(toStr(updates.title))
+        syncFieldKeys.push('title')
+        newSyncValues.title = normForCompare(updates.title)
       }
       if (updates.content !== undefined) {
         fields.push('content = ?')
         values.push(toStr(updates.content))
+        syncFieldKeys.push('content')
+        newSyncValues.content = normForCompare(updates.content)
       }
       if (updates.category !== undefined) {
         fields.push('category = ?')
         values.push(toStr(updates.category))
+        syncFieldKeys.push('category')
+        newSyncValues.category = normForCompare(updates.category)
       }
       if (updates.tags !== undefined) {
+        const stored = Array.isArray(updates.tags) ? updates.tags.join(',') : toStr(updates.tags)
         fields.push('tags = ?')
-        values.push(Array.isArray(updates.tags) ? updates.tags.join(',') : toStr(updates.tags))
+        values.push(stored)
+        syncFieldKeys.push('tags')
+        newSyncValues.tags = normTagsForCompare(updates.tags)
       }
       if (updates.doc_guid !== undefined) {
         fields.push('doc_guid = ?')
@@ -1355,22 +1390,41 @@ function registerDatabaseHandlers() {
         values.push(toNum(updates.server_modified))
       }
 
-      // 关键改进：根据 isSystemUpdate 区分用户编辑和系统自动更新
-      if (!isSystemUpdate) {
-        // 用户主动编辑 → 更新所有时间戳 + 标记为脏（待同步）
-        fields.push('data_modified = ?', 'local_modified = ?', 'updated_at = ?', 'dirty = ?')
-        values.push(now, now, now, 1)
-        console.log(`[DB] ✅ User edit: note ${id} marked as dirty=1`)
-      } else {
+      // 判断云同步字段是否真的发生了变化
+      const syncChanged = syncFieldKeys.some((key) => {
+        const oldVal = key === 'tags' ? normTagsForCompare(current.tags) : normForCompare(current[key])
+        return oldVal !== newSyncValues[key]
+      })
+
+      if (isSystemUpdate) {
         // 系统自动更新（同步完成）→ 清除 dirty 标记
         fields.push('updated_at = ?', 'dirty = ?')
         values.push(now, 0)
         console.log(`[DB] ✅ Sync completed: note ${id} marked as dirty=0`)
+      } else if (syncChanged) {
+        // 用户编辑且同步字段真的变化了 → 更新时间戳 + 标记为脏（待同步）
+        fields.push('data_modified = ?', 'local_modified = ?', 'updated_at = ?', 'dirty = ?')
+        values.push(now, now, now, 1)
+        console.log(`[DB] ✅ User edit (changed): note ${id} marked as dirty=1 (changed=${syncFieldKeys.filter((k) => {
+          const oldVal = k === 'tags' ? normTagsForCompare(current.tags) : normForCompare(current[k])
+          return oldVal !== newSyncValues[k]
+        }).join(',')})`)
+      } else {
+        // 同步字段没变（或调用方根本没提交同步字段）→ 不更新时间戳，不置脏
+        // 仅在确实有非同步字段（doc_guid/kb_guid/server_modified）需要写入时才发 UPDATE
+        if (updates.doc_guid === undefined && updates.kb_guid === undefined && updates.server_modified === undefined) {
+          console.log(`[DB] ⏭️ User edit (no-op): note ${id} sync fields unchanged, skip write & keep dirty=${current.dirty || 0}`)
+          return current
+        }
+        console.log(`[DB] ℹ️ User edit (non-sync fields only): note ${id} sync fields unchanged, keep dirty=${current.dirty || 0}`)
+      }
+
+      // 拼接最终 SQL
+      if (fields.length === 0) {
+        return current
       }
 
       values.push(id)
-
-      // 不再在数据库层静默删除冲突记录；若发生 GUID 冲突，应由上层同步逻辑显式处理。
       const query = `UPDATE notes SET ${fields.join(', ')} WHERE id = ?`
       await db.run(query, values)
       saveDatabase()
@@ -2673,7 +2727,9 @@ function registerDatabaseHandlers() {
 
   ipcMain.handle('db:getRuneTemplates', async () => {
     try {
-      return runeTemplateService.listAll()
+      const rows = runeTemplateService.listAll()
+      console.log(`[RUNE-TPL] IPC db:getRuneTemplates -> ${rows.length} rows`)
+      return rows
     } catch (error) {
       log.error('[DB] getRuneTemplates error:', error)
       return []

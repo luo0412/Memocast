@@ -236,9 +236,13 @@ function createRuneTemplateService ({ db, execToObjects, execOne, saveDatabase, 
 
   function listAll () {
     try {
-      return execToObjects(
+      const rows = execToObjects(
         'SELECT * FROM rune_templates ORDER BY is_builtin DESC, sort_order ASC, created_at ASC'
       ) || []
+      try {
+        logger.info && logger.info(`[rune-template-service] listAll rows=${rows.length}` + (rows.length ? ` first=${rows[0].id}/${rows[0].name}` : ''))
+      } catch (_) { /* noop */ }
+      return rows
     } catch (error) {
       logger.error && logger.error('[rune-template-service] listAll error:', error)
       return []

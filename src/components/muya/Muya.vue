@@ -783,11 +783,12 @@ export default {
       }
     },
     /**
-     * 插入文本到编辑器末尾（用于从夯到拉回填）
+     * 插入文本到编辑器末尾（用于从夯到拉回填 / AI 助手追加）
+     * 仅在 Muya 是当前激活编辑器时执行，避免 Muya/Monaco 同时挂载时双写。
      */
     insertTextHandler: function (text) {
-      if (!text || !this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return
       if (!this.active) return
+      if (!text || !this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return
 
       const currentMarkdown = this.contentEditor.getMarkdown() || ''
       const newMarkdown = currentMarkdown + text
@@ -1133,6 +1134,7 @@ export default {
       appBus.$on(appEvents.ECHO_EVENTS.commitInstance, this.updateEchoPlaceholderPayload)
       appBus.$on(appEvents.ECHO_EVENTS.openInstanceEditor, this.updateEchoPlaceholderPayload)
       appBus.$on(appEvents.INSERT_TEXT, this.insertTextHandler)
+      appBus.$on(appEvents.INSERT_AI_TEXT, this.insertTextHandler)
     })
   },
   beforeDestroy () {
@@ -1159,6 +1161,7 @@ export default {
     appBus.$off(appEvents.ECHO_EVENTS.commitInstance)
     appBus.$off(appEvents.ECHO_EVENTS.openInstanceEditor)
     appBus.$off(appEvents.INSERT_TEXT)
+    appBus.$off(appEvents.INSERT_AI_TEXT)
   },
   watch: {
     currentNote: function (currentData) {

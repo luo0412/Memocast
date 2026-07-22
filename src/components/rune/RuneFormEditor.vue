@@ -14,14 +14,6 @@
           class='preset-template-picker'
           @change='onPresetPicked'
         />
-        <div ref='cityPickerMount' class='rune-city-picker-mount'>
-          <input
-            id='rune-city-picker-input'
-            readonly
-            type='text'
-            :placeholder='cityPickerPlaceholder'
-          />
-        </div>
         <q-btn
           flat
           dense
@@ -90,17 +82,15 @@ export default {
       monacoEditor: null,
       _monacoClipboardDisposable: null,
       selectedPresetKey: null,
-      categoryPickerTree: [],
-      runeCategoryOptions: RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) })),
-      // city-picker 状态
-      cityPickerPlaceholder: '点击选择省/市/区',
-      cityPickerReady: false,
-      _cityPickerPollTimer: null
+      categoryPickerTree: []
     }
   },
   computed: {
     monacoEditorStyle () {
       return { height: `${this.monacoEditorHeight}px` }
+    },
+    runeCategoryOptions () {
+      return RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) }))
     },
     categoryPickerOption () {
       const groups = new Map()
@@ -145,11 +135,9 @@ export default {
         this.scheduleMonacoInit()
         this.loadTemplatePicker(true)
         this._scheduleDialogHeightInstall()
-        this._scheduleCityPickerInit()
       } else {
         this.clearMonacoInitTimer()
         this.uninstallDialogHeightListener()
-        this._destroyCityPicker()
       }
     },
     template (val) {
@@ -160,7 +148,10 @@ export default {
   },
   mounted () {
     this.scheduleMonacoInit()
-    this._scheduleCityPickerInit()
+    if (this.visible) {
+      console.log('[RUNE-TPL] RuneFormEditor mounted while visible=true -> loadTemplatePicker')
+      this.loadTemplatePicker(true)
+    }
     this.$nextTick(() => {
       this.$nextTick(() => {
         this.installDialogHeightListener()
@@ -178,7 +169,6 @@ export default {
       clearTimeout(this._dialogHeightPollTimer)
       this._dialogHeightPollTimer = null
     }
-    this._destroyCityPicker()
     this.disposeMonaco()
   },
   methods: {
@@ -224,16 +214,20 @@ export default {
 
     async loadTemplatePicker (force = false) {
       try {
+        console.log(`[RUNE-TPL] RuneFormEditor.loadTemplatePicker start visible=${this.visible} force=${force}`)
         const resolver = (key) => {
           const opt = (this.runeCategoryOptions || []).find(o => o.value === key)
           return opt ? opt.label : key
         }
         const grouped = await runeTemplateService.listGroupedByCategory(resolver, force)
+        console.log(`[RUNE-TPL] RuneFormEditor.loadTemplatePicker grouped.length=${(grouped || []).length}`)
         const flat = []
         for (const g of (grouped || [])) {
           for (const it of (g.items || [])) flat.push(it)
         }
         this.categoryPickerTree = flat
+        const opt = this.categoryPickerOption
+        console.log(`[RUNE-TPL] RuneFormEditor categoryPickerOption.datas roots=${opt.datas.length}, total-leaves=${opt.datas.reduce((s, n) => s + n.children.length, 0)}`)
       } catch (e) {
         console.warn('[RuneFormEditor] loadTemplatePicker failed:', e && e.message)
         this.categoryPickerTree = []
@@ -414,124 +408,6 @@ export default {
       }
     },
 
-    // ==================== City Picker ====================
-    _scheduleCityPickerInit () {
-      if (this.cityPickerReady) {
-        this._refreshCityPickerValue()
-        return
-      }
-      if (this._cityPickerPollTimer) {
-        clearTimeout(this._cityPickerPollTimer)
-        this._cityPickerPollTimer = null
-      }
-      let attempt = 0
-      let selfHealAttempted = false
-      const tryInit = () => {
-        attempt += 1
-        if (!this.visible) {
-          this._cityPickerPollTimer = null
-          return
-        }
-        const inputEl = this._findCityPickerInput()
-        const $ = (typeof window !== 'undefined' && window.$) || (typeof window !== 'undefined' && window.jQuery)
-        const hasCitypicker = !!(($ && $.fn && $.fn.citypicker) || (typeof window !== 'undefined' && window.citypicker))
-        if (inputEl && $ && hasCitypicker) {
-          this._cityPickerPollTimer = null
-          this._initCityPicker(inputEl, $)
-          return
-        }
-        if (!selfHealAttempted && window.ChineseDistricts && this._hasCityPickerJsScriptTag()) {
-          selfHealAttempted = true
-          this._selfHealCityPickerScript()
-        }
-        this._cityPickerPollTimer = setTimeout(tryInit, 80)
-      }
-      this._cityPickerPollTimer = setTimeout(tryInit, 0)
-    },
-
-    _hasCityPickerJsScriptTag () {
-      const scripts = document.querySelectorAll('head script[data-cdn-name]')
-      for (const el of scripts) {
-        const name = el.getAttribute('data-cdn-name') || ''
-        const src = el.src || ''
-        if (/city-picker\.js/i.test(src) || /city[\s_-]?picker/i.test(name)) {
-          if (/data/i.test(name) || /city-picker\.data/i.test(src)) continue
-          return el
-        }
-      }
-      return null
-    },
-
-    _selfHealCityPickerScript () {
-      const badScript = this._hasCityPickerJsScriptTag()
-      if (!badScript) return
-      const url = badScript.src
-      try {
-        badScript.parentNode && badScript.parentNode.removeChild(badScript)
-      } catch (e) { /* noop */ }
-      const fresh = document.createElement('script')
-      fresh.src = url
-      fresh.setAttribute('data-cdn-name', 'city-picker JS')
-      fresh.setAttribute('data-self-heal', 'rune-form-editor')
-      fresh.onload = () => console.log('[RuneFormEditor] 自愈后的 city-picker.js 已加载')
-      fresh.onerror = (e) => console.warn('[RuneFormEditor] 自愈后的 city-picker.js 加载失败')
-      document.head.appendChild(fresh)
-    },
-
-    _findCityPickerInput () {
-      if (this.$refs.cityPickerMount) {
-        const inner = this.$refs.cityPickerMount.querySelector('input')
-        if (inner) return inner
-      }
-      const fallback = document.getElementById('rune-city-picker-input')
-      return fallback || null
-    },
-
-    _initCityPicker (inputEl, $) {
-      const container = inputEl.parentElement
-      if (container && getComputedStyle(container).position === 'static') {
-        container.style.position = 'relative'
-      }
-      try {
-        if ($ && $.fn && $.fn.citypicker && $(inputEl).data && $(inputEl).data('citypicker')) {
-          $(inputEl).citypicker('destroy')
-        }
-      } catch (_) { /* noop */ }
-      $(inputEl).citypicker({
-        province: '江苏省',
-        city: '常州市',
-        district: '溧阳市'
-      })
-      this.cityPickerReady = true
-    },
-
-    _refreshCityPickerValue () {
-      const inputEl = this._findCityPickerInput()
-      const $ = window.$ || window.jQuery
-      if (!inputEl || !$ || !$.fn || !$.fn.citypicker) return
-      try {
-        const v = $(inputEl).data('citypicker') ? $(inputEl).citypicker('getValue') : null
-        if (!v || !v.province) {
-          $(inputEl).citypicker('reset')
-        }
-      } catch (_) { /* noop */ }
-    },
-
-    _destroyCityPicker () {
-      if (this._cityPickerPollTimer) {
-        clearTimeout(this._cityPickerPollTimer)
-        this._cityPickerPollTimer = null
-      }
-      const inputEl = this._findCityPickerInput()
-      const $ = window.$ || window.jQuery
-      if (inputEl && $ && $.fn && $.fn.citypicker) {
-        try {
-          $(inputEl).citypicker('destroy')
-        } catch (_) { /* noop */ }
-      }
-      this.cityPickerReady = false
-    },
-
     // ==================== 公开方法 ====================
     isMonacoReady () {
       return this.monacoReady
@@ -584,39 +460,6 @@ export default {
 .preset-template-picker {
   min-width: 180px;
   max-width: 240px;
-}
-
-.rune-city-picker-mount {
-  flex: 0 0 auto;
-  position: relative;
-}
-
-.rune-city-picker-mount input {
-  width: 170px;
-  height: 28px;
-  font-size: 12px;
-  padding: 0 8px;
-  border-radius: 4px;
-  border: 1px solid #c0c0c0;
-  background: #fff;
-  color: rgba(0, 0, 0, 0.85);
-  outline: none;
-  cursor: pointer;
-}
-
-.rune-city-picker-mount input:hover {
-  border-color: #7E57C2;
-}
-
-.rune-city-picker-mount input:focus {
-  border-color: #7E57C2;
-  box-shadow: 0 0 0 2px rgba(126, 87, 194, 0.2);
-}
-
-.body--dark .rune-city-picker-mount input {
-  background: #34383e;
-  border-color: #4a4a4a;
-  color: rgba(255, 255, 255, 0.85);
 }
 
 .body--dark .rune-monaco-editor {

@@ -11,7 +11,7 @@
       <div class="q-mb-md row q-gutter-sm items-center">
         <q-btn outline color="green-7" icon="add" :label="$t('microAppsAdd')" @click="openAdd" />
         <q-space />
-        <q-btn unelevated color="green-7" icon="save" :label="$t('save')" :loading="saving" @click="saveAll" />
+        <q-btn unelevated color="green-7" icon="refresh" :label="$t('microAppsReload')" :loading="reloading" @click="reloadApps" />
       </div>
 
       <div v-if="apps.length === 0" class="text-center q-pa-md text-grey-6">
@@ -129,8 +129,8 @@ export default {
   data () {
     return {
       apps: [],
-      lastSavedApps: [],
-      saving: false,
+      persisting: false,
+      reloading: false,
       loaded: false,
       editDialogVisible: false,
       editingApp: null
@@ -147,9 +147,9 @@ export default {
       let list = normalizeMicroApps(stored)
       if (!list.length) {
         list = normalizeMicroApps(buildDefaultMicroApps())
+        await DatabaseClient.microApps.saveAll(list)
       }
       this.apps = list
-      this.lastSavedApps = list
       this.loaded = true
     },
     openAdd () {
@@ -163,21 +163,23 @@ export default {
     },
     onEditSubmit (form) {
       const idx = this.apps.findIndex(a => a.id === form.id)
+      let next
       if (idx === -1) {
         // 新增
-        this.apps = [...this.apps, { ...form }]
+        next = [...this.apps, { ...form }]
       } else {
         // 更新
-        const newList = this.apps.slice()
-        newList.splice(idx, 1, { ...form })
-        this.apps = newList
+        next = this.apps.slice()
+        next.splice(idx, 1, { ...form })
       }
       // isDefault 唯一性
       if (form.isDefault) {
-        this.apps = this.apps.map(a => ({ ...a, isDefault: a.id === form.id }))
+        next = next.map(a => ({ ...a, isDefault: a.id === form.id }))
       }
       this.editDialogVisible = false
       this.editingApp = null
+      // 编辑/新增完成后立刻落库，并通知 drawer 重建被改/新增的子应用
+      this._persistAndBroadcast(next, this.apps)
     },
     confirmDelete (app) {
       this.$q.dialog({
@@ -188,66 +190,78 @@ export default {
         persistent: true
       }).onOk(async () => {
         const next = this.apps.filter(a => a.id !== app.id)
-        // 删完保存
         const normalized = normalizeMicroApps(next)
         if (!normalized.length) {
           this.$q.notify({ message: this.$t('microAppsEmptySave'), type: 'warning', position: 'top' })
           return
         }
-        this.saving = true
-        try {
-          const ok = await DatabaseClient.microApps.saveAll(normalized)
-          if (ok) {
-            const dirtyIds = diffMicroAppsForReload(this.lastSavedApps, normalized)
-            this.apps = normalized
-            this.lastSavedApps = normalized
-            bus.$emit('microAppsChanged', { list: normalized, dirtyIds })
-            this.$q.notify({
-              message: this.$t('microAppsSaved'),
-              type: 'positive',
-              position: 'top',
-              timeout: 1200
-            })
-          } else {
-            this.$q.notify({ message: this.$t('saveFailed'), type: 'negative', position: 'top' })
-          }
-        } catch (err) {
-          console.error('[Settings] deleteMicroApp error:', err)
-          this.$q.notify({ message: this.$t('saveFailed'), type: 'negative', position: 'top' })
-        } finally {
-          this.saving = false
-        }
+        await this._persistAndBroadcast(normalized, this.apps)
       })
     },
-    async saveAll () {
-      const normalized = normalizeMicroApps(this.apps)
+    /**
+     * 内部通用：把 next 落库，diff 出本次相对 prev 的 dirtyIds，再广播 microAppsChanged。
+     * 同时把 this.apps 同步成归一化结果。
+     *
+     * @param {Array} next  落库后应有的列表（已更新过的内存值）
+     * @param {Array} prev  落库前的内存值，用于 diff 出本次 dirtyIds
+     */
+    async _persistAndBroadcast (next, prev) {
+      const normalized = normalizeMicroApps(next)
       if (!normalized.length) {
         this.$q.notify({ message: this.$t('microAppsEmptySave'), type: 'warning', position: 'top' })
-        return
+        return false
       }
-      this.saving = true
+      const dirtyIds = diffMicroAppsForReload(prev || [], normalized)
+      this.persisting = true
       try {
         const ok = await DatabaseClient.microApps.saveAll(normalized)
-        if (ok) {
-          // 计算本次落库相对上次的差异，通知 chat 弹框销毁已被改/删的子应用
-          const dirtyIds = diffMicroAppsForReload(this.lastSavedApps, normalized)
-          this.apps = normalized
-          this.lastSavedApps = normalized
-          bus.$emit('microAppsChanged', { list: normalized, dirtyIds })
-          this.$q.notify({
-            message: this.$t('microAppsSaved'),
-            type: 'positive',
-            position: 'top',
-            timeout: 1200
-          })
-        } else {
+        if (!ok) {
           this.$q.notify({ message: this.$t('saveFailed'), type: 'negative', position: 'top' })
+          return false
         }
+        this.apps = normalized
+        bus.$emit('microAppsChanged', { list: normalized, dirtyIds })
+        this.$q.notify({
+          message: this.$t('microAppsSaved'),
+          type: 'positive',
+          position: 'top',
+          timeout: 1200
+        })
+        return true
       } catch (err) {
-        console.error('[Settings] saveMicroApps error:', err)
+        console.error('[Settings] persistMicroApps error:', err)
         this.$q.notify({ message: this.$t('saveFailed'), type: 'negative', position: 'top' })
+        return false
       } finally {
-        this.saving = false
+        this.persisting = false
+      }
+    },
+    /**
+     * 「刷新应用」按钮：把当前已落库的列表里所有 enabled 应用都标记为 dirty，
+     * 让 drawer 销毁并重新挂载它们，用于「修改了 url/devUrl 但本地没 dirty 时强制刷新」。
+     */
+    async reloadApps () {
+      const enabled = normalizeMicroApps(this.apps).filter(a => a.enabled)
+      if (!enabled.length) {
+        this.$q.notify({ message: this.$t('microAppsEmpty'), type: 'info', position: 'top' })
+        return
+      }
+      this.reloading = true
+      try {
+        // 把列表原样 emit 一次，dirtyIds = 所有 enabled 应用的 id
+        bus.$emit('microAppsChanged', {
+          list: normalizeMicroApps(this.apps),
+          dirtyIds: enabled.map(a => a.id)
+        })
+        this.$q.notify({
+          message: this.$t('microAppsReloaded'),
+          type: 'positive',
+          position: 'top',
+          timeout: 1000
+        })
+      } finally {
+        // 简单防抖：200ms 后解除 loading（drawer 的 destroy 是异步的，这里只是反馈层）
+        setTimeout(() => { this.reloading = false }, 200)
       }
     }
   }

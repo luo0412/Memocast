@@ -65,6 +65,27 @@
                 >
                   {{ getMessageStatusText(message) }}
                 </div>
+                <div
+                  v-if="message.role === 'assistant' && message.content && hasCurrentNote && message.status === 'done'"
+                  class="ai-demo-message-actions"
+                >
+                  <button
+                    type="button"
+                    class="ai-demo-apply-link"
+                    :disabled="applyingMessageId !== null && applyingMessageId !== message.id"
+                    @click="applyToCurrentNote(message)"
+                  >
+                    <span v-if="applyingMessageId === message.id" class="ai-demo-apply-link__dot" aria-hidden="true"></span>
+                    <span v-else class="ai-demo-apply-link__icon" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 3H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7" />
+                        <path d="M11.5 2.5h2v2" />
+                        <path d="M8 8l5.5-5.5" />
+                      </svg>
+                    </span>
+                    <span class="ai-demo-apply-link__label">{{ $t('aiDrawerApplyToNote') }}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -95,8 +116,13 @@
 
 <script>
 import { i18n } from 'boot/i18n'
+import { createNamespacedHelpers } from 'vuex'
 import PortkeyService from 'src/services/PortkeyService'
 import MarkdownRenderer from 'src/services/MarkdownRenderer'
+import appBus from 'components/common/bus'
+import { EVENTS as appEvents } from 'src/utils/const/eventsConst'
+
+const { mapGetters: mapServerGetters } = createNamespacedHelpers('server')
 
 function createMessage(id, role, content, status = 'done', meta = null) {
   return {
@@ -121,12 +147,30 @@ export default {
       streamAbortController: null,
       activeResponseMeta: '',
       rendererReady: false,
+      applyingMessageId: null,
       messages: [
         createMessage(1, 'assistant', i18n.t('aiDrawerIntroMessage'))
       ]
     }
   },
   computed: {
+    ...mapServerGetters(['currentNote']),
+    hasCurrentNote () {
+      // currentNote getter 可能返回多种形态：
+      //   '' / null / undefined  → 没打开笔记
+      //   { __markdown, ... }   → 有笔记（包装对象）
+      //   纯 markdown 字符串   → 有笔记（旧格式）
+      const note = this.currentNote
+      if (!note) return false
+      if (typeof note === 'string') return true
+      if (typeof note === 'object') {
+        // 新格式包装对象
+        if (typeof note.__markdown === 'string') return true
+        // 原始 store 对象：{ info: { docGuid, ... } }
+        if (note.info && note.info.docGuid) return true
+      }
+      return false
+    },
     providerLabel () {
       if (!this.defaultConfig) {
         return this.$t('aiProviderLabelGeneric')
@@ -344,6 +388,52 @@ export default {
         })
       }
     },
+    /**
+     * 把指定 assistant 消息内容追加到当前笔记末尾。
+     * Muya / Monaco 都通过 appBus.INSERT_AI_TEXT 监听，由 Index.vue 中活动的编辑器组件处理。
+     */
+    applyToCurrentNote (message) {
+      if (!message || message.role !== 'assistant') return
+      if (!this.hasCurrentNote) {
+        this.$q.notify({
+          type: 'warning',
+          message: this.$t('aiDrawerApplyNoNote'),
+          position: 'top'
+        })
+        return
+      }
+      const text = (message.content || '').trim()
+      if (!text) {
+        this.$q.notify({
+          type: 'warning',
+          message: this.$t('aiDrawerApplyEmpty'),
+          position: 'top'
+        })
+        return
+      }
+      this.applyingMessageId = message.id
+      try {
+        appBus.$emit(appEvents.INSERT_AI_TEXT, text)
+        this.$q.notify({
+          type: 'positive',
+          message: this.$t('aiDrawerApplyDone'),
+          position: 'top'
+        })
+      } catch (error) {
+        this.$q.notify({
+          type: 'negative',
+          message: this.$t('aiDrawerApplyFailed', { message: error.message || String(error) }),
+          position: 'top'
+        })
+      } finally {
+        // 让 dot 动画播完再清，避免视觉抖动；同时避免重复点击。
+        setTimeout(() => {
+          if (this.applyingMessageId === message.id) {
+            this.applyingMessageId = null
+          }
+        }, 800)
+      }
+    },
     async handleSubmit (value) {
       const message = typeof value === 'string' ? value : this.draftMessage
       const content = message && message.trim()
@@ -519,6 +609,96 @@ export default {
 .ai-demo-message-status {
   font-size: 12px;
   color: #c0c4cc;
+}
+
+.ai-demo-message-actions {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding-left: 4px;
+}
+
+.ai-demo-apply-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #909399;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  user-select: none;
+}
+
+.ai-demo-apply-link:hover:not(:disabled) {
+  color: #409eff;
+  background-color: rgba(64, 158, 255, 0.08);
+}
+
+.ai-demo-apply-link:active:not(:disabled) {
+  background-color: rgba(64, 158, 255, 0.14);
+}
+
+.ai-demo-apply-link:focus-visible {
+  outline: none;
+  color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.18);
+}
+
+.ai-demo-apply-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ai-demo-apply-link__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  color: inherit;
+}
+
+.ai-demo-apply-link__label {
+  white-space: nowrap;
+}
+
+.ai-demo-apply-link__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #409eff;
+  position: relative;
+}
+
+.ai-demo-apply-link__dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid rgba(64, 158, 255, 0.45);
+  animation: ai-demo-apply-pulse 0.9s ease-out infinite;
+}
+
+@keyframes ai-demo-apply-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
 }
 
 .ai-demo-message-bubble {
