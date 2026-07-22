@@ -9,12 +9,15 @@ import { EVENTS as events } from 'src/utils/const/eventsConst'
 import ClientFileStorage from './storage/ClientFileStorage'
 import remark from 'remark'
 import pangu from 'remark-pangu'
+import { identity } from 'src/muya/lib/utils'
 // import { getCacheImage } from 'src/ApiInvoker'
 
 const turndownService = new TurndownService({
   codeBlockStyle: 'fenced',
   headingStyle: 'atx'
 })
+
+turndownService.escape = identity
 
 function isNullOrEmpty (obj) {
   obj = _.toString(obj)
