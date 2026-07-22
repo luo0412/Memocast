@@ -14,7 +14,7 @@ import { Transformer } from 'markmap-lib'
 import * as markmap from 'markmap-view'
 import { showContextMenu as showMarkMapContextMenu } from 'src/components/contextMenu/markMap'
 import bus from '../common/bus.js'
-import { EVENTS as events } from 'src/utils/eventsConst'
+import { EVENTS as events } from 'src/utils/const/eventsConst'
 import MarkMapToolBar from './MarkMapToolBar.vue'
 
 const transformer = new Transformer()

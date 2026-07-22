@@ -15,7 +15,7 @@ import { createNamespacedHelpers } from 'vuex'
 import debugLogger from 'src/utils/debugLogger'
 import helper from 'src/utils/helper'
 import bus from 'components/common/bus'
-import { EVENTS as events } from 'src/utils/eventsConst'
+import { EVENTS as events } from 'src/utils/const/eventsConst'
 import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
 import { escape } from 'lodash'
 

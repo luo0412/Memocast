@@ -1,5 +1,5 @@
 import DatabaseClient from 'src/utils/DatabaseClient'
-import { OFFLINE_ROOT_CATEGORY, normalizeNbsp } from 'src/utils/constants'
+import { OFFLINE_ROOT_CATEGORY, normalizeNbsp } from 'src/utils/const/constants'
 
 export function createLocalDocGuid () {
   return `local_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`

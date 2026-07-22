@@ -2028,6 +2028,43 @@ function registerDatabaseHandlers() {
     }
   })
 
+  // 微应用（聊天弹框内的 wujie 子应用）持久化
+  const MICRO_APPS_KEY = 'setting/microApps'
+
+  ipcMain.handle('db:getMicroApps', async () => {
+    try {
+      const row = execOne('SELECT value FROM app_state WHERE key = ?', [MICRO_APPS_KEY])
+      if (!row) return []
+      try {
+        const parsed = JSON.parse(row.value)
+        return Array.isArray(parsed) ? parsed : []
+      } catch (parseError) {
+        return []
+      }
+    } catch (error) {
+      log.error('[DB] getMicroApps error:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle('db:saveMicroApps', async (event, apps) => {
+    try {
+      if (!Array.isArray(apps)) apps = []
+      const now = Date.now()
+      const serialized = JSON.stringify(apps)
+      await db.run(
+        `INSERT INTO app_state (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        [MICRO_APPS_KEY, serialized, now]
+      )
+      saveDatabase()
+      return true
+    } catch (error) {
+      log.error('[DB] saveMicroApps error:', error)
+      return false
+    }
+  })
+
   // 记录待同步的删除日志
   ipcMain.handle('db:logPendingDelete', async (event, { noteId, docGuid = null, kbGuid = null }) => {
     try {

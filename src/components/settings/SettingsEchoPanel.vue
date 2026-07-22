@@ -63,7 +63,7 @@
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
 import RuneCard from 'components/rune/RuneCard'
-import { ECHO_CATEGORIES, DEFAULT_ECHO_CATEGORY, getEchoCategoryValue } from 'src/utils/runeEchoCategoriesConst'
+import { ECHO_CATEGORIES, DEFAULT_ECHO_CATEGORY, getEchoCategoryValue } from 'src/utils/const/runeEchoCategoriesConst'
 
 export default {
   name: 'SettingsEchoPanel',

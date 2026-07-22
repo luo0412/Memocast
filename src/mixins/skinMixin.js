@@ -3,7 +3,7 @@
  * 管理皮肤切换、主题色应用
  */
 import bus from 'components/common/bus'
-import { EVENTS as events } from 'src/utils/eventsConst'
+import { EVENTS as events } from 'src/utils/const/eventsConst'
 
 const SKIN_COLORS = {
   baiyang: null,

@@ -404,6 +404,16 @@ const cdnDeps = {
   }
 }
 
+const microApps = {
+  async getAll() {
+    return await invoke('db:getMicroApps')
+  },
+
+  async saveAll(apps) {
+    return await invoke('db:saveMicroApps', apps)
+  }
+}
+
 const DatabaseClient = {
   notes,
   tags,
@@ -415,7 +425,8 @@ const DatabaseClient = {
   runes,
   runeTemplates,
   echoes,
-  cdnDeps
+  cdnDeps,
+  microApps
 }
 
 export default DatabaseClient

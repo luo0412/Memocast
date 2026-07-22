@@ -1,7 +1,7 @@
 import { ipcRenderer, shell } from 'electron'
 import { Notify } from 'quasar'
 import bus from 'components/common/bus'
-import { EVENTS as events } from 'src/utils/eventsConst'
+import { EVENTS as events } from 'src/utils/const/eventsConst'
 import { i18n } from '../src/boot/i18n'
 import debugLogger from './utils/debugLogger'
 import { quitAndUpdate } from './ApiInvoker'

@@ -86,7 +86,7 @@
     />
     <SearchDialog ref='searchDialog' />
     <TagDialog ref="tagDialog" />
-    <ImDrawer ref="imDrawer" />
+    <microAppDrawer ref="microAppDrawer" />
     <DoubaoChatDrawer ref="doubaoChatDrawer" />
     <AiDemoDrawer ref="aiDemoDrawer" @request-ai-provider-config="handleAiProviderConfigRequest" />
   </q-bar>
@@ -98,12 +98,12 @@ import { createNamespacedHelpers } from 'vuex'
 import { skinMixin } from 'src/mixins/skinMixin'
 import { decodeEchoPayload } from 'components/echo/EchoRuntime'
 import bus from 'components/common/bus'
-import { EVENTS as events } from 'src/utils/eventsConst'
+import { EVENTS as events } from 'src/utils/const/eventsConst'
 
 import LoginDialog from '../login/LoginDialog.vue'
 import SettingsDialog from '../settings/SettingsDialog.vue'
 import SearchDialog from 'components/search/SearchDialog'
-import ImDrawer from 'components/chat/ImDrawer'
+import microAppDrawer from 'components/microApp/microAppDrawer'
 import DoubaoChatDrawer from 'components/ai/DoubaoChatDrawer'
 import AiDemoDrawer from 'components/ai/AiDemoDrawer'
 import EchoInstanceDialog from 'components/echo/EchoInstanceDialog.vue'
@@ -130,7 +130,7 @@ export default {
     TagDialog: () => import('components/tag/TagDialog'),
     SettingsDialog: () => import('../settings/SettingsDialog.vue'),
     LoginDialog,
-    ImDrawer,
+    microAppDrawer,
     DoubaoChatDrawer,
     AiDemoDrawer,
     EchoInstanceDialog,
@@ -230,7 +230,7 @@ export default {
     },
 
     handleImChatClick () {
-      this.$refs.imDrawer.toggle()
+      this.$refs.microAppDrawer.toggle()
     },
 
     handleLoginClick () {

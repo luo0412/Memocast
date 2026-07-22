@@ -132,7 +132,7 @@
 </template>
 
 <script>
-import { RUNE_CATEGORIES } from 'src/utils/runeEchoCategoriesConst'
+import { RUNE_CATEGORIES } from 'src/utils/const/runeEchoCategoriesConst'
 
 const ICON_NAME_MAP = {
   whatshot: 'local_fire_department',

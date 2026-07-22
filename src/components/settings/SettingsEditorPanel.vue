@@ -75,7 +75,7 @@
 <script>
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
-import { NOTE_ORDER_TYPES } from 'src/utils/noteOrderTypesConst'
+import { NOTE_ORDER_TYPES } from 'src/utils/const/noteOrderTypesConst'
 
 export default {
   name: 'SettingsEditorPanel',

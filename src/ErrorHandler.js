@@ -1,6 +1,6 @@
 import { Notify } from 'quasar'
 import bus from 'components/common/bus'
-import { EVENTS as events } from 'src/utils/eventsConst'
+import { EVENTS as events } from 'src/utils/const/eventsConst'
 import { i18n } from 'boot/i18n'
 import debugLogger from './utils/debugLogger'
 

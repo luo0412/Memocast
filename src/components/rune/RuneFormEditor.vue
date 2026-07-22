@@ -57,7 +57,7 @@
 <script>
 import * as monaco from 'monaco-editor'
 import CategoryPicker from 'components/category/CategoryPickerV2'
-import { RUNE_CATEGORIES } from 'src/utils/runeEchoCategoriesConst'
+import { RUNE_CATEGORIES } from 'src/utils/const/runeEchoCategoriesConst'
 import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
 import { createBlankTemplate, createInheritDemoTemplate } from './rune-templates.js'
 import runeTemplateService from 'src/services/RuneTemplateService'

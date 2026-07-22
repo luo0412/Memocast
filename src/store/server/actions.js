@@ -3,9 +3,9 @@ import clientTypes from 'src/store/client/types'
 import api from 'src/utils/api'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from 'src/components/common/bus'
-import { OFFLINE_ROOT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY, normalizeCategoryForMatch } from 'src/utils/constants'
+import { OFFLINE_ROOT_CATEGORY, OFFLINE_ROOT_CATEGORY_KEY, normalizeCategoryForMatch } from 'src/utils/const/constants'
 import SessionStorageService from 'src/services/SessionStorageService'
-import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/utils/calendarDateBasisConst'
+import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/utils/const/calendarDateBasisConst'
 import { APP_STATE_KEYS, loadWorkspaceState, saveWorkspaceStateValue } from 'src/store/server/workspaceState'
 import path from 'path'
 import {
@@ -92,10 +92,10 @@ import {
   parseLocalTagId
 } from 'src/store/server/localSyncMigration'
 
-/** @deprecated 请从 src/utils/constants 导入，保持单点定义 */
-export { OFFLINE_ROOT_CATEGORY_KEY } from 'src/utils/constants'
-/** @deprecated 请从 src/utils/constants 导入，保持单点定义 */
-export { OFFLINE_ROOT_CATEGORY } from 'src/utils/constants'
+/** @deprecated 请从 src/utils/const/constants 导入，保持单点定义 */
+export { OFFLINE_ROOT_CATEGORY_KEY } from 'src/utils/const/constants'
+/** @deprecated 请从 src/utils/const/constants 导入，保持单点定义 */
+export { OFFLINE_ROOT_CATEGORY } from 'src/utils/const/constants'
 
 import { Dark, Dialog, Loading, Notify, QSpinnerGears } from 'quasar'
 import helper from 'src/utils/helper'

@@ -2,7 +2,7 @@ import api from 'src/utils/api'
 import _ from 'lodash'
 import helper from 'src/utils/helper'
 import ServerFileStorage from 'src/utils/storage/ServerFileStorage'
-import { DEFAULT_NOTE_ORDER_TYPE } from 'src/utils/noteOrderTypesConst'
+import { DEFAULT_NOTE_ORDER_TYPE } from 'src/utils/const/noteOrderTypesConst'
 
 export default {
   avatarUrl: ({ userGuid }) => {

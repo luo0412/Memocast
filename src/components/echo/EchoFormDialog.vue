@@ -61,7 +61,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { createDefaultEchoAnnoSource } from 'components/echo/EchoRuntime'
 import { DEFAULT_ECHO_COLOR, DEFAULT_ECHO_ICON } from 'components/echo/builtin-echo-shared'
-import { DEFAULT_ECHO_CATEGORY, getEchoCategoryValue } from 'src/utils/runeEchoCategoriesConst'
+import { DEFAULT_ECHO_CATEGORY, getEchoCategoryValue } from 'src/utils/const/runeEchoCategoriesConst'
 
 import EchoFormFields from './EchoFormFields.vue'
 import EchoFormEditor from './EchoFormEditor.vue'

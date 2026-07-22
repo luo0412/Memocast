@@ -1,5 +1,5 @@
 import DatabaseClient from 'src/utils/DatabaseClient'
-import { buildNoteUniqueKey, normalizeCategoryForMatch, normalizeTitleForMatch } from 'src/utils/constants'
+import { buildNoteUniqueKey, normalizeCategoryForMatch, normalizeTitleForMatch } from 'src/utils/const/constants'
 
 export async function findExistingNoteByCategoryAndTitle ({
   category,

@@ -115,6 +115,9 @@
           </div>
         </div>
       </SettingsSectionContent>
+
+      <!-- 微应用（聊天弹框内的 wujie 子应用） -->
+      <SettingsMicroAppsPanel v-if='subTab === "microApps"' ref='microAppsPanel' />
     </div>
   </div>
 </template>
@@ -122,6 +125,7 @@
 <script>
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
+import SettingsMicroAppsPanel from 'components/settings/SettingsMicroAppsPanel'
 import SessionStorageService from 'src/services/SessionStorageService'
 import CloudSyncService from 'src/services/CloudSyncService'
 import DatabaseClient from 'src/utils/DatabaseClient'
@@ -131,7 +135,8 @@ export default {
   name: 'SettingsServerPanel',
   components: {
     CategoryTabs,
-    SettingsSectionContent
+    SettingsSectionContent,
+    SettingsMicroAppsPanel
   },
   props: {
     cloudSyncProvider: {
@@ -208,7 +213,8 @@ export default {
       return [
         { value: 'sync', label: this.$t('cloudSync'), icon: 'cloud_sync' },
         { value: 'image', label: this.$t('cloudImage'), icon: 'image' },
-        { value: 'cdn', label: this.$t('cloudCdnDeps'), icon: 'link' }
+        { value: 'cdn', label: this.$t('cloudCdnDeps'), icon: 'link' },
+        { value: 'microApps', label: this.$t('microApps'), icon: 'apps' }
       ]
     }
   },
@@ -225,6 +231,16 @@ export default {
         }
       },
       deep: true
+    },
+    subTab (val) {
+      if (val === 'microApps') {
+        this.$nextTick(() => {
+          const panel = this.$refs.microAppsPanel
+          if (panel && typeof panel.load === 'function') {
+            panel.load()
+          }
+        })
+      }
     }
   },
   methods: {

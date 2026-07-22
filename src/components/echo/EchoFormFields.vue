@@ -124,7 +124,7 @@
 </template>
 
 <script>
-import { ECHO_CATEGORIES } from 'src/utils/runeEchoCategoriesConst'
+import { ECHO_CATEGORIES } from 'src/utils/const/runeEchoCategoriesConst'
 
 export default {
   name: 'EchoFormFields',

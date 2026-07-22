@@ -172,9 +172,9 @@ import DatabaseClient from 'src/utils/DatabaseClient'
 import CloudSyncService from 'src/services/CloudSyncService'
 import SessionStorageService from 'src/services/SessionStorageService'
 import bus from 'components/common/bus'
-import { EVENTS as events } from 'src/utils/eventsConst'
+import { EVENTS as events } from 'src/utils/const/eventsConst'
 import { version } from '../../../package.json'
-import { DEFAULT_RUNE_CATEGORY, DEFAULT_ECHO_CATEGORY } from 'src/utils/runeEchoCategoriesConst'
+import { DEFAULT_RUNE_CATEGORY, DEFAULT_ECHO_CATEGORY } from 'src/utils/const/runeEchoCategoriesConst'
 import helper from 'src/utils/helper'
 
 const {

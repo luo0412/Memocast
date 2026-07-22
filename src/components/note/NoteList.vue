@@ -54,7 +54,7 @@ import { Loading, QSpinnerGears } from 'quasar'
 import LoadingComponent from '../common/Loading.vue'
 import helper from 'src/utils/helper'
 import bus from '../common/bus.js'
-import { EVENTS as events } from 'src/utils/eventsConst'
+import { EVENTS as events } from 'src/utils/const/eventsConst'
 import { showContextMenu as showNoteItemContextMenu } from 'src/components/contextMenu/noteList'
 const { mapGetters: mapServerGetters, mapState: mapServerState, mapActions: mapServerActions } = createNamespacedHelpers('server')
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')

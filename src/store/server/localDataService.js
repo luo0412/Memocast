@@ -1,5 +1,5 @@
 import DatabaseClient from 'src/utils/DatabaseClient'
-import { OFFLINE_ROOT_CATEGORY } from 'src/utils/constants'
+import { OFFLINE_ROOT_CATEGORY } from 'src/utils/const/constants'
 import {
   buildCategoryTreeFromNotes,
   formatYmd,

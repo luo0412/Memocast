@@ -319,7 +319,7 @@ const note = await DatabaseClient.notes.create({
 | `src/store/server/notePersistenceService.js` | 笔记持久化操作（创建本地草稿、升级 GUID 等） |
 | `src/store/server/localSyncMigration.js` | 离线标签迁移到云端 |
 | `src/components/ui/dialog/OfflineSyncPromptDialog.vue` | 离线同步提示弹框 |
-| `src/utils/constants.js` | `OFFLINE_ROOT_CATEGORY`、`normalizeCategoryForMatch` 等常量 |
+| `src/utils/const/constants.js` | `OFFLINE_ROOT_CATEGORY`、`normalizeCategoryForMatch` 等常量 |
 
 ## 扩展阅读
 

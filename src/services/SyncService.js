@@ -8,7 +8,7 @@ import DatabaseClient from 'src/utils/DatabaseClient'
 import WizNoteApi from '../utils/api'
 import helper from '../utils/helper'
 import SessionStorageService from './SessionStorageService'
-import { OFFLINE_ROOT_CATEGORY, normalizeNbsp, normalizeCategoryForMatch } from '../utils/constants'
+import { OFFLINE_ROOT_CATEGORY, normalizeNbsp, normalizeCategoryForMatch } from '../utils/const/constants'
 
 function getKbGuid() {
   return SessionStorageService.getKbGuid()

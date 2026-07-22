@@ -63,7 +63,7 @@
 </template>
 
 <script>
-import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY } from 'src/utils/runeEchoCategoriesConst'
+import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY } from 'src/utils/const/runeEchoCategoriesConst'
 import { createBlankTemplate, createInheritDemoTemplate } from './rune-templates.js'
 import runeTemplateService from 'src/services/RuneTemplateService'
 

@@ -49,7 +49,7 @@
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
 import RuneCard from 'components/rune/RuneCard'
-import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY, getRuneCategoryValue } from 'src/utils/runeEchoCategoriesConst'
+import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY, getRuneCategoryValue } from 'src/utils/const/runeEchoCategoriesConst'
 
 export default {
   name: 'SettingsRunePanel',

@@ -1,4 +1,4 @@
-import { EVENTS as events } from 'src/utils/eventsConst'
+import { EVENTS as events } from 'src/utils/const/eventsConst'
 import { packClickFunction } from 'src/components/contextMenu/utils'
 
 export const rename = (menuItem, browserWindow) => {

@@ -39,7 +39,7 @@
 
 <script>
 import bus from 'components/common/bus'
-import { EVENTS as events } from 'src/utils/eventsConst'
+import { EVENTS as events } from 'src/utils/const/eventsConst'
 import prettyBytes from 'pretty-bytes'
 import { quitAndUpdate } from 'src/ApiInvoker'
 
