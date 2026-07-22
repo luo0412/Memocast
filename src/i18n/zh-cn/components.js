@@ -43,6 +43,8 @@ export default {
   cloudProfileCityCurrent: '当前选择',
   cloudProfileCityEmpty: '尚未设置',
   cloudProfileSavedAt: '已于 {time} 写入 SQLite',
+  cloudProfileSaving: '正在写入 SQLite…',
+  cloudProfileSaveFailed: '写入 SQLite 失败：{error}',
   cityPickerPlaceholder: '点击选择省/市/区',
   cloudFnConfig: '配置',
   cloudFnNavigation: '导航中心',

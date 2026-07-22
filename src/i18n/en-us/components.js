@@ -44,6 +44,8 @@ export default {
   cloudProfileCityCurrent: 'Current selection',
   cloudProfileCityEmpty: 'Not set',
   cloudProfileSavedAt: 'Saved to SQLite at {time}',
+  cloudProfileSaving: 'Saving to SQLite…',
+  cloudProfileSaveFailed: 'Save to SQLite failed: {error}',
   cityPickerPlaceholder: 'Click to pick province / city / district',
   cloudFnConfig: 'Config',
   cloudFnNavigation: 'Navigation',

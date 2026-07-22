@@ -1445,6 +1445,276 @@ function registerDatabaseHandlers() {
     }
   })
 
+  // ============ 诊断用 IPC（脏标记调查临时用，调查完删除） ============
+  ipcMain.handle('db:diag:counts', async () => {
+    try {
+      const currentKbGuid = ClientStorage.get('kbGuid')
+      const total = execOne('SELECT COUNT(*) as count FROM notes')
+      const all = execToObjects(`
+        SELECT
+          COALESCE(kb_guid, '<null>') AS kb_guid,
+          COUNT(*) AS total,
+          SUM(CASE WHEN dirty = 1 THEN 1 ELSE 0 END) AS dirty_count,
+          SUM(CASE WHEN dirty = 0 THEN 1 ELSE 0 END) AS clean_count
+        FROM notes
+        GROUP BY kb_guid
+      `)
+      const currentAccountDirty = currentKbGuid
+        ? execOne('SELECT COUNT(*) as count FROM notes WHERE dirty = 1 AND kb_guid = ?', [currentKbGuid])
+        : execOne('SELECT COUNT(*) as count FROM notes WHERE dirty = 1 AND (kb_guid IS NULL OR kb_guid = "")')
+      return {
+        currentKbGuid,
+        totalNotes: total?.count || 0,
+        currentAccountDirtyCount: currentAccountDirty?.count || 0,
+        distribution: all
+      }
+    } catch (error) {
+      log.error('[DB] diag:counts error:', error)
+      return null
+    }
+  })
+
+  ipcMain.handle('db:diag:dirty-notes', async () => {
+    try {
+      const currentKbGuid = ClientStorage.get('kbGuid')
+      if (!currentKbGuid) return { error: 'no_kb_guid_logged_in' }
+      const notes = execToObjects(`
+        SELECT
+          id,
+          title,
+          COALESCE(doc_guid, '<none>') AS doc_guid,
+          dirty,
+          data_modified,
+          local_modified,
+          COALESCE(server_modified, 0) AS server_modified,
+          updated_at,
+          (local_modified - COALESCE(server_modified, 0)) AS local_ahead_ms
+        FROM notes
+        WHERE dirty = 1 AND kb_guid = ?
+        ORDER BY local_modified ASC
+      `, [currentKbGuid])
+      return {
+        currentKbGuid,
+        total: notes.length,
+        notes
+      }
+    } catch (error) {
+      log.error('[DB] diag:dirty-notes error:', error)
+      return null
+    }
+  })
+
+  // 不依赖 kbGuid 的脏调查：dump 所有 dirty=1（不管归属）
+  ipcMain.handle('db:diag:dirty-all', async () => {
+    try {
+      const notes = execToObjects(`
+        SELECT
+          id,
+          title,
+          COALESCE(kb_guid, '<null>') AS kb_guid,
+          COALESCE(doc_guid, '<none>') AS doc_guid,
+          dirty,
+          data_modified,
+          local_modified,
+          COALESCE(server_modified, 0) AS server_modified,
+          updated_at,
+          (local_modified - COALESCE(server_modified, 0)) AS local_ahead_ms
+        FROM notes
+        WHERE dirty = 1
+        ORDER BY local_modified ASC
+        LIMIT 200
+      `)
+      const group = execToObjects(`
+        SELECT
+          COALESCE(kb_guid, '<null>') AS kb_guid,
+          COUNT(*) AS c,
+          MIN(local_modified) AS first_dirty_ts,
+          MAX(local_modified) AS last_dirty_ts
+        FROM notes
+        WHERE dirty = 1
+        GROUP BY kb_guid
+      `)
+      return { total: notes.length, groups: group, notes }
+    } catch (error) {
+      log.error('[DB] diag:dirty-all error:', error)
+      return null
+    }
+  })
+
+  // 全表 dump 不干净笔记：dirty=0 但 local_modified != server_modified 的（说明之前推过但回写没对齐）
+  ipcMain.handle('db:diag:modified-but-clean', async () => {
+    try {
+      const notes = execToObjects(`
+        SELECT
+          id,
+          title,
+          COALESCE(kb_guid, '<null>') AS kb_guid,
+          COALESCE(doc_guid, '<none>') AS doc_guid,
+          dirty,
+          data_modified,
+          local_modified,
+          COALESCE(server_modified, 0) AS server_modified,
+          (local_modified - COALESCE(server_modified, 0)) AS diff_ms
+        FROM notes
+        WHERE dirty = 0
+          AND server_modified IS NOT NULL
+          AND server_modified > 0
+          AND local_modified != server_modified
+        ORDER BY ABS(local_modified - server_modified) DESC
+        LIMIT 50
+      `)
+      return { total: notes.length, notes }
+    } catch (error) {
+      log.error('[DB] diag:modified-but-clean error:', error)
+      return null
+    }
+  })
+
+  // 紧急止血：把所有 dirty=1 重置为 0（防止错误地把它们再推到 server）
+  ipcMain.handle('db:diag:clear-all-dirty', async () => {
+    try {
+      const result = execRun(`
+        UPDATE notes SET dirty = 0, local_modified = COALESCE(server_modified, local_modified)
+        WHERE dirty = 1
+      `)
+      log.warn(`[DB] ⚠️ EMERGENCY: cleared dirty flag on ${result?.changes || 0} notes by user request`)
+      return { ok: true, cleared: result?.changes || 0 }
+    } catch (error) {
+      log.error('[DB] diag:clear-all-dirty error:', error)
+      return { error: error.message }
+    }
+  })
+
+  // 列出 ClientStorage 实际有的所有 key 和 kbGuid 相关值
+  ipcMain.handle('db:diag:storage-keys', async () => {
+    try {
+      // electron-store 的内部数据
+      const storeData = ClientStorage.store || {}
+      const storePath = ClientStorage.path
+      // 列出所有 key
+      const allKeys = Object.keys(storeData)
+      // 找 kb 相关
+      const kbRelated = {}
+      for (const key of allKeys) {
+        if (key.toLowerCase().includes('kb') || key.toLowerCase().includes('guid')) {
+          kbRelated[key] = storeData[key]
+        }
+      }
+      return {
+        storePath,
+        totalKeys: allKeys.length,
+        allKeys,
+        kbRelated,
+        kbGuidDirect: storeData.kbGuid ?? null,
+        kbGuidTypeof: typeof storeData.kbGuid
+      }
+    } catch (error) {
+      log.error('[DB] diag:storage-keys error:', error)
+      return { error: error.message }
+    }
+  })
+
+  // 字节级 debug：对比 currentKbGuid 和 notes 里真实存的 kb_guid
+  ipcMain.handle('db:diag:kbguid-bytes', async () => {
+    try {
+      const currentKbGuid = ClientStorage.get('kbGuid')
+      const sample = execOne(`
+        SELECT
+          kb_guid,
+          LENGTH(kb_guid) AS len,
+          HEX(kB_guid) AS hex,
+          (SELECT COUNT(*) FROM notes WHERE kb_guid = ?) AS eq_match,
+          (SELECT COUNT(*) FROM notes WHERE kb_guid IS ?) AS is_match,
+          (SELECT COUNT(*) FROM notes WHERE kb_guid = ? AND dirty = 1) AS eq_dirty_match,
+          (SELECT COUNT(*) FROM notes WHERE HEX(kb_guid) = HEX(?)) AS hex_match,
+          (SELECT COUNT(*) FROM notes WHERE LENGTH(kb_guid) = LENGTH(?)) AS len_match
+        FROM notes
+        LIMIT 1
+      `, [currentKbGuid, currentKbGuid, currentKbGuid, currentKbGuid, currentKbGuid, currentKbGuid])
+      const grouped = execToObjects(`
+        SELECT kb_guid, LENGTH(kb_guid) AS len, HEX(kb_guid) AS hex, COUNT(*) AS n
+        FROM notes
+        GROUP BY kb_guid
+      `)
+      return {
+        currentKbGuid,
+        currentKbGuidLength: currentKbGuid ? currentKbGuid.length : null,
+        currentKbGuidHex: currentKbGuid ? Buffer.from(currentKbGuid).toString('hex') : null,
+        sampleRow: sample,
+        allGroups: grouped
+      }
+    } catch (error) {
+      log.error('[DB] diag:kbguid-bytes error:', error)
+      return { error: error.message }
+    }
+  })
+
+  // 用于验证"系统更新是否能正确清 dirty"
+  // 模拟一次相同的 update，看 dirty 会不会被错置 1
+  ipcMain.handle('db:diag:simulate-noop-write', async (event, noteId) => {
+    try {
+      const before = execOne('SELECT * FROM notes WHERE id = ?', [noteId])
+      if (!before) return { error: 'note_not_found', noteId }
+      // 用完全相同的 title/content/category/tags 调用 updateNote，看会不会错置 dirty
+      const updates = {
+        title: before.title,
+        content: before.content,
+        category: before.category,
+        tags: before.tags
+      }
+      // 直接模拟一次写入，但绕开 IPC（直接走与 updateNote 一样的判定逻辑）
+      const { id } = before
+      const current = before
+      const fields = []
+      const values = []
+      const now = Date.now()
+      const toStr = (v) => (v == null) ? '' : (typeof v === 'string') ? v : (typeof v === 'number') ? String(v) : JSON.stringify(v)
+      const toNum = (v) => (v == null) ? now : (typeof v === 'number') ? v : parseInt(v, 10) || now
+      const normForCompare = (v) => (v == null) ? '' : String(v)
+      const normTagsForCompare = (v) => {
+        if (v == null) return ''
+        if (Array.isArray(v)) return v.join(',')
+        return String(v)
+      }
+
+      const syncFieldKeys = []
+      const newSyncValues = {}
+      if (updates.title !== undefined) {
+        syncFieldKeys.push('title')
+        newSyncValues.title = normForCompare(updates.title)
+      }
+      if (updates.content !== undefined) {
+        syncFieldKeys.push('content')
+        newSyncValues.content = normForCompare(updates.content)
+      }
+      if (updates.category !== undefined) {
+        syncFieldKeys.push('category')
+        newSyncValues.category = normForCompare(updates.category)
+      }
+      if (updates.tags !== undefined) {
+        syncFieldKeys.push('tags')
+        newSyncValues.tags = normTagsForCompare(updates.tags)
+      }
+
+      const syncChanged = syncFieldKeys.some((key) => {
+        const oldVal = key === 'tags' ? normTagsForCompare(current[key]) : normForCompare(current[key])
+        return oldVal !== newSyncValues[key]
+      })
+
+      const after = {
+        before_dirty: current.dirty,
+        before_local_modified: current.local_modified,
+        sync_changed_detected: syncChanged,
+        expected_dirty_unchanged: !syncChanged,
+        would_mark_dirty_1: syncChanged
+      }
+      return after
+    } catch (error) {
+      log.error('[DB] diag:simulate-noop-write error:', error)
+      return null
+    }
+  })
+
   // 删除笔记
   ipcMain.handle('db:deleteNote', async (event, payload) => {
     try {

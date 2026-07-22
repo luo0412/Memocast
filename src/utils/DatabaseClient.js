@@ -178,6 +178,17 @@ const sync = {
     return await invoke('db:getStats')
   },
 
+  // ============ 诊断接口（临时） ============
+  async diagCounts() {
+    return await invoke('db:diag:counts')
+  },
+  async diagDirtyNotes() {
+    return await invoke('db:diag:dirty-notes')
+  },
+  async diagSimulateNoopWrite(noteId) {
+    return await invoke('db:diag:simulate-noop-write', noteId)
+  },
+
   /**
    * 创建本地 ID ↔ 云端 doc_guid 映射记录
    * @param {number} localId

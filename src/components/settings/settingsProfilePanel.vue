@@ -37,6 +37,14 @@
         <q-icon name='check_circle' size='0.9em' color='green-7' class='q-mr-xs' />
         {{ $t('cloudProfileSavedAt', { time: lastSavedAt }) }}
       </div>
+      <div v-else-if='saving' class='text-caption text-grey-6 q-mt-xs profile-current__saving'>
+        <q-icon name='cloud_upload' size='0.9em' color='grey-6' class='q-mr-xs' />
+        {{ $t('cloudProfileSaving') }}
+      </div>
+      <div v-if='saveError' class='text-caption text-negative q-mt-xs profile-current__error'>
+        <q-icon name='error_outline' size='0.9em' color='negative' class='q-mr-xs' />
+        {{ $t('cloudProfileSaveFailed', { error: saveError }) }}
+      </div>
     </div>
   </SettingsSectionContent>
 </template>
@@ -64,7 +72,8 @@ export default {
       city: cloneEmpty(),
       loaded: false,
       saving: false,
-      lastSavedAt: ''
+      lastSavedAt: '',
+      saveError: ''
     }
   },
   computed: {
@@ -106,12 +115,17 @@ export default {
       if (this.saving) return
       const normalized = this._normalize(val)
       this.saving = true
+      this.saveError = ''
       try {
         const ok = await DatabaseClient.appState.set(STORAGE_KEY, normalized)
-        if (ok !== false) {
-          this.lastSavedAt = this._formatNow()
+        if (ok === false) {
+          this.saveError = 'save failed'
+          console.warn('[SettingsProfilePanel] save city returned false')
+          return
         }
+        this.lastSavedAt = this._formatNow()
       } catch (err) {
+        this.saveError = (err && err.message) || 'unknown'
         console.error('[SettingsProfilePanel] save city failed:', err && err.message)
       } finally {
         this.saving = false

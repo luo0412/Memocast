@@ -42,8 +42,10 @@ export default {
     uniqueCounter += 1
     return {
       inputId: `city-picker-input-${Date.now().toString(36)}-${uniqueCounter}`,
+      // whether the underlying jQuery citypicker instance is attached
       ready: false,
       pollTimer: null,
+      // value we last initialized the picker with
       internalValue: this._normalize(this.value)
     }
   },
@@ -65,7 +67,7 @@ export default {
           return
         }
         this.internalValue = normalized
-        if (this.ready) this._applyToPicker(normalized)
+        if (this.ready) this._rebuildPicker(normalized)
       }
     },
     disabled (val) {
@@ -74,7 +76,11 @@ export default {
       const $ = window.$ || window.jQuery
       if (!inputEl || !$ || !$.fn || !$.fn.citypicker) return
       try {
-        if (val) $(inputEl).citypicker('destroy')
+        if (val) {
+          $(inputEl).off('cp:updated.cpf')
+          $(inputEl).citypicker('destroy')
+          this.ready = false
+        }
       } catch (_) { /* noop */ }
     }
   },
@@ -125,29 +131,64 @@ export default {
           $(inputEl).citypicker('destroy')
         }
       } catch (_) { /* noop */ }
+      $(inputEl).off('cp:updated.cpf')
       if (this.disabled) {
         this.ready = true
         return
       }
+      const v = this.internalValue
       try {
         $(inputEl).citypicker({
-          province: this.internalValue.province || '',
-          city: this.internalValue.city || '',
-          district: this.internalValue.district || ''
+          province: v.province || '',
+          city: v.city || '',
+          district: v.district || ''
         })
       } catch (err) {
         console.warn('[CityPickerField] citypicker init error:', err && err.message)
         this.ready = true
         return
       }
-      $(inputEl).off('cp:updated.cpf')
       $(inputEl).on('cp:updated.cpf', () => this._onPickerUpdated(inputEl, $))
       this.ready = true
+    },
+    _rebuildPicker (val) {
+      const inputEl = this._input()
+      const $ = window.$ || window.jQuery
+      if (!inputEl || !$ || !$.fn || !$.fn.citypicker) return
+      // Detach the cp:updated listener so we don't echo our own programmatic
+      // change back to the parent as a user "edit".
+      $(inputEl).off('cp:updated.cpf')
+      const inst = $(inputEl).data && $(inputEl).data('citypicker')
+      if (inst) {
+        try { $(inputEl).citypicker('destroy') } catch (_) { /* noop */ }
+      }
+      try {
+        $(inputEl).citypicker({
+          province: val.province || '',
+          city: val.city || '',
+          district: val.district || ''
+        })
+      } catch (err) {
+        // If a rebuild throws, restore the listener before giving up.
+        $(inputEl).on('cp:updated.cpf', () => this._onPickerUpdated(inputEl, $))
+        return
+      }
+      $(inputEl).on('cp:updated.cpf', () => this._onPickerUpdated(inputEl, $))
     },
     _onPickerUpdated (inputEl, $) {
       let next
       try {
-        next = $(inputEl).citypicker('getValue')
+        // city-picker plugin does NOT expose a `getValue` method. The current
+        // selection lives on each dropdown panel as `$(panel).data('item')`.
+        const inst = $(inputEl).data && $(inputEl).data('citypicker')
+        if (!inst || !inst.$dropdown) return
+        const $selects = inst.$dropdown.find('.city-select').toArray()
+        const items = $selects.map((el) => $(el).data('item') || null)
+        next = {
+          province: items[0] ? items[0].address || '' : '',
+          city: items[1] ? items[1].address || '' : '',
+          district: items[2] ? items[2].address || '' : ''
+        }
       } catch (_) {
         return
       }
@@ -162,18 +203,6 @@ export default {
       this.$emit('input', { ...normalized })
       this.$emit('change', { ...normalized })
     },
-    _applyToPicker (val) {
-      const inputEl = this._input()
-      const $ = window.$ || window.jQuery
-      if (!inputEl || !$ || !$.fn || !$.fn.citypicker) return
-      if (!$(inputEl).data || !$(inputEl).data('citypicker')) return
-      try {
-        $(inputEl).citypicker('reset')
-        if (val.province) {
-          $(inputEl).citypicker('setValue', val.province, val.city || '', val.district || '')
-        }
-      } catch (_) { /* noop */ }
-    },
     _destroy () {
       this._teardownPoll()
       const inputEl = this._input()
@@ -183,7 +212,7 @@ export default {
           $(inputEl).citypicker('destroy')
         } catch (_) { /* noop */ }
       }
-      $(inputEl).off && $(inputEl).off('cp:updated.cpf')
+      if (inputEl && $(inputEl).off) $(inputEl).off('cp:updated.cpf')
       this.ready = false
     },
     _teardownPoll () {
