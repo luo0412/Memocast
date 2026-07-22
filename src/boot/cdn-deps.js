@@ -15,6 +15,7 @@
  *   (async=true 会让浏览器按网络到达顺序执行，破坏依赖关系，故此处不用 async。)
  */
 import bus from 'src/components/common/bus'
+import DatabaseClient from 'src/utils/DatabaseClient'
 
 const CDN_DEPS_STORAGE_KEY = 'v__2_client_cdnDeps'
 
@@ -206,19 +207,71 @@ function ensureJQueryGlobals () {
 }
 
 /**
+ * 内置 CDN 依赖（首次启动时使用）
+ */
+const BUILT_IN_DEPS = [
+  { name: 'jQuery', url: 'https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'jQuery Migrate', url: 'https://cdn.jsdelivr.net/npm/jquery-migrate@3/dist/jquery-migrate.min.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'layui CSS', url: '//unpkg.com/layui@2.13.8/dist/css/layui.css', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'layui JS', url: '//unpkg.com/layui@2.13.8/dist/layui.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'city-picker data', url: 'https://tshi0912.github.io/city-picker/js/city-picker.data.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'city-picker JS', url: 'https://tshi0912.github.io/city-picker/js/city-picker.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'city-picker CSS', url: 'https://tshi0912.github.io/city-picker/css/city-picker.css', enabled: true, applyToBlog: false, isBuiltIn: true }
+]
+
+const builtInNames = BUILT_IN_DEPS.map(d => d.name)
+
+function newId () {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
+}
+
+/**
  * 加载并注入已启用的 CDN 依赖
+ * 优先级：SQLite > localStorage > 内置依赖
  */
 async function loadAndInjectCdnDeps () {
   try {
-    const raw = localStorage.getItem(CDN_DEPS_STORAGE_KEY)
-    if (!raw) {
-      console.log('[CdnDepsBoot] No CDN deps configured')
-      return
+    let deps = []
+
+    // 1. 优先从 SQLite 读取
+    try {
+      const savedDeps = await DatabaseClient.cdnDeps.getAll()
+      if (Array.isArray(savedDeps) && savedDeps.length > 0) {
+        // 如果 SQLite 有数据，合并内置依赖和用户自定义依赖
+        const customDeps = savedDeps.filter(d => !builtInNames.includes(d.name))
+        const mergedBuiltIn = BUILT_IN_DEPS.map(bi => {
+          const existing = savedDeps.find(d => d.name === bi.name)
+          if (existing) return { ...existing, isBuiltIn: true, id: existing.id || newId() }
+          return { ...bi, id: newId() }
+        })
+        deps = [...mergedBuiltIn, ...customDeps]
+        console.log('[CdnDepsBoot] Loaded from SQLite:', deps.length, 'deps')
+      }
+    } catch (dbErr) {
+      console.warn('[CdnDepsBoot] Failed to load from SQLite, trying localStorage:', dbErr)
     }
 
-    const deps = JSON.parse(raw)
+    // 2. 如果 SQLite 为空，尝试 localStorage（向后兼容）
+    if (deps.length === 0) {
+      const raw = localStorage.getItem(CDN_DEPS_STORAGE_KEY)
+      if (raw) {
+        try {
+          deps = JSON.parse(raw)
+          console.log('[CdnDepsBoot] Loaded from localStorage:', deps.length, 'deps')
+        } catch (parseErr) {
+          console.warn('[CdnDepsBoot] Failed to parse localStorage, using built-in:', parseErr)
+        }
+      }
+    }
+
+    // 3. 如果都为空，使用内置依赖
+    if (deps.length === 0) {
+      deps = BUILT_IN_DEPS.map(bi => ({ ...bi, id: newId() }))
+      console.log('[CdnDepsBoot] Using built-in deps:', deps.length)
+    }
+
     if (!Array.isArray(deps) || deps.length === 0) {
-      console.log('[CdnDepsBoot] Empty CDN deps array')
+      console.log('[CdnDepsBoot] No CDN deps available')
       return
     }
 
