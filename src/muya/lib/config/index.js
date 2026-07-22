@@ -2,6 +2,8 @@ import { generateKeyHash, genUpper2LowerKeyHash, getLongUniqueId } from '../util
 import htmlTags from 'html-tags'
 import voidHtmlTags from 'html-tags/void'
 
+export { IMAGE_EXT_REG, URL_REG, DATA_URL_REG } from './imageConfig'
+
 // [0.25, 0.5, 1, 2, 4, 8] <—?—> [256M, 500M/768M, 1G/1000M, 2G, 4G, 8G]
 // Electron 2.0.2 not support yet! So give a default value 4
 export const DEVICE_MEMORY = navigator.deviceMemory || 4 // Get the divice memory number(Chrome >= 63)
@@ -27,8 +29,6 @@ export const BLOCK_TYPE6 = [
 export const BLOCK_TYPE7 = htmlTags.filter(tag => {
   return !BLOCK_TYPE1.find(t => t === tag) && !BLOCK_TYPE6.find(t => t === tag)
 })
-
-export const IMAGE_EXT_REG = /\.(?:jpeg|jpg|png|gif|svg|webp)(?=\?|$)/i
 
 export const PARAGRAPH_TYPES = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'ul', 'ol', 'li', 'figure']
 
@@ -289,11 +289,6 @@ export const MUYA_DEFAULT_OPTION = {
 
 export const isOsx = window && window.navigator && /Mac/.test(window.navigator.platform)
 export const isWin = window && window.navigator.userAgent && /win32|wow32|win64|wow64/i.test(window.navigator.userAgent)
-// http[s] (domain or IPv4 or localhost or IPv6) [port] /not-white-space
-export const URL_REG = /^http(s)?:\/\/([a-z0-9\-._~]+\.[a-z]{2,}|[0-9.]+|localhost|\[[a-f0-9.:]+\])(:[0-9]{1,5})?\/[\S]+/i
-// data:[<MIME-type>][;charset=<encoding>][;base64],<data>
-export const DATA_URL_REG = /^data:image\/[\w+-]+(;[\w-]+=[\w-]+|;base64)*,[a-zA-Z0-9+/]+={0,2}$/
-// The smallest transparent gif base64 image.
 // export const SMALLEST_BASE64 = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 // export const isIOS = /(?:iPhone|iPad|iPod|iOS)/i.test(window.navigator.userAgent)
 export const defaultSearchOption = {
