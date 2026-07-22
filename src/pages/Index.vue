@@ -60,10 +60,6 @@
         </div>
         <!-- Action Bar 放在编辑器容器外面，不影响滚动 -->
         <div class='editor-action-bar-wrapper' @mouseenter='onActionBarMouseEnter' @mouseleave='onActionBarMouseLeave'>
-          <!-- 边缘触发条 -->
-          <div class='editor-action-bar-edge-trigger' :class="{ 'edge-trigger--active': actionBarVisible || isActionBarHovered }">
-            <div class='edge-trigger-line'></div>
-          </div>
           <!-- 工具栏主体 -->
           <transition name='action-bar-slide'>
             <div
@@ -800,41 +796,11 @@ export default {
 .editor-action-bar-wrapper {
   position: fixed;
   bottom: 12px;
-  right: 20px;
+  right: 0;
   display: flex;
   align-items: flex-end;
   z-index: 6000;
   pointer-events: none;
-}
-
-/* 边缘触发条 */
-.editor-action-bar-edge-trigger {
-  width: 12px;
-  height: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  margin-right: 6px;
-}
-
-.editor-action-bar-edge-trigger.edge-trigger--active {
-  opacity: 1;
-}
-
-.edge-trigger-line {
-  width: 3px;
-  height: 50px;
-  background: linear-gradient(180deg, transparent 0%, #26A69A 20%, #26A69A 80%, transparent 100%);
-  border-radius: 2px;
-  transition: all 0.3s ease;
-}
-
-.editor-action-bar-edge-trigger:hover .edge-trigger-line {
-  height: 70px;
-  width: 4px;
 }
 
 /* 工具栏主体 */
@@ -956,14 +922,6 @@ export default {
 .body--dark .editor-action-bar {
   background: rgba(55, 55, 55, 0.88);
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
-}
-
-.body--dark .editor-action-bar-edge-trigger .edge-trigger-line {
-  background: linear-gradient(180deg, transparent, #26A69A 50%, transparent);
-}
-
-.body--dark .editor-action-bar-edge-trigger:hover .edge-trigger-line {
-  background: linear-gradient(180deg, transparent, #26A69A 30%, #26A69A 70%, transparent);
 }
 
 .body--dark .action-bar-drag-handle {
