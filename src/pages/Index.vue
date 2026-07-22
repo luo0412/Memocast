@@ -54,200 +54,67 @@
               <Illustration :mode='illustrationMode' key='illustration' />
             </transition-group>
           </div>
-          <div class='editor-action-bar-wrapper' @mouseenter='onActionBarMouseEnter' @mouseleave='onActionBarMouseLeave'>
-            <!-- 边缘触发条：底部/右侧边缘显示一个小条，hover 显示工具栏 -->
-            <div class='editor-action-bar-edge-trigger' :class="{ 'edge-trigger--active': actionBarVisible || isActionBarHovered }">
-              <div class='edge-trigger-line'></div>
-            </div>
-            <!-- 工具栏主体 -->
-            <transition name='action-bar-slide'>
-              <div
-                v-show='actionBarVisible || isActionBarHovered'
-                class='editor-action-bar'
-                :class="{ 'action-bar--hovered': isActionBarHovered }"
-                @mouseenter='onActionBarMouseEnter'
-                @mouseleave='onActionBarMouseLeave'
-              >
-                <!-- 悬浮时显示拖动手柄图标 -->
-                <div v-if='isActionBarHovered' class='action-bar-drag-handle'>
-                  <q-icon name='drag_indicator' size='xs' />
-                </div>
-                <div class='editor-action-bar-inner editor-action-bar-inner--reversed'>
-                  <q-btn
-                    v-if='showEditorNoteFab'
-                    :icon='editorNoteActionsExpanded ? "close" : "post_add"'
-                    dense
-                    flat
-                    round
-                    class='fab-icon cursor-pointer material-icons-round editor-note-trigger'
-                    @click='toggleEditorNoteActions'
-                    size='md'
-                    color='#26A69A'
-                    v-ripple
-                  >
-                    <q-tooltip
-                      v-if='!editorNoteActionsExpanded'
-                      anchor='center left'
-                      self='center right'
-                      :offset='[10, 10]'
-                    >{{ $t('createNote') }} / {{ $t('import') }}</q-tooltip>
-                    <q-tooltip
-                      v-else
-                      anchor='center left'
-                      self='center right'
-                      :offset='[10, 10]'
-                    >{{ $t('cancel') }}</q-tooltip>
-                  </q-btn>
-                  <div
-                    v-if='showEditorNoteFab && editorNoteActionsExpanded'
-                    class='editor-note-sub-actions'
-                  >
-                    <q-btn
-                      v-if='noteFabIsRootCategory'
-                      icon='create_new_folder'
-                      dense
-                      flat
-                      round
-                      class='fab-icon cursor-pointer material-icons-round'
-                      @click='addCategoryFromEditorBar'
-                      size='md'
-                      color='#26A69A'
-                      v-ripple
-                      :title='$t("createCategory")'
-                    />
-                    <template v-else>
-                      <q-btn
-                        icon='note_add'
-                        dense
-                        flat
-                        round
-                        class='fab-icon cursor-pointer material-icons-round'
-                        @click='addNoteFromEditorBar'
-                        size='md'
-                        color='#26A69A'
-                        v-ripple
-                        :title='$t("createNote")'
-                      />
-                      <q-btn
-                        icon='add'
-                        dense
-                        flat
-                        round
-                        class='fab-icon cursor-pointer material-icons-round'
-                        @click='openImportFromEditorBar'
-                        size='md'
-                        color='#26A69A'
-                        v-ripple
-                        :title='$t("import")'
-                      />
-                    </template>
-                  </div>
-                  <q-btn
-                    :icon='isSourceMode ? "assignment" : "code"'
-                    dense
-                    flat
-                    round
-                    class='fab-icon cursor-pointer material-icons-round'
-                    @click='isSourceMode = !isSourceMode'
-                    size='md'
-                    color='#26A69A'
-                    v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
-                    v-ripple
-                    :title="!isSourceMode ? $t('sourceMode') : $t('previewMode')"
-                  />
-                  <q-btn
-                    :icon='enablePreviewEditor ? "lock_open" : "lock"'
-                    dense
-                    flat
-                    round
-                    class='fab-icon cursor-pointer material-icons-round'
-                    @click='lockModeHandler'
-                    size='md'
-                    color='#26A69A'
-                    v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
-                    v-ripple
-                    :title="enablePreviewEditor ? $t('lock') : $t('unlock')"
-                  />
-                  <q-btn
-                    icon='dashboard'
-                    dense
-                    flat
-                    round
-                    class='fab-icon cursor-pointer material-icons-round'
-                    size='md'
-                    color='#26A69A'
-                    v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && !isSourceMode'
-                    v-ripple
-                  >
-                    <q-tooltip
-                      transition-show="fade"
-                      transition-hide="fade"
-                      anchor="center left" self="center right"
-                    >
-                      <div class="text-body2">
-                        <p>{{ `${$t('word:', wordCount)}` }}</p>
-                        <p>{{ `${$t('character:', wordCount)}` }}</p>
-                        <p>{{ `${$t('paragraph:', wordCount)}` }}</p>
-                      </div>
-                    </q-tooltip>
-                  </q-btn>
-                  <q-btn
-                    icon='format_align_center'
-                    dense
-                    flat
-                    round
-                    class='fab-icon cursor-pointer material-icons-round'
-                    @click.stop='$refs.outlineDrawer.show'
-                    size='md'
-                    color='#26A69A'
-                    v-show='!editorNoteActionsExpanded && dataLoaded && contentsListLoaded && !isOutlineShow && !isSourceMode'
-                    v-ripple
-                  />
-                  <q-btn
-                    :icon='saveButtonIcon'
-                    class='fab-icon cursor-pointer material-icons-round'
-                    dense
-                    flat
-                    round
-                    @click='refreshCurrentNote'
-                    size='md'
-                    color='#26A69A'
-                    v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
-                    v-ripple
-                  />
-                  <q-btn
-                    icon='slideshow'
-                    class='fab-icon cursor-pointer material-icons-round'
-                    dense
-                    flat
-                    round
-                    size='md'
-                    color='#26A69A'
-                    v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow'
-                    v-ripple
-                    :title="$t('pptPreview')"
-                    @click='openPptPreview'
-                  />
-                  <q-btn
-                    icon='link'
-                    class='fab-icon cursor-pointer material-icons-round'
-                    dense
-                    flat
-                    round
-                    size='md'
-                    color='#26A69A'
-                    v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && canCopyNoteLink'
-                    v-ripple
-                    :title="$t('copyNoteLink')"
-                    @click='copyNoteLink'
-                  />
-                  <ImportDialog ref='importDialog' />
-                  <BlogDeployDialog ref='blogDeployDialog' @deploy='onBlogDeploy' @cancel='onBlogDeployCancel' />
-                  <BlogDeployProgressDialog ref='blogDeployProgressDialog' @rebuild='onBlogDeployRebuild' />
-                </div>
-              </div>
-            </transition>
+          <ImportDialog ref='importDialog' />
+          <BlogDeployDialog ref='blogDeployDialog' @deploy='onBlogDeploy' @cancel='onBlogDeployCancel' />
+          <BlogDeployProgressDialog ref='blogDeployProgressDialog' @rebuild='onBlogDeployRebuild' />
+        </div>
+        <!-- Action Bar 放在编辑器容器外面，不影响滚动 -->
+        <div class='editor-action-bar-wrapper' @mouseenter='onActionBarMouseEnter' @mouseleave='onActionBarMouseLeave'>
+          <!-- 边缘触发条 -->
+          <div class='editor-action-bar-edge-trigger' :class="{ 'edge-trigger--active': actionBarVisible || isActionBarHovered }">
+            <div class='edge-trigger-line'></div>
           </div>
+          <!-- 工具栏主体 -->
+          <transition name='action-bar-slide'>
+            <div
+              v-show='actionBarVisible || isActionBarHovered'
+              class='editor-action-bar'
+              :class="{ 'action-bar--hovered': isActionBarHovered }"
+              @mouseenter='onActionBarMouseEnter'
+              @mouseleave='onActionBarMouseLeave'
+            >
+              <!-- 悬浮时显示拖动手柄 -->
+              <div v-if='isActionBarHovered' class='action-bar-drag-handle'>
+                <q-icon name='drag_indicator' size='xs' />
+              </div>
+              <div class='editor-action-bar-inner editor-action-bar-inner--reversed'>
+                <q-btn
+                  v-if='showEditorNoteFab'
+                  :icon='editorNoteActionsExpanded ? "close" : "post_add"'
+                  dense flat round
+                  class='fab-icon cursor-pointer material-icons-round editor-note-trigger'
+                  @click='toggleEditorNoteActions'
+                  size='md' color='#26A69A' v-ripple
+                >
+                  <q-tooltip v-if='!editorNoteActionsExpanded' anchor='center left' self='center right' :offset='[10, 10]'>{{ $t('createNote') }} / {{ $t('import') }}</q-tooltip>
+                  <q-tooltip v-else anchor='center left' self='center right' :offset='[10, 10]'>{{ $t('cancel') }}</q-tooltip>
+                </q-btn>
+                <div v-if='showEditorNoteFab && editorNoteActionsExpanded' class='editor-note-sub-actions'>
+                  <q-btn v-if='noteFabIsRootCategory' icon='create_new_folder' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='addCategoryFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("createCategory")' />
+                  <template v-else>
+                    <q-btn icon='note_add' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='addNoteFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("createNote")' />
+                    <q-btn icon='add' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='openImportFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("import")' />
+                  </template>
+                </div>
+                <q-btn :icon='isSourceMode ? "assignment" : "code"' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='isSourceMode = !isSourceMode' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title="!isSourceMode ? $t('sourceMode') : $t('previewMode')" />
+                <q-btn :icon='enablePreviewEditor ? "lock_open" : "lock"' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='lockModeHandler' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title="enablePreviewEditor ? $t('lock') : $t('unlock')" />
+                <q-btn icon='dashboard' dense flat round class='fab-icon cursor-pointer material-icons-round' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && !isSourceMode' v-ripple>
+                  <q-tooltip transition-show='fade' transition-hide='fade' anchor='center left' self='center right'>
+                    <div class='text-body2'>
+                      <p>{{ `${$t('word:', wordCount)}` }}</p>
+                      <p>{{ `${$t('character:', wordCount)}` }}</p>
+                      <p>{{ `${$t('paragraph:', wordCount)}` }}</p>
+                    </div>
+                  </q-tooltip>
+                </q-btn>
+                <q-btn icon='format_align_center' dense flat round class='fab-icon cursor-pointer material-icons-round' @click.stop='$refs.outlineDrawer.show' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && contentsListLoaded && !isOutlineShow && !isSourceMode' v-ripple />
+                <q-btn :icon='saveButtonIcon' class='fab-icon cursor-pointer material-icons-round' dense flat round @click='refreshCurrentNote' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple />
+                <q-btn icon='slideshow' class='fab-icon cursor-pointer material-icons-round' dense flat round size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title='$t("pptPreview")' @click='openPptPreview' />
+                <q-btn icon='link' class='fab-icon cursor-pointer material-icons-round' dense flat round size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && canCopyNoteLink' v-ripple :title='$t("copyNoteLink")' @click='copyNoteLink' />
+              </div>
+            </div>
+          </transition>
+        </div>
         </div>
         <NoteOutlineDrawer ref='outlineDrawer' :change='outlineDrawerChangeHandler' />
         <Loading :visible='isCurrentNoteLoading' />
@@ -385,7 +252,11 @@ export default {
       actionBarVisible: false,
       isActionBarHovered: false,
       actionBarHideTimer: null,
-      actionBarEdgeThreshold: 30 // 距离边缘多少像素时触发显示
+      actionBarEdgeThreshold: 30, // 距离边缘多少像素时触发显示
+      // Action Bar 拖拽状态
+      isActionBarDragging: false,
+      dragStartX: 0,
+      dragStartY: 0
     }
   },
   methods: {
@@ -875,29 +746,68 @@ export default {
   position: relative;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 将 Muya/Monaco 限制在右侧面板可视区域内 */
 .editor-stage {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* 加粗 Muya 编辑器滚动条 - 全局样式 */
+#muya,
+.muya,
+.muya-wrapper {
+  &::-webkit-scrollbar {
+    width: 12px !important;
+  }
+  &::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05) !important;
+    border-radius: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.25) !important;
+    border-radius: 6px !important;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.4) !important;
+    background-clip: padding-box;
+  }
+}
+
+/* Dark mode */
+.body--dark #muya,
+.body--dark .muya,
+.body--dark .muya-wrapper {
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05) !important;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25) !important;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4) !important;
+  }
 }
 
 /* 编辑器操作栏 - 贴边隐藏 */
 .editor-action-bar-wrapper {
   position: fixed;
   bottom: 12px;
-  right: 15px;
+  right: 20px;
   display: flex;
   align-items: flex-end;
   z-index: 6000;
   pointer-events: none;
 }
 
-/* 边缘触发条 - 右侧 */
+/* 边缘触发条 */
 .editor-action-bar-edge-trigger {
   width: 12px;
   height: 100px;
@@ -938,6 +848,7 @@ export default {
   border-radius: 10px 0 0 10px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
   pointer-events: auto;
+  overflow: visible !important;
 }
 
 /* macOS Dock 风格的图标悬浮放大效果 */
@@ -993,7 +904,12 @@ export default {
   margin-bottom: 4px;
 }
 
-.action-bar-drag-handle:active {
+.action-bar-drag-handle {
+  cursor: grab;
+}
+
+.action-bar-drag-handle:active,
+.action-bar-drag-handle.dragging {
   cursor: grabbing;
 }
 
