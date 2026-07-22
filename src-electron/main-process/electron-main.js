@@ -1504,6 +1504,47 @@ function registerDatabaseHandlers() {
     }
   })
 
+  // 全表 kb_guid / doc_guid / server_modified 覆盖统计：诊断"是否真同步过"
+  ipcMain.handle('db:diag:kb-coverage', async () => {
+    try {
+      const k1 = execOne('SELECT COUNT(*) AS c FROM notes')
+      const k2 = execOne(`SELECT COUNT(*) AS c FROM notes WHERE kb_guid IS NOT NULL AND kb_guid != ''`)
+      const k3 = execOne(`SELECT COUNT(*) AS c FROM notes WHERE doc_guid IS NOT NULL AND doc_guid != ''`)
+      const k4 = execOne(`SELECT COUNT(*) AS c FROM notes WHERE server_modified IS NOT NULL AND server_modified > 0`)
+      const k5 = execOne(`SELECT COUNT(*) AS c FROM notes WHERE data_modified IS NOT NULL AND data_modified > 0`)
+      const sRange = execOne(`SELECT
+        MIN(server_modified) AS min_s,
+        MAX(server_modified) AS max_s,
+        AVG(server_modified) AS avg_s
+        FROM notes`)
+      const dist = execToObjects(`
+        SELECT
+          COALESCE(kb_guid, '<null>') AS kb_guid,
+          COUNT(*) AS total,
+          SUM(dirty) AS dirty_total,
+          SUM(CASE WHEN doc_guid IS NOT NULL AND doc_guid != '' THEN 1 ELSE 0 END) AS has_doc_guid,
+          SUM(CASE WHEN server_modified IS NOT NULL AND server_modified > 0 THEN 1 ELSE 0 END) AS has_server_modified,
+          SUM(CASE WHEN data_modified IS NOT NULL AND data_modified > 0 THEN 1 ELSE 0 END) AS has_data_modified,
+          MIN(server_modified) AS min_server_mod,
+          MAX(server_modified) AS max_server_mod
+        FROM notes
+        GROUP BY kb_guid
+      `)
+      return {
+        total: k1?.c || 0,
+        has_kb_guid: k2?.c || 0,
+        has_doc_guid: k3?.c || 0,
+        has_server_modified: k4?.c || 0,
+        has_data_modified: k5?.c || 0,
+        server_modified_range: sRange,
+        distribution: dist
+      }
+    } catch (error) {
+      log.error('[DB] diag:kb-coverage error:', error)
+      return null
+    }
+  })
+
   // 不依赖 kbGuid 的脏调查：dump 所有 dirty=1（不管归属）
   ipcMain.handle('db:diag:dirty-all', async () => {
     try {
