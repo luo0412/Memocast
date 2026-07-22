@@ -239,6 +239,8 @@ export default {
   microAppsEmptyHint: 'Add one in Settings → Cloud → Micro Apps',
   microAppsEmptySave: 'The list cannot be empty',
   microAppsSaved: 'Saved',
+  microAppsIsMobile: 'Mobile Mode',
+  microAppsIsMobileHint: 'Narrows drawer to 60vw (max 480px), suitable for H5 page aspect ratios',
   noData: 'No data',
   yes: 'Yes',
   no: 'No',

@@ -238,6 +238,8 @@ export default {
   microAppsEmptyHint: '请在「云服务 → 微应用」中新增一条并保存',
   microAppsEmptySave: '微应用列表不能为空',
   microAppsSaved: '微应用已保存',
+  microAppsIsMobile: '移动端模式',
+  microAppsIsMobileHint: '开启后弹框宽度缩至 60vw（最大 480px），适配 H5 页面宽高比',
   noData: '暂无数据',
   yes: '是',
   no: '否',

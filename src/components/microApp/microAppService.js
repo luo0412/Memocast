@@ -39,7 +39,8 @@ export function buildDefaultMicroApps () {
       url: 'https://luo0412.github.io/box-im/#/',
       devUrl: 'http://localhost:18080/',
       isDefault: true,
-      enabled: true
+      enabled: true,
+      isMobile: false
     }
   ]
 }
@@ -58,7 +59,8 @@ export function normalizeMicroApp (raw) {
     url: String(raw.url || ''),
     devUrl: String(raw.devUrl || ''),
     isDefault: Boolean(raw.isDefault),
-    enabled: raw.enabled === undefined ? true : Boolean(raw.enabled)
+    enabled: raw.enabled === undefined ? true : Boolean(raw.enabled),
+    isMobile: raw.isMobile === true
   }
 }
 

@@ -81,6 +81,11 @@
             </el-radio>
             <span class="text-caption text-grey-6 q-ml-sm">{{ $t('microAppsDefaultHint') }}</span>
           </el-form-item>
+
+          <el-form-item :label="$t('microAppsIsMobile')">
+            <el-switch v-model="form.isMobile" />
+            <span class="text-caption text-grey-6 q-ml-sm">{{ $t('microAppsIsMobileHint') }}</span>
+          </el-form-item>
         </el-form>
       </q-card-section>
 
@@ -114,7 +119,8 @@ function buildInitialForm (source) {
     url: '',
     devUrl: '',
     isDefault: false,
-    enabled: true
+    enabled: true,
+    isMobile: false
   }
   if (source && typeof source === 'object') {
     return {
@@ -124,7 +130,8 @@ function buildInitialForm (source) {
       url: String(source.url || ''),
       devUrl: String(source.devUrl || ''),
       isDefault: Boolean(source.isDefault),
-      enabled: source.enabled === undefined ? true : Boolean(source.enabled)
+      enabled: source.enabled === undefined ? true : Boolean(source.enabled),
+      isMobile: Boolean(source.isMobile)
     }
   }
   return base

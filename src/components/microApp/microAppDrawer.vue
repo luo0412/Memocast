@@ -1,7 +1,7 @@
 <template>
   <q-drawer
     ref="drawer"
-    :width="$q.screen.width * 0.8"
+    :width="drawerWidth"
     side="right"
     overlay
     elevated
@@ -38,17 +38,16 @@
         />
 
         <!-- 贴边切换按钮：随侧边栏状态切换左右位置，悬停在分界线上 -->
-        <button
-          type="button"
+        <q-btn
           class="im-drawer-sidebar-toggle"
           :class="{ 'im-drawer-sidebar-toggle--collapsed': sidebarCollapsed }"
-          :aria-label="sidebarCollapsed ? $t('microAppsSidebarShow') : $t('microAppsSidebarHide')"
+          dense
+          unelevated
+          round
+          size="sm"
+          :icon="sidebarCollapsed ? 'chevron_right' : 'chevron_left'"
           @click="toggleSidebar"
         >
-          <q-icon
-            :name="sidebarCollapsed ? 'chevron_right' : 'chevron_left'"
-            size="16px"
-          />
           <q-tooltip
             anchor="center right"
             self="center left"
@@ -56,7 +55,7 @@
           >
             {{ sidebarCollapsed ? $t('microAppsSidebarShow') : $t('microAppsSidebarHide') }}
           </q-tooltip>
-        </button>
+        </q-btn>
       </div>
     </div>
   </q-drawer>
@@ -101,6 +100,12 @@ export default {
     },
     reloadKey () {
       return String(this.reloadNonce)
+    },
+    drawerWidth () {
+      if (this.activeApp && this.activeApp.isMobile) {
+        return Math.min(this.$q.screen.width * 0.6, 480)
+      }
+      return this.$q.screen.width * 0.8
     }
   },
   methods: {
@@ -276,21 +281,8 @@ export default {
   top: 50%;
   left: 56px;
   transform: translateY(-50%);
-  width: 18px;
-  height: 48px;
-  border-radius: 0 8px 8px 0;
-  background: var(--floatBgColor, rgba(255, 255, 255, 0.85));
-  color: var(--iconColor, #6b7280);
-  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.08);
-  border: 1px solid var(--floatBorderColor, #e8e8e8);
-  border-left: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  opacity: 0.5;
-  transition: opacity 0.18s ease, left 0.18s ease, background 0.18s ease, color 0.18s ease;
+  opacity: 0.45;
+  transition: opacity 0.18s ease, left 0.18s ease;
   z-index: 5;
 }
 
@@ -299,20 +291,7 @@ export default {
 }
 
 .im-drawer-sidebar-toggle:hover,
-.im-drawer-sidebar-toggle:focus-visible {
+.im-drawer-sidebar-toggle:focus {
   opacity: 1;
-  background: var(--themeColor10, rgba(64, 158, 255, 0.12));
-  color: var(--themeColor, #409eff);
-  outline: none;
-}
-
-.body--dark .im-drawer-sidebar-toggle {
-  background: rgba(40, 40, 40, 0.85);
-  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.4);
-}
-
-.body--dark .im-drawer-sidebar-toggle:hover,
-.body--dark .im-drawer-sidebar-toggle:focus-visible {
-  background: rgba(255, 255, 255, 0.1);
 }
 </style>
