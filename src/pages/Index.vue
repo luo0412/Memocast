@@ -69,11 +69,16 @@
               @mouseenter='onActionBarMouseEnter'
               @mouseleave='onActionBarMouseLeave'
             >
-              <!-- 悬浮时显示拖动手柄 -->
-              <div v-if='isActionBarHovered' class='action-bar-drag-handle'>
-                <q-icon name='drag_indicator' size='xs' />
-              </div>
               <div class='editor-action-bar-inner editor-action-bar-inner--reversed'>
+                <!-- 拖动手柄放在第一位置，column-reverse 会让它显示在底部 -->
+                <div
+                  v-if='isActionBarHovered'
+                  class='action-bar-drag-handle'
+                  @mousedown='onDragHandleMouseDown'
+                  @mouseenter='onActionBarMouseEnter'
+                >
+                  <q-icon name='drag_indicator' size='xs' />
+                </div>
                 <q-btn
                   v-if='showEditorNoteFab'
                   :icon='editorNoteActionsExpanded ? "close" : "post_add"'
@@ -110,7 +115,6 @@
               </div>
             </div>
           </transition>
-        </div>
         </div>
         <NoteOutlineDrawer ref='outlineDrawer' :change='outlineDrawerChangeHandler' />
         <Loading :visible='isCurrentNoteLoading' />
@@ -557,6 +561,41 @@ export default {
         btn.classList.remove('is-near', 'is-near-left', 'is-near-right', 'is-far-left', 'is-far-right')
       })
     },
+    // Action Bar 拖拽（仅限右侧区域上下拖动）
+    onDragHandleMouseDown: function (e) {
+      e.preventDefault()
+      // 仅在右侧区域允许拖动
+      const threshold = window.innerWidth - 150
+      if (e.clientX > threshold) {
+        this.isActionBarDragging = true
+        this.isActionBarHovered = true
+        // 清除可能存在的隐藏定时器
+        if (this.actionBarHideTimer) {
+          clearTimeout(this.actionBarHideTimer)
+          this.actionBarHideTimer = null
+        }
+        this.dragStartX = e.clientX
+        this.dragStartY = e.clientY
+        document.querySelector('.action-bar-drag-handle')?.classList.add('dragging')
+        document.addEventListener('mousemove', this.onDragMouseMove)
+        document.addEventListener('mouseup', this.onDragMouseUp)
+      }
+    },
+    onDragMouseMove: function (e) {
+      if (!this.isActionBarDragging) return
+      this.isActionBarHovered = true  // 拖拽过程中保持 hover 状态
+      const wrapper = document.querySelector('.editor-action-bar-wrapper')
+      if (!wrapper) return
+      // 以底部为锚点，根据鼠标 Y 位置计算 bottom
+      const newBottom = window.innerHeight - e.clientY
+      wrapper.style.bottom = Math.max(8, Math.min(newBottom, window.innerHeight - 8)) + 'px'
+    },
+    onDragMouseUp: function () {
+      this.isActionBarDragging = false
+      document.querySelector('.action-bar-drag-handle')?.classList.remove('dragging')
+      document.removeEventListener('mousemove', this.onDragMouseMove)
+      document.removeEventListener('mouseup', this.onDragMouseUp)
+    },
     async exportToBlogHandler () {
       const category = this.$store.state.client.rightClickCategoryItem
       if (!category) return
@@ -796,11 +835,11 @@ export default {
 .editor-action-bar-wrapper {
   position: fixed;
   bottom: 12px;
-  right: 0;
+  right: 8px;
   display: flex;
+  flex-direction: column;
   align-items: flex-end;
   z-index: 6000;
-  pointer-events: none;
 }
 
 /* 工具栏主体 */
@@ -810,6 +849,7 @@ export default {
   align-items: center;
   width: fit-content;
   padding: 4px 2px;
+  margin-right: 8px;
   background: rgba(240, 240, 240, 0.92);
   border-radius: 10px 0 0 10px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
@@ -861,17 +901,12 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  padding: 4px 12px;
+  width: 36px;
+  height: 20px;
   color: #9e9e9e;
   font-size: 12px;
   cursor: grab;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 4px;
-}
-
-.action-bar-drag-handle {
-  cursor: grab;
 }
 
 .action-bar-drag-handle:active,
@@ -926,7 +961,6 @@ export default {
 
 .body--dark .action-bar-drag-handle {
   color: #757575;
-  border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
 .editor-splitter-after {
