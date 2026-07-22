@@ -9,53 +9,38 @@
     class="im-drawer"
   >
     <div class="im-drawer-container">
-      <div class="im-drawer-header">
-        <span class="im-drawer-title">{{ $t('microApps') }}</span>
+      <!-- 顶部横向切换标签栏 + 关闭按钮 -->
+      <div class="im-drawer-tabs">
+        <div class="im-drawer-tabs-scroll">
+          <div
+            v-for="app in enabledApps"
+            :key="app.id"
+            class="im-drawer-tab"
+            :class="{ 'im-drawer-tab--active': app.id === activeId }"
+            @click="onAppSelect(app)"
+          >
+            <i v-if="isElementIcon(app.icon)" :class="[app.icon, 'im-drawer-tab__icon']" />
+            <q-icon v-else :name="app.icon || 'apps'" class="im-drawer-tab__icon" size="18px" />
+            <span class="im-drawer-tab__name">{{ app.name }}</span>
+          </div>
+        </div>
         <q-btn
           dense
           flat
           round
           icon="close"
           size="sm"
+          class="im-drawer-close-btn"
           @click="hide"
         />
       </div>
 
       <div class="im-drawer-body">
-        <transition name="sidebar-fade">
-          <microAppPanelList
-            v-if="!sidebarCollapsed"
-            class="im-drawer-sidebar"
-            :apps="enabledApps"
-            :active-id="activeApp ? activeApp.id : ''"
-            @select="onAppSelect"
-          />
-        </transition>
         <microAppHost
           class="im-drawer-host"
           :app="activeApp"
           :reload-key="reloadKey"
         />
-
-        <!-- 贴边切换按钮：随侧边栏状态切换左右位置，悬停在分界线上 -->
-        <q-btn
-          class="im-drawer-sidebar-toggle"
-          :class="{ 'im-drawer-sidebar-toggle--collapsed': sidebarCollapsed }"
-          dense
-          unelevated
-          round
-          size="sm"
-          :icon="sidebarCollapsed ? 'chevron_right' : 'chevron_left'"
-          @click="toggleSidebar"
-        >
-          <q-tooltip
-            anchor="center right"
-            self="center left"
-            :offset="[8, 0]"
-          >
-            {{ sidebarCollapsed ? $t('microAppsSidebarShow') : $t('microAppsSidebarHide') }}
-          </q-tooltip>
-        </q-btn>
       </div>
     </div>
   </q-drawer>
@@ -65,7 +50,6 @@
 import WujieVue from 'wujie-vue2'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from 'components/common/bus'
-import microAppPanelList from './microAppPanelList.vue'
 import microAppHost from './microAppHost.vue'
 import {
   buildDefaultMicroApps,
@@ -76,17 +60,14 @@ import {
 export default {
   name: 'microAppDrawer',
   components: {
-    microAppPanelList,
     microAppHost
   },
   data () {
     return {
       apps: [],
       activeId: '',
-      // 每次保存后 +1，用于强制重建 microAppHost，使 wujie 子应用重新挂载
       reloadNonce: 0,
-      ready: false,
-      sidebarCollapsed: false
+      ready: false
     }
   },
   computed: {
@@ -109,6 +90,9 @@ export default {
     }
   },
   methods: {
+    isElementIcon (icon) {
+      return typeof icon === 'string' && icon.startsWith('el-icon-')
+    },
     async loadApps () {
       const stored = await DatabaseClient.microApps.getAll()
       let list = normalizeMicroApps(stored)
@@ -119,21 +103,6 @@ export default {
       this.apps = list
       const defaultApp = pickDefaultApp(list)
       this.activeId = defaultApp ? defaultApp.id : ''
-    },
-    async loadUiState () {
-      const raw = await DatabaseClient.appState.get('setting/microApps/sidebarCollapsed')
-      if (raw === true || raw === 'true') {
-        this.sidebarCollapsed = true
-      }
-    },
-    persistSidebarCollapsed () {
-      DatabaseClient.appState
-        .set('setting/microApps/sidebarCollapsed', this.sidebarCollapsed)
-        .catch(err => console.warn('[microAppDrawer] persistSidebarCollapsed failed:', err))
-    },
-    toggleSidebar () {
-      this.sidebarCollapsed = !this.sidebarCollapsed
-      this.persistSidebarCollapsed()
     },
     onAppSelect (app) {
       this.activeId = app.id
@@ -202,7 +171,6 @@ export default {
   },
   mounted () {
     this.loadApps().then(() => { this.ready = true })
-    this.loadUiState()
     bus.$on('microAppsChanged', this.onMicroAppsChanged)
   },
   beforeDestroy () {
@@ -229,19 +197,73 @@ export default {
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
 }
 
-.im-drawer-header {
+/* 顶部横向标签栏 */
+.im-drawer-tabs {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  padding: 0 12px 0 16px;
-  border-bottom: 1px solid var(--floatBorderColor, #e8e8e8);
   flex-shrink: 0;
+  background-color: var(--floatBgColor, rgba(255, 255, 255, 0.4));
+  border-bottom: 1px solid var(--floatBorderColor, #e8e8e8);
+  padding-right: 8px;
 }
 
-.im-drawer-title {
-  font-size: 14px;
-  font-weight: 600;
+.im-drawer-tabs-scroll {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  gap: 4px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.im-drawer-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.im-drawer-close-btn {
+  flex-shrink: 0;
+  opacity: 0.6;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.im-drawer-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &:hover {
+    background-color: var(--themeColor10, rgba(64, 158, 255, 0.08));
+  }
+}
+
+.im-drawer-tab--active {
+  background: linear-gradient(135deg, rgba(67, 160, 71, 0.18) 0%, rgba(67, 160, 71, 0.08) 100%);
+  color: #2e7d32;
+
+  .im-drawer-tab__icon {
+    color: #2e7d32;
+  }
+}
+
+.im-drawer-tab__icon {
+  font-size: 18px;
+  color: var(--iconColor, #6b7280);
+}
+
+.im-drawer-tab__name {
+  font-size: 13px;
+  font-weight: 500;
   color: var(--editorColor, #333);
 }
 
@@ -253,45 +275,23 @@ export default {
   position: relative;
 }
 
-.im-drawer-sidebar {
-  flex-shrink: 0;
-  width: 56px;
-  min-width: 56px;
-  max-width: 56px;
-}
-
 .im-drawer-host {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-/* Vue <transition> 控制卸载/挂载时的透明度淡入淡出 */
-.sidebar-fade-enter-active,
-.sidebar-fade-leave-active {
-  transition: opacity 0.18s ease;
-}
-.sidebar-fade-enter-from,
-.sidebar-fade-leave-to {
-  opacity: 0;
-}
+.body--dark {
+  .im-drawer-tabs {
+    background-color: rgba(40, 40, 40, 0.4);
+  }
 
-/* 贴边切换按钮：随侧边栏状态切换左右位置 */
-.im-drawer-sidebar-toggle {
-  position: absolute;
-  top: 50%;
-  left: 56px;
-  transform: translateY(-50%);
-  opacity: 0.45;
-  transition: opacity 0.18s ease, left 0.18s ease;
-  z-index: 5;
-}
+  .im-drawer-tab--active {
+    background: linear-gradient(135deg, rgba(102, 187, 106, 0.3) 0%, rgba(102, 187, 106, 0.12) 100%);
+    color: #c8e6c9;
 
-.im-drawer-sidebar-toggle--collapsed {
-  left: 0;
-}
-
-.im-drawer-sidebar-toggle:hover,
-.im-drawer-sidebar-toggle:focus {
-  opacity: 1;
+    .im-drawer-tab__icon {
+      color: #c8e6c9;
+    }
+  }
 }
 </style>

@@ -602,14 +602,16 @@ export default {
     },
     // Action bar 贴边隐藏相关方法
     onMouseMove: function (e) {
-      if (this.isOutlineShow || !this.dataLoaded) {
+      // 大纲显示时隐藏工具栏
+      if (this.isOutlineShow) {
         this.actionBarVisible = false
         return
       }
-      // 检查鼠标是否靠近右侧和底部边缘
+      // 检查鼠标是否靠近右侧边缘或底部边缘
       const distanceFromRight = window.innerWidth - e.clientX
       const distanceFromBottom = window.innerHeight - e.clientY
-      this.actionBarVisible = distanceFromRight < this.actionBarEdgeThreshold && distanceFromBottom < 150
+      // 贴近边缘时显示
+      this.actionBarVisible = distanceFromRight < this.actionBarEdgeThreshold || distanceFromBottom < this.actionBarEdgeThreshold
     },
     onActionBarMouseEnter: function () {
       this.isActionBarHovered = true
@@ -617,9 +619,76 @@ export default {
         clearTimeout(this.actionBarHideTimer)
         this.actionBarHideTimer = null
       }
+      // 监听工具栏内的鼠标移动
+      this.$nextTick(() => {
+        const actionBar = document.querySelector('.editor-action-bar-inner')
+        if (actionBar) {
+          actionBar.addEventListener('mousemove', this.onActionBarMouseMove)
+        }
+      })
     },
     onActionBarMouseLeave: function () {
       this.isActionBarHovered = false
+      this.clearIconHoverState()
+      // 移除监听
+      const actionBar = document.querySelector('.editor-action-bar-inner')
+      if (actionBar) {
+        actionBar.removeEventListener('mousemove', this.onActionBarMouseMove)
+      }
+    },
+    onActionBarMouseMove: function (e) {
+      // 获取所有 fab-icon 按钮
+      const buttons = document.querySelectorAll('.editor-action-bar-inner .fab-icon')
+      if (!buttons.length) return
+
+      buttons.forEach(btn => {
+        btn.classList.remove('is-near', 'is-near-left', 'is-near-right', 'is-far-left', 'is-far-right')
+      })
+
+      // 找到鼠标下的按钮
+      const hoveredBtn = document.elementFromPoint(e.clientX, e.clientY)
+      if (!hoveredBtn) return
+
+      const btn = hoveredBtn.closest('.fab-icon')
+      if (!btn) return
+
+      const btnRect = btn.getBoundingClientRect()
+      const btnCenterY = btnRect.top + btnRect.height / 2
+      const mouseY = e.clientY
+
+      // 计算鼠标距离按钮中心的偏移
+      const offsetY = Math.abs(mouseY - btnCenterY)
+      const maxOffset = btnRect.height * 0.8
+
+      // 根据偏移计算放大级别
+      if (offsetY < maxOffset * 0.3) {
+        btn.classList.add('is-near')
+      } else if (offsetY < maxOffset) {
+        btn.classList.add('is-near-left')
+        // 找相邻按钮
+        const index = Array.from(buttons).indexOf(btn)
+        if (index > 0) {
+          buttons[index - 1].classList.add('is-far-right')
+        }
+        if (index < buttons.length - 1) {
+          buttons[index + 1].classList.add('is-far-left')
+        }
+      } else {
+        // 更远的按钮
+        const index = Array.from(buttons).indexOf(btn)
+        if (index > 0) {
+          buttons[index - 1].classList.add('is-near-left')
+        }
+        if (index < buttons.length - 1) {
+          buttons[index + 1].classList.add('is-near-right')
+        }
+      }
+    },
+    clearIconHoverState: function () {
+      const buttons = document.querySelectorAll('.editor-action-bar-inner .fab-icon')
+      buttons.forEach(btn => {
+        btn.classList.remove('is-near', 'is-near-left', 'is-near-right', 'is-far-left', 'is-far-right')
+      })
     },
     async exportToBlogHandler () {
       const category = this.$store.state.client.rightClickCategoryItem
@@ -808,40 +877,37 @@ export default {
   overflow: hidden;
 }
 
-/* 将 Muya/Monaco 限制在右侧面板可视区域内，避免 Monaco 撑高父级导致 action-bar 的 bottom 落在视口外 */
+/* 将 Muya/Monaco 限制在右侧面板可视区域内 */
 .editor-stage {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  overflow: hidden;
 }
 
-.editor-splitter-after {
-  min-height: 0;
-}
-
+/* 编辑器操作栏 - 贴边隐藏 */
 .editor-action-bar-wrapper {
   position: fixed;
-  bottom: 0;
-  right: 0;
+  bottom: 12px;
+  right: 15px;
   display: flex;
   align-items: flex-end;
   z-index: 6000;
+  pointer-events: none;
 }
 
-/* 边缘触发条 */
+/* 边缘触发条 - 右侧 */
 .editor-action-bar-edge-trigger {
-  width: 3px;
-  height: 120px;
+  width: 12px;
+  height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.2s ease;
-  margin-right: -3px;
+  transition: opacity 0.3s ease;
+  margin-right: 6px;
 }
 
 .editor-action-bar-edge-trigger.edge-trigger--active {
@@ -849,34 +915,69 @@ export default {
 }
 
 .edge-trigger-line {
-  width: 2px;
-  height: 60px;
-  background: linear-gradient(180deg, transparent, #26A69A 50%, transparent);
-  border-radius: 1px;
-  transition: all 0.2s ease;
+  width: 3px;
+  height: 50px;
+  background: linear-gradient(180deg, transparent 0%, #26A69A 20%, #26A69A 80%, transparent 100%);
+  border-radius: 2px;
+  transition: all 0.3s ease;
 }
 
 .editor-action-bar-edge-trigger:hover .edge-trigger-line {
-  height: 80px;
-  background: linear-gradient(180deg, transparent, #26A69A 30%, #26A69A 70%, transparent);
+  height: 70px;
+  width: 4px;
 }
 
+/* 工具栏主体 */
 .editor-action-bar {
   display: flex;
   flex-direction: column;
   align-items: center;
   width: fit-content;
   padding: 4px 2px;
-  background: rgba(240, 240, 240, 0.88);
+  background: rgba(240, 240, 240, 0.92);
   border-radius: 10px 0 0 10px;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.25s ease, transform 0.25s ease;
-  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  pointer-events: auto;
 }
 
-/* 悬浮时增加宽度显示拖动提示 */
+/* macOS Dock 风格的图标悬浮放大效果 */
+.editor-action-bar-inner .fab-icon {
+  transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1.5),
+              box-shadow 0.2s ease,
+              background-color 0.2s ease;
+  transform-origin: center center;
+  border-radius: 50%;
+  position: relative;
+  z-index: 1;
+}
+
+/* 默认尺寸 */
+.editor-action-bar-inner .fab-icon {
+  transform: scale(0.85);
+}
+
+/* 悬浮时的放大效果 - 当前按钮 */
+.editor-action-bar-inner .fab-icon:hover,
+.editor-action-bar-inner .fab-icon.is-near {
+  transform: scale(1.25);
+  box-shadow: 0 4px 16px rgba(38, 166, 154, 0.35);
+  z-index: 10;
+}
+
+/* 相邻按钮被挤开的效果 */
+.editor-action-bar-inner .fab-icon.is-near-left,
+.editor-action-bar-inner .fab-icon.is-near-right {
+  transform: scale(1.05);
+}
+
+/* 更远的按钮 */
+.editor-action-bar-inner .fab-icon.is-far-left,
+.editor-action-bar-inner .fab-icon.is-far-right {
+  transform: scale(0.9);
+}
+
 .editor-action-bar.action-bar--hovered {
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
 }
 
 .action-bar-drag-handle {
@@ -884,16 +985,28 @@ export default {
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 2px 8px;
+  padding: 4px 12px;
   color: #9e9e9e;
-  font-size: 10px;
+  font-size: 12px;
   cursor: grab;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .action-bar-drag-handle:active {
   cursor: grabbing;
+}
+
+/* 工具栏滑入/滑出动画 */
+.action-bar-slide-enter-active,
+.action-bar-slide-leave-active {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.action-bar-slide-enter,
+.action-bar-slide-leave-to {
+  transform: translateX(60px);
+  opacity: 0;
 }
 
 /* 按钮组内反向排列，最常用按钮在最下 */
@@ -942,16 +1055,8 @@ export default {
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
-/* 工具栏滑入/滑出动画 */
-.action-bar-slide-enter-active,
-.action-bar-slide-leave-active {
-  transition: transform 0.25s ease, opacity 0.25s ease;
-}
-
-.action-bar-slide-enter,
-.action-bar-slide-leave-to {
-  transform: translateX(100%);
-  opacity: 0;
+.editor-splitter-after {
+  min-height: 0;
 }
 
 .index-left-inner-splitter {

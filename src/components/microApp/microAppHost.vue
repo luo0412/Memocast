@@ -8,7 +8,7 @@
       :url="resolvedUrl"
       :alive="true"
       :sync="false"
-      :props="wujieProps"
+      :attrs="wujieAttrs"
     />
     <div v-else class="micro-app-host__placeholder">
       <q-icon name="apps" size="3rem" color="grey-5" />
@@ -47,7 +47,7 @@ export default {
       const app = this.app || {}
       return `${app.id || 'empty'}::${this.resolvedUrl || 'empty'}::${this.reloadKey}`
     },
-    wujieProps () {
+    wujieAttrs () {
       return { data: {} }
     }
   }
