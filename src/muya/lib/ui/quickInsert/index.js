@@ -281,6 +281,9 @@ class QuickInsert extends BaseScrollFloat {
     if (Array.isArray(obj.diagram)) {
       preferredSections.push('diagram')
     }
+    if (Array.isArray(obj['advanced block'])) {
+      preferredSections.push('advanced block')
+    }
 
     const orderedObj = reorderRenderObj(obj, preferredSections)
 

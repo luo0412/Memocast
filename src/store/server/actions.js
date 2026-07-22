@@ -670,32 +670,40 @@ export default {
 
     // 先加入本地笔记（本地优先）
     for (const local of localNotes) {
-      const key = `${local.docGuid || local.title || ''}`
+      // ✅ 关键：使用 docGuid 作为唯一 key（本地和云端统一）
+      const key = local.docGuid || local.title || ''
       if (!key) continue
       result.set(key, {
         ...local,
-        _preferLocal: true
+        _preferLocal: true,
+        _localDirty: local._dirty
       })
     }
 
     // 再加入云端笔记（覆盖非 dirty 的本地笔记）
     for (const cloud of cloudNotes) {
-      const docGuid = cloud.docGuid || cloud.guid || ''
-      const key = docGuid
+      const cloudGuid = cloud.docGuid || cloud.guid || ''
+      // 尝试找到对应的本地笔记（可能是 local_xxx 或已同步的 guid）
+      const localNote = localNotes.find(n => {
+        // 匹配：本地 docGuid == 云端 guid
+        // 或：本地 title == 云端 title（标题相同但 docGuid 不同，可能是同步后的状态）
+        return n.docGuid === cloudGuid ||
+               (n.title === cloud.title && cloudGuid && !n.docGuid.startsWith('local_'))
+      })
 
-      if (!key) continue
-
-      const existing = result.get(key)
-      if (existing && existing._dirty && existing._source === 'local') {
-        // 本地有 dirty 笔记 → 保留本地版本（未同步的修改优先）
-        console.log(`[mergeLocalAndCloudNotes] Keeping local dirty note: ${existing.title} (docGuid=${docGuid})`)
-        continue
+      if (cloudGuid && result.has(cloudGuid)) {
+        const existing = result.get(cloudGuid)
+        // 如果本地有 dirty 笔记 → 保留本地版本
+        if (existing._localDirty) {
+          console.log(`[mergeLocalAndCloudNotes] Keeping local dirty note: ${existing.title}`)
+          continue
+        }
       }
 
       // 云端笔记 或 本地无 dirty 标记 → 使用云端数据
-      result.set(key, {
-        docGuid: docGuid,
-        guid: docGuid,
+      result.set(cloudGuid || cloud.title, {
+        docGuid: cloudGuid || cloud.title,
+        guid: cloudGuid || cloud.title,
         title: cloud.title || 'Untitled',
         abstractText: cloud.abstract || cloud.abstractText || '',
         category: cloud.category || cloud.categoryPath || '',
@@ -773,7 +781,7 @@ export default {
       })
 
       // ✅ 核心修复：合并本地和云端笔记（本地 dirty 优先）
-      const mergedNotes = mergeLocalAndCloudNotes(localNotes, cloudNotes)
+      const mergedNotes = this.mergeLocalAndCloudNotes(localNotes, cloudNotes)
       console.log(`[getCategoryNotes] Merged: ${mergedNotes.length} notes (local=${localNotes.length}, cloud=${cloudNotes.length})`)
 
       commit(types.UPDATE_CURRENT_NOTES, mergedNotes)

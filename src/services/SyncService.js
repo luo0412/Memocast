@@ -713,44 +713,89 @@ class SyncService {
           cloudDocGuid = note.doc_guid
           console.log(`[SyncService] Updating cloud note: ${cloudDocGuid}`)
 
-          await api.updateDoc(cloudDocGuid, {
-            title: note.title,
-            content: note.content,
-            category: note.category || OFFLINE_ROOT_CATEGORY,  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY 而非 /
-            tags: note.tags || ''
-          }, note.kb_guid || kbGuid)
-        } else {
-          // ❌ 无云端 GUID 或 local_ 开头 → 按“同文件夹下是否存在同名文件”决定更新或创建
-          console.log(`[SyncService] New/offline note, checking cloud category existence...`)
-
           try {
-            syncStage = 'find-same-category-note'
-            matchedDoc = await this.findCloudNoteInCategory({
-              kbGuid,
+            await api.updateDoc(cloudDocGuid, {
               title: note.title,
-              category: note.category || OFFLINE_ROOT_CATEGORY
-            })
+              content: note.content,
+              category: note.category || OFFLINE_ROOT_CATEGORY,  // ✅ 空 category 用 OFFLINE_ROOT_CATEGORY 而非 /
+              tags: note.tags || ''
+            }, note.kb_guid || kbGuid)
+          } catch (updateError) {
+            // 2004 = 云端笔记已被删除（数据不存在）
+            // 回退策略：在同名同目录下创建新笔记，而不是让同步失败
+            // execRequest 抛出的 Error 结构：error.code = returnCode, error.message = returnMessage
+            const isNotFoundError = updateError.code === 2004 ||
+              updateError?.message?.includes('2004') ||
+              updateError?.message?.includes('不存在') ||
+              updateError?.message?.includes('not exist') ||
+              updateError?.message?.includes('not found') ||
+              updateError?.externCode === 2004
 
-            if (matchedDoc) {
-              syncMode = 'update-by-category-title'
-              syncStage = 'update-cloud'
-              cloudDocGuid = matchedDoc.guid || matchedDoc.docGuid
-              console.log(`[SyncService] Found same-category match, updating: ${cloudDocGuid}`)
-
-              await api.updateDoc(cloudDocGuid, {
-                title: note.title,
-                content: note.content,
-                category: note.category || OFFLINE_ROOT_CATEGORY,
-                tags: note.tags || ''
-              }, kbGuid)
+            if (isNotFoundError) {
+              console.warn(`[SyncService] ⚠️ Cloud note ${cloudDocGuid} no longer exists (2004), falling back to create-new mode`)
+              cloudDocGuid = null
+              syncMode = 'create-new'
+              syncStage = 'create-cloud'
+            } else {
+              throw updateError  // 其他错误继续上抛
             }
-          } catch (searchError) {
-            console.warn('[SyncService] Category existence check failed, will create new:', {
-              message: searchError.message,
-              title: note.title,
-              category: note.category || OFFLINE_ROOT_CATEGORY,
-              kbGuid
-            })
+          }
+        }
+
+        if (!cloudDocGuid) {
+          // 无云端 GUID 或 local_ 开头，或更新失败（2004）→ 按“同文件夹下是否存在同名文件”决定更新或创建
+          if (syncMode !== 'create-new') {
+            console.log(`[SyncService] New/offline note, checking cloud category existence...`)
+
+            try {
+              syncStage = 'find-same-category-note'
+              matchedDoc = await this.findCloudNoteInCategory({
+                kbGuid,
+                title: note.title,
+                category: note.category || OFFLINE_ROOT_CATEGORY
+              })
+
+              if (matchedDoc) {
+                syncMode = 'update-by-category-title'
+                syncStage = 'update-cloud'
+                cloudDocGuid = matchedDoc.guid || matchedDoc.docGuid
+                console.log(`[SyncService] Found same-category match, updating: ${cloudDocGuid}`)
+
+                try {
+                  await api.updateDoc(cloudDocGuid, {
+                    title: note.title,
+                    content: note.content,
+                    category: note.category || OFFLINE_ROOT_CATEGORY,
+                    tags: note.tags || ''
+                  }, kbGuid)
+                } catch (updateError) {
+                  // 2004 = 云端笔记已被删除，回退到创建模式
+                  // execRequest 抛出的 Error 结构：error.code = returnCode, error.message = returnMessage
+                  const isNotFoundError = updateError.code === 2004 ||
+                    updateError?.message?.includes('2004') ||
+                    updateError?.message?.includes('不存在') ||
+                    updateError?.message?.includes('not exist') ||
+                    updateError?.message?.includes('not found') ||
+                    updateError?.externCode === 2004
+
+                  if (isNotFoundError) {
+                    console.warn(`[SyncService] ⚠️ Matched cloud note ${cloudDocGuid} no longer exists (2004), will create new`)
+                    cloudDocGuid = null
+                    syncMode = 'create-new'
+                    syncStage = 'create-cloud'
+                  } else {
+                    throw updateError
+                  }
+                }
+              }
+            } catch (searchError) {
+              console.warn('[SyncService] Category existence check failed, will create new:', {
+                message: searchError.message,
+                title: note.title,
+                category: note.category || OFFLINE_ROOT_CATEGORY,
+                kbGuid
+              })
+            }
           }
 
           if (!cloudDocGuid) {

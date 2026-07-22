@@ -1,5 +1,5 @@
 import DatabaseClient from 'src/utils/DatabaseClient'
-import { OFFLINE_ROOT_CATEGORY } from 'src/utils/const/constants'
+import { OFFLINE_ROOT_CATEGORY, normalizeCategoryForMatch } from 'src/utils/const/constants'
 import {
   buildCategoryTreeFromNotes,
   formatYmd,
@@ -21,14 +21,24 @@ export async function loadLocalWorkspaceData () {
   }
 }
 
+/**
+ * 获取指定分类下的本地笔记
+ * @param {string} category - 原始 category 路径（如 '/' 或 '/My Notes/'）
+ * @returns {Promise<Array>} 格式化后的笔记列表
+ */
 export async function getOfflineNotesByCategory (category = OFFLINE_ROOT_CATEGORY) {
+  // ✅ 关键修复：使用规范化后的 category 进行查询
+  // 因为 SQLite 中存储的 category 可能是 '/'，但显示时 normalize 为 '/My Notes/'
+  // 所以查询时也要用规范化后的 category，确保能匹配到
+  const normalizedCategory = normalizeCategoryForMatch(category || OFFLINE_ROOT_CATEGORY)
+
   const localNotes = await DatabaseClient.notes.getAll({
-    category: category || OFFLINE_ROOT_CATEGORY
+    category: normalizedCategory
   })
 
   return (localNotes || [])
     .filter(note => note.title && note.title !== 'Untitled')
-    .map(note => mapLocalNoteToSummary(note, category || OFFLINE_ROOT_CATEGORY))
+    .map(note => mapLocalNoteToSummary(note, normalizedCategory))
     .sort((a, b) => (b.dataModified || 0) - (a.dataModified || 0))
 }
 
