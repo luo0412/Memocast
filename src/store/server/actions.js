@@ -658,6 +658,57 @@ export default {
     }
     commit(types.SET_CALENDAR_NOTE_DATES, Array.from(dateSet).sort())
   },
+
+  /**
+   * 合并本地笔记和云端笔记（本地 dirty 笔记优先）
+   * - 如果本地有 dirty 笔记（未同步到云端），优先显示本地版本
+   * - 云端有但本地没有的笔记，正常显示
+   * - 本地无 dirty 标记但有云端 GUID 的笔记，以云端数据为准
+   */
+  mergeLocalAndCloudNotes (localNotes, cloudNotes) {
+    const result = new Map()
+
+    // 先加入本地笔记（本地优先）
+    for (const local of localNotes) {
+      const key = `${local.docGuid || local.title || ''}`
+      if (!key) continue
+      result.set(key, {
+        ...local,
+        _preferLocal: true
+      })
+    }
+
+    // 再加入云端笔记（覆盖非 dirty 的本地笔记）
+    for (const cloud of cloudNotes) {
+      const docGuid = cloud.docGuid || cloud.guid || ''
+      const key = docGuid
+
+      if (!key) continue
+
+      const existing = result.get(key)
+      if (existing && existing._dirty && existing._source === 'local') {
+        // 本地有 dirty 笔记 → 保留本地版本（未同步的修改优先）
+        console.log(`[mergeLocalAndCloudNotes] Keeping local dirty note: ${existing.title} (docGuid=${docGuid})`)
+        continue
+      }
+
+      // 云端笔记 或 本地无 dirty 标记 → 使用云端数据
+      result.set(key, {
+        docGuid: docGuid,
+        guid: docGuid,
+        title: cloud.title || 'Untitled',
+        abstractText: cloud.abstract || cloud.abstractText || '',
+        category: cloud.category || cloud.categoryPath || '',
+        dataCreated: cloud.dataCreated || cloud.data_created || Date.now(),
+        dataModified: cloud.dataModified || cloud.data_modified || Date.now(),
+        _preferLocal: false,
+        _source: 'cloud'
+      })
+    }
+
+    return Array.from(result.values())
+  },
+
   async getCategoryNotes ({
     commit,
     state,
@@ -687,19 +738,22 @@ export default {
 
     const targetCategory = getDefaultCategoryForMode(state, resolvedCategory)
 
-    if (!isLogin || !kbGuid) {
-      try {
-        const formattedNotes = await getOfflineNotesByCategory(targetCategory)
-        console.log(`[getCategoryNotes] Loaded ${formattedNotes.length} notes from SQLite:`, targetCategory)
-        commit(types.UPDATE_CURRENT_NOTES, formattedNotes)
-        return
-      } catch (err) {
-        console.error('[getCategoryNotes] Failed to load from SQLite:', err)
-        commit(types.UPDATE_CURRENT_NOTES, [])
-        return
-      }
+    // 统一获取本地笔记（包括 dirty 笔记）
+    let localNotes = []
+    try {
+      localNotes = await getOfflineNotesByCategory(targetCategory)
+      console.log(`[getCategoryNotes] Loaded ${localNotes.length} local notes for category: ${targetCategory}`)
+    } catch (err) {
+      console.error('[getCategoryNotes] Failed to load local notes:', err)
     }
 
+    // 未登录：只用本地笔记
+    if (!isLogin || !kbGuid) {
+      commit(types.UPDATE_CURRENT_NOTES, localNotes)
+      return
+    }
+
+    // 已登录：合并本地 + 云端笔记
     commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, true)
     try {
       const result = await api.KnowledgeBaseApi.getCategoryNotes({
@@ -711,14 +765,22 @@ export default {
           withAbstract: true
         }
       })
+      const cloudNotes = Array.isArray(result) ? result : []
       console.log('[getCategoryNotes] Loaded remote notes:', {
         category: targetCategory || '/',
-        count: Array.isArray(result) ? result.length : 0
+        cloudCount: cloudNotes.length,
+        localCount: localNotes.length
       })
-      commit(types.UPDATE_CURRENT_NOTES, Array.isArray(result) ? result : [])
+
+      // ✅ 核心修复：合并本地和云端笔记（本地 dirty 优先）
+      const mergedNotes = mergeLocalAndCloudNotes(localNotes, cloudNotes)
+      console.log(`[getCategoryNotes] Merged: ${mergedNotes.length} notes (local=${localNotes.length}, cloud=${cloudNotes.length})`)
+
+      commit(types.UPDATE_CURRENT_NOTES, mergedNotes)
     } catch (err) {
       console.error('[getCategoryNotes] Failed to load remote notes:', err)
-      commit(types.UPDATE_CURRENT_NOTES, [])
+      // 网络失败时，至少显示本地笔记
+      commit(types.UPDATE_CURRENT_NOTES, localNotes)
     } finally {
       commit(types.UPDATE_CURRENT_NOTES_LOADING_STATE, false)
     }

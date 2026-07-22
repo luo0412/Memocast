@@ -418,19 +418,38 @@ export default {
   db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_doc_guid ON notes(doc_guid) WHERE doc_guid IS NOT NULL AND doc_guid NOT LIKE 'local_%'`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_notes_kb_guid ON notes(kb_guid)`)
   db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_kb_doc_unique ON notes(kb_guid, doc_guid) WHERE kb_guid IS NOT NULL AND doc_guid IS NOT NULL AND doc_guid NOT LIKE 'local_%'`)
-  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_category_title_kb ON notes(category, title, kb_guid) WHERE category IS NOT NULL AND title IS NOT NULL AND kb_guid IS NOT NULL`)
+  // ✅ 修复：移除 kb_guid IS NOT NULL 约束，让离线笔记（kb_guid 为空）也受唯一约束
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_category_title_kb ON notes(category, title, COALESCE(kb_guid, '')) WHERE category IS NOT NULL AND title IS NOT NULL AND title != 'Untitled'`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category)`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_notes_dirty ON notes(dirty)`)
 
-  // 数据库迁移：检查并创建唯一索引
+  // 数据库迁移：检查并创建/重建唯一索引
   try {
     const indexList = db.exec("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='notes'")
     const existingIndexes = indexList.length > 0 ? indexList[0].values.map(row => row[0]) : []
+    const targetIndexName = 'idx_notes_category_title_kb'
 
-    if (!existingIndexes.includes('idx_notes_category_title_kb')) {
-      console.log('[DB] Migrating: adding unique index on (category, title, kb_guid)')
-      db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_category_title_kb ON notes(category, title, kb_guid) WHERE category IS NOT NULL AND title IS NOT NULL AND kb_guid IS NOT NULL`)
+    if (!existingIndexes.includes(targetIndexName)) {
+      // 索引不存在 → 创建
+      console.log('[DB] Migrating: creating unique index on (category, title, COALESCE(kb_guid, ""))')
+      db.run(`CREATE UNIQUE INDEX IF NOT EXISTS ${targetIndexName} ON notes(category, title, COALESCE(kb_guid, '')) WHERE category IS NOT NULL AND title IS NOT NULL AND title != 'Untitled'`)
       saveDatabase()
+    } else {
+      // 索引存在 → 检查是否需要重建
+      const indexInfo = db.exec(`SELECT sql FROM sqlite_master WHERE type='index' AND name=?`, [targetIndexName])
+      if (indexInfo.length > 0 && indexInfo[0].values.length > 0) {
+        const oldSql = (indexInfo[0].values[0][0] || '').toLowerCase()
+        // 检查是否是旧版索引（包含 kb_guid is not null 或不包含 coalesce）
+        const needsRebuild = oldSql.includes('kb_guid is not null') || !oldSql.includes('coalesce')
+        if (needsRebuild) {
+          console.log('[DB] Migrating: rebuilding index to use COALESCE(kb_guid, "") for offline notes support')
+          db.run(`DROP INDEX IF EXISTS ${targetIndexName}`)
+          db.run(`CREATE UNIQUE INDEX IF NOT EXISTS ${targetIndexName} ON notes(category, title, COALESCE(kb_guid, '')) WHERE category IS NOT NULL AND title IS NOT NULL AND title != 'Untitled'`)
+          saveDatabase()
+        } else {
+          console.log('[DB] Index idx_notes_category_title_kb is already up-to-date')
+        }
+      }
     }
   } catch (idxError) {
     console.warn('[DB] Index migration check failed:', idxError.message)
@@ -1179,65 +1198,91 @@ function registerDatabaseHandlers() {
       }
 
       // ✅ 没有找到 → 才 INSERT 新记录
-      await db.run(`
-        INSERT INTO notes (doc_guid, kb_guid, title, content, category, tags, data_created, data_modified, local_modified, created_at, updated_at, dirty)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        docGuid,
-        kbGuid,
-        title,
-        toStr(note.content),
-        category,
-        toStr(note.tags),
-        toNum(note.data_created),
-        toNum(note.data_modified),
-        toNum(note.local_modified),
-        now,
-        now,
-        1  // 新建笔记默认 dirty=1（待同步）
-      ])
+      // 捕获唯一索引冲突，自动重命名后重试
+      let insertAttempts = 0
+      let finalTitle = title
+      let finalDocGuid = docGuid
+      let insertSuccess = false
 
-      console.log(`[DB] createNote: id=?, dirty=1 (pending sync)`)
-      // 保存到文件（sql.js 是 auto-commit，不需要手动 COMMIT）
-      saveDatabase()
-      const lastId = getLastInsertRowid()
+      while (insertAttempts < 10 && !insertSuccess) {
+        try {
+          await db.run(`
+            INSERT INTO notes (doc_guid, kb_guid, title, content, category, tags, data_created, data_modified, local_modified, created_at, updated_at, dirty)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            finalDocGuid,
+            kbGuid,
+            finalTitle,
+            toStr(note.content),
+            category,
+            toStr(note.tags),
+            toNum(note.data_created),
+            toNum(note.data_modified),
+            toNum(note.local_modified),
+            now,
+            now,
+            1  // 新建笔记默认 dirty=1（待同步）
+          ])
+          insertSuccess = true
+        } catch (insertError) {
+          // 检测唯一索引冲突
+          if (insertError.message && (insertError.message.includes('UNIQUE constraint failed') || insertError.message.includes('constraint failed'))) {
+            insertAttempts++
+            console.warn(`[DB] createNote: UNIQUE constraint conflict (attempt ${insertAttempts}), generating new title...`)
 
-      // ✅ 改进的 ID 验证逻辑
-      if (lastId === null || lastId === undefined) {
-        log.error('[DB] createNote: getLastInsertRowid returned null/undefined')
+            // 自动重命名：追加 (1), (2), (3)...
+            const lastDotIndex = finalTitle.lastIndexOf('.')
+            const baseName = (lastDotIndex > 0 && lastDotIndex > finalTitle.length - 6) ? finalTitle.substring(0, lastDotIndex) : finalTitle
+            const ext = (lastDotIndex > 0 && lastDotIndex > finalTitle.length - 6) ? finalTitle.substring(lastDotIndex) : ''
+            finalTitle = `${baseName} (${insertAttempts})${ext}`
+
+            // 如果 docGuid 是 local_ 开头，需要生成新的
+            if (finalDocGuid && finalDocGuid.startsWith('local_')) {
+              finalDocGuid = `local_${now}_${Math.random().toString(36).substring(2, 10)}_${insertAttempts}`
+            }
+
+            console.log(`[DB] createNote: Retrying with new title: "${finalTitle}"`)
+          } else {
+            // 其他错误，直接抛出
+            throw insertError
+          }
+        }
+      }
+
+      if (!insertSuccess) {
+        log.error('[DB] createNote: Failed to insert after 10 attempts due to unique constraint conflicts')
         return null
       }
 
-      console.log('[DB] createNote: lastInsertRowid =', lastId, 'doc_guid =', note?.doc_guid)
+      console.log(`[DB] createNote: Created with title="${finalTitle}", dirty=1 (pending sync)`)
 
+      console.log(`[DB] createNote: Created with title="${finalTitle}", dirty=1 (pending sync)`)
+      // 保存到文件（sql.js 是 auto-commit，不需要手动 COMMIT）
+      saveDatabase()
+
+      // 使用最终的 title 查询创建的笔记
       let createdNote = null
 
-      // 尝试 1：通过 ID 查询（最可靠）
-      if (lastId && lastId > 0) {
-        createdNote = execOne('SELECT * FROM notes WHERE id = ?', [lastId])
+      // 优先用 doc_guid 查询（如果存在）
+      if (finalDocGuid) {
+        createdNote = execOne('SELECT * FROM notes WHERE doc_guid = ?', [finalDocGuid])
       }
 
-      // 尝试 2：如果 ID 查询失败或 lastId=0，通过 doc_guid 回退查询
-      if (!createdNote && note.doc_guid) {
-        log.warn(`[DB] createNote: lastId=${lastId}, falling back to doc_guid query:`, note.doc_guid)
-        createdNote = execOne('SELECT * FROM notes WHERE doc_guid = ?', [note.doc_guid])
-      }
-
-      // 尝试 3：如果还是没有，尝试按最新创建时间查询（最后手段）
+      // 如果 doc_guid 查询失败或不唯一，用 (category, title) 查询
       if (!createdNote) {
-        log.warn('[DB] createNote: falling back to latest created_at query')
         createdNote = execOne(`
           SELECT * FROM notes
-          WHERE created_at = (SELECT MAX(created_at) FROM notes)
-          ORDER BY id DESC LIMIT 1
-        `)
+          WHERE category = ? AND title = ?
+          ORDER BY id DESC
+          LIMIT 1
+        `, [category, finalTitle])
       }
 
       if (!createdNote) {
-        log.error('[DB] createNote: all query methods failed for note:', {
-          lastId,
-          doc_guid: note?.doc_guid,
-          title: note?.title
+        log.error('[DB] createNote: Failed to find created note:', {
+          title: finalTitle,
+          docGuid: finalDocGuid,
+          category
         })
         return null
       }
