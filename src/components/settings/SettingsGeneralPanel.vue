@@ -153,6 +153,10 @@ export default {
     themes: {
       type: Array,
       required: true
+    },
+    version: {
+      type: String,
+      required: true
     }
   },
   data () {
@@ -175,9 +179,6 @@ export default {
         { value: 'database', label: this.$t('generalDatabase'), icon: 'storage' },
         { value: 'version', label: this.$t('generalVersion'), icon: 'info' }
       ]
-    },
-    version () {
-      return process.env.VERSION || '1.0.0'
     }
   },
   methods: {

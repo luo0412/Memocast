@@ -21,6 +21,7 @@
                   :language='language'
                   :theme='theme'
                   :themes='themes'
+                  :version='version'
                   @update-language='updateLanguage'
                   @update-theme='updateTheme'
                   @update-dark-mode='updateDarkMode'
