@@ -75,7 +75,7 @@
 <script>
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
-import { NOTE_ORDER_TYPES } from 'src/utils/const/noteOrderTypesConst'
+import { NoteOrderTypeEnum, enumToI18nOptions } from 'src/utils/enum'
 
 export default {
   name: 'SettingsEditorPanel',
@@ -108,10 +108,7 @@ export default {
   },
   computed: {
     noteOrderOptions: function () {
-      return NOTE_ORDER_TYPES.map(value => ({
-        label: this.$t(value),
-        value
-      }))
+      return enumToI18nOptions(this, NoteOrderTypeEnum)
     },
     subTabOptions () {
       return [
@@ -122,7 +119,7 @@ export default {
   },
   methods: {
     noteOrderChangeHandler: function (type) {
-      if (!NOTE_ORDER_TYPES.includes(type)) return
+      if (!NoteOrderTypeEnum.has(type)) return
       this.$emit('update-state', { noteOrderType: type })
     }
   }

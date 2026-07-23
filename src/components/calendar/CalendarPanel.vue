@@ -31,11 +31,11 @@
                 @change="onNoteOrderChange"
               >
                 <a-select-option
-                  v-for="orderType in noteOrderTypes"
-                  :key="orderType"
-                  :value="orderType"
+                  v-for="opt in noteOrderOptions"
+                  :key="opt.value"
+                  :value="opt.value"
                 >
-                  {{ $t(orderType) }}
+                  {{ opt.label }}
                 </a-select-option>
               </a-select>
             </div>
@@ -49,11 +49,11 @@
                 @change="onDateBasisChange"
               >
                 <a-select-option
-                  v-for="basis in calendarDateBasisTypes"
-                  :key="basis"
-                  :value="basis"
+                  v-for="opt in calendarDateBasisOptions"
+                  :key="opt.value"
+                  :value="opt.value"
                 >
-                  {{ $t(calendarDateBasisLabels[basis]) }}
+                  {{ opt.label }}
                 </a-select-option>
               </a-select>
             </div>
@@ -75,8 +75,11 @@
 <script>
 import moment from 'moment'
 import { createNamespacedHelpers } from 'vuex'
-import { CALENDAR_DATE_BASIS_LABELS, CALENDAR_DATE_BASIS_TYPES } from 'src/utils/const/calendarDateBasisConst'
-import { NOTE_ORDER_TYPES } from 'src/utils/const/noteOrderTypesConst'
+import {
+  CalendarDateBasisEnum,
+  NoteOrderTypeEnum,
+  enumToI18nOptions
+} from 'src/utils/enum'
 
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 const { mapActions: mapServerActions } = createNamespacedHelpers('server')
@@ -90,14 +93,11 @@ export default {
     }
   },
   computed: {
-    calendarDateBasisLabels () {
-      return CALENDAR_DATE_BASIS_LABELS
+    calendarDateBasisOptions () {
+      return enumToI18nOptions(this, CalendarDateBasisEnum)
     },
-    calendarDateBasisTypes () {
-      return CALENDAR_DATE_BASIS_TYPES
-    },
-    noteOrderTypes () {
-      return NOTE_ORDER_TYPES
+    noteOrderOptions () {
+      return enumToI18nOptions(this, NoteOrderTypeEnum)
     },
     thumbStyle () {
       return { display: 'none' }

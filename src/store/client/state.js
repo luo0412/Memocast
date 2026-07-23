@@ -1,5 +1,9 @@
 import { DEFAULT_NOTE_ORDER_TYPE } from 'src/utils/const/noteOrderTypesConst'
 import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/utils/const/calendarDateBasisConst'
+import {
+  DEFAULT_AI_ASSISTANT_PROVIDER,
+  DEFAULT_CLOUD_SYNC_PROVIDER
+} from 'src/utils/enum'
 import { BUILTIN_ECHO_CARDS } from 'components/echo/builtinEchoes'
 
 export default function () {
@@ -41,14 +45,10 @@ export default function () {
     leftInnerSplitterRatio: 280,
     runeCards: [],
     echoCards: BUILTIN_ECHO_CARDS.map(echo => ({ ...echo })),
-    // 右上角 AI 助手入口使用的实现：
-    //   'builtin' -> 内置 AI 抽屉（读取 ai_model_configs 默认项）
-    //   'doubao'  -> 豆包 WebApp（wujie 微前端）
-    aiAssistantProvider: 'builtin',
-    // 云同步方式：
-    //   'wiznote'    -> 为知笔记同步
-    //   'customFn'   -> 自定义云函数同步
-    cloudSyncProvider: 'wiznote',
+    // 右上角 AI 助手入口使用的实现由 AiAssistantProviderEnum 管理
+    aiAssistantProvider: DEFAULT_AI_ASSISTANT_PROVIDER,
+    // 云同步方式由 CloudSyncProviderEnum 管理
+    cloudSyncProvider: DEFAULT_CLOUD_SYNC_PROVIDER,
     syncStatus: {
       isSyncing: false,
       lastSyncTime: null,
