@@ -34,10 +34,22 @@ export const DEFAULT_ECHO_ICON = 'graphic_eq'
 export const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)/g
 
 // ============================================================================
-// handlerDoc(docLines) —— 已废弃：
-//   早期版本输出 `handler: function(chantNode, scopeContainer, meta) {` 模板，
-//   v2026-07 后统一改用 afterRender(node, attrs) 派发，
-//   caller 直接在 anno_source 里写完整的 afterRender 字段即可。
-//   保留空实现以兼容历史 import（不再返回任何模板前缀）。
+// handlerDoc(docLines) —— 生成 afterRender 方法前缀：
+//   // doc...
+//   afterRender (node, attrs = {}) {
+//   ↑ caller 只要在拼接时把函数体跟在后面：
+//     ${handlerDoc([...])}
+//       const $rune = $(node)
+//       ...
+//     }
+//   最终产物里 afterRender 就是个完整的对象方法，编译器会自动 export default。
+//
+// 注：handler 函数体内统一用 jQuery，编译器（HANDLER_PRELUDE_SOURCE）会注入
+// `const $ = window.jQuery`。
 // ============================================================================
-export const handlerDoc = () => ''
+export const handlerDoc = (docLines = []) => {
+  const banner = (Array.isArray(docLines) ? docLines : [])
+    .map(line => `//   ${line}`)
+    .join('\n  ')
+  return `${banner}\n  afterRender (node, attrs = {}) {`
+}

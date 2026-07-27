@@ -408,17 +408,7 @@ export default class EchoRuntime {
     let definition = null
     try {
       if (source) {
-        // 为 anno_source 注入 `const $ = window.jQuery`，让 handler 函数体
-        // 能直接调用 jQuery 操作 DOM。
         const factory = safeEvalFactory(source, HANDLER_PRELUDE_SOURCE)
-        if (process.env.NODE_ENV !== 'production') {
-          // 调试：把实际编译产物打到 console，方便排查 "Unexpected identifier" 等 parse 错误
-          try {
-            console.log('[EchoRuntime.compileDefinition] >>> source begin', cacheKey)
-            console.log(source)
-            console.log('[EchoRuntime.compileDefinition] <<< source end', cacheKey)
-          } catch (e) { /* ignore */ }
-        }
         definition = factory()
       }
     } catch (error) {

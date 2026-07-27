@@ -1041,69 +1041,33 @@ export default {
         handleNonEchoClick(event)
       })
 
-      // ✅ echo 占位符点击：document 级 capture 阶段 listener + closest 匹配。
-      // 挂到 document 而不是 container，因为 Muya 在笔记切换/重建时会替换
-      // container div（见 muya/lib/index.js: getContainer()），如果委托挂在 container
-      // 上，新 container 上的 echo token 不会被旧 handler 捕获——会出现"上次能点，
-      // 切一次笔记就失效"。document 级 capture 是稳态的。
-      //
-      // 注意：closest('.ag-echo-anno-token') 会匹配到 host 或 host 内层 span。
-      // 由于 enableEchoVueRenderer=true 时，Vue 组件在 host 内部 appendChild 自己的 $el，
-      // 其 $el 可能也是一个嵌套的 .ag-echo-anno-token（contenteditable="false" marker）。
-      // 如果 event.target 是内层 marker，closest 会先命中内层那个——而内层无 dataset。
-      // 所以我们用 [data-echo-inline="true"] 锁定**最外层 host**（仅 host 自己有该属性）。
-      const ECHO_HOST_SELECTOR = '[data-echo-inline="true"]'
-      console.log('[EchoClick] register document capture, container:', container && container.tagName, 'muya?', !!this.contentEditor, 'self:', this._selfEchoClickCount || 0)
-      this._selfEchoClickCount = (this._selfEchoClickCount || 0) + 1
-      const echoCaptureHandler = (event) => {
-        const targetEl = event?.target
-        if (!targetEl || typeof targetEl.closest !== 'function') {
-          console.log('[EchoClick] target invalid', targetEl)
-          return
-        }
-        const echoTarget = targetEl.closest(ECHO_HOST_SELECTOR)
-        if (!echoTarget) {
-          // 没匹配上 echo token 就放行，让其他 click 逻辑正常处理
-          return
-        }
-        console.log('[EchoClick] HIT echo token', {
-          count: this._selfEchoClickCount,
-          tag: echoTarget.tagName,
-          cls: typeof echoTarget.className === 'string' ? echoTarget.className.slice(0, 80) : '',
-          html: (echoTarget.outerHTML || '').slice(0, 200),
-          dataset: { ...echoTarget.dataset }
-        })
-        // 阻止后续 listener（包括 Muya 自己的 bubble handler）干扰点击体验
-        event.preventDefault()
-        event.stopImmediatePropagation()
-        const dataset = echoTarget.dataset || {}
-        const echoId = String(dataset.echoId || '').trim()
-        const echoName = String(dataset.echoName || '').trim()
-        const definitionId = String(dataset.echoDefinitionId || '').trim()
-        const value = String(dataset.echoValue || '')
-        const payload = encodeEchoPayload({
-          prompt: value,
-          attrs: {
-            id: echoId,
-            definitionId,
-            value
-          }
-        })
-        console.log('[EchoClick] calling updateEchoPlaceholderPayload', {
-          echoId, echoName, definitionId, value, mode: 'open-instance', payloadLen: payload.length
-        })
-        const ok = this.updateEchoPlaceholderPayload({
-          echoId,
-          echoName,
-          value,
-          payload,
-          mode: 'open-instance'
-        })
-        console.log('[EchoClick] updateEchoPlaceholderPayload returned', ok)
-      }
-      document.addEventListener('click', echoCaptureHandler, true /* capture */)
-      // 保存到实例以便 beforeDestroy 卸载
-      this._echoDelegate = { container: document, handler: echoCaptureHandler }
+      // echo 占位符点击：document 级 capture，最稳的捕获。
+// 不挂 container（会被 Muya 重建），用 closest('[data-echo-inline="true"]') 锁定 echo host。
+const echoCaptureHandler = (event) => {
+  const targetEl = event?.target
+  if (!targetEl || typeof targetEl.closest !== 'function') return
+  const echoTarget = targetEl.closest('[data-echo-inline="true"]')
+  if (!echoTarget) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  const dataset = echoTarget.dataset || {}
+  const echoId = String(dataset.echoId || '').trim()
+  const echoName = String(dataset.echoName || '').trim()
+  const definitionId = String(dataset.echoDefinitionId || '').trim()
+  const value = String(dataset.echoValue || '')
+  this.updateEchoPlaceholderPayload({
+    echoId,
+    echoName,
+    value,
+    payload: encodeEchoPayload({
+      prompt: value,
+      attrs: { id: echoId, definitionId, value }
+    }),
+    mode: 'open-instance'
+  })
+}
+document.addEventListener('click', echoCaptureHandler, true)
+this._echoDelegate = { container: document, handler: echoCaptureHandler }
 
       this.contentEditor.on('change', () => this.updateContentsList(this.contentEditor.getTOC()))
 
@@ -1208,7 +1172,7 @@ export default {
     appBus.$off(appEvents.ECHO_EVENTS.openInstanceEditor)
     appBus.$off(appEvents.INSERT_TEXT)
     appBus.$off(appEvents.INSERT_AI_TEXT)
-    // 卸载 document 级 capture click listener
+    // 卸载 document 级 click listener
     if (this._echoDelegate && this._echoDelegate.container) {
       this._echoDelegate.container.removeEventListener('click', this._echoDelegate.handler, true)
       this._echoDelegate = null

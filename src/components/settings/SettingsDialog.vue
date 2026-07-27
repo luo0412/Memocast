@@ -309,9 +309,20 @@ export default {
             if (echoName && item.name === echoName) return true
             return false
           }) || null
+          if (typeof window !== 'undefined' && window.__ECHO_OPEN_DEF_TRACE__ !== false) {
+            console.log('[Settings.applyOpenOptions] openEchoEdit', {
+              echoId, echoName, openEchoEdit,
+              localCount: (this.localEchoCards || []).length,
+              matched: matchedEcho ? { id: matchedEcho.id, name: matchedEcho.name } : null,
+              allIds: (this.localEchoCards || []).map(c => `${c.id}:${c.name}`).slice(0, 5)
+            })
+          }
           if (openEchoEdit && matchedEcho) {
             this.editingEcho = { ...matchedEcho }
             this.openEchoFormDialog()
+          } else if (openEchoEdit && !matchedEcho) {
+            // 用户从笔记点"编辑定义"——如果本地列表里没找到（极端情况），退化成只打开 echo 标签页
+            this.editingEcho = null
           }
         }
         if (openAiAdd) {
