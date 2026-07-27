@@ -1,10 +1,9 @@
 <template>
-  <div class="micro-app-host">
+  <div class="micro-app-host" :class="$attrs.class">
     <WujieVue
       v-if="app && resolvedUrl"
       :key="hostKey"
       :name="app.id"
-      class="micro-app-host__frame"
       :url="resolvedUrl"
       :alive="true"
       :sync="false"
@@ -27,17 +26,18 @@ export default {
   components: {
     WujieVue
   },
+  inheritAttrs: false,
   props: {
-    app: {
-      type: Object,
-      default: null
+      app: {
+        type: Object,
+        default: null
+      },
+      // 来自 microAppDrawer：每次保存后递增，触发整个 host 重建（wujie 子应用也会随之重新初始化）
+      reloadKey: {
+        type: String,
+        default: '0'
+      }
     },
-    // 来自 microAppDrawer：每次保存后递增，触发整个 host 重建（wujie 子应用也会随之重新初始化）
-    reloadKey: {
-      type: String,
-      default: '0'
-    }
-  },
   computed: {
     resolvedUrl () {
       return resolveActiveUrl(this.app) || ''

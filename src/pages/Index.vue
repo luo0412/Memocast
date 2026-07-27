@@ -72,8 +72,8 @@
                       @click='toggleEditorNoteActions'
                       size='md' color='#26A69A' v-ripple
                     >
-                      <q-tooltip v-if='!editorNoteActionsExpanded' anchor='center top' self='center bottom' :offset='[0, 10]'>{{ $t('createNote') }} / {{ $t('import') }}</q-tooltip>
-                      <q-tooltip v-else anchor='center top' self='center bottom' :offset='[0, 10]'>{{ $t('cancel') }}</q-tooltip>
+                      <q-tooltip v-if='!editorNoteActionsExpanded' anchor='top middle' self='bottom middle' :offset='[0, 10]'>{{ $t('createNote') }} / {{ $t('import') }}</q-tooltip>
+                      <q-tooltip v-else anchor='top middle' self='bottom middle' :offset='[0, 10]'>{{ $t('cancel') }}</q-tooltip>
                     </q-btn>
                     <transition name='sub-actions-ios'>
                       <div v-if='showEditorNoteFab && editorNoteActionsExpanded' class='editor-note-sub-actions'>
@@ -87,7 +87,7 @@
                     <q-btn :icon='isSourceMode ? "assignment" : "code"' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='isSourceMode = !isSourceMode' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title="!isSourceMode ? $t('sourceMode') : $t('previewMode')" />
                     <q-btn :icon='enablePreviewEditor ? "lock_open" : "lock"' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='lockModeHandler' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title="enablePreviewEditor ? $t('lock') : $t('unlock')" />
                     <q-btn icon='dashboard' dense flat round class='fab-icon cursor-pointer material-icons-round' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && !isSourceMode' v-ripple>
-                      <q-tooltip transition-show='fade' transition-hide='fade' anchor='center top' self='center bottom'>
+                      <q-tooltip transition-show='fade' transition-hide='fade' anchor='top middle' self='bottom middle'>
                         <div class='text-body2'>
                           <p>{{ `${$t('word:', wordCount)}` }}</p>
                           <p>{{ `${$t('character:', wordCount)}` }}</p>
