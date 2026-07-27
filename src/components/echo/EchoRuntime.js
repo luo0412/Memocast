@@ -20,6 +20,37 @@ const unescapeQuotedString = (value = '') => String(value || '')
   .replace(/\\r/g, '\r')
   .replace(/\\t/g, '\t')
 
+// 把 extraAttrs（形如 `data-x="y" data-z="w"`）注入到 html 的第一个起始标签内。
+//   - 同步在第一个起始标签的 class 列表里追加 extraClass（不去重，原有 class 保留）
+//   - 若 html 整体不是以标签开头，会退化为外面包一层 <span extraAttrs extraClass>...</span>。
+//   - 用于 render 自带 HTML 时，给根元素补 echo host 所需的 ABI 元数据
+//     （data-echo-inline="true" / data-echo-name / data-echo-id / ...），
+//     并确保根元素同时拥有 `ag-echo-inline` class 以兼容 .ag-echo-inline 选择器。
+const injectAttrsIntoFirstTag = (html, extraAttrs = '', extraClass = '') => {
+  const src = String(html || '')
+  if (!src) return src
+  if (!extraAttrs && !extraClass) return src
+  const tagMatch = src.match(/^<([a-zA-Z][\w-]*)\b([^>]*)>/)
+  if (!tagMatch) {
+    return `<span ${extraClass ? `class="${extraClass}" ` : ''}${extraAttrs}>${src}</span>`
+  }
+  let tagInner = tagMatch[2] // 起始标签内除标签名外的部分（"<span TAG_INNER>"）
+  let insertTail = ''
+  if (extraClass) {
+    const classMatch = tagInner.match(/\bclass\s*=\s*("([^"]*)"|'([^']*)')/i)
+    if (classMatch) {
+      const quote = classMatch[1][0]
+      const current = classMatch[2] !== undefined ? classMatch[2] : classMatch[3]
+      const next = current ? `${current} ${extraClass}` : extraClass
+      tagInner = tagInner.replace(classMatch[0], `class=${quote}${next}${quote}`)
+    } else {
+      insertTail = ` class="${extraClass}"`
+    }
+  }
+  const attrInsertAt = tagMatch[0].length - 1
+  return `${src.slice(0, attrInsertAt)}${insertTail ? insertTail : ''}${extraAttrs ? ` ${extraAttrs}` : ''}${src.slice(attrInsertAt)}`
+}
+
 const parsePrimitiveValue = (rawValue = '') => {
   const source = String(rawValue || '').trim()
   if (!source) return ''
@@ -974,25 +1005,50 @@ export default class EchoRuntime {
     //     htmlLen: (rendered?.html || '').length
     //   })
     // }
+
+    // === 优先使用 render 自带的 HTML（优先级最高）===
+    // 约定：render 自带的 HTML 根元素是 echo host（通常是 <span>），上面需带
+    //   data-echo-chant-id="..."（handler 派发靠这个）
+    // 我们在根元素上补充少量 ABI 属性，让 afterRender 派发与 [data-echo-inline="true"] 选择器也能命中。
+    const renderedHtml = String(rendered.html || '').trim()
+    if (renderedHtml) {
+      const echoName = escapeHtml(token?.echoName || echo?.name || '')
+      const echoId = escapeHtml(token?.echoId || echo?.id || '')
+      const definitionId = escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')
+      const value = escapeHtml(rendered.value || rendered.prompt || '')
+      // 推断 kind：优先用 echoChantMeta，没有时根据 render 自带 HTML 上是否带 data-echo-chant-id 兜底。
+      // 这样即使 echo 的 render 忘了在 attrs 里写 kind='echo-chant'，CSS 仍然能命中 [data-echo-chant-kind]。
+      const chantKind = (rendered.echoChantMeta && rendered.echoChantMeta.kind)
+        || (/data-echo-chant-id=/i.test(renderedHtml) ? 'echo-chant' : '')
+      const echoChantKind = chantKind
+        ? ` data-echo-chant-kind="${escapeHtml(chantKind)}"`
+        : ''
+      // 注入的 ABI 属性（让根元素同时是 echo host；data-echo-chant-id 由 render 自身提供，这里不覆盖）
+      const injectedAttrs = [
+        `data-echo-inline="true"`,
+        `data-echo-name="${echoName}"`,
+        `data-echo-id="${echoId}"`,
+        `data-echo-definition-id="${definitionId}"`,
+        `data-echo-value="${value}"${echoChantKind}`
+      ].join(' ')
+      return injectAttrsIntoFirstTag(renderedHtml, injectedAttrs, 'ag-echo-inline ag-echo-anno-token')
+    }
+
+    // === 默认占位渲染（render 没给 html 时）===
     const icon = escapeHtml(rendered.icon || DEFAULT_ECHO_ICON)
     const color = escapeHtml(rendered.color || DEFAULT_ECHO_COLOR)
     const title = escapeHtml(rendered.title || '回响')
     const description = escapeHtml(rendered.description || '')
     const prompt = escapeHtml(rendered.prompt || '')
-    const bodyHtml = rendered.html || ''
     const descriptionHtml = description ? `<div class="ag-echo-inline__desc">${description}</div>` : ''
     const promptHtml = prompt ? `<div class="ag-echo-inline__prompt">${prompt}</div>` : ''
-    const customHtml = bodyHtml ? `<div class="ag-echo-inline__html">${bodyHtml}</div>` : ''
 
     // DOM 属性 ABI：data-echo-chant-id / data-echo-chant-kind（echo-chant handler 元数据，与 echo 体系同名空间）。
     const echoChantAttr = rendered.echoChantMeta
       ? ` data-echo-chant-id="${escapeHtml(rendered.echoChantMeta.id || 'unknown')}" data-echo-chant-kind="${escapeHtml(rendered.echoChantMeta.kind || 'echo-chant')}"`
       : ''
 
-    // 默认为 inline，除非有自定义 HTML 才切成 block（customHtml 通常是 block 级内容）。
-    const isInline = customHtml ? 'false' : 'true'
-
-    return `<span class="ag-echo-inline" data-echo-inline="${isInline}" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}"${echoChantAttr} style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}${customHtml}</span></span>`
+    return `<span class="ag-echo-inline ag-echo-anno-token" data-echo-inline="true" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}"${echoChantAttr} style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}</span></span>`
   }
 
   // 渲染完成后的副作用入口。

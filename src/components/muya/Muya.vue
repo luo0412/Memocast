@@ -1011,30 +1011,8 @@ export default {
 
       attachThemeColor(this.theme)
 
-      this.contentEditor.on('muya-click', _.debounce((event) => {
-        const echoTarget = event?.target?.closest?.('.ag-echo-anno-token')
-        if (echoTarget) {
-          const dataset = echoTarget.dataset || {}
-          const echoId = String(dataset.echoId || '').trim()
-          const echoName = String(dataset.echoName || '').trim()
-          const definitionId = String(dataset.echoDefinitionId || '').trim()
-          const value = String(dataset.echoValue || '')
-          this.updateEchoPlaceholderPayload({
-            echoId,
-            echoName,
-            value,
-            payload: encodeEchoPayload({
-              prompt: value,
-              attrs: {
-                id: echoId,
-                definitionId,
-                value
-              }
-            })
-          })
-          return
-        }
-        if (event.target.type === 'checkbox') {
+      const handleNonEchoClick = _.debounce((event) => {
+        if (event?.target?.type === 'checkbox') {
           const curData = this.contentEditor.getMarkdown()
 
           // ✅ 兼容新格式：提取 currentNote 的真实内容
@@ -1053,7 +1031,41 @@ export default {
             this.updateNoteState('default')
           }
         }
-      }, 800))
+      }, 800)
+
+      const handleEchoClick = (event) => {
+        const echoTarget = event?.target?.closest?.('.ag-echo-anno-token')
+        if (!echoTarget) return false
+        const dataset = echoTarget.dataset || {}
+        const echoId = String(dataset.echoId || '').trim()
+        const echoName = String(dataset.echoName || '').trim()
+        const definitionId = String(dataset.echoDefinitionId || '').trim()
+        const value = String(dataset.echoValue || '')
+        // 点击 echo 占位 → 打开弹框（弹框内提交后通过 commitInstance 回填 MD）。
+        // 注意：必须立即触发，不能走 800ms debounce —— 用户期望点完一下就有反馈。
+        this.updateEchoPlaceholderPayload({
+          echoId,
+          echoName,
+          value,
+          payload: encodeEchoPayload({
+            prompt: value,
+            attrs: {
+              id: echoId,
+              definitionId,
+              value
+            }
+          }),
+          mode: 'open-instance'
+        })
+        return true
+      }
+
+      this.contentEditor.on('muya-click', (event) => {
+        if (handleEchoClick(event)) return
+        // 非 echo 路径（checkbox / 表格 / container 等）继续走 800ms debounce，
+        // 避免连续 click 频繁触发 noteState 切换。
+        handleNonEchoClick(event)
+      })
 
       this.contentEditor.on('change', () => this.updateContentsList(this.contentEditor.getTOC()))
 

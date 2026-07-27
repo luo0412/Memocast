@@ -557,6 +557,21 @@ export default {
     onShowBlogDeployDialog ({ category }) {
       this.$refs.blogDeployDialog.show()
     },
+    /**
+     * 把编辑器返回的 cursor 归一化到 lineNumber >= 1 / column >= 1。
+     * 子组件内部也会再兜底一次，但父组件提前保证 props 合法可以减少一次 watcher 抛错的窗口。
+     */
+    safeCursorPosition: function (cursor) {
+      if (!cursor || typeof cursor !== 'object') {
+        return { lineNumber: 1, column: 1 }
+      }
+      const line = Number(cursor.lineNumber)
+      const column = Number(cursor.column)
+      return {
+        lineNumber: Number.isFinite(line) && line >= 1 ? Math.floor(line) : 1,
+        column: Number.isFinite(column) && column >= 1 ? Math.floor(column) : 1
+      }
+    },
     ...mapServerActions(['createNote', 'createCategory']),
     ...mapClientActions(['toggleChanged', 'updateStateAndStore'])
   },
@@ -660,21 +675,6 @@ export default {
           markdown: this.$refs.muya?.getValue() || '',
           cursor: this.safeCursorPosition(this.$refs.muya?.getCursorPosition())
         }
-      }
-    },
-    /**
-     * 把编辑器返回的 cursor 归一化到 lineNumber >= 1 / column >= 1。
-     * 子组件内部也会再兜底一次，但父组件提前保证 props 合法可以减少一次 watcher 抛错的窗口。
-     */
-    safeCursorPosition: function (cursor) {
-      if (!cursor || typeof cursor !== 'object') {
-        return { lineNumber: 1, column: 1 }
-      }
-      const line = Number(cursor.lineNumber)
-      const column = Number(cursor.column)
-      return {
-        lineNumber: Number.isFinite(line) && line >= 1 ? Math.floor(line) : 1,
-        column: Number.isFinite(column) && column >= 1 ? Math.floor(column) : 1
       }
     },
     noteState: function (val, oldVal) {

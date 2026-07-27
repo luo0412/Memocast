@@ -156,6 +156,7 @@ import RuneCard from 'components/rune/RuneCard'
 import RuneFormDialog from 'components/rune/RuneFormDialog'
 import EchoFormDialog from 'components/echo/EchoFormDialog'
 import NavigationDialog from 'components/navigation/NavigationDialog'
+import { BUILTIN_ECHO_CARDS } from 'components/echo/builtinEchoes'
 
 import SettingsNav from './SettingsNav'
 import SettingsGeneralPanel from './SettingsGeneralPanel'
@@ -404,9 +405,9 @@ export default {
         ok: { label: this.$t('confirm'), color: 'cyan-7' }
       }).onOk(async () => {
         try {
-          // 把 store 里当前内置回响（含最新 anno_source，可能是用户编辑过的）推给 main，
-          // 让 DB 用这一份最新数据覆写，规避 main / renderer 双源漂移。
-          const builtins = (this.localEchoCards || []).filter(echo => echo && echo.isBuiltin)
+          // 用 renderer 端内置 echo 默认镜像列表覆盖 DB —— 真正把"被编辑过的内置回响"还原回默认值。
+          // 之前这里传的是 store / localEchoCards 里当前的快照（含用户编辑），重置后内容不会变，等于失效。
+          const builtins = Array.isArray(BUILTIN_ECHO_CARDS) ? BUILTIN_ECHO_CARDS : []
           const result = await DatabaseClient.echoes.clearAll({ builtins })
           if (result && result.success) {
             this.$q.notify({ message: this.$t('resetEchoesSuccess', { count: result.count || 0, custom: result.customKept || 0 }), type: 'positive', position: 'top' })

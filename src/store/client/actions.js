@@ -7,7 +7,7 @@ import { i18n } from 'boot/i18n'
 import _ from 'lodash'
 import { importImage, uploadImages } from 'src/ApiInvoker'
 import DatabaseClient from 'src/utils/DatabaseClient'
-import { BUILTIN_ECHO_CARDS, isBuiltinEcho } from 'components/echo/builtinEchoes'
+import { BUILTIN_ECHO_CARDS } from 'components/echo/builtinEchoes'
 
 const applyQuickInsertColumns = (value) => {
   if (typeof document === 'undefined') return
@@ -144,7 +144,7 @@ export default {
       // 保留 store 中已有 builtin 的覆盖（向后兼容旧逻辑中可能存在的"用户编辑过的内置拷贝"）。
       // 关键：isBuiltin 永远是 true，store override 不能把它覆盖成 false（安全护栏）。
       // 分类以代码版 BUILTIN_ECHO_CARDS 为权威，防止 DB 中的错误分类（如全部写成 'builtin'）覆盖正确值。
-      const stateBuiltins = (state.echoCards || []).filter(echo => isBuiltinEcho(echo))
+      const stateBuiltins = (state.echoCards || []).filter(echo => echo && echo.isBuiltin)
       const mergedBuiltins = builtinEchoes.map(builtinEcho => {
         const override = stateBuiltins.find(s => s && s.id === builtinEcho.id)
         if (!override) return builtinEcho
@@ -184,7 +184,7 @@ export default {
   },
   async saveEchoes (_, echoes) {
     // 内置回响不入库，避免被持久化为普通卡片导致下次丢失 isBuiltin 标记
-    const persistable = (Array.isArray(echoes) ? echoes : []).filter(echo => !isBuiltinEcho(echo))
+    const persistable = (Array.isArray(echoes) ? echoes : []).filter(echo => !(echo && echo.isBuiltin))
     if (persistable.length === 0) return persistable
     return await DatabaseClient.echoes.saveMany(persistable)
   },
