@@ -61,7 +61,8 @@
 import { v4 as uuidv4 } from 'uuid'
 import { createDefaultEchoAnnoSource } from 'components/echo/EchoRuntime'
 import { DEFAULT_ECHO_COLOR, DEFAULT_ECHO_ICON } from 'components/echo/builtin-echo-shared'
-import { DEFAULT_ECHO_CATEGORY, getEchoCategoryValue } from 'src/utils/const/runeEchoCategoriesConst'
+import { DEFAULT_ECHO_CATEGORY, EchoCategoryEnum } from 'src/utils/enum'
+import { normalizeEchoCategory } from 'src/utils/const/runeEchoCategoryLogic'
 
 import EchoFormFields from './EchoFormFields.vue'
 import EchoFormEditor from './EchoFormEditor.vue'
@@ -138,7 +139,7 @@ export default {
       handler (val) {
         if (val) {
           const annoSource = val.anno_source || val.template || createDefaultEchoAnnoSource(val.name)
-          const category = val.isBuiltin ? (val.category || 'builtin') : getEchoCategoryValue(val.category)
+          const category = val.isBuiltin ? (val.category || EchoCategoryEnum.Builtin) : normalizeEchoCategory(val.category)
           this.form = {
             id: val.id,
             name: val.name || '',
@@ -196,8 +197,8 @@ export default {
         : (this.form.anno_source || '')
       if (!annoSource.trim()) return
       const category = this.form.isBuiltin
-        ? (this.form.category || 'builtin')
-        : getEchoCategoryValue(this.form.category)
+        ? (this.form.category || EchoCategoryEnum.Builtin)
+        : normalizeEchoCategory(this.form.category)
       const payload = {
         ...this.form,
         name,

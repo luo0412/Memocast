@@ -51,7 +51,15 @@ export default {
     colorTheme: {
       type: String,
       default: 'purple',
-      validator: v => ['purple', 'cyan', 'primary', 'secondary', 'accent', 'positive', 'negative', 'info', 'warning', 'red', 'orange'].includes(v)
+      // 既支持精确色阶名（yellow / green 等，对齐第一层 SettingsNav 的 accent），
+      // 也支持 Quasar 语义色（primary / positive / info / warning 等），
+      // 新增 enum 项时只要 validator 通过就行。
+      validator: v => [
+        // 精确色阶名（与 SettingsTabEnum.accentTheme 一致）
+        'red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple',
+        // Quasar 语义色
+        'primary', 'secondary', 'accent', 'positive', 'negative', 'info', 'warning'
+      ].includes(v)
     }
   },
   data () {
@@ -62,17 +70,22 @@ export default {
   computed: {
     badgeColor () {
       const map = {
-        purple: 'purple-7',
+        // 精确色阶名 → Quasar 色阶 token（用于 badge）
+        red: 'red-7',
+        orange: 'orange-8',
+        yellow: 'yellow-9',
+        green: 'green-7',
         cyan: 'cyan-7',
+        blue: 'blue-7',
+        purple: 'purple-7',
+        // Quasar 语义色
         primary: 'primary',
         secondary: 'secondary',
         accent: 'accent',
         positive: 'positive',
         negative: 'negative',
         info: 'info',
-        warning: 'warning',
-        red: 'red-7',
-        orange: 'orange-8'
+        warning: 'warning'
       }
       return map[this.colorTheme] || 'primary'
     }
@@ -399,6 +412,90 @@ export default {
   border-radius: 0 3px 3px 0;
 }
 
+/* ====================== 黄色主题 (AI，对齐 SettingsNav.yellow-9) ====================== */
+.category-tabs--yellow ::v-deep(.q-tab) {
+  background: transparent;
+  color: #f9a825;
+}
+
+.category-tabs--yellow ::v-deep(.q-tab:hover:not(.q-tab--active):not(.q-tab--disable)) {
+  background: rgba(249, 168, 37, 0.08);
+}
+
+.category-tabs--yellow ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(249, 168, 37, 0.18) 0%, rgba(249, 168, 37, 0.08) 100%);
+  color: #f57f17;
+  box-shadow: 0 2px 8px rgba(249, 168, 37, 0.25);
+}
+
+.category-tabs--yellow ::v-deep(.q-tab--active)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, #f9a825 0%, #f57f17 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* ====================== 绿色主题 (云服务，对齐 SettingsNav.green-7) ====================== */
+.category-tabs--green ::v-deep(.q-tab) {
+  background: transparent;
+  color: #43a047;
+}
+
+.category-tabs--green ::v-deep(.q-tab:hover:not(.q-tab--active):not(.q-tab--disable)) {
+  background: rgba(67, 160, 71, 0.08);
+}
+
+.category-tabs--green ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(67, 160, 71, 0.18) 0%, rgba(67, 160, 71, 0.08) 100%);
+  color: #2e7d32;
+  box-shadow: 0 2px 8px rgba(67, 160, 71, 0.25);
+}
+
+.category-tabs--green ::v-deep(.q-tab--active)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, #43a047 0%, #2e7d32 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* ====================== 蓝色主题 (云函数，对齐 SettingsNav.blue-7) ====================== */
+.category-tabs--blue ::v-deep(.q-tab) {
+  background: transparent;
+  color: #0288d1;
+}
+
+.category-tabs--blue ::v-deep(.q-tab:hover:not(.q-tab--active):not(.q-tab--disable)) {
+  background: rgba(2, 136, 209, 0.08);
+}
+
+.category-tabs--blue ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(2, 136, 209, 0.18) 0%, rgba(2, 136, 209, 0.08) 100%);
+  color: #0277bd;
+  box-shadow: 0 2px 8px rgba(2, 136, 209, 0.25);
+}
+
+.category-tabs--blue ::v-deep(.q-tab--active)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, #0288d1 0%, #0277bd 100%);
+  border-radius: 0 3px 3px 0;
+}
+
 /* ====================== 暗色模式适配 ====================== */
 .body--dark .category-tabs--purple ::v-deep(.q-tab) {
   color: #ce93d8;
@@ -512,6 +609,51 @@ export default {
 
 .body--dark .category-tabs--orange ::v-deep(.q-tab--active) .category-tab-label {
   color: #ffe0b2;
+}
+
+/* 暗色模式 - 黄色主题 (AI) */
+.body--dark .category-tabs--yellow ::v-deep(.q-tab) {
+  color: #ffee58;
+}
+
+.body--dark .category-tabs--yellow ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(253, 216, 53, 0.3) 0%, rgba(253, 216, 53, 0.15) 100%);
+  color: #fff9c4;
+  box-shadow: 0 2px 8px rgba(253, 216, 53, 0.35);
+}
+
+.body--dark .category-tabs--yellow ::v-deep(.q-tab--active) .category-tab-label {
+  color: #fff9c4;
+}
+
+/* 暗色模式 - 绿色主题 (云服务) */
+.body--dark .category-tabs--green ::v-deep(.q-tab) {
+  color: #a5d6a7;
+}
+
+.body--dark .category-tabs--green ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(102, 187, 106, 0.3) 0%, rgba(102, 187, 106, 0.15) 100%);
+  color: #c8e6c9;
+  box-shadow: 0 2px 8px rgba(102, 187, 106, 0.35);
+}
+
+.body--dark .category-tabs--green ::v-deep(.q-tab--active) .category-tab-label {
+  color: #c8e6c9;
+}
+
+/* 暗色模式 - 蓝色主题 (云函数) */
+.body--dark .category-tabs--blue ::v-deep(.q-tab) {
+  color: #81d4fa;
+}
+
+.body--dark .category-tabs--blue ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(41, 182, 246, 0.3) 0%, rgba(41, 182, 246, 0.15) 100%);
+  color: #b3e5fc;
+  box-shadow: 0 2px 8px rgba(41, 182, 246, 0.35);
+}
+
+.body--dark .category-tabs--blue ::v-deep(.q-tab--active) .category-tab-label {
+  color: #b3e5fc;
 }
 
 /* ====================== 响应式布局 ====================== */

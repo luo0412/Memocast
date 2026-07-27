@@ -49,7 +49,9 @@
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
 import RuneCard from 'components/rune/RuneCard'
-import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY, getRuneCategoryValue } from 'src/utils/const/runeEchoCategoriesConst'
+import { RuneCategoryEnum } from 'src/utils/enum'
+
+const resolveRuneCategory = (raw) => RuneCategoryEnum.has(raw) ? raw : RuneCategoryEnum.General
 
 export default {
   name: 'SettingsRunePanel',
@@ -66,31 +68,30 @@ export default {
   },
   data () {
     return {
-      category: DEFAULT_RUNE_CATEGORY,
+      category: RuneCategoryEnum.General,
       selected: [],
       dragFromIndex: null
     }
   },
   computed: {
     categoryOptions () {
-      const opts = RUNE_CATEGORIES.map(c => ({
+      const opts = RuneCategoryEnum.items.map((c) => ({
         value: c.value,
-        label: this.$t(c.i18nKey),
-        count: (this.runeCards || []).filter(r => getRuneCategoryValue(r && r.category) === c.value).length
+        label: this.$t(c.label),
+        count: (this.runeCards || []).filter(r => resolveRuneCategory(r && r.category) === c.value).length
       }))
       return opts.sort((a, b) => {
-        if (a.value === 'general') return -1
-        if (b.value === 'general') return 1
+        if (a.value === RuneCategoryEnum.General) return -1
+        if (b.value === RuneCategoryEnum.General) return 1
         return b.count - a.count
       })
     },
     localRunesInCategory () {
       const target = this.category
-      return (this.runeCards || []).filter(r => getRuneCategoryValue(r && r.category) === target)
+      return (this.runeCards || []).filter(r => resolveRuneCategory(r && r.category) === target)
     },
     currentCategoryLabel () {
-      const item = RUNE_CATEGORIES.find(c => c.value === this.category)
-      return item ? this.$t(item.i18nKey) : this.$t('runeCategoryGeneral')
+      return this.$t(RuneCategoryEnum.label(this.category))
     }
   },
   watch: {

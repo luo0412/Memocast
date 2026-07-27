@@ -5,260 +5,278 @@ description: enum-plus 枚举增强库集成指南。用于在 Memocast 中使�
 
 # enum-plus 枚举增强库使用指南
 
-## 快速参考
+> **来源**：`node_modules/enum-plus/README.md` + 源码
+> **版本**：3.2.1
 
-### 导入
+## 核心原则
+
+enum-plus 的 **核心设计**：直接访问枚举项就是值本身！
+
+```javascript
+StatusEnum.Review === 2           // ✓ 直接就是值
+StatusEnum.Review.value === undefined  // ✗ .value 不存在！
+```
+
+---
+
+## 导入
 
 ```javascript
 import { Enum } from 'enum-plus'
 ```
 
-### 基本用法
+---
+
+## API 一览（README 原文）
 
 ```javascript
 const StatusEnum = Enum({
-  Draft: { value: 1, label: '草稿', color: 'default' },
-  Review: { value: 2, label: '审核中', color: 'processing' },
-  Published: { value: 3, label: '已发布', color: 'success' },
+  Draft: { value: 1, label: 'Draft', color: 'default' },
+  Review: { value: 2, label: 'In Review', color: 'processing' },
+  Published: { value: 3, label: 'Published', color: 'success' },
 })
 
-// 获取 label（最常用）
-StatusEnum.label(1) // '草稿'
-StatusEnum.label(2) // '审核中'
-
-// 获取元数据
-StatusEnum.color(1) // 'default'
-StatusEnum.color(3) // 'success'
-
-// 获取 key
-StatusEnum.key(2) // 'Review'
-
-// 获取值
-StatusEnum.value('Review') // 1
-
-// 获取所有项（用于生成下拉选项）
-StatusEnum.items // [{ key: 'Draft', value: 1, label: '草稿', color: 'default' }, ...]
-
-// 遍历所有 key
-StatusEnum.keys // ['Draft', 'Review', 'Published']
-
-// 遍历所有 value
-StatusEnum.values // [1, 2, 3]
-
-// 转为列表（用于 el-select）
-Enum.toList(StatusEnum) // [{ label: '草稿', value: 1 }, ...]
+// 直接访问就是值（核心特性！）
+StatusEnum.Review         // 2
+StatusEnum.label(2)       // 'In Review'
+StatusEnum.has(2)         // true
+StatusEnum.keys           // ['Draft', 'Review', 'Published']
+StatusEnum.values          // [1, 2, 3]
+StatusEnum.labels         // ['Draft', 'In Review', 'Published']
+StatusEnum.items          // [{ key: 'Draft', value: 1, label: 'Draft', color: 'default' }, ...]
+StatusEnum.named.Draft    // { key: 'Draft', value: 1, label: 'Draft', color: 'default' }
+StatusEnum.item(1)        // { key: 'Draft', value: 1, label: 'Draft', color: 'default' }
+StatusEnum.meta           // { color: [ 'default', 'processing', 'success' ] }
+StatusEnum.findBy('color', 'success')  // { key: 'Published', value: 3, ... }
+StatusEnum.toList({ valueField: 'id', labelField: 'name' })  // [{ id: 1, name: 'Draft' }, ...]
+StatusEnum.toMap({ keySelector: 'key', valueSelector: 'value' })  // { Draft: 1, Review: 2, Published: 3 }
 ```
 
-## 在 Memocast 中的最佳实践
+---
 
-### 1. 集中管理枚举定义
+## 实例属性（README 明确列出）
 
-枚举定义应放在 `src/const/` 目录下，按业务模块组织：
+| 属性 | 类型 | 说明 |
+|-----|------|------|
+| `EnumName.Key` | 值本身 | 直接访问就是 value，不需要 `.value`！ |
+| `EnumName.keys` | `string[]` | 所有 key 名 |
+| `EnumName.values` | `(string\|number)[]` | 所有 value |
+| `EnumName.labels` | `string[]` | 所有 label（安装 i18n plugin 后自动翻译） |
+| `EnumName.items` | `EnumItem[]` | 所有项的数组 |
+| `EnumName.named` | `object` | 按 key 名访问 item，如 `named.Draft` |
+| `EnumName.meta` | `object` | 按扩展字段聚合值，如 `{ color: ['default', 'success'] }` |
 
-```
-src/const/
-├── noteConst.js         // 笔记状态、类型等
-├── syncConst.js         // 同步状态
-├── editorConst.js       // 编辑器设置
-└── ...
-```
+---
 
-### 2. 定义示例
+## 实例方法（README 明确列出）
+
+| 方法 | 说明 |
+|-----|------|
+| `EnumName.label(keyOrValue)` | 通过 key 或 value 获取 label |
+| `EnumName.key(value)` | 通过 value 获取 key 名 |
+| `EnumName.item(keyOrValue)` | 通过 key 或 value 获取单个 item |
+| `EnumName.has(keyOrValue)` | 判断 key 或 value 是否存在 |
+| `EnumName.findBy(field, value)` | 按任意字段查找 item |
+| `EnumName.toList({ valueField, labelField })` | 转为 UI 下拉框用的列表 |
+| `EnumName.toMap({ keySelector, valueSelector })` | 转为 Map |
+
+---
+
+## 实例 Getter（源码中有）
+
+| Getter | 类型 | 说明 |
+|--------|------|------|
+| `EnumName.name` | `string \| undefined` | 枚举集合名称 |
+| `EnumName.valueType` | - | 值类型 |
+| `EnumName.keyType` | - | key 类型 |
+| `EnumName.rawType` | - | 原始类型 |
+
+---
+
+## 静态方法（在 Enum 上）
+
+| 方法 | 说明 |
+|-----|------|
+| `Enum.install(plugin, options?)` | 安装插件（如 i18n） |
+| `Enum.extends(obj)` | 扩展枚举方法（项目用它添加通用方法） |
+| `Enum.isEnum(value)` | 判断是否是枚举实例 |
+| `Enum.localize` | 获取/设置全局本地化函数 |
+| `Enum.config` | 全局配置 |
+
+---
+
+## 全局访问：`Vue.prototype.$enums`
+
+Memocast 在 `boot/i18n.js` 中将所有业务 enum **统一挂载到 Vue 原型**（复数语义：一个对象里多个 enum 实例的集合）：
 
 ```javascript
-// src/const/noteConst.js
-import { Enum } from 'enum-plus'
-
-export const NoteTypeEnum = Enum({
-  Markdown: { value: 'markdown', label: 'Markdown', icon: 'icon-markdown' },
-  Document: { value: 'document', label: '纯文档', icon: 'icon-doc' },
-  RichText: { value: 'richtext', label: '富文本', icon: 'icon-rich' },
-})
-
-export const NoteStatusEnum = Enum({
-  Normal: { value: 0, label: '正常', color: 'success' },
-  Archived: { value: 1, label: '已归档', color: 'info' },
-  Deleted: { value: 2, label: '已删除', color: 'danger' },
-})
-
-export const SyncStatusEnum = Enum({
-  Synced: { value: 'synced', label: '已同步', color: 'success' },
-  Pending: { value: 'pending', label: '待同步', color: 'warning' },
-  Syncing: { value: 'syncing', label: '同步中', color: 'primary' },
-  Error: { value: 'error', label: '同步失败', color: 'danger' },
-})
+// src/boot/i18n.js（节选）
+import { NoteOrderTypeEnum, ..., GeneralSubEnum, EditorSubEnum, ... } from 'src/utils/enum'
+Vue.prototype.$enums = { NoteOrderTypeEnum, ..., GeneralSubEnum, EditorSubEnum, ... }
 ```
 
-### 3. 在 Vue 组件中使用
+这样**任何 .vue 模板中**都可以直接通过 `$enums.XxxEnum` 访问，**无需 import，也无需 mixin**：
 
-```vue
-<template>
-  <el-select v-model="form.type">
-    <el-option
-      v-for="item in noteTypeOptions"
-      :key="item.value"
-      :label="item.label"
-      :value="item.value"
-    />
-  </el-select>
+```html
+<!-- ✅ 模板直接用 $enums，不需要 import，不需要 mixin -->
+<SettingsSectionContent v-if="subTab === $enums.GeneralSubEnum.Language" ...>
+  ...
+</SettingsSectionContent>
+```
 
-  <el-tag :type="syncStatusColor">
-    {{ syncStatusLabel }}
-  </el-tag>
-</template>
-
-<script>
-import { NoteTypeEnum, NoteStatusEnum, SyncStatusEnum, Enum } from 'enum-plus'
-import { noteConst } from 'src/const/noteConst'
-
-export default {
-  computed: {
-    noteTypeOptions() {
-      return Enum.toList(NoteTypeEnum)
-    },
-    syncStatusLabel() {
-      return SyncStatusEnum.label(this.note.syncStatus)
-    },
-    syncStatusColor() {
-      return SyncStatusEnum.color(this.note.syncStatus)
-    },
+```javascript
+// ✅ JS 中通过 this.$enums 访问
+computed: {
+  subTabOptions () {
+    return this.$enums.GeneralSubEnum.items.map(c => ({
+      value: c.value,
+      label: this.$t(c.label),
+      icon: c.icon
+    }))
   }
 }
-</script>
 ```
 
-### 4. 与 el-form 集成
+> **设计原因**：避免每个组件都写 `import { XxxEnum } from 'src/utils/enum'` + 在 `export default` 中把 XxxEnum 挂在实例上。新增 enum 后只需在 `boot/i18n.js` 的 `$enums` 对象里加一行即可。
+>
+> **命名说明**：用复数 `$enums` 而非 `$enum` 是为了语义清晰——对象里装的是"多个 enum 实例的集合"，而不是"一个 enum"。
 
-```vue
-<template>
-  <el-form :model="form" label-width="100px">
-    <el-form-item label="状态">
-      <el-select v-model="form.status">
-        <el-option
-          v-for="item in statusOptions"
-          :key="item.value"
-          :label="item.label"
-          :value="item.value"
-        />
-      </el-select>
-    </el-form-item>
-  </el-form>
-</template>
+---
 
-<script>
-import { NoteStatusEnum, Enum } from 'enum-plus'
-import { noteConst } from 'src/const/noteConst'
+## 在 Memocast 中的正确用法
 
-export default {
-  data() {
-    return {
-      form: {
-        status: 0
-      },
-      statusOptions: Enum.toList(NoteStatusEnum)
-    }
-  }
+### 1. 直接访问值（不需要 .value）
+
+```javascript
+// ✅ 正确
+subTab: GeneralSubEnum.Language          // → 'language'
+category: RuneCategoryEnum.General      // → 'general'
+
+// ❌ 错误
+subTab: GeneralSubEnum.Language.value   // → undefined
+category: RuneCategoryEnum.General.value // → undefined
+```
+
+### 2. 生成下拉选项
+
+```javascript
+// ✅ 用 items.map（README 原生用法）
+categoryOptions () {
+  return EchoCategoryEnum.items.map(c => ({
+    value: c.value,
+    label: this.$t(c.label)
+  }))
 }
-</script>
-```
 
-### 5. 批量获取多个字段
-
-```javascript
-const item = StatusEnum.item(2)
-// { key: 'Review', value: 2, label: '审核中', color: 'processing' }
-
-// 结合解构使用
-const { label, color } = StatusEnum.item(this.status)
-this.$message.success(`状态：${label}`)
-```
-
-### 6. 判断值是否存在
-
-```javascript
-StatusEnum.has(1) // true
-StatusEnum.has(99) // false
-
-StatusEnum.hasKey('Draft') // true
-StatusEnum.hasKey('Unknown') // false
-```
-
-## 类型安全（TypeScript）
-
-如果项目使用 TypeScript，可以利用枚举的值类型约束：
-
-```typescript
-import { Enum } from 'enum-plus'
-
-const StatusEnum = Enum({
-  Draft: { value: 1 as const, label: '草稿' },
-  Published: { value: 2 as const, label: '已发布' },
-})
-
-// valueType 自动推断为 1 | 2
-function setStatus(status: typeof StatusEnum.valueType) {
-  // status 只能是 1 或 2
+// ✅ 或者用 toList
+categoryOptions () {
+  return EchoCategoryEnum.toList({ valueField: 'value', labelField: 'label' })
 }
 ```
 
-## 常见模式
-
-### 状态映射到 UI
+### 3. 校验值是否存在
 
 ```javascript
-// 状态 -> Element-UI tag type
-const StatusTagMap = Enum({
-  Draft: { value: 1, label: '草稿', tagType: 'info' },
-  Active: { value: 2, label: '活跃', tagType: 'success' },
-  Suspended: { value: 3, label: '暂停', tagType: 'warning' },
-})
-
-// 在组件中使用
-<el-tag :type="StatusTagMap.tagType(note.status)">
-  {{ StatusTagMap.label(note.status) }}
-</el-tag>
-```
-
-### 布尔值枚举
-
-```javascript
-const YesNoEnum = Enum({
-  Yes: { value: 1, label: '是', bool: true },
-  No: { value: 0, label: '否', bool: false },
-})
-
-// 判断逻辑
-if (YesNoEnum.bool(form.required)) {
-  // 必须
+// ✅ 用 has 方法
+if (!RuneCategoryEnum.has(rawValue)) {
+  return RuneCategoryEnum.General  // fallback
 }
 ```
 
-### 数字 + 字符串混用
+### 4. 按字段查找
 
 ```javascript
-const MixedEnum = Enum({
-  Unknown: { value: 0, label: '未知' },
-  Active: { value: 'active', label: '活跃' },
-})
+// ✅ 用 findBy 方法
+const item = StatusEnum.findBy('color', 'success')
 ```
 
-## 注意事项
+### 5. 访问自定义扩展字段
 
-1. **枚举定义后不要修改结构**：`Enum` 创建的是冻结对象，运行时修改不会生效
-2. **value 必须唯一**：`value` 是枚举的唯一标识，不能重复
-3. **向后兼容**：新增枚举值时，建议在末尾添加，避免影响已有代码的数组下标
-4. **国际化支持**：`enum-plus` 支持 `@enum-plus/plugin-i18next`，如需 i18n 可以扩展
+```javascript
+const item = StatusEnum.item(1)
+// item = { key: 'Draft', value: 1, label: 'Draft', color: 'default', raw: {...}, ... }
+
+// ✅ 扩展字段直接挂在 item 上
+item.color  // 'default'
+
+// ✅ 也可以通过 .raw 访问（raw = 原始定义对象）
+item.raw.color  // 'default'
+```
+
+---
+
+## 禁止的反模式
+
+| 反模式 | 说明 |
+|-------|------|
+| `EnumName.Key.value` | ✗ enum-plus 直接访问就是值！ |
+| 虚构方法 | 只用 README 明确列出的方法 |
+
+## 常见问题
+
+### Q: 自定义字段怎么访问？
+
+```javascript
+// 每个 item（EnumItemClass 实例）包含定义时的所有字段
+const item = StatusEnum.item(1)
+// item = { key: 'Draft', value: 1, label: 'Draft', color: 'default', raw: {...}, ... }
+
+// ✅ 扩展字段直接挂在 item 上
+item.color  // 'default'
+
+// ✅ 也可以通过 .raw 访问
+item.raw.color  // 'default'
+```
+
+---
 
 ## 相关文件结构
 
 ```
-src/
-├── const/
-│   ├── noteConst.js        # 笔记相关枚举
-│   ├── syncConst.js        # 同步状态枚举
-│   └── index.js            # 统一导出
-└── ...
+src/utils/enum/
+├── index.js                     # 统一导出
+├── enumSetup.js                 # Enum.extends() 扩展方法
+├── settingsTabEnum.js           # 设置面板 Tab（含嵌套 subEnum）
+├── noteOrderTypeEnum.js         # 笔记排序
+├── calendarDateBasisEnum.js     # 日历日期基准
+└── runeEchoCategoriesEnum.js   # 符文/回响分类
+
+src/utils/const/
+└── runeEchoCategoryLogic.js     # 业务规则 helper
 ```
+
+---
+
+## 扫描 enum 并挂到 `$enums`（require.context 写法）
+
+**目标**：新增 `src/utils/enum/<Xxx>Enum.js` 后，无需改 `boot/i18n.js` 即可在所有组件用 `$enums.XxxEnum`。
+
+Quasar v1 + webpack 用 `require.context` 实现：
+
+```javascript
+// src/boot/i18n.js
+const enumContext = require.context('src/utils/enum/', false, /[A-Z]\w+Enum\.js$/)
+const enumMap = {}
+enumContext.keys().forEach(key => {
+  // key 形如 './noteOrderTypeEnum.js'
+  const mod = enumContext(key)
+  Object.keys(mod).forEach(exportName => {
+    if (exportName === 'default') return
+    const val = mod[exportName]
+    // 只挑 enum-plus Enum 实例（带 .items）
+    if (val && typeof val === 'object' && val.items) {
+      enumMap[exportName] = val
+    }
+  })
+})
+Vue.prototype.$enums = enumMap
+```
+
+> **正则约束 `/[A-Z]\w+Enum\.js$/`**：只匹配 `XxxEnum.js` 命名的文件，跳过 `enumSetup.js` / `index.js` 等基础设施文件。
+>
+> 当前项目 `boot/i18n.js` 直接用 `import { ... } from 'src/utils/enum'`，但**后续可平滑迁移到 require.context 写法**，无需改动模板（模板一律通过 `$enums` 访问）。
+
+---
 
 ## 扩展阅读
 

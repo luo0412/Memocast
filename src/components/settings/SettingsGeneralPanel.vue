@@ -8,7 +8,7 @@
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-general-panel'>
       <!-- 语言 -->
-      <SettingsSectionContent v-if='subTab === "language"' :title="$t('generalLanguage')" accent-color='red-7'>
+      <SettingsSectionContent v-if="subTab === $enums.GeneralSubEnum.Language" :title="$t('generalLanguage')" accent-color='red-7'>
         <div>
           <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
             {{ $t('language') }}
@@ -23,7 +23,7 @@
       </SettingsSectionContent>
 
       <!-- 主题 -->
-      <SettingsSectionContent v-if='subTab === "theme"' :title="$t('generalTheme')" accent-color='red-7'>
+      <SettingsSectionContent v-if="subTab === $enums.GeneralSubEnum.Theme" :title="$t('generalTheme')" accent-color='red-7'>
         <div>
           <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
             {{ $t('theme') }}
@@ -44,7 +44,7 @@
       </SettingsSectionContent>
 
       <!-- 日志 -->
-      <SettingsSectionContent v-if='subTab === "log"' :title="$t('generalLog')" accent-color='red-7'>
+      <SettingsSectionContent v-if="subTab === $enums.GeneralSubEnum.Log" :title="$t('generalLog')" accent-color='red-7'>
         <div class='setting-item--row fa-align-center'>
           <span>{{ $t('openLogFiles') }}</span>
           <q-btn
@@ -56,7 +56,7 @@
       </SettingsSectionContent>
 
       <!-- 数据库 -->
-      <SettingsSectionContent v-if='subTab === "database"' :title="$t('generalDatabase')" accent-color='red-7'>
+      <SettingsSectionContent v-if="subTab === $enums.GeneralSubEnum.Database" :title="$t('generalDatabase')" accent-color='red-7'>
         <div class='setting-item--row fa-align-center'>
           <span>{{ $t('openSqliteFile') }}</span>
           <q-btn
@@ -115,7 +115,7 @@
       </SettingsSectionContent>
 
       <!-- 版本 -->
-      <SettingsSectionContent v-if='subTab === "version"' :title="$t('generalVersion')" accent-color='red-7'>
+      <SettingsSectionContent v-if="subTab === $enums.GeneralSubEnum.Version" :title="$t('generalVersion')" accent-color='red-7'>
         <div class='setting-item--row fa-align-center'>
           <span>{{ $t('currentVersion', { version }) }}</span>
           <q-btn
@@ -161,7 +161,7 @@ export default {
   },
   data () {
     return {
-      subTab: 'language'
+      subTab: this.$enums.GeneralSubEnum.Language
     }
   },
   computed: {
@@ -172,13 +172,11 @@ export default {
       return this.themes.map(t => i18n.t(t.name))
     },
     subTabOptions () {
-      return [
-        { value: 'language', label: this.$t('generalLanguage'), icon: 'language' },
-        { value: 'theme', label: this.$t('generalTheme'), icon: 'palette' },
-        { value: 'log', label: this.$t('generalLog'), icon: 'description' },
-        { value: 'database', label: this.$t('generalDatabase'), icon: 'storage' },
-        { value: 'version', label: this.$t('generalVersion'), icon: 'info' }
-      ]
+      return this.$enums.GeneralSubEnum.items.map(c => ({
+        value: c.value,
+        label: this.$t(c.label),
+        icon: c.icon
+      }))
     }
   },
   methods: {

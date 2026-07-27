@@ -3,12 +3,12 @@
     <CategoryTabs
       v-model='subTab'
       :tabs='subTabOptions'
-      color-theme='positive'
+      color-theme='green'
     />
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-server-panel'>
       <!-- 笔记同步 -->
-      <SettingsSectionContent v-if='subTab === "sync"' :title="$t('cloudSync')" accent-color='green-7'>
+        <SettingsSectionContent v-if='subTab === $enums.ServerSubEnum.Sync' :title="$t('cloudSync')" accent-color='green-7'>
         <!-- 同步方式选择 -->
         <div class='cloud-sync-provider q-mb-md'>
           <div class='text-body2 text-weight-medium q-mb-xs'>{{ $t('cloudSyncProvider') }}</div>
@@ -56,7 +56,7 @@
       </SettingsSectionContent>
 
       <!-- 图片上传 -->
-      <SettingsSectionContent v-if='subTab === "image"' :title="$t('cloudImage')" accent-color='green-7'>
+      <SettingsSectionContent v-if='subTab === $enums.ServerSubEnum.Image' :title="$t('cloudImage')" accent-color='green-7'>
         <div>
           <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
             <span>{{ $t('imageUploadService') }}</span>
@@ -71,7 +71,7 @@
       </SettingsSectionContent>
 
       <!-- CDN注入 -->
-      <SettingsSectionContent v-if='subTab === "cdn"' :title="$t('cdnInjectTitle')" accent-color='green-7'>
+      <SettingsSectionContent v-if='subTab === $enums.ServerSubEnum.Cdn' :title="$t('cdnInjectTitle')" accent-color='green-7'>
         <q-banner rounded dense class='bg-green-1 text-green-10 q-mb-md'>
           <template v-slot:avatar>
             <q-icon name='info_outline' color='green-7' />
@@ -117,10 +117,10 @@
       </SettingsSectionContent>
 
       <!-- 个人信息 -->
-      <SettingsProfilePanel v-if='subTab === "profile"' />
+      <SettingsProfilePanel v-if='subTab === $enums.ServerSubEnum.Profile' />
 
       <!-- 微应用（聊天弹框内的 wujie 子应用） -->
-      <SettingsMicroAppsPanel v-if='subTab === "microApps"' ref='microAppsPanel' />
+      <SettingsMicroAppsPanel v-if='subTab === $enums.ServerSubEnum.MicroApps' ref='microAppsPanel' />
     </div>
   </div>
 </template>
@@ -161,9 +161,9 @@ export default {
       required: true
     }
   },
-  data () {
+    data () {
     return {
-      subTab: 'sync',
+      subTab: this.$enums.ServerSubEnum.Sync,
       cloudSyncLoginState: {
         isLoggedIn: SessionStorageService.isLoggedIn(),
         accountInfo: SessionStorageService.getAccountInfo()
@@ -215,13 +215,11 @@ export default {
       return `${s.synced || 0}/${s.total || 0}`
     },
     subTabOptions () {
-      return [
-        { value: 'sync', label: this.$t('cloudSync'), icon: 'cloud_sync' },
-        { value: 'image', label: this.$t('cloudImage'), icon: 'image' },
-        { value: 'cdn', label: this.$t('cloudCdnInject'), icon: 'link' },
-        { value: 'microApps', label: this.$t('microApps'), icon: 'apps' },
-        { value: 'profile', label: this.$t('cloudProfile'), icon: 'person' }
-      ]
+      return this.$enums.ServerSubEnum.items.map(c => ({
+        value: c.value,
+        label: this.$t(c.label),
+        icon: c.icon
+      }))
     }
   },
   watch: {
@@ -239,7 +237,7 @@ export default {
       deep: true
     },
     subTab (val) {
-      if (val === 'microApps') {
+      if (val === this.$enums.ServerSubEnum.MicroApps) {
         this.$nextTick(() => {
           const panel = this.$refs.microAppsPanel
           if (panel && typeof panel.load === 'function') {

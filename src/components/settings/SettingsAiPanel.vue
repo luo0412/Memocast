@@ -3,12 +3,12 @@
     <CategoryTabs
       v-model='subTab'
       :tabs='subTabOptions'
-      color-theme='warning'
+      color-theme='yellow'
     />
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-ai-panel'>
       <!-- 入口 -->
-      <SettingsSectionContent v-if='subTab === "entry"' :title="$t('aiEntry')" accent-color='yellow-9'>
+      <SettingsSectionContent v-if='subTab === $enums.AiSubEnum.Entry' :title="$t('aiEntry')" accent-color='yellow-9'>
         <div class='text-caption text-grey-6 q-mb-sm'>
           {{ $t('aiAssistantEntryHint') }}
         </div>
@@ -24,7 +24,7 @@
       </SettingsSectionContent>
 
       <!-- 模型 -->
-      <SettingsSectionContent v-if='subTab === "model"' :title="$t('aiModel')" accent-color='yellow-9'>
+      <SettingsSectionContent v-if='subTab === $enums.AiSubEnum.Model' :title="$t('aiModel')" accent-color='yellow-9'>
         <template v-slot:actions>
           <q-btn dense flat no-caps color='yellow-9' icon='add' size='sm'
             :label="$t('aiModelAdd')" @click='$emit("open-ai-model-dialog")' />
@@ -74,7 +74,7 @@
       </SettingsSectionContent>
 
       <!-- 技能 -->
-      <SettingsSectionContent v-if='subTab === "skill"' :title="$t('aiSkill')" accent-color='yellow-9'>
+      <SettingsSectionContent v-if='subTab === $enums.AiSubEnum.Skill' :title="$t('aiSkill')" accent-color='yellow-9'>
         <template v-slot:actions>
           <q-btn dense flat no-caps color='yellow-9' icon='add' size='sm'
             :label="$t('aiSkillAdd')" @click='$emit("open-ai-skill-dialog")' />
@@ -150,7 +150,7 @@ export default {
   },
   data () {
     return {
-      subTab: 'entry',
+      subTab: this.$enums.AiSubEnum.Entry,
       testingAiModelId: null,
       aiModelTestResults: {}
     }
@@ -169,11 +169,11 @@ export default {
       }))
     },
     subTabOptions () {
-      return [
-        { value: 'entry', label: this.$t('aiEntry'), icon: 'auto_awesome' },
-        { value: 'model', label: this.$t('aiModel'), icon: 'smart_toy' },
-        { value: 'skill', label: this.$t('aiSkill'), icon: 'auto_fix_high' }
-      ]
+      return this.$enums.AiSubEnum.items.map(c => ({
+        value: c.value,
+        label: this.$t(c.label),
+        icon: c.icon
+      }))
     }
   },
   methods: {

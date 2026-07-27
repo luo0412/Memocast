@@ -1,5 +1,5 @@
-import { DEFAULT_NOTE_ORDER_TYPE } from 'src/utils/const/noteOrderTypesConst'
-import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/utils/const/calendarDateBasisConst'
+import { DEFAULT_NOTE_ORDER_TYPE } from 'src/utils/enum'
+import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/utils/enum'
 import {
   DEFAULT_AI_ASSISTANT_PROVIDER,
   DEFAULT_CLOUD_SYNC_PROVIDER

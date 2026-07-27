@@ -140,6 +140,154 @@ description: coolma/Memocast 项目专用复杂任务工作流指南。用于分
 - 保持三栏/双栏/单栏模式切换的一致性
 - 涉及列表、树、抽屉、浮动按钮时，优先考虑可见性状态与现有布局联动
 
+### 业务枚举与字典（enum-plus）
+
+`enum-plus` 是项目内业务枚举的**唯一**实现方式，必须按以下写法使用。详细 API 见 `node_modules/enum-plus/README.md`（README Quick Example 就是本项目期望的写法）；本节只列项目特化的约束。
+
+#### 1. 三层物理位置分工
+
+```
+src/utils/enum/
+├── enumSetup.js               仅放 Enum.extends() 全局方法，i18nKey / tagType / iconOf
+├── index.js                   barrel：导入 enumSetup 后再 re-export 所有业务 enum
+├── aiAssistantProviderEnum.js
+├── calendarDateBasisEnum.js
+├── cloudSyncProviderEnum.js
+├── noteOrderTypeEnum.js
+├── settingsTabEnum.js         （含嵌套 subEnum）
+└── ...
+
+src/utils/const/
+└── runeEchoCategoriesConst.js  业务 enum 实例所在（数据量大 / 多分类）
+                              （已改为 re-export from enum/）
+
+src/components/<feature>/
+└── <Feature>*.vue             组件内 import { ... } from 'src/utils/enum'
+```
+
+约定：
+- **数据源 enum 实例**可以放 `src/utils/const/<feature>Const.js`，由 `enum/index.js` 统一 re-export
+- 不写中间 wrapper（如 `runeCategoryEnum.js` 那种 `export { RuneCategoryEnum } from './real-source.js'` 的过水层）
+- `Enum` 工厂函数仅 `enum/index.js` 透出一次，业务组件不要直接 `import { Enum } from 'enum-plus'`
+
+#### 2. 标准定义形态
+
+```javascript
+// src/utils/enum/noteOrderTypeEnum.js
+import { Enum } from 'enum-plus'
+
+export const NoteOrderTypeEnum = Enum({
+  NoteTitleAsc: { value: 'orderByNoteTitleAsc', label: 'orderByNoteTitleAsc' },
+  ModifiedDesc: { value: 'orderByModifiedTimeDesc', label: 'orderByModifiedTimeDesc' }
+})
+
+// ⚠️ 关键：直接访问就是值，不需要 .value！
+// NoteOrderTypeEnum.NoteTitleAsc === 'orderByNoteTitleAsc'
+// NoteOrderTypeEnum.NoteTitleAsc.value === undefined ❌
+```
+
+约定：
+- `label` 字段**就是 i18n key**（不带前缀 `xxxEnum.`），让组件 `this.$t(enumInst.label(value))` 即可
+- 业务侧枚举扩展字段直接挂在 item 对象上：`{ value, label, icon, accent, ... }`
+  - **直接通过 item 访问扩展字段**：`enum.items[0].icon` 或 `enum.item(1).icon`
+  - **不要用 `.raw`**（README 没提到这个属性）
+- 嵌套结构（如 `SettingsTabEnum` 内嵌 5 个 `GeneralSubEnum` 等）：把子 enum 实例挂在父 item 的 `subEnum` 字段里，**不**用 `tab.General.subEnum` 这种游离命名
+
+#### 3. 组件消费模式
+
+```javascript
+// ✅ 正确：原生 enum-plus API，无第三方 helper
+options () {
+  return NoteOrderTypeEnum.items.map(c => ({
+    value: c.value,
+    label: this.$t(c.label),
+    icon: c.icon        // 需要 icon 时直接读 item.icon，来自 raw.icon
+  }))
+}
+
+// 数据校验
+if (!NoteOrderTypeEnum.has(this.form.status)) return null
+
+// label 回显
+$statusLabel () { return this.$t(NoteOrderTypeEnum.label(this.status)) }
+```
+
+#### 4. 全局扩展（`Enum.extends`）
+
+> **注意**：README 没有提到 `.raw` 访问扩展字段，扩展字段是直接挂在 item 上的。
+
+```javascript
+// src/utils/enum/enumSetup.js
+import { Enum } from 'enum-plus'
+
+Enum.extends({
+  i18nKey (v) { return this.label(v) },
+  tagType (v) { const it = this.item(v); return it && it.tagType || null },
+  iconOf (v)  { const it = this.item(v); return it && it.icon || null }
+})
+```
+
+约定：
+- `enumSetup.js` 必须**第一个** import，且在所有业务 enum 实例 import 之前已被加载
+- `enum/index.js` 顶部用 `import './enumSetup.js'` 强制执行，`business enum exports` 跟在它后面
+- 扩展方法**只能挂在 enum 实例方法上**，不要再单独建 `commonHelper.js` / `enumHelper.js`
+
+#### 5. 业务规则归一化 ≠ enum
+
+enum 是字典，**不承载业务规则**。当读到 raw 数据需要兜底归一化时，独立建一个 `xxxLogic.js`：
+
+```javascript
+// src/utils/const/runeEchoCategoryLogic.js
+import { EchoCategoryEnum } from 'src/utils/enum'
+
+// 业务规则：内置 echo 必须落到 builtin/showy；非内置未指定 → marker
+export function normalizeEchoCategory (raw, isBuiltin, echoCategory) {
+  const value = String(raw || '').trim()
+  if (EchoCategoryEnum.has(value)) return value
+  if (isBuiltin) {
+    if (echoCategory && EchoCategoryEnum.has(echoCategory)) return echoCategory
+    return EchoCategoryEnum.Builtin
+  }
+  return EchoCategoryEnum.Marker
+}
+```
+
+约定：
+- 业务 helper 文件**不导 enum 实例之外的新常量**（如 `RUNE_CATEGORIES` frozen 数组、`get*CategoryValue` 这种以 enum 为基础导出的二次封装的统统不要）
+- helper 文件名建议 `<feature>Logic.js`，与数据源 enum 文件并列在 `src/utils/const/`
+
+#### 6. 禁止的反模式
+
+- ❌ **`subLanguage: GeneralSubEnum.Language`** 这种 data 别名字段——直接模板里写 `subTab === GeneralSubEnum.Language`
+- ❌ **`tabGeneral: () => SettingsTabEnum.General`** 这种 computed 别名——同上
+- ❌ **`enumToI18nOptions(vm, XxxEnum, { extraFields: [...] })`** 这种第三方 helper——用 `enum.items.map(...)`
+- ❌ **`const RUNE_CATEGORIES = Object.freeze([{value, i18nKey}, ...])`** 二次暴露 frozen 数组——直接 `RuneCategoryEnum.items` 或 `RuneCategoryEnum.values`
+- ❌ **`getRuneCategoryValue(raw)` / `getEchoCategoryValue(raw, ...)`** 等以 enum 为基础导出的二次封装——只允许业务规则的归一化函数（如 `normalizeEchoCategory`），但实现里要用 `enum.has`/`enum.findBy`
+- ❌ **`runeCategoryEnum.js` / `echoCategoryEnum.js`** 这种 `export { Foo } from '../const/real-source.js'` 的过水 wrapper——barrel 直接 from 真实源即可
+- ❌ **`this.$enum.XxxEnum` 全局原型链访问器**（在 main.js 里 `require.context('./utils/enum', false, /.*Enum\.js$/).keys().forEach(...)` 然后 `Vue.prototype.$enum = {...}`）——理由：
+  - enum-plus 设计意图是**显式 `import`**，挂原型链等于把它降级成"全局变量"，失去枚举语义
+  - `require.context` 是 webpack 魔法，IDE 跳转、TypeScript 推断、单元测试全部失灵
+  - 组件 / 模板 / store action / 服务函数中**所有需要 enum 的地方都已经能 `import { ... } from 'src/utils/enum'`**——这是零成本的方案
+  - 模板里 `RuneCategoryEnum.General` 已经是 enum-plus 原生支持的字面量访问（README：完全兼容原生 enum 用法）
+  - 真要避免重复 import，`enum/index.js` 已经做好了 barrel
+  - 自动扫描 `utils/enum/**/*.js` 会让"新增一个 enum 文件就自动全局暴露"，绕过 code review
+- ❌ **`XxxEnum.General.value`** —— enum-plus 直接访问就是值，`XxxEnum.General === 'general'`，加 `.value` 会得到 `undefined`！这是**最容易犯的错误**，一定要避免：
+  ```javascript
+  // ❌ 错误
+  subTab: GeneralSubEnum.Language.value    // → undefined
+  category: RuneCategoryEnum.General.value  // → undefined
+  
+  // ✅ 正确
+  subTab: GeneralSubEnum.Language          // → 'language'
+  category: RuneCategoryEnum.General       // → 'general'
+  ```
+
+#### 7. 修改 enum 已存在的字段时
+
+- 改 `value` 是**破坏性**：调用方拿到的字符串全变；如必须改，**只在数据侧**（落库层）做一次性迁移，**不要**在消费方写 `if (raw === 'old-value') ... else ...` 兼容分支
+- 改 `label` 字段值（i18n key）安全，但 i18n 文件里要同步改 key
+- 改 `icon` / `accent` 等附加字段安全，只影响 UI 表现
+
 ## 输出要求
 
 默认按以下方式组织对外说明：
@@ -158,6 +306,7 @@ description: coolma/Memocast 项目专用复杂任务工作流指南。用于分
 - 是否遗漏相关状态、文案、i18n 或调用链
 - 是否引入明显 lint / 语法问题
 - 是否真正满足用户目标，而不是只做了局部表面修改
+- **业务 enum** 是否按上面"业务枚举与字典（enum-plus）"章节写（无 alias 字段、无第三方 helper、无 wrapper 文件、barrel 顺序正确）
 
 ## 详细参考
 

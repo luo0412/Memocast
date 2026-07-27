@@ -8,7 +8,7 @@
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-editor-panel'>
       <!-- 笔记 -->
-      <SettingsSectionContent v-if='subTab === "note"' :title="$t('editorNote')" accent-color='orange-8'>
+      <SettingsSectionContent v-if='subTab === $enums.EditorSubEnum.Note' :title="$t('editorNote')" accent-color='orange-8'>
         <div>
           <div class='text-body2 text-weight-medium q-mb-xs setting-item setting-item--row'>
             <span>{{ $t('markdownOnly') }}</span>
@@ -46,7 +46,7 @@
       </SettingsSectionContent>
 
       <!-- 面板 -->
-      <SettingsSectionContent v-if='subTab === "panel"' :title="$t('editorPanel')" accent-color='orange-8'>
+      <SettingsSectionContent v-if='subTab === $enums.EditorSubEnum.Panel' :title="$t('editorPanel')" accent-color='orange-8'>
         <div>
           <div class='text-body2 text-weight-medium q-mb-xs setting-item'>
             <div class='row items-center no-wrap justify-between q-mb-xs'>
@@ -75,7 +75,7 @@
 <script>
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
-import { NoteOrderTypeEnum, enumToI18nOptions } from 'src/utils/enum'
+import { NoteOrderTypeEnum } from 'src/utils/enum'
 
 export default {
   name: 'SettingsEditorPanel',
@@ -103,18 +103,19 @@ export default {
   },
   data () {
     return {
-      subTab: 'note'
+      subTab: this.$enums.EditorSubEnum.Note
     }
   },
   computed: {
     noteOrderOptions: function () {
-      return enumToI18nOptions(this, NoteOrderTypeEnum)
+      return NoteOrderTypeEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
     },
     subTabOptions () {
-      return [
-        { value: 'note', label: this.$t('editorNote'), icon: 'article' },
-        { value: 'panel', label: this.$t('editorPanel'), icon: 'dashboard' }
-      ]
+      return this.$enums.EditorSubEnum.items.map(c => ({
+        value: c.value,
+        label: this.$t(c.label),
+        icon: c.icon
+      }))
     }
   },
   methods: {

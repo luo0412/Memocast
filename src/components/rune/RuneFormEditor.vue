@@ -49,7 +49,7 @@
 <script>
 import * as monaco from 'monaco-editor'
 import CategoryPicker from 'components/category/CategoryPickerV2'
-import { RUNE_CATEGORIES } from 'src/utils/const/runeEchoCategoriesConst'
+import { RuneCategoryEnum } from 'src/utils/enum'
 import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
 import { createBlankTemplate, createInheritDemoTemplate } from './rune-templates.js'
 import runeTemplateService from 'src/services/RuneTemplateService'
@@ -90,7 +90,7 @@ export default {
       return { height: `${this.monacoEditorHeight}px` }
     },
     runeCategoryOptions () {
-      return RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) }))
+      return RuneCategoryEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
     },
     categoryPickerOption () {
       const groups = new Map()

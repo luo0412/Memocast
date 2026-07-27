@@ -166,3 +166,16 @@ src-electron/
 - 优先小步修改，不轻易整体重写成熟模块
 - 修改 UI 时同时检查状态、文案和布局联动
 - 修改同步逻辑时同时检查本地、云端、映射和提示文案
+
+## 业务枚举与字典
+
+新增 / 修改任何业务枚举时，按 `SKILL.md` 的"业务枚举与字典（enum-plus）"章节强制执行。重点自检项：
+
+- [ ] enum 定义文件位置正确（`src/utils/enum/` 单文件 or `src/utils/const/<Feature>Const.js`）
+- [ ] barrel `src/utils/enum/index.js` 顶部 **先** `import './enumSetup.js'` 再 re-export 业务 enum
+- [ ] 组件消费用 `enum.items.map(...)` / `enum.findBy('value', v).raw.<field>`，没有写第三方 helper
+- [ ] 没有 `this.$enum` 全局原型链访问器（也禁止 `Vue.prototype.$enum = {...}` + `require.context` 自动扫描）
+- [ ] 没有再发明 alias 字段（`subLanguage: SubEnum.X`）、computed 别名（`tabGeneral: () => Enum.X`）、wrapper 文件（`runeCategoryEnum.js`）
+- [ ] `label` 字段就是 i18n key，调用 `this.$t(enumInst.label(value))`
+- [ ] 业务归一化逻辑（"非法 → 默认值"）走独立 `xxxLogic.js`，**不是 enum**
+- [ ] 已有 enum 的 `value` 字段不能改字符串，要改就在数据层一次性迁移

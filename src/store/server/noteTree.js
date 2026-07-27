@@ -1,5 +1,5 @@
 import { OFFLINE_ROOT_CATEGORY, normalizeCategoryForMatch } from 'src/utils/const/constants'
-import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/utils/const/calendarDateBasisConst'
+import { DEFAULT_CALENDAR_DATE_BASIS } from 'src/utils/enum'
 
 export function getCalendarNoteTimestamp (note, basis = DEFAULT_CALENDAR_DATE_BASIS) {
   if (basis === 'created') {

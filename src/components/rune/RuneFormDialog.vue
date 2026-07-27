@@ -63,7 +63,7 @@
 </template>
 
 <script>
-import { RUNE_CATEGORIES, DEFAULT_RUNE_CATEGORY } from 'src/utils/const/runeEchoCategoriesConst'
+import { RuneCategoryEnum } from 'src/utils/enum'
 import { createBlankTemplate, createInheritDemoTemplate } from './rune-templates.js'
 import runeTemplateService from 'src/services/RuneTemplateService'
 
@@ -122,7 +122,7 @@ export default {
         color: '#7E57C2',
         icon: 'whatshot',
         template: createInheritDemoTemplate(),
-        category: DEFAULT_RUNE_CATEGORY,
+        category: RuneCategoryEnum.General,
         inherit_from_previous: 1
       },
       remoteImportDialogVisible: false,
@@ -140,7 +140,7 @@ export default {
       return this.mode === 'echo'
     },
     runeCategoryOptions () {
-      return RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) }))
+      return RuneCategoryEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
     },
     resolvedAddTitle () {
       return this.isEchoMode ? this.$t('echoCardAdd') : this.$t('runeCardAdd')
@@ -179,7 +179,7 @@ export default {
             color: '#7E57C2',
             icon: 'whatshot',
             template: createInheritDemoTemplate(),
-            category: this.defaultCategory || DEFAULT_RUNE_CATEGORY,
+            category: this.defaultCategory || RuneCategoryEnum.General,
             inherit_from_previous: 1
           }
           console.log('\n[RuneFormDialog.rune watcher] Initialized new rune form:', {
@@ -206,7 +206,7 @@ export default {
       try {
         const res = await runeTemplateService.fetchFromGithub({
           sourceUrl: url || '',
-          categoryKey: category || this.form.category || DEFAULT_RUNE_CATEGORY
+          categoryKey: category || this.form.category || RuneCategoryEnum.General
         })
         if (!res || !res.success) {
           this.remoteImportError = (res && (res.message || res.code)) || '导入失败'

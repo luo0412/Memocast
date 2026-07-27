@@ -132,7 +132,7 @@
 </template>
 
 <script>
-import { RUNE_CATEGORIES } from 'src/utils/const/runeEchoCategoriesConst'
+import { RuneCategoryEnum } from 'src/utils/enum'
 
 const ICON_NAME_MAP = {
   whatshot: 'local_fire_department',
@@ -213,7 +213,7 @@ export default {
       return this.isEchoMode ? this.$t('echoCardPower') : this.$t('runeCardPower')
     },
     categoryOptions () {
-      const opts = RUNE_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) }))
+      const opts = RuneCategoryEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
       if (opts.length) {
         const missing = opts.filter(o => !o.label).map(o => o.value)
         console.log(`[RUNE-TPL] RuneFormFields.categoryOptions size=${opts.length} first.label=${opts[0].label}` + (missing.length ? ` missing-labels=${missing.join(',')}` : ''))

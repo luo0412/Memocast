@@ -1,0 +1,97 @@
+# Mixin 使用规范
+
+> **核心原则**：除非万不得已，不要用 mixins。优先用**公共方法提取**的方式（utils、helpers、`this.$xxx` 注入等）替代 mixin。
+
+---
+
+## 1. 为什么不用 mixin
+
+| 问题 | 说明 |
+|-----|------|
+| **来源不透明** | mixin 的字段/方法会"凭空"出现在组件实例上，新人调方法时在 IDE 里看不到定义在哪、属于哪个 mixin 文件。 |
+| **命名冲突** | 多个 mixin 之间、mixin 与组件之间的同名 prop/method/computed 会按合并策略互相覆盖，调试困难。 |
+| **来源链长** | A mixin 嵌 B mixin 嵌 C mixin 时，排查一个字段来源要追三层。 |
+| **this 上下文陷阱** | 箭头函数 / 普通函数 / 动态 this 给 mixin 写起来很别扭。 |
+| **类型推导差** | JS / TS 工具链对 mixin 的字段提示远不如显式引入 / `this.$xxx` 注入。 |
+| **测试不友好** | 要测 mixin 里的逻辑，得挂个空 Vue 组件跑，难以纯函数测。 |
+
+---
+
+## 2. 替代方案优先级
+
+| 方案 | 适用场景 |
+|-----|--------|
+| **公共 utils / 纯函数** | 无副作用、与 Vue 实例无关的纯逻辑（如格式化、校验、分类合并）。 |
+| **`Vue.prototype.$xxx`** | 需要全局可访问、跨组件复用的"枚举/常量/服务类"对象，例如 `this.$enum.GeneralSubEnum`、`this.$bus`。 |
+| **Composable / 普通函数返回对象** | 组件内多个地方都要用的局部状态/方法组合，用 `function xxxFactory() { return {...} }` 在组件内 `const x = xxxFactory()` 即可。 |
+| **共享组件 / slot** | UI 片段复用。 |
+| **高阶组件 / wrapper 组件** | 跨切面行为注入（如埋点）。 |
+| **mixin** | **仅在以下场景允许**：跨组件的**生命周期钩子统一接管**（如统一注入 `mounted` 时的 hideInitLoadingPage 调用）、且**找不到更轻量的等价方案**时。 |
+
+---
+
+## 3. 反模式（禁止）
+
+```javascript
+// ❌ 禁止：为了暴露枚举到模板而写 mixin
+import { GeneralSubEnum, EditorSubEnum, AiSubEnum, ... } from 'src/utils/enum'
+
+export const settingsSubEnumsMixin = {
+  // 这些东西模板里用 $enum 直接就能拿到，根本不需要 mixin
+  // Vue.prototype.$enum 在 boot 阶段已经挂好了
+  GeneralSubEnum,
+  EditorSubEnum,
+  ...
+}
+
+// ❌ 禁止：mixin 嵌套 mixin
+const baseMixin = { methods: { ... } }
+const derivedMixin = { mixins: [baseMixin], methods: { ... } }
+export const finalMixin = { mixins: [derivedMixin], ... }
+```
+
+## 4. 正解
+
+```javascript
+// ✅ 公共方法 / 纯函数 → src/utils/
+// src/utils/formatUtil.js
+export function formatNoteDate (date) { ... }
+
+// ✅ 组件内 import 用
+import { formatNoteDate } from 'src/utils/formatUtil.js'
+computed: {
+  displayDate () { return formatNoteDate(this.note.createdAt) }
+}
+
+// ✅ 枚举 / 常量类 → 挂在 Vue.prototype.$enum
+// src/boot/i18n.js
+Vue.prototype.$enum = { GeneralSubEnum, EditorSubEnum, ... }
+
+// 模板里
+<template v-if="subTab === $enum.GeneralSubEnum.Language" />
+
+// JS 里
+data () {
+  return { subTab: this.$enum.GeneralSubEnum.Language }
+}
+```
+
+## 5. 自检清单
+
+写一个新功能前问一下自己：
+
+1. 这个逻辑里有没有"枚举/常量"需要全局访问？→ 挂 `Vue.prototype.$xxx`，**不要**走 mixin。
+2. 这个逻辑是不是纯函数（不依赖 `this` / Vue 实例）？→ 放 `src/utils/`，**不要**包装成 mixin。
+3. 这个逻辑是不是"组件里组合几个方法"？→ 用工厂函数 `function xxxFactory() {...}`，在组件内 `const x = xxxFactory()`。
+4. 这个逻辑**真的必须**用到 Vue 的生命周期钩子吗？→ 如果是，且**找不到**其他等价方案（高阶组件、Vue 插件、wrapper 组件），且**功能稳定**——才允许写 mixin。
+
+> **80% 的"用 mixin"场景都有更轻量的替代方案。** mixin 应该被视为最后手段。
+
+---
+
+## 6. 已存在的 mixin 审查
+
+- `src/mixins/skinMixin.js` —— **保留**（主题皮肤切换需要全局监听/响应，目前无更轻量替代）
+- `src/mixins/index.js` 里的 `initLoadingPageMixins` —— **保留**（启动期一次性副作用，无更轻量替代）
+
+> 其它历史 mixin 在评审时按本规则评估，能迁移到 utils / `$xxx` 的逐步迁移；不能迁移的需在文件头注释说明保留理由。

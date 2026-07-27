@@ -10,6 +10,8 @@
  *   - iconOf(value)    -> 拿 enum 项里写的 icon
  *
  * 注：真实使用时由 index.js 在所有业务 enum 实例之前 import 触发。
+ * 通过给 Enum 函数本身挂一个标记属性来确保这行 import 不被 webpack
+ * tree-shaking 优化掉（纯副作用 import 在某些优化级别下会被消除）。
  */
 
 import { Enum } from 'enum-plus'
@@ -27,3 +29,8 @@ Enum.extends({
     return item && item.raw && item.raw.icon ? item.raw.icon : null
   }
 })
+
+// 副作用守卫：引用 Enum 函数本身，确保这整个文件不被 tree-shaking 消除。
+// Enum 本身已经在这个文件顶部被 import 并使用，所以这里只是显式引用。
+// @__PURE__ 注释故意不写，让 bundler 知道这里有真实的模块引用关系。
+void Enum

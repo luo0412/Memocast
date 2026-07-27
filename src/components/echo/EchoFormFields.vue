@@ -124,7 +124,7 @@
 </template>
 
 <script>
-import { ECHO_CATEGORIES } from 'src/utils/const/runeEchoCategoriesConst'
+import { EchoCategoryEnum } from 'src/utils/enum'
 
 export default {
   name: 'EchoFormFields',
@@ -164,7 +164,7 @@ export default {
         { value: '#9CCC65' },
         { value: '#FFA726' }
       ],
-      categoryOptions: ECHO_CATEGORIES.map(c => ({ value: c.value, label: this.$t(c.i18nKey) }))
+      categoryOptions: EchoCategoryEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
     }
   },
   computed: {

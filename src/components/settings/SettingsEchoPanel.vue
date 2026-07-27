@@ -63,7 +63,8 @@
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
 import RuneCard from 'components/rune/RuneCard'
-import { ECHO_CATEGORIES, DEFAULT_ECHO_CATEGORY, getEchoCategoryValue } from 'src/utils/const/runeEchoCategoriesConst'
+import { EchoCategoryEnum } from 'src/utils/enum'
+import { normalizeEchoCategory } from 'src/utils/const/runeEchoCategoryLogic'
 
 export default {
   name: 'SettingsEchoPanel',
@@ -80,7 +81,7 @@ export default {
   },
   data () {
     return {
-      category: DEFAULT_ECHO_CATEGORY,
+      category: EchoCategoryEnum.Marker,
       selected: [],
       dragFromIndex: null
     }
@@ -90,29 +91,29 @@ export default {
       return process.env.PROD === true
     },
     categoryOptions () {
-      const opts = ECHO_CATEGORIES.map(c => ({
+      const opts = EchoCategoryEnum.items.map((c) => ({
         value: c.value,
-        label: this.$t(c.i18nKey),
+        label: this.$t(c.label),
         count: (this.echoCards || []).filter(e => {
-          const cat = getEchoCategoryValue(e && e.category, Boolean(e && e.isBuiltin), e && e.category)
+          const cat = normalizeEchoCategory(e && e.category, Boolean(e && e.isBuiltin), e && e.category)
           return cat === c.value
         }).length
       }))
       return opts.sort((a, b) => {
-        if (a.value === 'builtin') return -1
-        if (b.value === 'builtin') return 1
+        if (a.value === EchoCategoryEnum.Builtin) return -1
+        if (b.value === EchoCategoryEnum.Builtin) return 1
         return b.count - a.count
       })
     },
     localEchoesInCategory () {
       const target = this.category
       return (this.echoCards || []).filter(e => {
-        const cat = getEchoCategoryValue(e && e.category, Boolean(e && e.isBuiltin), e && e.category)
+        const cat = normalizeEchoCategory(e && e.category, Boolean(e && e.isBuiltin), e && e.category)
         return cat === target
       })
     },
     sortedEchoes () {
-      if (this.category === 'builtin') {
+      if (this.category === EchoCategoryEnum.Builtin) {
         return [...this.localEchoesInCategory].sort((a, b) => {
           if (Boolean(a.isBuiltin) === Boolean(b.isBuiltin)) return 0
           return a.isBuiltin ? -1 : 1
@@ -121,11 +122,10 @@ export default {
       return this.localEchoesInCategory
     },
     currentCategoryLabel () {
-      const item = ECHO_CATEGORIES.find(c => c.value === this.category)
-      return item ? this.$t(item.i18nKey) : this.$t('echoCategoryMarker')
+      return this.$t(EchoCategoryEnum.label(this.category))
     },
     isCurrentCategoryBuiltin () {
-      return this.category === 'builtin'
+      return this.category === EchoCategoryEnum.Builtin
     }
   },
   watch: {

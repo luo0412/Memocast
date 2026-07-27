@@ -77,8 +77,7 @@ import moment from 'moment'
 import { createNamespacedHelpers } from 'vuex'
 import {
   CalendarDateBasisEnum,
-  NoteOrderTypeEnum,
-  enumToI18nOptions
+  NoteOrderTypeEnum
 } from 'src/utils/enum'
 
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
@@ -94,10 +93,10 @@ export default {
   },
   computed: {
     calendarDateBasisOptions () {
-      return enumToI18nOptions(this, CalendarDateBasisEnum)
+      return CalendarDateBasisEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
     },
     noteOrderOptions () {
-      return enumToI18nOptions(this, NoteOrderTypeEnum)
+      return NoteOrderTypeEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
     },
     thumbStyle () {
       return { display: 'none' }

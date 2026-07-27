@@ -3,12 +3,12 @@
     <CategoryTabs
       v-model='subTab'
       :tabs='subTabOptions'
-      color-theme='info'
+      color-theme='blue'
     />
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-cloudfn-panel'>
       <!-- 配置 -->
-      <SettingsSectionContent v-if='subTab === "config"' :title="$t('cloudFnConfig')" accent-color='blue-7'>
+      <SettingsSectionContent v-if='subTab === $enums.CloudFnSubEnum.Config' :title="$t('cloudFnConfig')" accent-color='blue-7'>
         <template v-slot:actions>
           <q-btn flat dense size='sm' icon='help_outline' @click='openCloudFnHelp'>
             <q-tooltip>{{ $t('cloudFunctionDoc') }}</q-tooltip>
@@ -18,7 +18,7 @@
       </SettingsSectionContent>
 
       <!-- 导航中心 -->
-      <SettingsSectionContent v-if='subTab === "navigation"' :title="$t('cloudFnNavigation')" accent-color='blue-7'>
+      <SettingsSectionContent v-if='subTab === $enums.CloudFnSubEnum.Navigation' :title="$t('cloudFnNavigation')" accent-color='blue-7'>
         <q-banner rounded dense class='bg-blue-1 text-blue-10 q-mb-md'>
           <template v-slot:avatar>
             <q-icon name='info_outline' color='blue-7' />
@@ -48,15 +48,16 @@ export default {
   props: {},
   data () {
     return {
-      subTab: 'config'
+      subTab: this.$enums.CloudFnSubEnum.Config
     }
   },
   computed: {
     subTabOptions () {
-      return [
-        { value: 'config', label: this.$t('cloudFnConfig'), icon: 'settings' },
-        { value: 'navigation', label: this.$t('cloudFnNavigation'), icon: 'explore' }
-      ]
+      return this.$enums.CloudFnSubEnum.items.map(c => ({
+        value: c.value,
+        label: this.$t(c.label),
+        icon: c.icon
+      }))
     }
   },
   methods: {
