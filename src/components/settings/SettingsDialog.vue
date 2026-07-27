@@ -309,14 +309,6 @@ export default {
             if (echoName && item.name === echoName) return true
             return false
           }) || null
-          if (typeof window !== 'undefined' && window.__ECHO_OPEN_DEF_TRACE__ !== false) {
-            console.log('[Settings.applyOpenOptions] openEchoEdit', {
-              echoId, echoName, openEchoEdit,
-              localCount: (this.localEchoCards || []).length,
-              matched: matchedEcho ? { id: matchedEcho.id, name: matchedEcho.name } : null,
-              allIds: (this.localEchoCards || []).map(c => `${c.id}:${c.name}`).slice(0, 5)
-            })
-          }
           if (openEchoEdit && matchedEcho) {
             this.editingEcho = { ...matchedEcho }
             this.openEchoFormDialog()
