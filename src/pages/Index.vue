@@ -58,27 +58,15 @@
           <BlogDeployDialog ref='blogDeployDialog' @deploy='onBlogDeploy' @cancel='onBlogDeployCancel' />
           <BlogDeployProgressDialog ref='blogDeployProgressDialog' @rebuild='onBlogDeployRebuild' />
         </div>
-        <!-- Action Bar 放在编辑器容器外面，不影响滚动 -->
-        <div class='editor-action-bar-wrapper' @mouseenter='onActionBarMouseEnter' @mouseleave='onActionBarMouseLeave'>
-          <!-- 工具栏主体 -->
-          <transition name='action-bar-slide'>
+        <!-- Action Bar 底部居中，水平排列，仿 iOS 毛玻璃药丸 -->
+        <div class='editor-action-bar-wrapper'>
+          <transition name='action-bar-ios'>
             <div
-              v-show='actionBarVisible || isActionBarHovered'
+              v-show='actionBarVisible'
               class='editor-action-bar'
-              :class="{ 'action-bar--hovered': isActionBarHovered }"
-              @mouseenter='onActionBarMouseEnter'
-              @mouseleave='onActionBarMouseLeave'
+              :class="{ 'action-bar--scroll': isActionBarScrolling }"
             >
-              <div class='editor-action-bar-inner editor-action-bar-inner--reversed'>
-                <!-- 拖动手柄放在第一位置，column-reverse 会让它显示在底部 -->
-                <div
-                  v-if='isActionBarHovered'
-                  class='action-bar-drag-handle'
-                  @mousedown='onDragHandleMouseDown'
-                  @mouseenter='onActionBarMouseEnter'
-                >
-                  <q-icon name='drag_indicator' size='xs' />
-                </div>
+              <div class='editor-action-bar-inner'>
                 <q-btn
                   v-if='showEditorNoteFab'
                   :icon='editorNoteActionsExpanded ? "close" : "post_add"'
@@ -87,20 +75,22 @@
                   @click='toggleEditorNoteActions'
                   size='md' color='#26A69A' v-ripple
                 >
-                  <q-tooltip v-if='!editorNoteActionsExpanded' anchor='center left' self='center right' :offset='[10, 10]'>{{ $t('createNote') }} / {{ $t('import') }}</q-tooltip>
-                  <q-tooltip v-else anchor='center left' self='center right' :offset='[10, 10]'>{{ $t('cancel') }}</q-tooltip>
+                  <q-tooltip v-if='!editorNoteActionsExpanded' anchor='center top' self='center bottom' :offset='[0, 10]'>{{ $t('createNote') }} / {{ $t('import') }}</q-tooltip>
+                  <q-tooltip v-else anchor='center top' self='center bottom' :offset='[0, 10]'>{{ $t('cancel') }}</q-tooltip>
                 </q-btn>
-                <div v-if='showEditorNoteFab && editorNoteActionsExpanded' class='editor-note-sub-actions'>
-                  <q-btn v-if='noteFabIsRootCategory' icon='create_new_folder' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='addCategoryFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("createCategory")' />
-                  <template v-else>
-                    <q-btn icon='note_add' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='addNoteFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("createNote")' />
-                    <q-btn icon='add' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='openImportFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("import")' />
-                  </template>
-                </div>
+                <transition name='sub-actions-ios'>
+                  <div v-if='showEditorNoteFab && editorNoteActionsExpanded' class='editor-note-sub-actions'>
+                    <q-btn v-if='noteFabIsRootCategory' icon='create_new_folder' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='addCategoryFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("createCategory")' />
+                    <template v-else>
+                      <q-btn icon='note_add' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='addNoteFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("createNote")' />
+                      <q-btn icon='add' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='openImportFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("import")' />
+                    </template>
+                  </div>
+                </transition>
                 <q-btn :icon='isSourceMode ? "assignment" : "code"' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='isSourceMode = !isSourceMode' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title="!isSourceMode ? $t('sourceMode') : $t('previewMode')" />
                 <q-btn :icon='enablePreviewEditor ? "lock_open" : "lock"' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='lockModeHandler' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title="enablePreviewEditor ? $t('lock') : $t('unlock')" />
                 <q-btn icon='dashboard' dense flat round class='fab-icon cursor-pointer material-icons-round' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && !isSourceMode' v-ripple>
-                  <q-tooltip transition-show='fade' transition-hide='fade' anchor='center left' self='center right'>
+                  <q-tooltip transition-show='fade' transition-hide='fade' anchor='center top' self='center bottom'>
                     <div class='text-body2'>
                       <p>{{ `${$t('word:', wordCount)}` }}</p>
                       <p>{{ `${$t('character:', wordCount)}` }}</p>
@@ -478,6 +468,18 @@ export default {
         this.actionBarVisible = false
         return
       }
+      // 鼠标进入编辑器滚动条区域 → 强制隐藏 action bar，避免遮挡滚动操作
+      // 用 .editor-stage 的实际右边界定位（而非 window.innerWidth），让 splitter / 窗口装饰等都不影响判断
+      const editorStage = document.querySelector('.editor-stage')
+      if (editorStage) {
+        const stageRect = editorStage.getBoundingClientRect()
+        // 14px 跨平台兜底：项目显式 12px、Win/Linux 默认 17px、macOS overlay 0px（macOS 不会触发该分支）
+        const SCROLLBAR_WIDTH = 14
+        if (e.clientX > stageRect.right - SCROLLBAR_WIDTH && e.clientX <= stageRect.right) {
+          this.actionBarVisible = false
+          return
+        }
+      }
       // 检查鼠标是否靠近右侧边缘或底部边缘
       const distanceFromRight = window.innerWidth - e.clientX
       const distanceFromBottom = window.innerHeight - e.clientY
@@ -831,11 +833,12 @@ export default {
   }
 }
 
-/* 编辑器操作栏 - 贴边隐藏 */
+/* 编辑器操作栏 - 贴边隐藏
+ * right 偏移：让出 12px 滚动条 + 12px 视觉间距，避免与编辑器最右侧滚动条重叠 */
 .editor-action-bar-wrapper {
   position: fixed;
   bottom: 12px;
-  right: 8px;
+  right: 24px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;

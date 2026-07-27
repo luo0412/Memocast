@@ -1175,11 +1175,6 @@
     graceful-fs "^4.2.11"
     postject "^1.0.0-alpha.6"
 
-"@enum-plus/plugin-i18next@^1.0.0":
-  version "1.0.0"
-  resolved "https://mirrors.cloud.tencent.com/npm/@enum-plus/plugin-i18next/-/plugin-i18next-1.0.0.tgz#f732a58ba3f7045050edab73b042628d59d049ed"
-  integrity sha512-Du+STJ2QRFjgLOmgVyT0jE7CqMAN+6DbBGrX0ajkfm6wFfwPAnp7fXykMwNI2aZozf4It25nONFJofLM6VmcXg==
-
 "@epic-web/invariant@^1.0.0":
   version "1.0.0"
   resolved "https://mirrors.cloud.tencent.com/npm/@epic-web/invariant/-/invariant-1.0.0.tgz#1073e5dee6dd540410784990eb73e4acd25c9813"
@@ -8820,11 +8815,6 @@ humanize-ms@^1.2.1:
   integrity sha512-Fl70vYtsAFb/C06PTS9dZBo7ihau+Tu/DNCk/OyHhea07S+aeMWpFFkUaXRa8fI+ScZbEI8dfSxwY7gxZ9SAVQ==
   dependencies:
     ms "^2.0.0"
-
-"i18next@>=8.4.0 <9.0.0":
-  version "8.4.3"
-  resolved "https://mirrors.cloud.tencent.com/npm/i18next/-/i18next-8.4.3.tgz#36b6ff516c4f992010eedcce24a36c4609e8c7dc"
-  integrity sha512-V6HKLWSh2d/CSie1s/TErgEIdu/gPRUGJo/kBRcOW+YH2fnwMl3ByIMGsKSO5qajThceQ9AghZQ+OsGVS492/g==
 
 iconv-corefoundation@^1.1.7:
   version "1.1.7"

@@ -62,7 +62,7 @@ module.exports = function (/* ctx */) {
       // Add dependencies for transpiling with Babel (Array of string/regex)
       // (from node_modules, which are by default not transpiled).
       // Applies only if "transpile" is set to true.
-      transpileDependencies: [/vega.*/, /@quasar.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/, 'sql.js', /reveal\.js.*/, /portkey-ai/, /openai/, 'consola', 'enum-plus', '@enum-plus/plugin-i18next'],
+      transpileDependencies: [/vega.*/, /@quasar.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/, 'sql.js', /reveal\.js.*/, /portkey-ai/, /openai/, 'consola', 'enum-plus'],
 
       // rtl: false, // https://quasar.dev/options/rtl-support
       // preloadChunks: true,
@@ -85,8 +85,7 @@ module.exports = function (/* ctx */) {
           include: [
             /node_modules[/\\]openai/,
             /node_modules[/\\]portkey-ai/,
-            /node_modules[/\\]consola/,
-            /node_modules[/\\]@enum-plus[/\\]plugin-i18next/
+            /node_modules[/\\]consola/
           ],
           type: 'javascript/auto',
           use: {
