@@ -3,7 +3,7 @@
     <CategoryTabs
       v-model='subTab'
       :tabs='subTabOptions'
-      color-theme='green'
+      color-theme='positive'
     />
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-server-panel'>
@@ -161,7 +161,7 @@ export default {
       required: true
     }
   },
-    data () {
+  data () {
     return {
       subTab: this.$enums.ServerSubEnum.Sync,
       cloudSyncLoginState: {

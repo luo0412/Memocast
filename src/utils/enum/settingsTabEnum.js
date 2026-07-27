@@ -62,6 +62,7 @@ export const SettingsTabEnum = Enum({
     icon: 'tune',
     accent: 'red-7',
     accentTheme: 'red',
+    tabClass: 'text-red-7',
     subEnum: GeneralSubEnum
   },
   Editor: {
@@ -70,6 +71,7 @@ export const SettingsTabEnum = Enum({
     icon: 'edit_attributes',
     accent: 'orange-8',
     accentTheme: 'orange',
+    tabClass: 'text-orange-8',
     subEnum: EditorSubEnum
   },
   Ai: {
@@ -78,6 +80,7 @@ export const SettingsTabEnum = Enum({
     icon: 'auto_awesome',
     accent: 'yellow-9',
     accentTheme: 'yellow',
+    tabClass: 'text-yellow-9',
     subEnum: AiSubEnum
   },
   Server: {
@@ -86,6 +89,7 @@ export const SettingsTabEnum = Enum({
     icon: 'storage',
     accent: 'green-7',
     accentTheme: 'green',
+    tabClass: 'text-green-7',
     subEnum: ServerSubEnum
   },
   Echo: {
@@ -94,6 +98,7 @@ export const SettingsTabEnum = Enum({
     icon: 'graphic_eq',
     accent: 'cyan-7',
     accentTheme: 'cyan',
+    tabClass: 'text-cyan-7',
     subEnum: null
   },
   CloudFn: {
@@ -102,6 +107,7 @@ export const SettingsTabEnum = Enum({
     icon: 'cloud_circle',
     accent: 'blue-7',
     accentTheme: 'blue',
+    tabClass: 'text-blue-7',
     subEnum: CloudFnSubEnum
   },
   Rune: {
@@ -110,6 +116,7 @@ export const SettingsTabEnum = Enum({
     icon: 'star',
     accent: 'purple-7',
     accentTheme: 'purple',
+    tabClass: 'text-purple-7',
     subEnum: null
   }
 })

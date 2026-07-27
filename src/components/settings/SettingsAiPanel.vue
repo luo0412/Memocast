@@ -3,7 +3,7 @@
     <CategoryTabs
       v-model='subTab'
       :tabs='subTabOptions'
-      color-theme='yellow'
+      color-theme='warning'
     />
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-ai-panel'>

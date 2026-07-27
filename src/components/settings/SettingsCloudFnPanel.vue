@@ -3,7 +3,7 @@
     <CategoryTabs
       v-model='subTab'
       :tabs='subTabOptions'
-      color-theme='blue'
+      color-theme='info'
     />
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-cloudfn-panel'>
