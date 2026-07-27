@@ -68,7 +68,6 @@ export default {
   orderByNoteTitleDesc: 'Order by note name (descending)',
   orderByCreatedTimeAsc: 'Order by created time (ascending)',
   orderByCreatedTimeDesc: 'Order by created time (descending)',
-  calendarSortLabel: 'Sort',
   calendarFilterLabel: 'Filter',
   calendarBasisCreated: 'Created date',
   calendarBasisModified: 'Modified date',

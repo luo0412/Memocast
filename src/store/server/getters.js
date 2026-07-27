@@ -42,6 +42,29 @@ export default {
         return true
       })
 
+      // 视图层去重：同标题（trim 后）只保留最新创建的那一条（dataCreated 最大者）。
+      // 不动数据库、不动新建逻辑；纯 getter 内合并展示。
+      const dedupedNotes = (() => {
+        const buckets = new Map()
+        for (const note of filteredNotes) {
+          const key = (note.title || '').toString().trim()
+          if (!key) {
+            // 标题缺失的笔记不参与按标题去重，单独保留
+            buckets.set(`__no_title__:${note.docGuid || _.uniqueId('nt_')}`, note)
+            continue
+          }
+          const existing = buckets.get(key)
+          if (!existing) {
+            buckets.set(key, note)
+            continue
+          }
+          const existingTs = Number(existing.dataCreated) || 0
+          const candidateTs = Number(note.dataCreated) || 0
+          if (candidateTs > existingTs) buckets.set(key, note)
+        }
+        return Array.from(buckets.values())
+      })()
+
       const orderType = rootState.client.noteOrderType || DEFAULT_NOTE_ORDER_TYPE
       const compareStrings = (v1 = '', v2 = '') => v1.localeCompare(v2, 'zh-Hans-CN', { sensitivity: 'base', numeric: true })
       const compareNumbers = (v1 = 0, v2 = 0) => (v1 || 0) - (v2 || 0)
@@ -54,7 +77,7 @@ export default {
         orderByModifiedTimeDesc: (n1, n2) => compareNumbers(n2.dataModified, n1.dataModified)
       }
 
-      return filteredNotes.sort(comparators[orderType] || comparators[DEFAULT_NOTE_ORDER_TYPE])
+      return dedupedNotes.sort(comparators[orderType] || comparators[DEFAULT_NOTE_ORDER_TYPE])
     }
     return []
   },

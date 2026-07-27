@@ -67,7 +67,6 @@ export default {
   orderByNoteTitleDesc: '笔记名称（倒序）',
   orderByCreatedTimeAsc: '创建时间（顺序）',
   orderByCreatedTimeDesc: '创建时间（倒序）',
-  calendarSortLabel: '排序',
   calendarFilterLabel: '筛选',
   calendarBasisCreated: '创建日期',
   calendarBasisModified: '修改日期',

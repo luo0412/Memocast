@@ -22,24 +22,6 @@
         <template slot="headerRender" slot-scope="{ value, type, onChange, onTypeChange }">
           <div class="calendar-panel-header">
             <div class="calendar-header-group">
-              <span class="calendar-header-label">{{ $t('calendarSortLabel') }}</span>
-              <a-select
-                :value="noteOrderType"
-                size="small"
-                class="calendar-note-order-select"
-                :get-popup-container="getMonthPickerPopupContainer"
-                @change="onNoteOrderChange"
-              >
-                <a-select-option
-                  v-for="opt in noteOrderOptions"
-                  :key="opt.value"
-                  :value="opt.value"
-                >
-                  {{ opt.label }}
-                </a-select-option>
-              </a-select>
-            </div>
-            <div class="calendar-header-group">
               <span class="calendar-header-label">{{ $t('calendarFilterLabel') }}</span>
               <a-select
                 :value="calendarDateBasis"
@@ -75,10 +57,7 @@
 <script>
 import moment from 'moment'
 import { createNamespacedHelpers } from 'vuex'
-import {
-  CalendarDateBasisEnum,
-  NoteOrderTypeEnum
-} from 'src/utils/enum'
+import { CalendarDateBasisEnum } from 'src/utils/enum'
 
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 const { mapActions: mapServerActions } = createNamespacedHelpers('server')
@@ -95,16 +74,13 @@ export default {
     calendarDateBasisOptions () {
       return CalendarDateBasisEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
     },
-    noteOrderOptions () {
-      return NoteOrderTypeEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
-    },
     thumbStyle () {
       return { display: 'none' }
     },
     barStyle () {
       return { display: 'none' }
     },
-    ...mapClientState(['calendarSelectedDate', 'calendarDateBasis', 'noteOrderType']),
+    ...mapClientState(['calendarSelectedDate', 'calendarDateBasis']),
     ...mapServerState(['calendarNoteDates'])
   },
   watch: {
@@ -149,10 +125,6 @@ export default {
       this.getCategoryNotes()
       this.fetchMonthNoteDates()
     },
-    onNoteOrderChange (val) {
-      if (val === this.noteOrderType) return
-      this.updateStateAndStore({ noteOrderType: val })
-    },
     getMonthPickerPopupContainer (trigger) {
       return trigger?.parentElement || document.body
     },
@@ -180,7 +152,7 @@ export default {
       const m = this.pickDate.month() + 1
       this.fetchCalendarNoteDates({ year: y, month: m })
     },
-    ...mapClientActions(['toggleChanged', 'updateStateAndStore']),
+    ...mapClientActions(['toggleChanged']),
     ...mapServerActions(['getCategoryNotes', 'fetchCalendarNoteDates'])
   }
 }
@@ -216,11 +188,6 @@ export default {
 .calendar-date-basis-select {
   min-width: 104px;
   max-width: 120px;
-}
-
-.calendar-note-order-select {
-  min-width: 120px;
-  max-width: 140px;
 }
 
 .calendar-month-picker {
