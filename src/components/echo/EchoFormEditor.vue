@@ -9,7 +9,7 @@
         </div>
         <q-icon name='info' size='14px' class='echo-form-info-icon'>
           <q-tooltip anchor='top middle' self='bottom middle' :offset='[0, 6]'>
-            导出默认对象，支持 <code>render(node, ancestors)</code> 和 <code>afterRender(node, domElement, ancestors)</code>。可通过 <code>node.attributes</code> 访问属性，通过 <code>domElement.nextElementSibling</code> 修改相邻元素。
+            导出默认对象，支持 <code>render(node, ancestors)</code> 和 <code>afterRender(node, attrs)</code>。可通过 <code>$(node)</code> 拿到 echo host jQuery 对象；<code>attrs</code> 是实例的业务参数。
           </q-tooltip>
         </q-icon>
       </div>

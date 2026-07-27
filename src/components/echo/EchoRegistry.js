@@ -32,19 +32,6 @@ export default class EchoRegistry {
     this.runtime.invalidate()
   }
 
-  canDelete (id = '') {
-    const normalizedId = normalizeEchoId(id)
-    if (!normalizedId) return false
-    const echo = this.echoIdMap.get(normalizedId)
-    return echo && !echo.isBuiltin
-  }
-
-  isBuiltin (name = '') {
-    const normalizedName = normalizeEchoName(name)
-    const echo = this.echoMap.get(normalizedName)
-    return Boolean(echo && echo.isBuiltin)
-  }
-
   getAll () {
     return Array.from(this.echoMap.values())
   }

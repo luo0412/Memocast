@@ -159,37 +159,35 @@ export const createDefaultEchoAnnoSource = (echoName = '回响') => `export defa
   },
 
   // === 后渲染钩子：domElement 已插入到 DOM ===
-  // 直接用 jQuery 操作节点，简洁明了。
-  afterRender (node, domElement, ancestors) {
-    $(domElement).addClass('ag-echo-default-mounted')
+  // 第 1 参就是 echo host DOM element（jQuery 能直接 $(node) 选中），
+  // 第 2 参 attrs = attrsParsed（实例的业务参数对象）由 EchoRuntime 注入。
+  // 形参名 echo 定义里可以自由用 node / domElement / host，参数语义不变。
+  afterRender (node, attrs = {}) {
+    $(node).addClass('ag-echo-default-mounted')
   }
 }`
 
 // ============================================================================
-// Echo 体系 enum 与运行时命名（v2026-07-15 起固定）
+// Echo 体系 enum 与运行时命名（v2026-07 起固定）
 //
-//   kind              取值：'echo' / 'echo-chant' / 'echo-tbd'
-//   echo-chant        影响附近元素的 echo（咏唱派发）
-//   echo-tbd          兜底 echo（占位）
+//   kind              取值：'echo'
 //
-// 函数 / Map / 常量名：
-//   ECHO_CHANT_HANDLERS         // 8 个内置 handler 表（growth / shatter / skywalk / twinbloom / mindsteal / lucky / disperse / __echo_chant_tbd__）
-//   ECHO_CHANT_KINDS            // ['echo-chant', 'echo-tbd'] Set
-//   echoChantHandlers           // this.echoChantHandlers 用户动态注册 Map
-//   findEchoChantHandler        // 按 id 查找内置 handler
-//   registerEchoChantHandler    // 注册用户动态 handler
-//   unregisterEchoChantHandler  // 注销用户动态 handler
-//   listCustomEchoChantHandlers // 列出所有用户动态 handler
-//   resolveEchoChantHandler     // custom 优先于内置的派发
-//   extractEchoChantMeta        // 从 rendered.attrs 提取 echo-chant 元数据
-//   echoChantMeta               // 渲染结果上的字段名
-//   _readChantAttrs             // 从 DOM 读 echo 实例参数
+// 渲染管线（renderEchoPlaceholders → EchoRuntime.renderToHtml → host.innerHTML
+//         → EchoRuntime.afterRender）：
+//   1. parseEchoAttrs / decodeEchoPayload 解析 token
+//   2. registry.render 拿到定义（matchedEcho → this.compileDefinition）
+//   3. definition.render(context) 返回 { type, attrs, html, ... }
+//      definition.html 写到 host.innerHTML（host 自带 data-echo-inline="true"）
+//   4. 容器完成 paint 后调用 registry.afterRender(container)
+//      按 [data-echo-inline="true"] 逐个调 definition.afterRender(fakeToken, node, ancestors)
+//      cleanup 统一从 afterRender 返回值收集
 //
-// DOM ABI：data-echo-chant-id / data-echo-chant-kind / data-echo-chant-attrs / data-echo-chant-attr-*
-//   —— 当前 markdown 源 ABI；早期 data-rune-id / data-rune-kind / data-rune-attrs / data-rune-attr-*
-//      形态不主动兼容（实验功能，迁移成本由后续规则约束）。
-//   字段值（id / kind）是 echo 体系的内容；属性名本身属于 echo 命名空间。
+// 16 个内置 echo 都以 jQuery 写 afterRender，
+// 所有副作用都通过 $(domElement) / $(ancestors.document) / ancestors.echo.attrs 等上下文拿到。
 //
+// DOM ABI：data-echo-inline / data-echo-id / data-echo-name / data-echo-value
+//          / data-echo-definition-id / data-echo-attrs / data-echo-attrs-json
+//          / data-echo-node-id
 // CSS class（字面保留）：ag-rune-*（视觉样式锚点；避免触发回归）。
 // ============================================================================
 
@@ -344,70 +342,6 @@ export const extractPrevEchoTokenValue = (markdown = '', currentIndex = -1, opti
   return lastValue
 }
 
-/**
- * 应用上一节点 value 继承：attrs.inheritFromPrevious === true 且当前 value 空 → 用 prevValue 填充。
- * 返回新的 attrs 对象（不修改入参）。值变化时 `inherited === true`。
- */
-export const applyInheritedEchoValue = (attrs = {}, prevValue = '') => {
-  const source = (attrs && typeof attrs === 'object') ? attrs : {}
-  if (!isInheritFromPreviousEnabled(source)) return { attrs: source, inherited: false }
-  const currentValue = typeof source.value === 'string' ? source.value : ''
-  if (currentValue.trim()) return { attrs: source, inherited: false }
-  const filled = String(prevValue || '')
-  if (!filled) return { attrs: source, inherited: false }
-  return { attrs: { ...source, value: filled }, inherited: true }
-}
-
-export const buildUpdatedEchoAnnotationText = ({ raw, echo, keepInstanceId = false } = {}) => {
-  const source = String(raw || '').trim()
-  if (!source) return source
-
-  const nameMatch = source.match(/^@([^\s{}()@]*)\{/)
-  const echoName = nameMatch ? nameMatch[1] : '回响'
-
-  const legacy = source.match(/^@([^\s{}()@]+)\{\}\(\)$/)
-  if (!legacy) {
-    return source
-  }
-
-  const placeholderPayload = createEchoPlaceholderPayload(echo)
-  const payload = decodeEchoPayload(placeholderPayload)
-  const value = payload.prompt || payload?.attrs?.value || ''
-  const instanceId = keepInstanceId ? `id: '${escapeEchoAttrValue(echo.id || '')}'` : ''
-
-  return `@${echoName}{${[instanceId, `value: '${escapeEchoAttrValue(value)}'`].filter(Boolean).join(', ')}()`
-}
-
-export const backfillEchoAnnotationsInMarkdown = ({ markdown = '', echoCards = [] } = {}) => {
-  const source = String(markdown || '')
-  if (!source || source.indexOf('@') === -1) return source
-
-  const echoMap = (Array.isArray(echoCards) ? echoCards : []).reduce((acc, echo) => {
-    const name = String(echo?.name || '').trim()
-    if (name) acc.set(name, echo)
-    return acc
-  }, new Map())
-  if (!echoMap.size) return source
-
-  return source.replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, rawEchoName = '', attrsRaw = '', promptRaw = '') => {
-    const echoName = String(rawEchoName || '').trim() || '回响'
-    const echo = echoMap.get(echoName)
-    if (!echo) return match
-
-    const parsed = parseEchoAttrs(attrsRaw)
-    const instanceId = String(parsed.id || echo.id || '').trim()
-    const placeholderPayload = createEchoPlaceholderPayload({
-      ...echo,
-      ...(parsed.definitionId ? { id: parsed.definitionId } : {})
-    })
-    const payload = decodeEchoPayload(placeholderPayload)
-    const value = payload.prompt || payload?.attrs?.value || ''
-    const nextAttrs = `id: '${escapeEchoAttrValue(instanceId)}', value: '${escapeEchoAttrValue(value)}'`
-
-    return `@${echoName || '回响'}{${nextAttrs}}(${escapeEchoAttrValue(promptRaw)})`
-  })
-}
-
 // safeEvalFactory(source, prelude?) —— 把 anno_source 编译成一个工厂函数。
 //   - source:  'export default {...}' 形式的 anno_source 字符串
 //   - prelude: 可选顶层声明（如 helper 常量），拼接在 source 前面。
@@ -426,27 +360,18 @@ const safeEvalFactory = (source = '', prelude = '') => {
 }
 
 // ============================================================================
-// 多符文运行时（EchoRuntime + echo-chant handlers）
+// EchoRuntime.afterRender 派发模型（v2026-07 起统一）
 // ============================================================================
-// 渲染管线：
-//   1. parseEchoAttrs / decodeEchoPayload 解析 token
-//   2. definition.render() 拿到标准化结果（包含 attrs.kind / attrs.id）
-//   3. EchoRuntime.render() 在 kind === 'echo-chant' | 'echo-tbd' 时挂 echoChantMeta
-//      （已重命名，旧名 'rune' / 'rune-tbd' / 'runeMeta' 全部清除，无兼容分支）
-//   4. 编辑器把 rendered HTML 插入到内容容器
-//   5. 容器完成 paint 后调用 registry.afterRender(container, runes)
-//      逐个调用对应 handler，给附近节点施加运行时副作用
-//
-// scope 约定：
-//   siblings   —— 同段落（或同 block）的兄弟节点（默认）
-//   prev-block —— 前一块节点
-//   block      —— 当前 block（含自身）
-//   document   —— 整篇容器
-// ============================================================================
-
-const ECHO_CHANT_KINDS = new Set(['echo-chant', 'echo-tbd'])
-
-const isChantKind = (kind = '') => ECHO_CHANT_KINDS.has(String(kind || '').trim())
+// 所有 echo（含 16 个内置 + 用户自定义）通过 afterRender(node, attrs) 派发：
+//   - node : { echoName, echoId, definitionId, attrsParsed, prompt, ... } token 元数据
+//           （第 1 参当 jQuery 选择器使用也行：$(node) 选中 echo host）
+//   - attrs: 实例的业务参数对象（= node.attrsParsed），方便 echo 定义直接用 `attrs.color` 等
+// domElement / ancestors / document 由 echo 定义自己拿：
+//   - domElement: jQuery(node) 或 jQuery(node).get(0)
+//   - document:   闭包内 window.document 或 jQuery(node).closest('[data-block-type]').parent()
+//   - ancestors:  jQuery(node).parents(...) / closest(...)
+// 16 个内置 echo 的 anno_source 都以 jQuery 写 afterRender，
+// handler 体内通过 `const $ = window.jQuery` 拿到 jQuery 对象（见 HANDLER_PRELUDE_SOURCE）。
 
 const safeQueryAll = (root, selector) => {
   if (!root || typeof root.querySelectorAll !== 'function') return []
@@ -457,308 +382,10 @@ const safeQueryAll = (root, selector) => {
     return []
   }
 }
-
-const resolveScopeContainer = (chantNode, scope = 'siblings') => {
-  if (!chantNode) return null
-  const block = chantNode.closest('[data-block-type], .mu-block, p, pre, h1, h2, h3, h4, h5, h6, li, blockquote, table, ul, ol') || chantNode.parentElement
-  const documentRoot = chantNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body
-
-  switch (String(scope || 'siblings').toLowerCase()) {
-    case 'prev-block': {
-      let prev = block && block.previousElementSibling
-      while (prev && !prev.firstElementChild && prev.textContent.trim() === '') {
-        prev = prev.previousElementSibling
-      }
-      return prev || block
-    }
-    case 'block':
-      return block
-    case 'document':
-      return documentRoot
-    case 'siblings':
-    default:
-      return block && block.parentElement ? block.parentElement : documentRoot
-  }
-}
-
-const addClassOnce = (el, className) => {
-  if (!el || !className) return
-  el.classList.add(...String(className).split(/\s+/).filter(Boolean))
-}
-
-const removeClasses = (el, classNames = []) => {
-  if (!el) return
-  String(classNames || '').split(/\s+/).filter(Boolean).forEach(name => el.classList.remove(name))
-}
-
-// ----- 8 个内置 echo-chant handler -----
-
-const growthHandler = {
-  id: 'growth',
-  match (meta) { return meta && meta.id === 'growth' },
-  handler (chantNode, _scopeContainer, meta) {
-    const scope = (meta && meta.attrs && meta.attrs.scope) || 'siblings'
-    const container = resolveScopeContainer(chantNode, scope)
-    if (!container) return () => {}
-    const trigger = (meta && meta.attrs && meta.attrs.trigger) || 'auto'
-    const targetSelector = (meta && meta.attrs && meta.attrs.target) || '[data-block-type], p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table'
-    const targets = safeQueryAll(container, targetSelector)
-    targets.forEach((node, index) => {
-      addClassOnce(node, 'ag-rune-growth-target')
-      if (trigger === 'auto') {
-        node.style.setProperty('--ag-rune-growth-delay', `${Math.min(index, 8) * 120}ms`)
-      }
-    })
-    addClassOnce(chantNode, 'ag-rune-growth-active')
-    return () => {
-      targets.forEach(node => removeClasses(node, 'ag-rune-growth-target'))
-      removeClasses(chantNode, 'ag-rune-growth-active')
-    }
-  }
-}
-
-const shatterHandler = {
-  id: 'shatter',
-  match (meta) { return meta && meta.id === 'shatter' },
-  handler (chantNode, _scopeContainer, meta) {
-    const target = (meta && meta.attrs && meta.attrs.target) || 'line'
-    const container = resolveScopeContainer(chantNode, target === 'block' ? 'block' : 'siblings')
-    if (!container) return () => {}
-    const echoNodes = safeQueryAll(container, '[data-echo-inline="true"]')
-    echoNodes.forEach(node => {
-      if (node === chantNode) return
-      node.setAttribute('data-shatter-disabled', 'true')
-      node.classList.add('ag-rune-shatter-disabled')
-    })
-    addClassOnce(chantNode, 'ag-rune-shatter-active')
-    return () => {
-      echoNodes.forEach(node => {
-        if (node === chantNode) return
-        node.removeAttribute('data-shatter-disabled')
-        removeClasses(node, 'ag-rune-shatter-disabled')
-      })
-      removeClasses(chantNode, 'ag-rune-shatter-active')
-    }
-  }
-}
-
-const skywalkHandler = {
-  id: 'skywalk',
-  match (meta) { return meta && meta.id === 'skywalk' },
-  handler (chantNode, _scopeContainer, meta) {
-    const theme = (meta && meta.attrs && meta.attrs.theme) || 'auto'
-    const layout = (meta && meta.attrs && meta.attrs.layout) || 'enhanced'
-    const container = resolveScopeContainer(chantNode, 'document')
-    if (!container) return () => {}
-    const previous = {
-      theme: container.getAttribute('data-skywalk-theme'),
-      layout: container.getAttribute('data-skywalk-layout')
-    }
-    container.setAttribute('data-skywalk-theme', theme)
-    container.setAttribute('data-skywalk-layout', layout)
-    addClassOnce(chantNode, 'ag-rune-skywalk-active')
-    return () => {
-      if (previous.theme === null) container.removeAttribute('data-skywalk-theme')
-      else container.setAttribute('data-skywalk-theme', previous.theme)
-      if (previous.layout === null) container.removeAttribute('data-skywalk-layout')
-      else container.setAttribute('data-skywalk-layout', previous.layout)
-      removeClasses(chantNode, 'ag-rune-skywalk-active')
-    }
-  }
-}
-
-const twinbloomHandler = {
-  id: 'twinbloom',
-  match (meta) { return meta && meta.id === 'twinbloom' },
-  handler (chantNode, _scopeContainer, meta) {
-    const placeholder = (meta && meta.attrs && meta.attrs.placeholder) || '双生节点'
-    const block = chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote') || chantNode.parentElement
-    if (!block) return () => {}
-    const previous = block.nextElementSibling
-    if (previous && previous.getAttribute('data-twinbloom-of') === chantNode.getAttribute('data-echo-chant-id')) {
-      return () => {}
-    }
-    const cloned = block.cloneNode(true)
-    cloned.setAttribute('data-twinbloom-of', chantNode.getAttribute('data-echo-chant-id') || 'twinbloom')
-    cloned.classList.add('ag-rune-twinbloom-clone')
-    cloned.setAttribute('data-twinbloom-placeholder', placeholder)
-    const originalText = (cloned.textContent || '').trim()
-    if (!originalText) {
-      cloned.textContent = placeholder
-    }
-    if (block.parentElement) {
-      block.parentElement.insertBefore(cloned, block.nextSibling)
-    }
-    addClassOnce(chantNode, 'ag-rune-twinbloom-active')
-    return () => {
-      if (cloned.parentElement) cloned.parentElement.removeChild(cloned)
-      removeClasses(chantNode, 'ag-rune-twinbloom-active')
-    }
-  }
-}
-
-const mindstealHandler = {
-  id: 'mindsteal',
-  match (meta) { return meta && meta.id === 'mindsteal' },
-  handler (chantNode, _scopeContainer, meta) {
-    const mode = (meta && meta.attrs && meta.attrs.mode) || 'override'
-    const container = resolveScopeContainer(chantNode, 'siblings')
-    if (!container) return () => {}
-    const echoChantTargets = safeQueryAll(container, '[data-echo-chant-id]')
-    echoChantTargets.forEach(node => {
-      if (node === chantNode) return
-      node.setAttribute('data-mindsteal-mode', mode)
-      node.style.setProperty('animation', 'none', 'important')
-    })
-    addClassOnce(chantNode, 'ag-rune-mindsteal-active')
-    return () => {
-      echoChantTargets.forEach(node => {
-        if (node === chantNode) return
-        node.removeAttribute('data-mindsteal-mode')
-        node.style.removeProperty('animation')
-      })
-      removeClasses(chantNode, 'ag-rune-mindsteal-active')
-    }
-  }
-}
-
-const luckyHandler = {
-  id: 'lucky',
-  match (meta) { return meta && meta.id === 'lucky' },
-  handler (chantNode, _scopeContainer, meta) {
-    addClassOnce(chantNode, 'ag-rune-lucky-active')
-    chantNode.style.cursor = 'pointer'
-    chantNode.setAttribute('role', 'button')
-    chantNode.setAttribute('tabindex', '0')
-    chantNode.setAttribute('title', (meta && meta.attrs && meta.attrs.label) || '点击触发 AI 校对')
-
-    const trigger = async (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      chantNode.classList.add('ag-rune-lucky-loading')
-      try {
-        const handler = (typeof window !== 'undefined') ? window.__memocastEchoChantHandlers?.lucky : null
-        if (typeof handler === 'function') {
-          await handler({ chantNode, meta })
-        } else {
-          console.info('[EchoRuntime] lucky: no global handler registered (window.__memocastEchoChantHandlers.lucky)')
-        }
-      } catch (error) {
-        console.error('[EchoRuntime] lucky handler failed:', error)
-      } finally {
-        chantNode.classList.remove('ag-rune-lucky-loading')
-      }
-    }
-
-    const onClick = (event) => { trigger(event) }
-    const onKey = (event) => {
-      if (event.key === 'Enter' || event.key === ' ') trigger(event)
-    }
-    chantNode.addEventListener('click', onClick)
-    chantNode.addEventListener('keydown', onKey)
-
-    return () => {
-      chantNode.removeEventListener('click', onClick)
-      chantNode.removeEventListener('keydown', onKey)
-      removeClasses(chantNode, 'ag-rune-lucky-active ag-rune-lucky-loading')
-      chantNode.style.cursor = ''
-      chantNode.removeAttribute('role')
-      chantNode.removeAttribute('tabindex')
-      chantNode.removeAttribute('title')
-    }
-  }
-}
-
-const disperseHandler = {
-  id: 'disperse',
-  match (meta) { return meta && meta.id === 'disperse' },
-  handler (chantNode, _scopeContainer, meta) {
-    const density = (meta && meta.attrs && meta.attrs.density) || 'loose'
-    const container = resolveScopeContainer(chantNode, 'block')
-    if (!container) return () => {}
-    const previous = container.getAttribute('data-disperse-density')
-    container.setAttribute('data-disperse-density', density)
-    addClassOnce(chantNode, 'ag-rune-disperse-active')
-    return () => {
-      if (previous === null) container.removeAttribute('data-disperse-density')
-      else container.setAttribute('data-disperse-density', previous)
-      removeClasses(chantNode, 'ag-rune-disperse-active')
-    }
-  }
-}
-
-const tbdHandler = {
-  id: '__echo_chant_tbd__',
-  match (meta) { return meta && meta.kind === 'echo-tbd' },
-  handler (chantNode, _scopeContainer, _meta) {
-    addClassOnce(chantNode, 'ag-echo-tbd-active')
-    return () => removeClasses(chantNode, 'ag-echo-tbd-active')
-  }
-}
-
-export const ECHO_CHANT_HANDLERS = [
-  growthHandler,
-  shatterHandler,
-  skywalkHandler,
-  twinbloomHandler,
-  mindstealHandler,
-  luckyHandler,
-  disperseHandler,
-  tbdHandler
-]
-
-export const findEchoChantHandler = (chantId = '') => {
-  const target = String(chantId || '').trim()
-  return ECHO_CHANT_HANDLERS.find(handler => handler.id === target) || null
-}
-
-// 让运行时能挂载"由 echo anno_source 内置 handler 字段动态声明"的 echo-chant handler
-// - id 必须唯一（建议用 `echo:${definitionId}` 或自定义 id）
-// - match(meta) -> boolean，决定该 handler 是否对该 echo 起作用
-// - handler(chantNode, scopeContainer, meta) -> cleanupFn? 与内置 handler 同样语义
-export const normalizeCustomHandler = (raw = {}, fallbackId = '') => {
-  if (!raw || typeof raw !== 'object') return null
-  const id = String(raw.id || raw.runeId || fallbackId || '').trim()
-  if (!id) return null
-  const match = (typeof raw.match === 'function')
-    ? raw.match
-    : (meta) => Boolean(meta) && (meta.id === id || meta?.attrs?.id === id)
-  const handler = (typeof raw.handler === 'function')
-    ? raw.handler
-    : (typeof raw.apply === 'function')
-      ? raw.apply
-      : null
-  if (!handler) return null
-  const cleanupFn = (typeof raw.cleanup === 'function') ? raw.cleanup : null
-  return {
-    id,
-    match,
-    handler,
-    cleanup: cleanupFn,
-    description: typeof raw.description === 'string' ? raw.description : '',
-    source: typeof raw.source === 'string' ? raw.source : ''
-  }
-}
-
-export const extractEchoChantMeta = (rendered = {}) => {
-  const attrs = (rendered && rendered.attrs && typeof rendered.attrs === 'object') ? rendered.attrs : {}
-  const kind = String(attrs.kind || '').trim()
-  if (!isChantKind(kind)) return null
-  return {
-    id: String(attrs.id || attrs.runeId || '').trim(),
-    kind,
-    attrs: { ...attrs, kind },
-    title: rendered.title || '',
-    description: rendered.description || ''
-  }
-}
-
 export default class EchoRuntime {
   constructor ({ registry } = {}) {
     this.registry = registry
     this.definitionCache = new Map()
-    // 用户/动态注册 echo-chant handler，id -> { id, match, handler, cleanup, ... }
-    this.echoChantHandlers = new Map()
   }
 
   invalidate (echoId) {
@@ -769,61 +396,6 @@ export default class EchoRuntime {
     this.definitionCache.delete(String(echoId))
   }
 
-  /**
-   * 动态注册一个 echo-chant handler。
-   *  - raw 可以是已规整的 { id, match, handler } 或 anno_source 里的 handler 字段。
-   *  - 注册后，afterRender() 派发时会优先命中 echoChant handler；找不到再退到 ECHO_CHANT_HANDLERS。
-   *  - 同一 id 重复 register 会覆盖。
-   *  - 返回注册的 id，失败返回空串。
-   */
-  registerEchoChantHandler (raw = {}, fallbackId = '') {
-    const normalized = normalizeCustomHandler(raw, fallbackId)
-    if (!normalized) {
-      console.warn('[EchoRuntime] registerEchoChantHandler: invalid handler', raw)
-      return ''
-    }
-    this.echoChantHandlers.set(normalized.id, normalized)
-    return normalized.id
-  }
-
-  unregisterEchoChantHandler (id = '') {
-    const target = String(id || '').trim()
-    if (!target) return false
-    return this.echoChantHandlers.delete(target)
-  }
-
-  listCustomEchoChantHandlers () {
-    return Array.from(this.echoChantHandlers.values())
-  }
-
-  /**
-   * 查找 handler（custom 优先于内置）。
-   * 提供给内部 afterRender() 使用，外部也可直接调用。
-   */
-  resolveEchoChantHandler (echoChantMeta = {}) {
-    const id = String(echoChantMeta?.id || echoChantMeta?.runeId || '').trim()
-    const kind = String(echoChantMeta?.kind || 'echo-chant').trim()
-    // 1) 自定义 handler（精确按 id）
-    if (id && this.echoChantHandlers.has(id)) {
-      return this.echoChantHandlers.get(id)
-    }
-    // 2) 自定义 handler（按 match 探测）
-    for (const handler of this.echoChantHandlers.values()) {
-      try {
-        if (typeof handler.match === 'function' && handler.match(echoChantMeta)) {
-          return handler
-        }
-      } catch (error) {
-        console.warn('[EchoRuntime] echoChant handler.match failed:', handler.id, error)
-      }
-    }
-    // 3) 内置 echo-chant handler
-    const builtIn = findEchoChantHandler(id)
-    if (builtIn) return builtIn
-    // 4) echo-tbd 兜底
-    if (kind === 'echo-tbd') return findEchoChantHandler('__echo_chant_tbd__')
-    return null
-  }
 
   compileDefinition (echo = {}) {
     const cacheKey = String(echo.id || echo.name || '')
@@ -839,6 +411,14 @@ export default class EchoRuntime {
         // 为 anno_source 注入 `const $ = window.jQuery`，让 handler 函数体
         // 能直接调用 jQuery 操作 DOM。
         const factory = safeEvalFactory(source, HANDLER_PRELUDE_SOURCE)
+        if (process.env.NODE_ENV !== 'production') {
+          // 调试：把实际编译产物打到 console，方便排查 "Unexpected identifier" 等 parse 错误
+          try {
+            console.log('[EchoRuntime.compileDefinition] >>> source begin', cacheKey)
+            console.log(source)
+            console.log('[EchoRuntime.compileDefinition] <<< source end', cacheKey)
+          } catch (e) { /* ignore */ }
+        }
         definition = factory()
       }
     } catch (error) {
@@ -852,33 +432,6 @@ export default class EchoRuntime {
       }
     }
 
-    // === 自动注册 anno_source 内置的 echo-chant handler ===
-    // 约定：definition.handler = function (chantNode, scopeContainer, meta) { ... }
-    // 同时 definition.kind === 'echo-chant' | 'echo-tbd' 且
-    // definition.id 已声明。
-    try {
-      const kind = String(definition.kind || definition?.attrs?.kind || '').trim()
-      if (isChantKind(kind)) {
-        const handlerSpec = definition.handler || definition
-        const fallbackId = String(definition.id || cacheKey || '').trim()
-        if (typeof handlerSpec?.handler === 'function' || typeof handlerSpec === 'function' || typeof handlerSpec?.match === 'function') {
-          const normalizedHandler = normalizeCustomHandler({
-            ...(typeof handlerSpec === 'object' ? handlerSpec : {}),
-            // 函数形式：handler(chantNode, container, meta)
-            handler: (typeof handlerSpec === 'function')
-              ? handlerSpec
-              : (typeof handlerSpec?.handler === 'function' ? handlerSpec.handler : undefined),
-            id: String(definition.id || fallbackId || '').trim(),
-            source: `definition:${cacheKey}`
-          }, fallbackId)
-          if (normalizedHandler) {
-            this.echoChantHandlers.set(normalizedHandler.id, normalizedHandler)
-          }
-        }
-      }
-    } catch (error) {
-      console.warn('[EchoRuntime] auto-register definition handler failed:', error)
-    }
 
     this.definitionCache.set(cacheKey, { source, definition })
     return definition
@@ -954,12 +507,10 @@ export default class EchoRuntime {
         if (typeof definition.afterRender === 'function') {
           normalized.afterRenderHook = (domElement) => {
             try {
-              const ancestors = {
-                echo: matchedEcho,
-                block: token?.range && matchedEcho,
-                document: typeof window !== 'undefined' ? window.document : null
-              }
-              definition.afterRender(token, domElement, ancestors)
+              const attrs = (token && token.attrsParsed && typeof token.attrsParsed === 'object')
+                ? token.attrsParsed
+                : {}
+              definition.afterRender(domElement, attrs)
             } catch (error) {
               console.error('[EchoRuntime] afterRender hook failed:', error)
             }
@@ -985,11 +536,6 @@ export default class EchoRuntime {
     normalized.attrs = normalized.attrs && typeof normalized.attrs === 'object' ? normalized.attrs : context.attrs
     normalized.echo = matchedEcho
 
-    const echoChantMeta = extractEchoChantMeta(normalized)
-    if (echoChantMeta) {
-      normalized.echoChantMeta = echoChantMeta
-    }
-
     return normalized
   }
 
@@ -1007,29 +553,20 @@ export default class EchoRuntime {
     // }
 
     // === 优先使用 render 自带的 HTML（优先级最高）===
-    // 约定：render 自带的 HTML 根元素是 echo host（通常是 <span>），上面需带
-    //   data-echo-chant-id="..."（handler 派发靠这个）
-    // 我们在根元素上补充少量 ABI 属性，让 afterRender 派发与 [data-echo-inline="true"] 选择器也能命中。
+    // 约定：render 自带的 HTML 根元素是 echo host（通常是 <span>）。
+    // 我们在根元素上补充 echo ABI 属性，让 afterRender 派发与 [data-echo-inline="true"] 选择器都能命中。
     const renderedHtml = String(rendered.html || '').trim()
     if (renderedHtml) {
       const echoName = escapeHtml(token?.echoName || echo?.name || '')
       const echoId = escapeHtml(token?.echoId || echo?.id || '')
       const definitionId = escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')
       const value = escapeHtml(rendered.value || rendered.prompt || '')
-      // 推断 kind：优先用 echoChantMeta，没有时根据 render 自带 HTML 上是否带 data-echo-chant-id 兜底。
-      // 这样即使 echo 的 render 忘了在 attrs 里写 kind='echo-chant'，CSS 仍然能命中 [data-echo-chant-kind]。
-      const chantKind = (rendered.echoChantMeta && rendered.echoChantMeta.kind)
-        || (/data-echo-chant-id=/i.test(renderedHtml) ? 'echo-chant' : '')
-      const echoChantKind = chantKind
-        ? ` data-echo-chant-kind="${escapeHtml(chantKind)}"`
-        : ''
-      // 注入的 ABI 属性（让根元素同时是 echo host；data-echo-chant-id 由 render 自身提供，这里不覆盖）
       const injectedAttrs = [
         `data-echo-inline="true"`,
         `data-echo-name="${echoName}"`,
         `data-echo-id="${echoId}"`,
         `data-echo-definition-id="${definitionId}"`,
-        `data-echo-value="${value}"${echoChantKind}`
+        `data-echo-value="${value}"`
       ].join(' ')
       return injectAttrsIntoFirstTag(renderedHtml, injectedAttrs, 'ag-echo-inline ag-echo-anno-token')
     }
@@ -1043,12 +580,7 @@ export default class EchoRuntime {
     const descriptionHtml = description ? `<div class="ag-echo-inline__desc">${description}</div>` : ''
     const promptHtml = prompt ? `<div class="ag-echo-inline__prompt">${prompt}</div>` : ''
 
-    // DOM 属性 ABI：data-echo-chant-id / data-echo-chant-kind（echo-chant handler 元数据，与 echo 体系同名空间）。
-    const echoChantAttr = rendered.echoChantMeta
-      ? ` data-echo-chant-id="${escapeHtml(rendered.echoChantMeta.id || 'unknown')}" data-echo-chant-kind="${escapeHtml(rendered.echoChantMeta.kind || 'echo-chant')}"`
-      : ''
-
-    return `<span class="ag-echo-inline ag-echo-anno-token" data-echo-inline="true" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}"${echoChantAttr} style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}</span></span>`
+    return `<span class="ag-echo-inline ag-echo-anno-token" data-echo-inline="true" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.attrsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}" style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}</span></span>`
   }
 
   // 渲染完成后的副作用入口。
@@ -1094,11 +626,11 @@ export default class EchoRuntime {
           echoName,
           echoId,
           definitionId,
-          attrsParsed: this._readChantAttrs(node),
+          attrsParsed: this._readEchoAttrs(node),
           prompt: node.getAttribute('data-echo-value') || ''
         }
-        const ancestors = { echo: matchedEcho, document: container }
-        cleanup = definition.afterRender(fakeToken, node, ancestors) || null
+        const attrs = fakeToken.attrsParsed || {}
+        cleanup = definition.afterRender(fakeToken, attrs) || null
       } catch (error) {
         console.error('[EchoRuntime] afterRender hook failed:', echoName, error)
       }
@@ -1107,42 +639,6 @@ export default class EchoRuntime {
         node.__agEchoCleanup = cleanup
       }
     })
-
-    const chantNodes = safeQueryAll(container, '[data-echo-chant-id]')
-    chantNodes.forEach(node => {
-      const id = node.getAttribute('data-echo-chant-id') || ''
-      const meta = {
-        id,
-        kind: node.getAttribute('data-echo-chant-kind') || 'echo-chant',
-        attrs: this._readChantAttrs(node)
-      }
-      const handler = this.resolveEchoChantHandler(meta)
-      if (!handler) return
-      let cleanup = null
-      try {
-        cleanup = handler.handler(node, container, meta) || null
-      } catch (error) {
-        console.error('[EchoRuntime] handler failed:', id, error)
-      }
-      if (typeof cleanup === 'function') {
-        installed.push({ node, id, cleanup })
-        node.__agEchoChantCleanup = cleanup
-      } else if (typeof handler.cleanup === 'function') {
-        // 自定义 handler 可能把 cleanup 挂在自身而不是 handler 返回值
-        const boundCleanup = handler.cleanup.bind(handler, node, container, meta)
-        installed.push({ node, id, cleanup: boundCleanup })
-        node.__agEchoChantCleanup = boundCleanup
-      }
-    })
-    // 注释保留：调试时把下面 block 解开即可
-    // if (typeof window !== 'undefined' && window.__ECHO_TRACE__ !== false) {
-    //   console.log('[EchoRuntime._doAfterRender] chant dispatch', {
-    //     containerTag: container?.tagName || '',
-    //     chantCount: chantNodes.length,
-    //     installedCount: installed.length,
-    //     chantNodes: traceNodes
-    //   })
-    // }
 
     this._installed = installed
     return installed
@@ -1161,16 +657,16 @@ export default class EchoRuntime {
       } catch (error) {
         console.warn('[EchoRuntime] dispose cleanup failed:', item.id, error)
       }
-      if (item.node) delete item.node.__agEchoChantCleanup
+      if (item.node) delete item.node.__agEchoCleanup
     }
   }
 
-  // === _readChantAttrs：从 <span data-echo-chant-attrs> 读 echo 实例参数（kind/scope/density 等） ===
-  _readChantAttrs (node) {
-    const card = node.querySelector('[data-echo-chant-attrs]') || node
+  // === _readEchoAttrs：从 <span data-echo-attrs> 读 echo 实例参数（id/value/业务字段等） ===
+  _readEchoAttrs (node) {
+    const card = node.querySelector('[data-echo-attrs]') || node
     if (!card) return {}
     try {
-      const raw = card.getAttribute('data-echo-chant-attrs')
+      const raw = card.getAttribute('data-echo-attrs')
       if (raw) return JSON.parse(raw)
     } catch (error) { /* ignore */ }
     // 再回退：直接从当前 echo host（node 自身）读 data-echo-attrs-json，
@@ -1185,8 +681,8 @@ export default class EchoRuntime {
     const result = {}
     const attrSource = (typeof node.attributes !== 'undefined') ? node : card
     Array.from(attrSource.attributes || []).forEach(attr => {
-      if (attr.name.startsWith('data-echo-chant-attr-')) {
-        const key = attr.name.replace(/^data-echo-chant-attr-/, '')
+      if (attr.name.startsWith('data-echo-attr-')) {
+        const key = attr.name.replace(/^data-echo-attr-/, '')
         try {
           result[key] = JSON.parse(attr.value)
         } catch (error) {

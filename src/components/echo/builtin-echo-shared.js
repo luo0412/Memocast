@@ -1,13 +1,11 @@
 // ============================================================================
 // 内置回响共享样板（renderer 端）
 //
-// 提供 15 个 echo-chant 内置 + nice 共用的辅助函数 + 共享代码片段。
-// 消除 builtinEchoes.js 里 16 份重复的 banner 注释与 cleanup 写法。
+// 提供 16 个内置 echo 共用的辅助函数 + 共享代码片段。
+// 消除 builtinEchoes.js 里 16 份重复的 banner 注释与 afterRender 写法。
 //
 // === 主要导出 ===
 //   banner(lines)                把多行教学注释格式化进 anno_source 顶部
-//   handlerDoc(lines)            输出 handler 字段头（jQuery 函数体）；
-//                                不再维护 handlerExample 演示槽。
 //   DEFAULT_ECHO_COLOR / ICON    echo 默认颜色 / 图标
 //   CURRENT_ECHO_PLACEHOLDER_RE  @name{attrs}(prompt) 当前形态的正则；
 //                                attrs 段可选，因此旧式 @name{}() 也匹配得上。
@@ -18,7 +16,7 @@
 //   内部调用都用普通 JS 字符串拼接，不能用 ES module 语法。
 //
 // === jQuery 集成 ===
-//   handler 闭包内由 EchoRuntime 的 HANDLER_PRELUDE_SOURCE 先注入
+//   afterRender 闭包内由 EchoRuntime 的 HANDLER_PRELUDE_SOURCE 先注入
 //   `const $ = window.jQuery`，下面 helper 全部以 jQuery 选择器 API 为前提；
 //   调用方拿到的是 jQuery 对象实例，可继续用
 //   `.addClass` / `.removeClass` / `.css` / `.attr` / `.on` / `.off` 等。
@@ -36,16 +34,10 @@ export const DEFAULT_ECHO_ICON = 'graphic_eq'
 export const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)/g
 
 // ============================================================================
-// handlerDoc(docLines)
-//   输出 handler 字段头。
-//   调用方写完模仿者逻辑后用 `}` 闭合函数 + `,` 闭合 handler 字段。
-//   直接用 jQuery：`$(chantNode)` 拿到节点，沿 DOM 随便走即可。
+// handlerDoc(docLines) —— 已废弃：
+//   早期版本输出 `handler: function(chantNode, scopeContainer, meta) {` 模板，
+//   v2026-07 后统一改用 afterRender(node, attrs) 派发，
+//   caller 直接在 anno_source 里写完整的 afterRender 字段即可。
+//   保留空实现以兼容历史 import（不再返回任何模板前缀）。
 // ============================================================================
-export const handlerDoc = (docLines) => `${banner(docLines)}
-
-  handler: function (chantNode, scopeContainer, meta) {
-    // 直接用 jQuery 操作 DOM：
-    //   $(chantNode).closest('p').addClass('my-style')
-    //   $(chantNode).prev().css({ 'background-color': 'red' })
-    //   const attrs = meta && meta.attrs || {} // 拿 @xxx{scope:"block"}() 里的 attrs
-    //   // 返回一个函数用于解包/还原（cleanup）`
+export const handlerDoc = () => ''

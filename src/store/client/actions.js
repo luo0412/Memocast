@@ -117,17 +117,17 @@ export default {
       console.error('[Runes] loadRunes error:', err)
     }
   },
-  async loadEchoes ({ commit, state }) {
+  async loadEchoes ({ commit }) {
     try {
       const storedFromDb = await DatabaseClient.echoes.getAll()
       const dbCards = Array.isArray(storedFromDb) ? storedFromDb : []
 
       // === 内置回响以代码版 BUILTIN_ECHO_CARDS 为权威 ===
-      // 1) 先用 DB 中已存在的 builtin 行（可能是 sync seed 写入的）作为基准
-      // 2) 用代码版 BUILTIN_ECHO_CARDS 补全缺失项（保证 16 个总在场）
+      // 1) DB 中已存在的 builtin 行（可能是 sync seed 写入的）作为底
+      // 2) 用代码版补全缺失项（保证 16 个总在场）
       // 3) 附加非 builtin 的 dbCards
-      // 这样既能看到"DB 工具里查到的内置回响"也能在代码升级时自动补全新内置
-      // DB schema 没有 isBuiltin 列；按 id 前缀约定补标记，供 UI 区分显示
+      // DB schema 没有 isBuiltin 列；按 id 前缀约定补标记，仅用于 UI 区分显示
+      // 维护责任归开发者——内置回响不允许运行时覆盖（也不持久化），这里不做 store override
       const builtinIds = new Set(BUILTIN_ECHO_CARDS.map(echo => echo.id))
       const dbBuiltins = dbCards
         .filter(echo => builtinIds.has(echo.id))
@@ -141,24 +141,8 @@ export default {
       ]
       const nonBuiltinDbCards = dbCards.filter(echo => !builtinIds.has(echo.id))
 
-      // 保留 store 中已有 builtin 的覆盖（向后兼容旧逻辑中可能存在的"用户编辑过的内置拷贝"）。
-      // 关键：isBuiltin 永远是 true，store override 不能把它覆盖成 false（安全护栏）。
-      // 分类以代码版 BUILTIN_ECHO_CARDS 为权威，防止 DB 中的错误分类（如全部写成 'builtin'）覆盖正确值。
-      const stateBuiltins = (state.echoCards || []).filter(echo => echo && echo.isBuiltin)
-      const mergedBuiltins = builtinEchoes.map(builtinEcho => {
-        const override = stateBuiltins.find(s => s && s.id === builtinEcho.id)
-        if (!override) return builtinEcho
-        return {
-          ...builtinEcho,
-          // 允许 override 覆盖 name/desc/color/icon/anno_source 等内容属性，
-          // 但 category 必须以代码中的定义为准（防止 DB 写入错误的分类值）。
-          category: builtinEcho.category,
-          isBuiltin: true
-        }
-      })
-
       const mergedEchoes = [
-        ...mergedBuiltins,
+        ...builtinEchoes,
         ...nonBuiltinDbCards
       ]
 
