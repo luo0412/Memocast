@@ -53,58 +53,60 @@
             >
               <Illustration :mode='illustrationMode' key='illustration' />
             </transition-group>
+            <!-- Action Bar 底部居中（相对 .editor-stage），水平排列，仿 iOS 毛玻璃药丸 -->
+            <div class='editor-action-bar-wrapper'>
+              <transition name='action-bar-ios'>
+                <div
+                  v-show='actionBarVisible'
+                  class='editor-action-bar'
+                  :class="{ 'action-bar--scroll': isActionBarScrolling }"
+                  @mousemove='onActionBarMouseMove'
+                  @mouseleave='onActionBarMouseLeaveDock'
+                >
+                  <div class='editor-action-bar-inner'>
+                    <q-btn
+                      v-if='showEditorNoteFab'
+                      :icon='editorNoteActionsExpanded ? "close" : "post_add"'
+                      dense flat round
+                      class='fab-icon cursor-pointer material-icons-round editor-note-trigger'
+                      @click='toggleEditorNoteActions'
+                      size='md' color='#26A69A' v-ripple
+                    >
+                      <q-tooltip v-if='!editorNoteActionsExpanded' anchor='center top' self='center bottom' :offset='[0, 10]'>{{ $t('createNote') }} / {{ $t('import') }}</q-tooltip>
+                      <q-tooltip v-else anchor='center top' self='center bottom' :offset='[0, 10]'>{{ $t('cancel') }}</q-tooltip>
+                    </q-btn>
+                    <transition name='sub-actions-ios'>
+                      <div v-if='showEditorNoteFab && editorNoteActionsExpanded' class='editor-note-sub-actions'>
+                        <q-btn v-if='noteFabIsRootCategory' icon='create_new_folder' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='addCategoryFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("createCategory")' />
+                        <template v-else>
+                          <q-btn icon='note_add' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='addNoteFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("createNote")' />
+                          <q-btn icon='add' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='openImportFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("import")' />
+                        </template>
+                      </div>
+                    </transition>
+                    <q-btn :icon='isSourceMode ? "assignment" : "code"' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='isSourceMode = !isSourceMode' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title="!isSourceMode ? $t('sourceMode') : $t('previewMode')" />
+                    <q-btn :icon='enablePreviewEditor ? "lock_open" : "lock"' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='lockModeHandler' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title="enablePreviewEditor ? $t('lock') : $t('unlock')" />
+                    <q-btn icon='dashboard' dense flat round class='fab-icon cursor-pointer material-icons-round' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && !isSourceMode' v-ripple>
+                      <q-tooltip transition-show='fade' transition-hide='fade' anchor='center top' self='center bottom'>
+                        <div class='text-body2'>
+                          <p>{{ `${$t('word:', wordCount)}` }}</p>
+                          <p>{{ `${$t('character:', wordCount)}` }}</p>
+                          <p>{{ `${$t('paragraph:', wordCount)}` }}</p>
+                        </div>
+                      </q-tooltip>
+                    </q-btn>
+                    <q-btn icon='format_align_center' dense flat round class='fab-icon cursor-pointer material-icons-round' @click.stop='$refs.outlineDrawer.show' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && contentsListLoaded && !isOutlineShow && !isSourceMode' v-ripple />
+                    <q-btn :icon='saveButtonIcon' class='fab-icon cursor-pointer material-icons-round' dense flat round @click='refreshCurrentNote' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple />
+                    <q-btn icon='slideshow' class='fab-icon cursor-pointer material-icons-round' dense flat round size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title='$t("pptPreview")' @click='openPptPreview' />
+                    <q-btn icon='link' class='fab-icon cursor-pointer material-icons-round' dense flat round size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && canCopyNoteLink' v-ripple :title='$t("copyNoteLink")' @click='copyNoteLink' />
+                  </div>
+                </div>
+              </transition>
+            </div>
           </div>
           <ImportDialog ref='importDialog' />
           <BlogDeployDialog ref='blogDeployDialog' @deploy='onBlogDeploy' @cancel='onBlogDeployCancel' />
           <BlogDeployProgressDialog ref='blogDeployProgressDialog' @rebuild='onBlogDeployRebuild' />
-        </div>
-        <!-- Action Bar 底部居中，水平排列，仿 iOS 毛玻璃药丸 -->
-        <div class='editor-action-bar-wrapper'>
-          <transition name='action-bar-ios'>
-            <div
-              v-show='actionBarVisible'
-              class='editor-action-bar'
-              :class="{ 'action-bar--scroll': isActionBarScrolling }"
-            >
-              <div class='editor-action-bar-inner'>
-                <q-btn
-                  v-if='showEditorNoteFab'
-                  :icon='editorNoteActionsExpanded ? "close" : "post_add"'
-                  dense flat round
-                  class='fab-icon cursor-pointer material-icons-round editor-note-trigger'
-                  @click='toggleEditorNoteActions'
-                  size='md' color='#26A69A' v-ripple
-                >
-                  <q-tooltip v-if='!editorNoteActionsExpanded' anchor='center top' self='center bottom' :offset='[0, 10]'>{{ $t('createNote') }} / {{ $t('import') }}</q-tooltip>
-                  <q-tooltip v-else anchor='center top' self='center bottom' :offset='[0, 10]'>{{ $t('cancel') }}</q-tooltip>
-                </q-btn>
-                <transition name='sub-actions-ios'>
-                  <div v-if='showEditorNoteFab && editorNoteActionsExpanded' class='editor-note-sub-actions'>
-                    <q-btn v-if='noteFabIsRootCategory' icon='create_new_folder' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='addCategoryFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("createCategory")' />
-                    <template v-else>
-                      <q-btn icon='note_add' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='addNoteFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("createNote")' />
-                      <q-btn icon='add' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='openImportFromEditorBar' size='md' color='#26A69A' v-ripple :title='$t("import")' />
-                    </template>
-                  </div>
-                </transition>
-                <q-btn :icon='isSourceMode ? "assignment" : "code"' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='isSourceMode = !isSourceMode' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title="!isSourceMode ? $t('sourceMode') : $t('previewMode')" />
-                <q-btn :icon='enablePreviewEditor ? "lock_open" : "lock"' dense flat round class='fab-icon cursor-pointer material-icons-round' @click='lockModeHandler' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title="enablePreviewEditor ? $t('lock') : $t('unlock')" />
-                <q-btn icon='dashboard' dense flat round class='fab-icon cursor-pointer material-icons-round' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && !isSourceMode' v-ripple>
-                  <q-tooltip transition-show='fade' transition-hide='fade' anchor='center top' self='center bottom'>
-                    <div class='text-body2'>
-                      <p>{{ `${$t('word:', wordCount)}` }}</p>
-                      <p>{{ `${$t('character:', wordCount)}` }}</p>
-                      <p>{{ `${$t('paragraph:', wordCount)}` }}</p>
-                    </div>
-                  </q-tooltip>
-                </q-btn>
-                <q-btn icon='format_align_center' dense flat round class='fab-icon cursor-pointer material-icons-round' @click.stop='$refs.outlineDrawer.show' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && contentsListLoaded && !isOutlineShow && !isSourceMode' v-ripple />
-                <q-btn :icon='saveButtonIcon' class='fab-icon cursor-pointer material-icons-round' dense flat round @click='refreshCurrentNote' size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple />
-                <q-btn icon='slideshow' class='fab-icon cursor-pointer material-icons-round' dense flat round size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow' v-ripple :title='$t("pptPreview")' @click='openPptPreview' />
-                <q-btn icon='link' class='fab-icon cursor-pointer material-icons-round' dense flat round size='md' color='#26A69A' v-show='!editorNoteActionsExpanded && dataLoaded && !isOutlineShow && canCopyNoteLink' v-ripple :title='$t("copyNoteLink")' @click='copyNoteLink' />
-              </div>
-            </div>
-          </transition>
         </div>
         <NoteOutlineDrawer ref='outlineDrawer' :change='outlineDrawerChangeHandler' />
         <Loading :visible='isCurrentNoteLoading' />
@@ -238,15 +240,10 @@ export default {
       },
       saveButtonIcon: 'save',
       editorNoteActionsExpanded: false,
-      // Action bar 贴边隐藏相关
-      actionBarVisible: false,
-      isActionBarHovered: false,
-      actionBarHideTimer: null,
-      actionBarEdgeThreshold: 30, // 距离边缘多少像素时触发显示
-      // Action Bar 拖拽状态
-      isActionBarDragging: false,
-      dragStartX: 0,
-      dragStartY: 0
+      // iOS 风格底部工具栏：滚动时收缩，恢复时弹回
+      actionBarVisible: true,
+      isActionBarScrolling: false,
+      _actionBarScrollTimer: null
     }
   },
   methods: {
@@ -462,141 +459,58 @@ export default {
       this.$refs.importDialog.toggle()
     },
     // Action bar 贴边隐藏相关方法
-    onMouseMove: function (e) {
-      // 大纲显示时隐藏工具栏
-      if (this.isOutlineShow) {
-        this.actionBarVisible = false
-        return
+    // iOS 风格：滚动时工具栏收缩 + 透明度降低，停下后恢复
+    onEditorStageScroll: function () {
+      this.isActionBarScrolling = true
+      if (this._actionBarScrollTimer) {
+        clearTimeout(this._actionBarScrollTimer)
       }
-      // 鼠标进入编辑器滚动条区域 → 强制隐藏 action bar，避免遮挡滚动操作
-      // 用 .editor-stage 的实际右边界定位（而非 window.innerWidth），让 splitter / 窗口装饰等都不影响判断
-      const editorStage = document.querySelector('.editor-stage')
-      if (editorStage) {
-        const stageRect = editorStage.getBoundingClientRect()
-        // 14px 跨平台兜底：项目显式 12px、Win/Linux 默认 17px、macOS overlay 0px（macOS 不会触发该分支）
-        const SCROLLBAR_WIDTH = 14
-        if (e.clientX > stageRect.right - SCROLLBAR_WIDTH && e.clientX <= stageRect.right) {
-          this.actionBarVisible = false
-          return
-        }
-      }
-      // 检查鼠标是否靠近右侧边缘或底部边缘
-      const distanceFromRight = window.innerWidth - e.clientX
-      const distanceFromBottom = window.innerHeight - e.clientY
-      // 贴近边缘时显示
-      this.actionBarVisible = distanceFromRight < this.actionBarEdgeThreshold || distanceFromBottom < this.actionBarEdgeThreshold
+      this._actionBarScrollTimer = setTimeout(() => {
+        this.isActionBarScrolling = false
+        this._actionBarScrollTimer = null
+      }, 220)
     },
-    onActionBarMouseEnter: function () {
-      this.isActionBarHovered = true
-      if (this.actionBarHideTimer) {
-        clearTimeout(this.actionBarHideTimer)
-        this.actionBarHideTimer = null
-      }
-      // 监听工具栏内的鼠标移动
-      this.$nextTick(() => {
-        const actionBar = document.querySelector('.editor-action-bar-inner')
-        if (actionBar) {
-          actionBar.addEventListener('mousemove', this.onActionBarMouseMove)
-        }
-      })
-    },
-    onActionBarMouseLeave: function () {
-      this.isActionBarHovered = false
-      this.clearIconHoverState()
-      // 移除监听
-      const actionBar = document.querySelector('.editor-action-bar-inner')
-      if (actionBar) {
-        actionBar.removeEventListener('mousemove', this.onActionBarMouseMove)
-      }
-    },
+    // 仿 magicui dock：每个 icon 独立按"距离鼠标 X"做连续插值
+    // useTransform([-distance, 0, distance], [size, magnification, size]) + useSpring 平滑
+    // Vue2 等价物：每帧算出 scale 写入行内 style，CSS transition 做 spring 平滑
     onActionBarMouseMove: function (e) {
-      // 获取所有 fab-icon 按钮
-      const buttons = document.querySelectorAll('.editor-action-bar-inner .fab-icon')
-      if (!buttons.length) return
-
-      buttons.forEach(btn => {
-        btn.classList.remove('is-near', 'is-near-left', 'is-near-right', 'is-far-left', 'is-far-right')
-      })
-
-      // 找到鼠标下的按钮
-      const hoveredBtn = document.elementFromPoint(e.clientX, e.clientY)
-      if (!hoveredBtn) return
-
-      const btn = hoveredBtn.closest('.fab-icon')
-      if (!btn) return
-
-      const btnRect = btn.getBoundingClientRect()
-      const btnCenterY = btnRect.top + btnRect.height / 2
-      const mouseY = e.clientY
-
-      // 计算鼠标距离按钮中心的偏移
-      const offsetY = Math.abs(mouseY - btnCenterY)
-      const maxOffset = btnRect.height * 0.8
-
-      // 根据偏移计算放大级别
-      if (offsetY < maxOffset * 0.3) {
-        btn.classList.add('is-near')
-      } else if (offsetY < maxOffset) {
-        btn.classList.add('is-near-left')
-        // 找相邻按钮
-        const index = Array.from(buttons).indexOf(btn)
-        if (index > 0) {
-          buttons[index - 1].classList.add('is-far-right')
-        }
-        if (index < buttons.length - 1) {
-          buttons[index + 1].classList.add('is-far-left')
-        }
-      } else {
-        // 更远的按钮
-        const index = Array.from(buttons).indexOf(btn)
-        if (index > 0) {
-          buttons[index - 1].classList.add('is-near-left')
-        }
-        if (index < buttons.length - 1) {
-          buttons[index + 1].classList.add('is-near-right')
-        }
-      }
-    },
-    clearIconHoverState: function () {
-      const buttons = document.querySelectorAll('.editor-action-bar-inner .fab-icon')
-      buttons.forEach(btn => {
-        btn.classList.remove('is-near', 'is-near-left', 'is-near-right', 'is-far-left', 'is-far-right')
+      // rAF 节流：1 帧最多 1 次，避免高频 getBoundingClientRect + 多次 style 写
+      if (this._actionBarDockRaf) return
+      this._actionBarDockRaf = window.requestAnimationFrame(() => {
+        this._actionBarDockRaf = null
+        const inner = document.querySelector('.editor-action-bar-inner')
+        if (!inner) return
+        const buttons = inner.querySelectorAll('.fab-icon')
+        if (!buttons.length) return
+        const mouseX = e.clientX
+        const ICON_DISTANCE = 100   // 与 mouseX 距离 <100px 时开始缩放
+        const BASE_SCALE = 0.85
+        const PEAK_SCALE = 1.45
+        const scaleRange = PEAK_SCALE - BASE_SCALE
+        buttons.forEach((btn) => {
+          const rect = btn.getBoundingClientRect()
+          const centerX = rect.left + rect.width / 2
+          const absDist = Math.abs(mouseX - centerX)
+          // 三角插值：absDist=0 → PEAK_SCALE；absDist>=DISTANCE → BASE_SCALE
+          const t = absDist >= ICON_DISTANCE ? 1 : absDist / ICON_DISTANCE
+          // ease-out 让靠近中心时增长更陡（更接近 magicui 的视觉效果）
+          const eased = 1 - Math.pow(1 - t, 2)
+          const scale = PEAK_SCALE - scaleRange * eased
+          btn.style.transform = `scale(${scale.toFixed(3)})`
+        })
       })
     },
-    // Action Bar 拖拽（仅限右侧区域上下拖动）
-    onDragHandleMouseDown: function (e) {
-      e.preventDefault()
-      // 仅在右侧区域允许拖动
-      const threshold = window.innerWidth - 150
-      if (e.clientX > threshold) {
-        this.isActionBarDragging = true
-        this.isActionBarHovered = true
-        // 清除可能存在的隐藏定时器
-        if (this.actionBarHideTimer) {
-          clearTimeout(this.actionBarHideTimer)
-          this.actionBarHideTimer = null
-        }
-        this.dragStartX = e.clientX
-        this.dragStartY = e.clientY
-        document.querySelector('.action-bar-drag-handle')?.classList.add('dragging')
-        document.addEventListener('mousemove', this.onDragMouseMove)
-        document.addEventListener('mouseup', this.onDragMouseUp)
+    // 鼠标离开 dock：所有 icon 立刻弹回基础尺寸（iOS 行为）
+    onActionBarMouseLeaveDock: function () {
+      if (this._actionBarDockRaf) {
+        window.cancelAnimationFrame(this._actionBarDockRaf)
+        this._actionBarDockRaf = null
       }
-    },
-    onDragMouseMove: function (e) {
-      if (!this.isActionBarDragging) return
-      this.isActionBarHovered = true  // 拖拽过程中保持 hover 状态
-      const wrapper = document.querySelector('.editor-action-bar-wrapper')
-      if (!wrapper) return
-      // 以底部为锚点，根据鼠标 Y 位置计算 bottom
-      const newBottom = window.innerHeight - e.clientY
-      wrapper.style.bottom = Math.max(8, Math.min(newBottom, window.innerHeight - 8)) + 'px'
-    },
-    onDragMouseUp: function () {
-      this.isActionBarDragging = false
-      document.querySelector('.action-bar-drag-handle')?.classList.remove('dragging')
-      document.removeEventListener('mousemove', this.onDragMouseMove)
-      document.removeEventListener('mouseup', this.onDragMouseUp)
+      const inner = document.querySelector('.editor-action-bar-inner')
+      if (!inner) return
+      inner.querySelectorAll('.fab-icon').forEach((btn) => {
+        btn.style.transform = ''
+      })
     },
     async exportToBlogHandler () {
       const category = this.$store.state.client.rightClickCategoryItem
@@ -657,8 +571,13 @@ export default {
     bus.$on(events.VIEW_SHORTCUT_CALL.sourceMode, this.sourceModeHandler)
     bus.$on(events.GENERATE_MINDMAP, this.generateMindmapHandler)
     bus.$on(events.UPDATE_WORD_COUNT, this.wordCountUpdateHandler)
-    // Action bar 贴边隐藏：监听鼠标移动
-    window.addEventListener('mousemove', this.onMouseMove)
+    // 监听编辑器滚动，触发 iOS 风格的工具栏收缩动效
+    this.$nextTick(() => {
+      const editorStage = document.querySelector('.editor-stage')
+      if (editorStage) {
+        editorStage.addEventListener('scroll', this.onEditorStageScroll, { passive: true })
+      }
+    })
     this.$nextTick(this.hideInitLoadingPage)
     if (!this.noteListVisible) {
       this.splitterLimits = [0, Infinity]
@@ -688,10 +607,16 @@ export default {
     if (this.splitterWidthSaveTimer) {
       clearTimeout(this.splitterWidthSaveTimer)
     }
-    if (this.actionBarHideTimer) {
-      clearTimeout(this.actionBarHideTimer)
+    if (this._actionBarScrollTimer) {
+      clearTimeout(this._actionBarScrollTimer)
     }
-    window.removeEventListener('mousemove', this.onMouseMove)
+    if (this._actionBarDockRaf) {
+      window.cancelAnimationFrame(this._actionBarDockRaf)
+    }
+    const editorStage = document.querySelector('.editor-stage')
+    if (editorStage) {
+      editorStage.removeEventListener('scroll', this.onEditorStageScroll)
+    }
   },
   watch: {
     splitterWidthValue (val) {
@@ -766,14 +691,10 @@ export default {
       if (!val) this.editorNoteActionsExpanded = false
     },
     dataLoaded: function (val) {
-      if (!val) {
-        this.actionBarVisible = false
-      }
+      this.actionBarVisible = val
     },
     isOutlineShow: function (val) {
-      if (val) {
-        this.actionBarVisible = false
-      }
+      this.actionBarVisible = !val
     }
   }
 }
@@ -833,137 +754,120 @@ export default {
   }
 }
 
-/* 编辑器操作栏 - 贴边隐藏
- * right 偏移：让出 12px 滚动条 + 12px 视觉间距，避免与编辑器最右侧滚动条重叠 */
+/* ============== 编辑器操作栏：底部居中 + 水平 iOS 药丸 ==============
+ * 锚定到 .editor-stage (position: relative) 而非视口 */
 .editor-action-bar-wrapper {
-  position: fixed;
-  bottom: 12px;
-  right: 24px;
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  justify-content: center;
   z-index: 6000;
+  pointer-events: none; /* 让 mousemove 穿透；子元素仍可点 */
 }
 
-/* 工具栏主体 */
 .editor-action-bar {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
+  flex-direction: row;
   align-items: center;
-  width: fit-content;
-  padding: 4px 2px;
-  margin-right: 8px;
-  background: rgba(240, 240, 240, 0.92);
-  border-radius: 10px 0 0 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  gap: 4px;
+  padding: 6px 10px;
+  /* iOS 毛玻璃药丸背景 */
+  background: rgba(245, 245, 247, 0.72);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 22px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 0 0 0.5px rgba(0, 0, 0, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.12);
   pointer-events: auto;
-  overflow: visible !important;
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+              opacity 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform, opacity;
 }
 
-/* macOS Dock 风格的图标悬浮放大效果 */
+/* 滚动时收缩 + 淡化（仿 iOS Safari 底部工具栏） */
+.editor-action-bar.action-bar--scroll {
+  transform: scale(0.92);
+  opacity: 0.6;
+}
+
+/* iOS 滑入/滑出：从底部弹出 + 缩放回弹 */
+.action-bar-ios-enter-active {
+  transition: transform 0.45s cubic-bezier(0.32, 1.6, 0.4, 1),
+              opacity 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.action-bar-ios-leave-active {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1),
+              opacity 0.2s ease;
+}
+.action-bar-ios-enter,
+.action-bar-ios-leave-to {
+  transform: translateY(120%) scale(0.85);
+  opacity: 0;
+}
+
+/* 子操作（新建笔记/导入）从右侧滑入 */
+.sub-actions-ios-enter-active,
+.sub-actions-ios-leave-active {
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1),
+              opacity 0.2s ease;
+}
+.sub-actions-ios-enter,
+.sub-actions-ios-leave-to {
+  transform: translateX(20px);
+  opacity: 0;
+}
+
+/* 按钮组：水平排列 */
+.editor-action-bar-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.editor-note-sub-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 全局 .fab-icon { margin: 40px } 在堆叠时会叠成巨大间距，此处恢复为紧凑感 */
+.editor-action-bar .fab-icon {
+  margin: 0 !important;
+}
+
+/* 仿 magicui dock：transform 由 JS 行内 style 驱动；CSS transition 做 spring 平滑
+ * cubic-bezier(0.16, 1, 0.3, 1) ≈ framer-motion { mass: 0.1, stiffness: 150, damping: 12 } 的视觉曲线 */
 .editor-action-bar-inner .fab-icon {
-  transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1.5),
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
               box-shadow 0.2s ease,
               background-color 0.2s ease;
   transform-origin: center center;
   border-radius: 50%;
   position: relative;
   z-index: 1;
-}
-
-/* 默认尺寸 */
-.editor-action-bar-inner .fab-icon {
   transform: scale(0.85);
+  will-change: transform;
 }
 
-/* 悬浮时的放大效果 - 当前按钮 */
-.editor-action-bar-inner .fab-icon:hover,
-.editor-action-bar-inner .fab-icon.is-near {
-  transform: scale(1.25);
+/* hover 由行内 transform 接管；这里仅加阴影微调保留 iOS dock 高亮感 */
+.editor-action-bar-inner .fab-icon:hover {
   box-shadow: 0 4px 16px rgba(38, 166, 154, 0.35);
   z-index: 10;
 }
 
-/* 相邻按钮被挤开的效果 */
-.editor-action-bar-inner .fab-icon.is-near-left,
-.editor-action-bar-inner .fab-icon.is-near-right {
-  transform: scale(1.05);
-}
-
-/* 更远的按钮 */
-.editor-action-bar-inner .fab-icon.is-far-left,
-.editor-action-bar-inner .fab-icon.is-far-right {
-  transform: scale(0.9);
-}
-
-.editor-action-bar.action-bar--hovered {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
-}
-
-.action-bar-drag-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 20px;
-  color: #9e9e9e;
-  font-size: 12px;
-  cursor: grab;
-  margin-bottom: 4px;
-}
-
-.action-bar-drag-handle:active,
-.action-bar-drag-handle.dragging {
-  cursor: grabbing;
-}
-
-/* 工具栏滑入/滑出动画 */
-.action-bar-slide-enter-active,
-.action-bar-slide-leave-active {
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.action-bar-slide-enter,
-.action-bar-slide-leave-to {
-  transform: translateX(60px);
-  opacity: 0;
-}
-
-/* 按钮组内反向排列，最常用按钮在最下 */
-.editor-action-bar-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.editor-action-bar-inner--reversed {
-  flex-direction: column-reverse;
-}
-
-.editor-note-sub-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.editor-action-bar-inner--reversed {
-  gap: 2px;
-}
-
-/* 全局 .fab-icon { margin: 40px } 在纵向堆叠时会叠成巨大间距，此处恢复为原独立浮动时的紧凑感 */
-.editor-action-bar .fab-icon {
-  margin: 0 !important;
-}
-
+/* Dark mode 适配 */
 .body--dark .editor-action-bar {
-  background: rgba(55, 55, 55, 0.88);
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
-}
-
-.body--dark .action-bar-drag-handle {
-  color: #757575;
+  background: rgba(40, 40, 42, 0.72);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .editor-splitter-after {
