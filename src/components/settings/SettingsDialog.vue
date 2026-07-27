@@ -404,7 +404,10 @@ export default {
         ok: { label: this.$t('confirm'), color: 'cyan-7' }
       }).onOk(async () => {
         try {
-          const result = await DatabaseClient.echoes.clearAll()
+          // 把 store 里当前内置回响（含最新 anno_source，可能是用户编辑过的）推给 main，
+          // 让 DB 用这一份最新数据覆写，规避 main / renderer 双源漂移。
+          const builtins = (this.localEchoCards || []).filter(echo => echo && echo.isBuiltin)
+          const result = await DatabaseClient.echoes.clearAll({ builtins })
           if (result && result.success) {
             this.$q.notify({ message: this.$t('resetEchoesSuccess', { count: result.count || 0, custom: result.customKept || 0 }), type: 'positive', position: 'top' })
             this.loadEchoes()

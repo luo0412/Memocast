@@ -491,12 +491,12 @@ const EchoPreviewRenderer = Vue.extend({
           contenteditable: 'false'
         }
       }, [
-        h('i', {
-          staticClass: 'ag-echo-anno-icon material-icons',
+        h('span', {
+          staticClass: 'ag-echo-anno-at',
           attrs: {
             contenteditable: 'false'
           }
-        }, ['play_arrow']),
+        }, ['@']),
         h('span', {
           staticClass: 'ag-echo-anno-name',
           attrs: {
@@ -877,32 +877,28 @@ export default {
       }
     },
     getCursorPosition: function () {
-      const {
-        line: lineNumber,
-        ch: column
-      } = this.contentEditor?.getCursor().focus
+      const cursor = this.contentEditor?.getCursor?.()
+      const focus = cursor && cursor.focus ? cursor.focus : null
+      if (!focus) {
+        return { lineNumber: 1, column: 1 }
+      }
+      const line = Number(focus.line)
+      const ch = Number(focus.ch)
       return {
-        lineNumber,
-        column
+        lineNumber: Number.isFinite(line) && line >= 1 ? Math.floor(line) : 1,
+        column: Number.isFinite(ch) && ch >= 1 ? Math.floor(ch) : 1
       }
     },
     setCursorPosition: function (position) {
-      const {
-        lineNumber,
-        column
-      } = position
-      if (this.contentEditor) {
-        this.contentEditor.setCursor({
-          anchor: {
-            line: lineNumber,
-            ch: column
-          },
-          focus: {
-            line: lineNumber,
-            ch: column
-          }
-        })
-      }
+      if (!this.contentEditor) return
+      const rawLine = Number(position && position.lineNumber)
+      const rawColumn = Number(position && position.column)
+      const lineNumber = Number.isFinite(rawLine) && rawLine >= 1 ? Math.floor(rawLine) : 1
+      const column = Number.isFinite(rawColumn) && rawColumn >= 1 ? Math.floor(rawColumn) : 1
+      this.contentEditor.setCursor({
+        anchor: { line: lineNumber, ch: column },
+        focus: { line: lineNumber, ch: column }
+      })
     },
     ...mapServerActions(['updateNote', 'updateNoteWithInfo', 'updateNoteState', 'updateContentsList', 'uploadImage']),
     ...mapClientActions(['importImageFromLocal'])
@@ -1470,38 +1466,5 @@ export default {
   line-height: 1.4;
   opacity: 0.72;
   word-break: break-word;
-}
-
-/* Echo block highlight styles - propagate highlight from echo tokens to parent blocks */
-.ag-echo-highlight {
-  background-color: rgba(38, 166, 154, 0.12);
-  border-left: 3px solid rgba(38, 166, 154, 0.5);
-  padding-left: 8px;
-  margin-left: -8px;
-  border-radius: 0 4px 4px 0;
-  transition: background-color 0.2s ease;
-}
-
-.ag-echo-highlight.ag-paragraph,
-.ag-echo-highlight.ag-li,
-.ag-echo-highlight.ag-p,
-.ag-echo-highlight.ag-span {
-  background-color: rgba(38, 166, 154, 0.1);
-}
-
-.ag-echo-highlight.ag-h1,
-.ag-echo-highlight.ag-h2,
-.ag-echo-highlight.ag-h3,
-.ag-echo-highlight.ag-h4,
-.ag-echo-highlight.ag-h5,
-.ag-echo-highlight.ag-h6 {
-  background-color: rgba(38, 166, 154, 0.08);
-}
-
-/* Also highlight the echo token itself within highlighted blocks */
-.ag-echo-highlight .ag-echo-anno-token,
-.ag-echo-highlight.ag-echo-anno-token {
-  background-color: rgba(38, 166, 154, 0.2);
-  border-radius: 4px;
 }
 </style>

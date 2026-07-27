@@ -419,13 +419,27 @@ class StateRender {
 
       // 将 attrs 序列化到 dataset，让 echoRuntime 能读取
       const echoAttrsJson = (() => {
-        try { return JSON.stringify(echo?.anno_source || '') } catch (error) { return '' }
+        try {
+          // 必须是解析后的对象（@nice{scope:'block'}() 这种），不能是 anno_source 字符串。
+          // 这里是读 echo 的「实例参数」，anno_source 是 echo 定义源码，不是同一个东西。
+          const parsed = (echo && echo.__parsedAttrs && typeof echo.__parsedAttrs === 'object')
+            ? echo.__parsedAttrs
+            : null
+          return parsed ? JSON.stringify(parsed) : ''
+        } catch (error) { return '' }
       })()
       if (echo && echoAttrsJson) {
         host.dataset.echoAttrsJson = echoAttrsJson
       }
 
       let innerHtml = ''
+      // 注释保留：调试时把下面 block 解开即可
+      // if (typeof window !== 'undefined' && window.__ECHO_TRACE__ !== false) {
+      //   console.log('[Muya.renderEchoPlaceholders] host', {
+      //     echoName, echoId, definitionId, isEchoEffect,
+      //     hasAnnoSource: Boolean(echo?.anno_source), echoRuntimeReady: Boolean(echoRuntime)
+      //   })
+      // }
       if (isEchoEffect && echoRuntime && typeof echoRuntime.renderToHtml === 'function') {
         try {
           const simAttrs = { id: echoId, definitionId, value }
@@ -1105,196 +1119,6 @@ class StateRender {
     }
   }
 
-  getEchoHighlightOptions () {
-    const options = this.muya?.options || {}
-    if (options.echoHighlightOptions && typeof options.echoHighlightOptions === 'object') {
-      return options.echoHighlightOptions
-    }
-    return {
-      scope: options.echoHighlightScope || 'block',
-      className: options.echoHighlightClassName || 'ag-echo-highlight',
-      matchField: options.echoHighlightMatchField || 'name',
-      filter: options.echoHighlightFilter || null,
-      maxDistance: typeof options.echoHighlightMaxDistance === 'number' ? options.echoHighlightMaxDistance : 1
-    }
-  }
-
-  getEchoHighlightMatcher () {
-    const options = this.getEchoHighlightOptions()
-    const matcher = options.filter
-    if (typeof matcher === 'function') {
-      return matcher
-    }
-    const matchField = String(options.matchField || 'name').trim()
-    const fieldMap = new Map([
-      ['name', echo => String(echo?.name || '').trim()],
-      ['id', echo => String(echo?.id || '').trim()],
-      ['nameOrId', echo => {
-        const name = String(echo?.name || '').trim()
-        const id = String(echo?.id || '').trim()
-        return name || id
-      }]
-    ])
-    const getter = fieldMap.get(matchField) || fieldMap.get('name')
-    const matched = new Set()
-    return echo => {
-      if (!echo || matched.has(echo)) return false
-      const value = getter(echo)
-      if (!value) return false
-      matched.add(echo)
-      return true
-    }
-  }
-
-  normalizeEchoHighlights (rawHighlights = []) {
-    const highlights = (Array.isArray(rawHighlights) ? rawHighlights : [])
-      .map(item => {
-        if (!item || typeof item !== 'object') return null
-        const blockKey = String(item.blockKey || '').trim()
-        const scope = String(item.scope || this.getEchoHighlightOptions().scope || 'block').trim()
-        const className = String(item.className || this.getEchoHighlightOptions().className || 'ag-echo-highlight').trim()
-        const echoName = String(item.echoName || '').trim()
-        const echoId = String(item.echoId || '').trim()
-        const echo = item.echo || null
-        if (!blockKey || (!echoName && !echoId && !echo)) return null
-        return {
-          blockKey,
-          scope,
-          className,
-          echoName,
-          echoId,
-          echo: echo && typeof echo === 'object' ? echo : null
-        }
-      })
-      .filter(Boolean)
-    const seen = new Set()
-    return highlights.filter(item => {
-      const key = `${item.blockKey}:${item.scope}:${item.className}:${item.echoName}:${item.echoId}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }
-
-  buildEchoBlockHighlights (blocks = [], echoCards = []) {
-    const options = this.getEchoHighlightOptions()
-    const matcher = this.getEchoHighlightMatcher()
-    const matchedEcho = []
-    const all = Array.isArray(echoCards) ? echoCards : []
-    for (let i = 0; i < all.length; i++) {
-      const echo = all[i]
-      if (matcher(echo)) matchedEcho.push(echo)
-    }
-    if (!matchedEcho.length) return []
-
-    const highlights = []
-    const travel = (blockList) => {
-      for (const block of blockList) {
-        if (!block) continue
-        const text = String(block.text || '')
-        const hasEchoMarker = text.indexOf('@') !== -1
-        const childEchoBlocks = []
-
-        if (hasEchoMarker && /span/.test(block.type) && /atxLine|paragraphContent|cellContent/.test(block.functionType || '')) {
-          const tokens = tokenizer(text, {
-            hasBeginRules: false,
-            options: this.muya.options
-          })
-          for (const token of tokens) {
-            if (token.type !== 'echo_anno') continue
-            const echoName = String(token.echoName || '').trim()
-            const echoId = String(token.echoId || token?.attrsParsed?.id || '').trim()
-            const matched = matchedEcho.find(echo => {
-              const name = String(echo?.name || '').trim()
-              const id = String(echo?.id || '').trim()
-              return (echoName && name && echoName === name) || (echoId && id && echoId === id)
-            })
-            if (!matched) continue
-
-            if (options.scope === 'token') {
-              highlights.push({
-                blockKey: block.key,
-                scope: 'token',
-                className: options.className,
-                echoName: matched.name || echoName,
-                echoId: matched.id || echoId,
-                echo: matched
-              })
-            } else {
-              childEchoBlocks.push({ block, distance: 0, matched })
-            }
-          }
-        }
-
-        if (Array.isArray(block.children) && block.children.length) {
-          travel(block.children)
-        }
-
-        for (const item of childEchoBlocks) {
-          this.addEchoHighlightForBlock(highlights, item.block, item.distance, item.matched, options)
-        }
-      }
-    }
-
-    travel(blocks)
-    return highlights
-  }
-
-  addEchoHighlightForBlock (highlights, block, distance, matchedEcho, options) {
-    const maxDistance = typeof options.maxDistance === 'number' ? options.maxDistance : 1
-    const scope = distance === 0 ? 'block' : 'children'
-    highlights.push({
-      blockKey: block.key,
-      scope,
-      className: options.className,
-      echoName: matchedEcho?.name || '',
-      echoId: matchedEcho?.id || '',
-      echo: matchedEcho
-    })
-    if (distance >= maxDistance) return
-    if (Array.isArray(block.children) && block.children.length) {
-      for (const child of block.children) {
-        this.addEchoHighlightForBlock(highlights, child, distance + 1, matchedEcho, options)
-      }
-    }
-  }
-
-  getEchoHighlightsForBlock (block, echoBlockHighlights = []) {
-    if (!block || !Array.isArray(echoBlockHighlights) || !echoBlockHighlights.length) {
-      return []
-    }
-    const direct = echoBlockHighlights.filter(item => item.blockKey === block.key)
-    if (!direct.length) {
-      return []
-    }
-    const scoped = {
-      token: [],
-      block: [],
-      children: []
-    }
-    for (const item of direct) {
-      const scope = String(item.scope || 'block').trim()
-      if (!scoped[scope]) continue
-      scoped[scope].push(item)
-    }
-    return [
-      ...scoped.token,
-      ...scoped.block,
-      ...scoped.children
-    ]
-  }
-
-  shouldInvalidateTokenCacheForEchoHighlights (block, echoBlockHighlights = []) {
-    if (!block || !Array.isArray(echoBlockHighlights) || !echoBlockHighlights.length) {
-      return false
-    }
-    return echoBlockHighlights.some(item => {
-      if (!item || !item.blockKey) return false
-      if (item.blockKey !== block.key) return false
-      return true
-    })
-  }
-
   async renderMermaid () {
     if (this.mermaidCache.size) {
       const mermaid = await loadRenderer('mermaid')
@@ -1397,10 +1221,8 @@ class StateRender {
 
   render (blocks, activeBlocks, matches) {
     const selector = `div#${CLASS_OR_ID.AG_EDITOR_ID}`
-    const echoCards = this.muya?.options?.echoCards || []
-    const echoBlockHighlights = this.buildEchoBlockHighlights(blocks, echoCards)
     const children = blocks.map(block => {
-      return this.renderBlock(null, block, activeBlocks, matches, true, echoBlockHighlights)
+      return this.renderBlock(null, block, activeBlocks, matches, true)
     })
 
     const newVdom = h(selector, children)
@@ -1416,12 +1238,10 @@ class StateRender {
 
   // Only render the blocks which you updated
   partialRender (blocks, activeBlocks, matches, startKey, endKey) {
-    const echoCards = this.muya?.options?.echoCards || []
-    const echoBlockHighlights = this.buildEchoBlockHighlights(blocks, echoCards)
     const cursorOutMostBlock = activeBlocks[activeBlocks.length - 1]
     // If cursor is not in render blocks, need to render cursor block independently
     const needRenderCursorBlock = blocks.indexOf(cursorOutMostBlock) === -1
-    const newVnode = h('section', blocks.map(block => this.renderBlock(null, block, activeBlocks, matches, false, echoBlockHighlights)))
+    const newVnode = h('section', blocks.map(block => this.renderBlock(null, block, activeBlocks, matches, false)))
     const html = toHTML(newVnode).replace(/^<section>([\s\S]+?)<\/section>$/, '$1')
 
     const needToRemoved = []
@@ -1454,7 +1274,7 @@ class StateRender {
       const cursorDom = document.querySelector(`#${key}`)
       if (cursorDom) {
         const oldCursorVnode = toVNode(cursorDom)
-        const newCursorVnode = this.renderBlock(null, cursorOutMostBlock, activeBlocks, matches, true, echoBlockHighlights)
+        const newCursorVnode = this.renderBlock(null, cursorOutMostBlock, activeBlocks, matches, true)
         patch(oldCursorVnode, newCursorVnode)
       }
     }
@@ -1473,10 +1293,8 @@ class StateRender {
    * @param {array} matches
    */
   singleRender (block, activeBlocks, matches) {
-    const echoCards = this.muya?.options?.echoCards || []
-    const echoBlockHighlights = this.buildEchoBlockHighlights([block], echoCards)
     const selector = `#${block.key}`
-    const newVdom = this.renderBlock(null, block, activeBlocks, matches, true, echoBlockHighlights)
+    const newVdom = this.renderBlock(null, block, activeBlocks, matches, true)
     const rootDom = document.querySelector(selector)
     const oldVdom = toVNode(rootDom)
     patch(oldVdom, newVdom)

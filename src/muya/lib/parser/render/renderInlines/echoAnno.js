@@ -92,11 +92,11 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
           contenteditable: 'false'
         }
       }, [
-        h('i.ag-echo-anno-icon.material-icons', {
+        h('span.ag-echo-anno-at', {
           attrs: {
             contenteditable: 'false'
           }
-        }, 'play_arrow'),
+        }, '@'),
         h('span.ag-echo-anno-name', {
           attrs: {
             contenteditable: 'false'

@@ -26,20 +26,6 @@
       />
     </div>
 
-    <!-- 能量条 -->
-    <div class='rune-form-field rune-form-field--tight'>
-      <div class='rune-form-label'>{{ powerLabel }}</div>
-      <q-slider
-        v-model='formData.power'
-        :min='1'
-        :max='100'
-        label
-        label-always
-        color='primary'
-        class='rune-form-slider'
-      />
-    </div>
-
     <!-- 分类 -->
     <div class='rune-form-field rune-form-field--tight'>
       <div class='rune-form-label'>分类</div>
@@ -209,9 +195,6 @@ export default {
     descLabel () {
       return this.isEchoMode ? this.$t('echoCardDesc') : this.$t('runeCardDesc')
     },
-    powerLabel () {
-      return this.isEchoMode ? this.$t('echoCardPower') : this.$t('runeCardPower')
-    },
     categoryOptions () {
       const opts = RuneCategoryEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
       if (opts.length) {
@@ -297,11 +280,6 @@ export default {
 .rune-form-input--compact :deep(.q-field__native),
 .rune-form-input--compact :deep(.q-field__input) {
   font-size: 13px;
-}
-
-.rune-form-slider {
-  margin-top: 6px;
-  margin-bottom: 2px;
 }
 
 .rune-form-hint {

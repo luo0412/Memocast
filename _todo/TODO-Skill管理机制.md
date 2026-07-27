@@ -31,7 +31,6 @@ CREATE TABLE IF NOT EXISTS runes (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   "desc" TEXT,
-  power INTEGER DEFAULT 50,
   color TEXT DEFAULT '#7E57C2',
   icon TEXT DEFAULT 'auto_awesome',
   template TEXT,

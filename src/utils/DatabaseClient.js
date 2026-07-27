@@ -400,8 +400,15 @@ const echoes = {
     return await invoke('db:deleteEcho', id)
   },
 
-  async clearAll () {
-    return await invoke('db:clearEchoes')
+  /**
+   * 重置回响：删掉所有内置回响，再用传入的最新列表重新插入；自定义回响保留。
+   * @param {Object} [options]
+   * @param {Array} [options.builtins] 由 renderer 端推过来的最新内置 echo 列表（含最新 anno_source）；
+   *                                   不传则由 main 进程用其镜像版兜底。
+   */
+  async clearAll (options = {}) {
+    const builtins = Array.isArray(options && options.builtins) ? options.builtins : null
+    return await invoke('db:clearEchoes', { builtins })
   }
 }
 

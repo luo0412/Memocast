@@ -577,6 +577,14 @@ export default {
       if (editorStage) {
         editorStage.addEventListener('scroll', this.onEditorStageScroll, { passive: true })
       }
+      // 初始化时把 tempNoteData 用合法的 cursor 补齐，避免 Monaco/Muya watcher 第一次跑时
+      // 拿到 lineNumber=0 / column=0 触发 "Illegal value for lineNumber"。
+      if (!this.tempNoteData || typeof this.tempNoteData !== 'object' || !this.tempNoteData.cursor) {
+        this.tempNoteData = {
+          markdown: '',
+          cursor: { lineNumber: 1, column: 1 }
+        }
+      }
     })
     this.$nextTick(this.hideInitLoadingPage)
     if (!this.noteListVisible) {
@@ -641,15 +649,32 @@ export default {
     },
     isSourceMode: function (val) {
       if (!val) {
+        // 退出源码模式：先把当前 Monaco 内容 + 光标位置同步给 Muya。
+        // cursor 兜底成 (1, 1)，避免 Monaco 内部「Illegal value for lineNumber」抛错。
         this.tempNoteData = {
-          markdown: this.$refs.monaco.getValue(),
-          cursor: this.$refs.monaco.getCursorPosition()
+          markdown: this.$refs.monaco?.getValue() || '',
+          cursor: this.safeCursorPosition(this.$refs.monaco?.getCursorPosition())
         }
       } else {
         this.tempNoteData = {
-          markdown: this.$refs.muya.getValue(),
-          cursor: this.$refs.muya.getCursorPosition()
+          markdown: this.$refs.muya?.getValue() || '',
+          cursor: this.safeCursorPosition(this.$refs.muya?.getCursorPosition())
         }
+      }
+    },
+    /**
+     * 把编辑器返回的 cursor 归一化到 lineNumber >= 1 / column >= 1。
+     * 子组件内部也会再兜底一次，但父组件提前保证 props 合法可以减少一次 watcher 抛错的窗口。
+     */
+    safeCursorPosition: function (cursor) {
+      if (!cursor || typeof cursor !== 'object') {
+        return { lineNumber: 1, column: 1 }
+      }
+      const line = Number(cursor.lineNumber)
+      const column = Number(cursor.column)
+      return {
+        lineNumber: Number.isFinite(line) && line >= 1 ? Math.floor(line) : 1,
+        column: Number.isFinite(column) && column >= 1 ? Math.floor(column) : 1
       }
     },
     noteState: function (val, oldVal) {

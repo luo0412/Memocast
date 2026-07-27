@@ -18,10 +18,6 @@
         <q-icon v-if='hasIcon' :name='rune.icon' class='rune-card-icon-glyph' />
         <span v-else class='rune-card-icon-text'>{{ runeInitial }}</span>
       </div>
-      <div v-if='!isBuiltin' class='rune-card-power'>
-        <span class='power-label'>{{ resolvedPowerLabel }}</span>
-        <span class='power-value'>{{ rune.power }}</span>
-      </div>
     </div>
     <div class='rune-card-body'>
       <div class='rune-card-name'>
@@ -84,10 +80,6 @@ export default {
       default: ''
     },
     descLabel: {
-      type: String,
-      default: ''
-    },
-    powerLabel: {
       type: String,
       default: ''
     },
@@ -176,9 +168,6 @@ export default {
       return {
         background: `linear-gradient(135deg, ${this.rune.color}dd 0%, ${this.rune.color}88 100%)`
       }
-    },
-    resolvedPowerLabel () {
-      return this.powerLabel || this.$t('runeCardPower')
     },
     resolvedEditLabel () {
       return this.editLabel || this.$t('runeCardEdit')
@@ -324,29 +313,6 @@ export default {
   line-height: 1;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-}
-
-.rune-card-power {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background: rgba(0, 0, 0, 0.32);
-  border-radius: 6px;
-  padding: 2px 5px;
-  flex-shrink: 0;
-}
-
-.power-label {
-  font-size: 0.5rem;
-  color: rgba(255, 255, 255, 0.8);
-  line-height: 1;
-}
-
-.power-value {
-  font-size: 0.85rem;
-  font-weight: bold;
-  color: #fff;
-  line-height: 1.2;
 }
 
 .rune-card-body {

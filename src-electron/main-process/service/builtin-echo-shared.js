@@ -1,7 +1,7 @@
 /**
  * 内置回响共享样板（main 端，CommonJS）
  *
- * ⚠️ 与 renderer 端的 src/components/ui/editor/echo/builtin-echo-shared.js
+ * ⚠️ 与 renderer 端的 src/components/echo/builtin-echo-shared.js
  *    内容基本保持一致；本文件严禁 require 跨目录文件。
  *
  * ⚠️ 2026-07 jQuery 化改造说明：
@@ -15,129 +15,25 @@
  */
 const banner = (lines) => lines.map(line => `//   ${line}`).join('\n  ')
 
-const resolveScopeContainerSource = `
-const __resolveScopeContainer = (node, scope) => {
-  if (!node) return null
-  const block = node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol') || node.parentElement
-  const documentRoot = node.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body
-  switch (String(scope || 'siblings').toLowerCase()) {
-    case 'prev-block': {
-      let prev = block && block.previousElementSibling
-      while (prev && !prev.firstElementChild && (prev.textContent || '').trim() === '') {
-        prev = prev.previousElementSibling
-      }
-      return prev || block
-    }
-    case 'block':      return block
-    case 'document':   return documentRoot
-    case 'siblings':
-    default:           return block && block.parentElement ? block.parentElement : documentRoot
-  }
-}`.trim()
-
-const safeQueryAllSource = `
-const __safeQueryAll = (root, sel) => {
-  if (!root || typeof root.querySelectorAll !== 'function') return []
-  try { return Array.from(root.querySelectorAll(sel)) } catch (error) { return [] }
-}`.trim()
-
-const withAttrsSource = `
-const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})`.trim()
-
-const sampleShuffleSource = `
-const __sampleShuffle = (arr, n) => {
-  if (!Array.isArray(arr) || arr.length === 0 || n <= 0) return []
-  const copy = arr.slice()
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    const tmp = copy[i]; copy[i] = copy[j]; copy[j] = tmp
-  }
-  return copy.slice(0, Math.min(n, copy.length))
-}`.trim()
-
-const handlerPrelude = [
-  resolveScopeContainerSource,
-  safeQueryAllSource,
-  withAttrsSource,
-  sampleShuffleSource
-].join('\n\n')
-
-// ---- handlerFieldSource(fieldName) ----
-//   返回 `${fieldName}: function (...) {` + 3 个 helper 局部 const 声明。
-//   闭合由调用方负责。
-const handlerFieldSource = (fieldName) => `${fieldName}: function (chantNode, scopeContainer, meta) {
-    const __resolveScopeContainer = (node, scope) => {
-      if (!node) return null
-      const block = node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol') || node.parentElement
-      const documentRoot = node.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body
-      switch (String(scope || 'siblings').toLowerCase()) {
-        case 'prev-block': {
-          let prev = block && block.previousElementSibling
-          while (prev && !prev.firstElementChild && (prev.textContent || '').trim() === '') {
-            prev = prev.previousElementSibling
-          }
-          return prev || block
-        }
-        case 'block':      return block
-        case 'document':   return documentRoot
-        case 'siblings':
-        default:           return block && block.parentElement ? block.parentElement : documentRoot
-      }
-    }
-    const __safeQueryAll = (root, sel) => {
-      if (!root || typeof root.querySelectorAll !== 'function') return []
-      try { return Array.from(root.querySelectorAll(sel)) } catch (error) { return [] }
-    }
-    const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})
-    const __sampleShuffle = (arr, n) => {
-      if (!Array.isArray(arr) || arr.length === 0 || n <= 0) return []
-      const copy = arr.slice()
-      for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1))
-        const tmp = copy[i]; copy[i] = copy[j]; copy[j] = tmp
-      }
-      return copy.slice(0, Math.min(n, copy.length))
-    }
-
-    // === 模仿者写的 handler 逻辑（紧随 prelude 之后） ===`
-
-// ---- handlerAndExampleDoc(docLines) ----
-//   返回"banner + handler 字段头 + handlerExample 字段头"。
-//   调用方写完模仿者逻辑后用 `}` 闭合函数 + `,` 闭合 handlerExample 字段。
-const handlerAndExampleDoc = (docLines) => {
-  const bannerText = banner(docLines)
-  return `${bannerText}
-
-  ${handlerFieldSource('handler')}
-
-    // === 模仿者写的 handler 逻辑（紧随 prelude 之后） ===
-  },
-  ${bannerText}
-
-  ${handlerFieldSource('handlerExample')}
-
-    // === 模仿者写的 handler 逻辑（紧随 prelude 之后） ===`
-}
-
-// ---- handlerExampleDoc(docLines) —— 兼容旧 API ----
-const handlerExampleDoc = (docLines) => `${banner(docLines)}
-
-  ${handlerFieldSource('handlerExample')}
-
-    // === 模仿者写的 handler 逻辑（紧随 prelude 之后） ===`
-
 const DEFAULT_ECHO_COLOR = '#26A69A'
 const DEFAULT_ECHO_ICON = 'graphic_eq'
 
+// ---- handlerDoc(docLines) ----
+//   输出 handler 字段头。
+//   调用方写完模仿者逻辑后用 `}` 闭合函数 + `,` 闭合 handler 字段。
+//   直接用 jQuery：`$(chantNode)` 拿到节点，沿 DOM 随便走即可。
+const handlerDoc = (docLines) => `${banner(docLines)}
+
+  handler: function (chantNode, scopeContainer, meta) {
+    // 直接用 jQuery 操作 DOM：
+    //   $(chantNode).closest('p').addClass('my-style')
+    //   $(chantNode).prev().css({ 'background-color': 'red' })
+    //   const attrs = meta && meta.attrs || {} // 拿 @xxx{scope:"block"}() 里的 attrs
+    //   // 返回一个函数用于解包/还原（cleanup）`
+
 module.exports = {
   banner,
-  handlerAndExampleDoc,
-  handlerExampleDoc,
-  handlerFieldSource,
-  handlerPrelude,
-  resolveScopeContainerSource,
-  safeQueryAllSource,
-  withAttrsSource,
+  handlerDoc,
   DEFAULT_ECHO_COLOR,
   DEFAULT_ECHO_ICON,
   SCOPE_TYPES: Object.freeze({

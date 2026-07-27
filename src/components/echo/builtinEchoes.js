@@ -1,4 +1,4 @@
-import { banner, handlerExampleDoc } from './builtin-echo-shared.js'
+import { banner, handlerDoc } from './builtin-echo-shared.js'
 
 // ============================================================================
 // 内置回响（系统提供，固定不可删改）
@@ -8,9 +8,8 @@ import { banner, handlerExampleDoc } from './builtin-echo-shared.js'
 //   每个 echo-chant anno_source 由以下几段组成：
 //     - banner 注释（描述这个 echo 做什么 / 影响谁 / 怎么传参）
 //     - render(context)         决定回响卡片外观 + 写入 attrs 默认值
-//     - handlerExample 字段     handler(chantNode, scopeContainer, meta) 模板；
-//                              字段名带 Example 后缀，运行时不会自动注册为 handler。
-//                              把字段名改成 handler 即可接管运行时副作用。
+//     - handler(chantNode, scopeContainer, meta)  运行时副作用（jQuery 风格）
+//                                后续会持续维护，不再使用 handlerExample 演示槽。
 //
 // === 分类约定（2026-07 调整）===
 //   16 个内置回响分成两类：
@@ -21,55 +20,77 @@ import { banner, handlerExampleDoc } from './builtin-echo-shared.js'
 //   用户自定义的回响默认归 marker（标记）或 typography（排版）分类。
 //
 // === 共享代码 ===
-//   banner() 与 handlerExampleDoc() 都从 './builtin-echo-shared' 导入，
-//   三个工具函数（__resolveScopeContainer / __safeQueryAll / __withAttrs）
-//   自动嵌入到 handlerExample 顶部，模仿者可直接使用。
-//
-// === jQuery 集成（2026-07 改造）===
-//   handler 函数体里所有 DOM 调用都改用 jQuery 形式：$(node).addClass / .attr /
-//   .css / .removeClass / .on / .off / .clone / .append / .before 等。
-//   编译器（HANDLER_PRELUDE_SOURCE）会注入 `const $ = window.jQuery`，直接用即可，
-//   无需在函数体里再写 const $ = ...。
+//   banner() 与 handlerDoc() 都从 './builtin-echo-shared' 导入，
+//   handler 函数体内统一使用 jQuery，编译器（HANDLER_PRELUDE_SOURCE）会注入
+//   `const $ = window.jQuery`，直接用即可。
 // ============================================================================
 
 // ============================================================================
-// 1. nice：纯标记，无副作用
+// 1. nice：高亮行内除 @nice 之外的文本（<mark> 包裹）
 // ============================================================================
-//
-// nice 的卡片源不像其他 15 个 echo-chant 内置那样有 handler，因此单独提供一个
-// createNiceAnnoSource：在 namespace / render(node, ancestors) / afterRender 三块结构的基础上，
-// 在 attrs 末尾显式写入 inheritFromPrevious: false，让"默认不开启上一节点继承"的语义对齐。
+// 示例：
+//   - 你好世界 @nice              → li 内「你好世界」被 <mark> 包裹
+//   # 今天天气真好 @nice           → h1 内文本被 <mark> 包裹
+//   普通段落 xxx @nice              → p 内文本被 <mark> 包裹
 const createNiceAnnoSource = () => `export default {
-  kind: 'echo',
+  ${banner([
+    '【nice】 —— 把所在行 / block 内除 @nice 之外的节点用 <mark> 包裹',
+    '使用示例：',
+    '  - 你好世界 @nice              → li 内「你好世界」被 <mark> 高亮',
+    '  # 今天天气真好 @nice          → h1 文本被 <mark> 高亮',
+    '  普通段落 xxx @nice            → p 文本被 <mark> 高亮'
+  ])},
+  kind: 'echo-chant',
+  id: 'nice',
   version: 1,
   name: 'nice',
-  namespace: '回响',
 
-  // === 新模板签名（TODO 提议）：node + ancestors ===
-  //   - node     : token = { type:'echo_anno', echoName, echoId, attrsParsed, prompt, raw, range, ... }
-  //   - ancestors: { echo: echoCard, block, document, parent }
-  // 默认与 EchoRuntime.createDefaultEchoAnnoSource 保持一致；attrs 末尾写入 inheritFromPrevious: false，
-  // 让该回响走「默认不继承」路径（用户在自己的 anno_source 里改 inheritFromPrevious: true 即可开启）。
-  render (node, ancestors) {
-    const attrs = (node && node.attrsParsed) || {}
-    const prompt = (node && node.prompt) || ''
-    const echoMeta = (ancestors && ancestors.echo) || {}
+  render (context = {}) {
+    const attrs = context.attrs || {}
+    const prompt = context.prompt || ''
     return {
       type: 'card',
-      icon: attrs.icon || echoMeta.icon || 'thumb_up',
-      color: attrs.color || echoMeta.color || '#4CAF50',
-      title: attrs.title || echoMeta.name || 'nice',
-      description: attrs.desc || echoMeta.desc || '标记为赞的内容',
+      icon: attrs.icon || context.echo?.icon || 'thumb_up',
+      color: attrs.color || context.echo?.color || '#4CAF50',
+      title: attrs.title || context.echo?.name || 'nice',
+      description: attrs.desc || context.echo?.desc || '把所在行除 @nice 之外的文本用 <mark> 包裹',
       prompt,
-      attrs: { ...attrs, inheritFromPrevious: false },
-      html: attrs.html || ''
+      attrs: { ...attrs, kind: 'echo-chant', id: 'nice', inheritFromPrevious: false },
+      html: '<span class="ag-rune ag-rune--nice" data-echo-chant-id="nice">nice</span>'
     }
   },
 
-  // === 后渲染钩子：domElement 已插入到 DOM ===
-  // 直接用 jQuery 操作节点，简洁明了。
-  afterRender (node, domElement, ancestors) {
-    $(domElement).addClass('ag-echo-default-mounted')
+  ${handlerDoc([
+    '【handler】把 block 内除 @nice 之外的节点用 <mark> 包起来；cleanup 时解包'
+  ])}
+    const $rune = $(chantNode)
+    if (!$rune.length) return () => {}
+
+    const $block = $rune.closest('li, p, pre, h1, h2, h3, h4, h5, h6, blockquote, [data-block-type], .mu-block').first()
+    if (!$block.length || $block.attr('data-nice-marked')) return () => {}
+
+    // 把 block 内除 @nice 自身 / 已有 mark / 其他 echo-chant 之外的节点，统一用 <mark> 包起来
+    const targets = $block.contents().filter(function () {
+      const $n = $(this)
+      if (this === chantNode) return false
+      if ($n.is('[data-echo-chant-id]')) return false
+      if ($n.is('mark.ag-rune-nice-highlight')) return false
+      // 跳过空白文本节点
+      if (this.nodeType === 3 && !this.nodeValue.trim()) return false
+      return true
+    })
+
+    const $mark = targets.length
+      ? $('<mark class="ag-rune-nice-highlight"></mark>').append(targets)
+      : $()
+    if ($mark.length) $rune.after($mark)
+    $rune.remove()
+    $block.attr('data-nice-marked', 'true')
+
+    return () => {
+      if ($mark.length) $mark.replaceWith($mark.contents())
+      $block.removeAttr('data-nice-marked')
+    }
   }
 }`
 
@@ -87,8 +108,7 @@ const createGrowthAnnoSource = () => `export default {
     '命中元素（target）：CSS 选择器，默认覆盖 p/pre/h1~h6/li/blockquote/table',
     '触发方式（trigger）：auto=自动 stagger；manual=需要外部触发器',
     '使用示例：',
-    '  @生生不息{scope: "siblings", trigger: "manual", target: "p, li"}(春风吹又生)',
-    '模仿提示：把 handlerExample 字段名改成 handler 即可接管运行时'
+    '  @生生不息{scope: "siblings", trigger: "manual", target: "p, li"}(春风吹又生)'
   ])},
   kind: 'echo-chant',
   id: 'growth',
@@ -110,18 +130,16 @@ const createGrowthAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】handler(chantNode, scopeContainer, meta) 返回 cleanup？',
-    '   __resolveScopeContainer(node, scope)  按 4 种 scope 取目标容器',
-    '   __safeQueryAll(root, sel)             容错 querySelectorAll（jQuery 版）',
-    '   __withAttrs(meta, defaults)           meta.attrs 默认值合并'
+  ${handlerDoc([
+    '【handler】自动给目标元素加生长动画；trigger=auto 时按 index 设置 stagger delay'
   ])}
-    const attrs = __withAttrs(meta, { scope: 'siblings', trigger: 'auto' })
-    const targetSelector = attrs.target || '[data-block-type], p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table'
-    const container = __resolveScopeContainer(chantNode, attrs.scope)
-    if (!container) return () => {}
+    const attrs = Object.assign({ scope: 'siblings', trigger: 'auto', target: '[data-block-type], p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table' }, meta && meta.attrs || {})
+    const targetSelector = attrs.target
+    const $container = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol').parent()
+    if (!$container.length) return () => {}
+    const container = $container.get(0) || scopeContainer
 
-    const $targets = __safeQueryAll(container, targetSelector)
+    const $targets = $(container).find(targetSelector)
     $targets.each((i, el) => {
       $(el).addClass('ag-rune-growth-target')
       if (attrs.trigger === 'auto') {
@@ -130,9 +148,8 @@ const createGrowthAnnoSource = () => `export default {
     })
     $(chantNode).addClass('ag-rune-growth-active')
 
-    // 必须返回 cleanup：下一次重渲染 / 卸载时被调用，撤销副作用
     return () => {
-      $targets.each((_i, el) => $(el).removeClass('ag-rune-growth-target'))
+      $targets.removeClass('ag-rune-growth-target').css('--ag-rune-growth-delay', '')
       $(chantNode).removeClass('ag-rune-growth-active')
     }
   }
@@ -146,8 +163,7 @@ const createShatterAnnoSource = () => `export default {
     '【破万法 / shatter】 —— 让附近一行或一个块的回响作用都失效',
     '影响范围（target）：line(默认) 同段落的兄弟 echo；block 整个当前 block',
     '使用示例：',
-    '  @破万法{target: "block"}(此段一切回响失效)',
-    '模仿提示：把 handlerExample 改名 handler 即可实装'
+    '  @破万法{target: "block"}(此段一切回响失效)'
   ])},
   kind: 'echo-chant',
   id: 'shatter',
@@ -169,27 +185,23 @@ const createShatterAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】target=line 关闭同段其他 echo；target=block 关闭整个 block'
+  ${handlerDoc([
+    '【handler】target=line 时屏蔽同段 echo；target=block 时屏蔽整个 block 内的 echo'
   ])}
-    const attrs = __withAttrs(meta, { target: 'line' })
-    const useBlockScope = attrs.target === 'block'
-    const container = useBlockScope
-      ? ($(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement)
-      : __resolveScopeContainer(chantNode, 'siblings')
-    if (!container) return () => {}
+    const attrs = Object.assign({ target: 'line' }, meta && meta.attrs || {})
+    const $rune = $(chantNode)
+    const $scopeRoot = attrs.target === 'block'
+      ? $rune.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote')
+      : $rune.parent()
+    if (!$scopeRoot.length) return () => {}
 
-    const $echoes = __safeQueryAll(container, '[data-echo-inline="true"]').filter((_i, n) => n !== chantNode)
-    $echoes.each((_i, n) => {
-      $(n).attr('data-shatter-disabled', 'true').addClass('ag-rune-shatter-disabled')
-    })
-    $(chantNode).addClass('ag-rune-shatter-active')
+    const $echoes = $scopeRoot.find('[data-echo-inline="true"]').filter((_i, n) => n !== chantNode)
+    $echoes.attr('data-shatter-disabled', 'true').addClass('ag-rune-shatter-disabled')
+    $rune.addClass('ag-rune-shatter-active')
 
     return () => {
-      $echoes.each((_i, n) => {
-        $(n).removeAttr('data-shatter-disabled').removeClass('ag-rune-shatter-disabled')
-      })
-      $(chantNode).removeClass('ag-rune-shatter-active')
+      $echoes.removeAttr('data-shatter-disabled').removeClass('ag-rune-shatter-disabled')
+      $rune.removeClass('ag-rune-shatter-active')
     }
   }
 }`
@@ -224,18 +236,16 @@ const createSkywalkAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】document scope：记忆原值，cleanup 还原'
+  ${handlerDoc([
+    '【handler】document scope：记忆原 theme/layout，cleanup 时还原'
   ])}
-    const attrs = __withAttrs(meta, { theme: 'auto', layout: 'enhanced' })
-    const documentRoot = $(chantNode).closest('[data-echo-document], .mu-editor, article, [data-doc-id]').get(0) || scopeContainer || document.body
-    if (!documentRoot) return () => {}
-
-    // 记忆原值，cleanup 还原
-    const $root = $(documentRoot)
+    const attrs = Object.assign({ theme: 'auto', layout: 'enhanced' }, meta && meta.attrs || {})
+    const $root = $(chantNode).closest('[data-echo-document], .mu-editor, article, [data-doc-id]').first()
+    if (!$root.length) return () => {}
+    const root = $root.get(0)
     const prev = {
-      theme: $root.attr('data-skywalk-theme') || null,
-      layout: $root.attr('data-skywalk-layout') || null
+      theme: root.getAttribute('data-skywalk-theme'),
+      layout: root.getAttribute('data-skywalk-layout')
     }
     $root.attr('data-skywalk-theme', attrs.theme).attr('data-skywalk-layout', attrs.layout)
     $(chantNode).addClass('ag-rune-skywalk-active')
@@ -251,26 +261,21 @@ const createSkywalkAnnoSource = () => `export default {
 }`
 
 // ============================================================================
-// 5. 双生花（twinbloom）：clone prev-block / next-block / current
-//    这是用户最容易看出效果的 demo，特意把可见性做明显。
+// 5. 双生花（twinbloom）：jQuery clone() 占位复制同行上一个 / 上一行元素
 // ============================================================================
 const createTwinbloomAnnoSource = () => `export default {
   ${banner([
-    '【双生花 / twinbloom】 —— 复制前/后一个 block 并生成占位副本',
+    '【双生花 / twinbloom】 —— 用 jQuery .clone() 复制「上一个元素 / 上一行」作占位',
     '【核心】影响范围 source：',
-    '  - prev-block(默认) 前一块 block；克隆插入到当前 block 之后',
-    '  - next-block       下一块 block；克隆插入到当前 block 之前',
-    '  - clone-self       克隆当前 block；插入到当前 block 之后',
-    '参数：placeholder=占位文本（若 prev-block 无文本则用此填充）',
-    '可见性：克隆段落会带 .ag-rune-twinbloom-clone class 与粉紫虚线 outline；',
-    '  并在段落顶部贴一张 "🌸 双生花 · 双生节点" 标记条，便于直观确认已克隆。',
+    '  - prev-sibling(默认) 同行上一个 inline / element 兄弟节点；克隆后插在 @twinbloom 之后',
+    '  - prev-line          上一行 block 节点（li / p / h1-h6 / pre / blockquote 等）；克隆后插在当前 block 之后',
+    '  - next-line          下一行 block 节点；克隆后插在当前 block 之前',
+    '参数：placeholder=占位文本（若被克隆节点没有可见文本则用此填充）',
+    '可见性：克隆节点会带 .ag-rune-twinbloom-clone class 与粉紫虚线 outline',
     '使用示例：',
-    '  双生花1:  @双生花{source: "prev-block"}()                 ← 拷贝上方段落',
-    '  双生花2:  @双生花{source: "prev-block", placeholder: "..."}() ← 带占位',
-    '  双生花3:  @双生花{source: "next-block"}()                  ← 拷贝下方段落',
-    '  双生花4:  @双生花{source: "clone-self"}()                  ← 克隆当前段落',
-    '模仿提示：双生花的克隆是 readonly 的（contenteditable=false），',
-    '  想重新编辑请双击克隆块使其解除 readonly，或直接删除重写。'
+    '  双生花1:  - xxx @twinbloom                       ← 默认：克隆同行上一个元素',
+    '  双生花2:  - xxx @twinbloom{source: "prev-line"} ← 克隆上一行 li/p/h1..',
+    '  双生花3:  - xxx @twinbloom{source: "next-line"} ← 克隆下一行'
   ])},
   kind: 'echo-chant',
   id: 'twinbloom',
@@ -285,115 +290,91 @@ const createTwinbloomAnnoSource = () => `export default {
       icon: attrs.icon || context.echo?.icon || 'local_florist',
       color: attrs.color || context.echo?.color || '#8E24AA',
       title: attrs.title || context.echo?.name || '双生花',
-      description: attrs.desc || context.echo?.desc || '复制上一个节点并占位',
+      description: attrs.desc || context.echo?.desc || '复制上一个元素 / 上一行节点作占位',
       prompt,
-      attrs: { ...attrs, kind: 'echo-chant', id: 'twinbloom', source: attrs.source || 'prev-block', placeholder: attrs.placeholder || '双生节点', inheritFromPrevious: false },
+      attrs: { ...attrs, kind: 'echo-chant', id: 'twinbloom', source: attrs.source || 'prev-sibling', placeholder: attrs.placeholder || '双生节点', inheritFromPrevious: false },
       html: '<span class="ag-rune ag-rune--twinbloom" data-echo-chant-id="twinbloom">双生花</span>'
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】3 种 source：克隆位置 / 可见性标记',
-    '  - 用 __resolveScopeContainer(., source) 直接复用 4 种 scope 的解析',
-    '  - 给克隆块加 outline + 标记条，cleanup 时一并移除'
+  ${handlerDoc([
+    '【handler】jQuery .clone()：按 source 复制 prev-sibling / prev-line / next-line；cleanup 时移除克隆块'
   ])}
     const $rune = $(chantNode)
-    const attrs = __withAttrs(meta, { source: 'prev-block', placeholder: '双生节点' })
-    const source = String(attrs.source || 'prev-block').toLowerCase()
+    if (!$rune.length) return () => {}
+
+    const attrs = Object.assign({ source: 'prev-sibling', placeholder: '双生节点' }, meta && meta.attrs || {})
+    const source = String(attrs.source || 'prev-sibling').toLowerCase()
     const placeholder = attrs.placeholder || '双生节点'
-
-    // 拿当前 block（chantNode 所在的 paragraph / heading 等）
-    const block = $rune.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
-    if (!block || !block.parentElement) return () => {}
-
-    // 决定克隆源：
-    //   prev-block / next-block：取相邻 block；clone-self：取当前 block
-    let sourceNode = block
-    let insertTarget = block
-    if (source === 'prev-block') {
-      const resolved = __resolveScopeContainer(chantNode, 'prev-block')
-      if (resolved && resolved !== block) {
-        sourceNode = resolved
-        insertTarget = block  // 插入到当前 block 之后
-      }
-    } else if (source === 'next-block') {
-      const $next = $(block).next()
-      if ($next.length && $next.get(0) !== block) {
-        sourceNode = $next.get(0)
-        insertTarget = block
-      }
-    } else {
-      sourceNode = block
-      insertTarget = block
-    }
-
     const twinId = $rune.attr('data-echo-chant-id') || 'twinbloom'
-    const sentinel = 'data-twinbloom-of'
-    let cloned = null
-    let insertedBefore = (source === 'next-block')
-    let existedBefore = false
-    {
-      const $neighbor = $(insertTarget)[insertedBefore ? 'prev' : 'next']()
-      if ($neighbor.length && $neighbor.attr(sentinel) === twinId) {
-        cloned = $neighbor.get(0)
-        existedBefore = true
-      }
+
+    const $block = $rune.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').first()
+    if (!$block.length) return () => {}
+
+    // 选源 + 插入位置
+    let $src, $target, insertBefore = false
+    if (source === 'prev-line' || source === 'prev-block') {
+      $src = $block.prev()
+      $target = $block
+    } else if (source === 'next-line' || source === 'next-block') {
+      $src = $block.next()
+      $target = $block
+      insertBefore = true
+    } else {
+      // 默认 prev-sibling：chantNode 紧邻的上一兄弟节点（排除 echo-chant 自身 / mark / rune-*）
+      $src = $rune.prevAll(':not([data-echo-chant-id]):not(mark):not(.ag-rune)').first()
+      if (!$src.length) $src = $block // fallback：克隆当前 block
+      $target = $rune
     }
-    if (!cloned) {
-      const $clone = $(sourceNode).clone(true)
-      cloned = $clone.get(0)
-      $(cloned)
-        .attr(sentinel, twinId)
+    if (!$src.length) return () => {}
+
+    // 检查同 id 是否已克隆过
+    const $neighbor = insertBefore ? $target.prev() : $target.next()
+    let $clone = $neighbor.filter(function () { return this.getAttribute('data-twinbloom-of') === twinId })
+    let existedBefore = $clone.length > 0
+
+    if (!existedBefore) {
+      $clone = $src.clone(true)
+        .attr('data-twinbloom-of', twinId)
         .attr('data-twinbloom-source', source)
-        .addClass('ag-rune-twinbloom-clone')
         .attr('contenteditable', 'false')
+        .addClass('ag-rune-twinbloom-clone')
         .css({
-          'outline': '2px dashed #8E24AA',
+          outline: '2px dashed #8E24AA',
           'outline-offset': '2px',
-          'position': $(cloned).css('position') || 'relative',
-          'padding': $(cloned).css('padding') || '8px 12px',
-          'border-radius': $(cloned).css('border-radius') || '6px',
-          'background': 'rgba(142,36,170,0.06)'
+          'background-color': 'rgba(142,36,170,0.06)',
+          'border-radius': '6px',
+          padding: '8px 12px'
         })
-
-      // 在克隆块顶部追加一张 "🌸 双生花 · 双生节点" 标记条（仅一次）
-      if (!$(cloned).find('[data-twinbloom-badge]').length) {
-        const $badge = $('<div></div>')
-          .attr('data-twinbloom-badge', twinId)
-          .text('🌸 双生花 · ' + placeholder)
-          .css({
-            'font-size': '11px',
-            'color': '#8E24AA',
-            'padding': '2px 8px',
-            'background': 'rgba(142,36,170,.12)',
-            'border': '1px solid rgba(142,36,170,.4)',
-            'border-radius': '4px',
-            'display': 'inline-block',
-            'margin-bottom': '6px'
-          })
-        $(cloned).prepend($badge)
+      if (!$clone.find('[data-twinbloom-badge]').length) {
+        $clone.prepend(
+          $('<span></span>')
+            .attr('data-twinbloom-badge', twinId)
+            .text('🌸 双生花 · ' + placeholder)
+            .css({
+              'font-size': '11px',
+              color: '#8E24AA',
+              padding: '2px 8px',
+              'background-color': 'rgba(142,36,170,.12)',
+              border: '1px solid rgba(142,36,170,.4)',
+              'border-radius': '4px',
+              display: 'inline-block',
+              'margin-bottom': '6px'
+            })
+        )
       }
-
-      // 若克隆源是 prev-block 但 prev-block 全空，用 placeholder 文本填充
-      if (source === 'prev-block' && !$(cloned).text().trim()) {
-        $(cloned).text(placeholder)
+      if (!$clone.text().replace(/🌸.*$/, '').trim()) {
+        $clone.append(
+          $('<span></span>').attr('data-twinbloom-placeholder', 'true').text(placeholder)
+        )
       }
-
-      // 插入：
-      //   insertedBefore=true 时插入到 insertTarget 之前；否则插入到 insertTarget 之后
-      if (insertedBefore) {
-        $(insertTarget).before($(cloned))
-      } else {
-        $(insertTarget).after($(cloned))
-      }
+      insertBefore ? $target.before($clone) : $target.after($clone)
     }
-    $(chantNode).addClass('ag-rune-twinbloom-active')
+    $rune.addClass('ag-rune-twinbloom-active')
 
     return () => {
-      if (!existedBefore && cloned && cloned.parentElement) {
-        $(cloned).remove()
-      }
-      $(chantNode).removeClass('ag-rune-twinbloom-active')
+      if (!existedBefore) $clone.remove()
+      $rune.removeClass('ag-rune-twinbloom-active')
     }
   }
 }`
@@ -427,18 +408,18 @@ const createMindstealAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】mode=disable 直接停掉动画，stack/override 由各 rune 自己解读'
+  ${handlerDoc([
+    '【handler】mode=disable 直接停掉动画；targets 为空时作用于所有 echo-chant'
   ])}
-    const attrs = __withAttrs(meta, { mode: 'override', targets: '' })
+    const attrs = Object.assign({ mode: 'override', targets: '' }, meta && meta.attrs || {})
     const targetsCsv = String(attrs.targets || '').trim()
     const targets = targetsCsv ? targetsCsv.split(',').map(s => s.trim()).filter(Boolean) : null
-    const container = __resolveScopeContainer(chantNode, 'siblings')
-    if (!container) return () => {}
+    const $scope = $(chantNode).parent()
+    if (!$scope.length) return () => {}
 
-    const $candidates = __safeQueryAll(container, '[data-echo-chant-id]')
+    const $candidates = $scope.find('[data-echo-chant-id]')
       .filter((_i, n) => n !== chantNode)
-      .filter((_i, n) => !targets || targets.includes($(n).attr('data-echo-chant-id')))
+      .filter((_i, n) => !targets || targets.indexOf($(n).attr('data-echo-chant-id')) !== -1)
 
     $candidates.each((_i, n) => {
       $(n).attr('data-mindsteal-mode', attrs.mode)
@@ -447,9 +428,7 @@ const createMindstealAnnoSource = () => `export default {
     $(chantNode).addClass('ag-rune-mindsteal-active')
 
     return () => {
-      $candidates.each((_i, n) => {
-        $(n).removeAttr('data-mindsteal-mode').css('animation', '')
-      })
+      $candidates.removeAttr('data-mindsteal-mode').css('animation', '')
       $(chantNode).removeClass('ag-rune-mindsteal-active')
     }
   }
@@ -463,8 +442,7 @@ const createLuckyAnnoSource = () => `export default {
     '【强运 / lucky】 —— 点击触发 AI 校对，是"事件型 echo-chant"样板',
     '事件流：handler 给节点加 role=button / tabindex=0；点击时调用',
     '  window.__memocastEchoChantHandlers.lucky({chantNode, meta})，由应用层注册回调',
-    '示例：@强运{model: "gpt-4o-mini", action: "ai-proofread"}(一键润色)',
-    '模仿提示：把 handlerExample 改成 handler 后，再注册 window.__memocastEchoChantHandlers.lucky'
+    '示例：@强运{model: "gpt-4o-mini", action: "ai-proofread"}(一键润色)'
   ])},
   kind: 'echo-chant',
   id: 'lucky',
@@ -486,12 +464,11 @@ const createLuckyAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】事件型 handler：cleanup 必须解绑 + 移除属性',
-    '   handlerExample 给节点加 role=button / tabindex=0；click 与 Enter/Space 触发',
-    '   callback 走 window.__memocastEchoChantHandlers.lucky（应用层注册）'
+  ${handlerDoc([
+    '【handler】事件型：cleanup 必须解绑 + 移除属性',
+    'callback 走 window.__memocastEchoChantHandlers.lucky（应用层注册）'
   ])}
-    const attrs = __withAttrs(meta, { label: '点击触发 AI 校对' })
+    const attrs = Object.assign({ label: '点击触发 AI 校对' }, meta && meta.attrs || {})
     const $rune = $(chantNode)
     $rune.css('cursor', 'pointer')
       .attr('role', 'button')
@@ -526,10 +503,6 @@ const createLuckyAnnoSource = () => `export default {
 
 // ============================================================================
 // 8. 替罪（scapegoat）：作用域内的"救场位"
-//   - 把最近的 block 标记为 ag-rune-scapegoat-standby（黄色描边 + "🛡️ 救场位"）
-//   - 监听 window.error 与 ag:rune:error 事件，
-//     一旦后续 rune 抛错 / DOM 异常，把它转成 ag-rune-scapegoat-injured（红边 + 错误描述）
-//   - handler 清理时移除监听并清掉 standby/injured 状态。
 // ============================================================================
 const createScapegoatAnnoSource = () => `export default {
   ${banner([
@@ -559,14 +532,11 @@ const createScapegoatAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    'handler / handlerExample 同体；handler 在 afterRender 时被 EchoRuntime 注册接管',
-    '—— 见 __resolveScopeContainer / __safeQueryAll / __withAttrs 三个 prelude helper',
+  ${handlerDoc([
     'cleanup：移除监听 + 移除 standby/injured 状态'
-  ])},
-    const block = __resolveScopeContainer(chantNode, 'block')
-    if (!block) return () => {}
-    const $block = $(block)
+  ])}
+    const $block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol').first()
+    if (!$block.length) return () => {}
 
     const intensity = Number(meta && meta.attrs && meta.attrs.intensity) || 0
     if (intensity > 0) {
@@ -632,26 +602,35 @@ const createCalamityAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    'handler / handlerExample 同体；handler 在 afterRender 时被 EchoRuntime 注册接管',
-    '—— 见 __resolveScopeContainer / __safeQueryAll / __sampleShuffle 三个 prelude helper',
+  ${handlerDoc([
     'cleanup：取消染彩 class'
-  ])},
-    const container = __resolveScopeContainer(chantNode, (meta && meta.attrs && meta.attrs.scope) || 'siblings')
-    if (!container) return () => {}
+  ])}
+    const scope = (meta && meta.attrs && meta.attrs.scope) || 'siblings'
+    const $scope = scope === 'block'
+      ? $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote')
+      : $(chantNode).parent()
+    if (!$scope.length) return () => {}
 
     const intensity = Math.max(0.05, Math.min(0.8,
       Number(meta && meta.attrs && meta.attrs.intensity) || 0.3))
 
-    const textHosts = __safeQueryAll(container, 'p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, dd, dt')
+    const textHosts = $scope.find('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, dd, dt')
       .filter((_i, el) => el && el !== chantNode && $(el).text().trim().length >= 2)
       .get()
-    const targetCount = Math.max(1, Math.floor(textHosts.length * intensity))
-    const picked = __sampleShuffle(textHosts, targetCount)
+    if (!textHosts.length) return () => {}
 
-    picked.forEach((el) => $(el).addClass('ag-rune-calamity-gothic'))
+    const targetCount = Math.max(1, Math.floor(textHosts.length * intensity))
+    // 简单 Fisher-Yates 抽样
+    const pool = textHosts.slice()
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp
+    }
+    const picked = pool.slice(0, Math.min(targetCount, pool.length))
+
+    $(picked).addClass('ag-rune-calamity-gothic')
     return () => {
-      picked.forEach((el) => $(el).removeClass('ag-rune-calamity-gothic'))
+      $(picked).removeClass('ag-rune-calamity-gothic')
     }
   }
 }`
@@ -686,20 +665,19 @@ const createDisperseAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】block scope 写 data-disperse-density；CSS 据此调整 line-height/margin'
+  ${handlerDoc([
+    '【handler】block scope 写 data-disperse-density；CSS 据此调整 line-height/margin'
   ])}
-    const attrs = __withAttrs(meta, { density: 'loose' })
-    const block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
-    if (!block) return () => {}
-    const $block = $(block)
+    const attrs = Object.assign({ density: 'loose' }, meta && meta.attrs || {})
+    const $block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').first()
+    if (!$block.length) return () => {}
 
-    const previous = $block.attr('data-disperse-density') || null
+    const previous = $block.attr('data-disperse-density')
     $block.attr('data-disperse-density', attrs.density)
     $(chantNode).addClass('ag-rune-disperse-active')
 
     return () => {
-      if (previous === null) $block.removeAttr('data-disperse-density')
+      if (previous === undefined) $block.removeAttr('data-disperse-density')
       else $block.attr('data-disperse-density', previous)
       $(chantNode).removeClass('ag-rune-disperse-active')
     }
@@ -736,10 +714,10 @@ const createPeekAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】添加高亮 class，可交互折叠'
+  ${handlerDoc([
+    '【handler】添加高亮 class，可交互折叠'
   ])}
-    const attrs = __withAttrs(meta, { collapsed: false, level: 1 })
+    const attrs = Object.assign({ collapsed: false, level: 1 }, meta && meta.attrs || {})
     const $rune = $(chantNode)
     const level = Math.max(1, Math.min(3, Number(attrs.level) || 1))
     $rune.addClass('ag-rune-peek ag-rune-peek-level-' + level)
@@ -780,13 +758,12 @@ const createIgnoreAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】降低透明度'
+  ${handlerDoc([
+    '【handler】降低 block 透明度，cleanup 时还原'
   ])}
-    const attrs = __withAttrs(meta, { opacity: 0.4 })
-    const block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
-    if (!block) return () => {}
-    const $block = $(block)
+    const attrs = Object.assign({ opacity: 0.4 }, meta && meta.attrs || {})
+    const $block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').first()
+    if (!$block.length) return () => {}
     const prevOpacity = $block.css('opacity') || '1'
     $block.addClass('ag-rune-ignore').css('opacity', attrs.opacity)
     return () => {
@@ -825,13 +802,12 @@ const createAdAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】添加广告标记样式'
+  ${handlerDoc([
+    '【handler】添加广告标记样式'
   ])}
-    const attrs = __withAttrs(meta, { type: 'banner' })
-    const block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
-    if (!block) return () => {}
-    const $block = $(block)
+    const attrs = Object.assign({ type: 'banner' }, meta && meta.attrs || {})
+    const $block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').first()
+    if (!$block.length) return () => {}
     const adType = String(attrs.type || 'banner').toLowerCase()
     $block.addClass('ag-rune-ad ag-rune-ad-' + adType)
     return () => {
@@ -870,13 +846,12 @@ const createDiffAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】添加 diff 标记样式'
+  ${handlerDoc([
+    '【handler】添加 diff 标记样式'
   ])}
-    const attrs = __withAttrs(meta, { mode: 'change' })
-    const block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
-    if (!block) return () => {}
-    const $block = $(block)
+    const attrs = Object.assign({ mode: 'change' }, meta && meta.attrs || {})
+    const $block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').first()
+    if (!$block.length) return () => {}
     const diffMode = String(attrs.mode || 'change').toLowerCase()
     $block.addClass('ag-rune-diff ag-rune-diff-' + diffMode)
     return () => {
@@ -915,10 +890,10 @@ const createRefAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】添加参考标记样式，可点击跳转'
+  ${handlerDoc([
+    '【handler】添加参考标记样式，可点击跳转'
   ])}
-    const attrs = __withAttrs(meta, { url: '', title: '' })
+    const attrs = Object.assign({ url: '', title: '' }, meta && meta.attrs || {})
     const $rune = $(chantNode)
     $rune.addClass('ag-rune-ref')
     if (attrs.url) {
@@ -964,13 +939,12 @@ const createTodoAnnoSource = () => `export default {
     }
   },
 
-  ${handlerExampleDoc([
-    '【示例模式】添加待办标记样式'
+  ${handlerDoc([
+    '【handler】添加待办标记样式'
   ])}
-    const attrs = __withAttrs(meta, { checked: false })
-    const block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').get(0) || chantNode.parentElement
-    if (!block) return () => {}
-    const $block = $(block)
+    const attrs = Object.assign({ checked: false }, meta && meta.attrs || {})
+    const $block = $(chantNode).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').first()
+    if (!$block.length) return () => {}
     $block.addClass('ag-rune-todo')
     if (attrs.checked) $block.addClass('ag-rune-todo-checked')
     return () => {
@@ -987,7 +961,7 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
   Object.freeze({
     id: '__builtin_nice__',
     name: 'nice',
-    desc: '标记为赞的内容',
+    desc: '把所在行除 @nice 之外的文本用 <mark> 包裹（高亮）',
     icon: 'thumb_up',
     color: '#4CAF50',
     category: 'builtin',
@@ -1148,4 +1122,24 @@ export const BUILTIN_ECHO_CARDS = Object.freeze([
   })
 ])
 
-export const isBuiltinEcho = (echo = {}) => Boolean(echo && echo.isBuiltin)
+// 10 个 echo-chant 内置 id 集中导出，方便外部按 id 查找
+export const BUILTIN_ECHO_CHANT_IDS = Object.freeze([
+  'nice',
+  'growth',
+  'shatter',
+  'skywalk',
+  'twinbloom',
+  'mindsteal',
+  'lucky',
+  'scapegoat',
+  'calamity',
+  'disperse',
+  'peek',
+  'ignore',
+  'ad',
+  'diff',
+  'ref',
+  'todo'
+])
+
+export const isBuiltinEchoChantId = (id = '') => BUILTIN_ECHO_CHANT_IDS.includes(String(id || '').trim())

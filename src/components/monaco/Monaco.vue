@@ -34,8 +34,10 @@ export default {
       default: () => ({
         markdown: '',
         cursor: {
-          lineNumber: 0,
-          column: 0
+          // Monaco 要求 lineNumber / column >= 1，0 会被 validateLineNumber 抛错。
+          // 父组件 Index.vue 会传入真实光标，这里只是兜底。
+          lineNumber: 1,
+          column: 1
         }
       })
     },
@@ -382,13 +384,35 @@ export default {
       return this.contentEditor?.getValue()
     },
     getCursorPosition: function () {
-      return this.contentEditor?.getPosition()
+      const raw = this.contentEditor?.getPosition()
+      if (!raw) {
+        return { lineNumber: 1, column: 1 }
+      }
+      return {
+        lineNumber: Math.max(1, Number(raw.lineNumber) || 1),
+        column: Math.max(1, Number(raw.column) || 1)
+      }
     },
     setCursorPosition: function (position) {
-      if (this.contentEditor) {
-        this.contentEditor.setPosition(position)
-        this.contentEditor.revealPositionInCenter(position, 0)
-      }
+      if (!this.contentEditor) return
+      const model = this.contentEditor.getModel()
+      if (!model) return
+
+      // Monaco 的 Position 要求 lineNumber >= 1、column >= 1、且不能超过模型行数 / 列数；
+      // 父组件在编辑器首次挂载时会传 { lineNumber: 0, column: 0 } 这种「未知」默认值，
+      // 不归一化直接 setPosition 会触发 "Illegal value for lineNumber" 抛错。
+      const lineCount = model.getLineCount()
+      const rawLine = Number(position && position.lineNumber)
+      const rawColumn = Number(position && position.column)
+      const safeLineNumber = Number.isFinite(rawLine) && rawLine >= 1 && rawLine <= lineCount
+        ? Math.floor(rawLine)
+        : 1
+      const maxColumn = model.getLineMaxColumn(safeLineNumber)
+      const safeColumn = Number.isFinite(rawColumn) && rawColumn >= 1 && rawColumn <= maxColumn
+        ? Math.floor(rawColumn)
+        : 1
+      this.contentEditor.setPosition({ lineNumber: safeLineNumber, column: safeColumn })
+      this.contentEditor.revealPositionInCenter({ lineNumber: safeLineNumber, column: safeColumn }, 0)
     },
     getWordCount: function (markdown) {
       return this.contentEditor.getWordCount(markdown)

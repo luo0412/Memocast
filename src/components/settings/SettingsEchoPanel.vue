@@ -36,7 +36,6 @@
               :selected='selected.includes(echo.id)'
               :name-label='$t("echoCardName")'
               :desc-label='$t("echoCardDesc")'
-              :power-label='$t("echoCardPower")'
               :edit-label='$t("echoCardEdit")'
               :delete-label='$t("echoCardDelete")'
               :disable-delete='echo.isBuiltin'

@@ -67,13 +67,11 @@ const hasReferenceToken = tokens => {
   return result
 }
 
-export default function renderLeafBlock (parent, block, activeBlocks, matches, useCache = false, echoBlockHighlights = []) {
+export default function renderLeafBlock (parent, block, activeBlocks, matches, useCache = false) {
   const { loadMathMap } = this
   const { cursor } = this.muya.contentState
   let selector = this.getSelector(block, activeBlocks)
   const highlights = matches.filter(m => m.key === block.key)
-  const echoHighlights = this.getEchoHighlightsForBlock(block, echoBlockHighlights)
-  const hasEchoBlockHighlight = echoHighlights.some(item => item.scope !== 'token')
   const {
     text,
     type,
@@ -96,14 +94,6 @@ export default function renderLeafBlock (parent, block, activeBlocks, matches, u
   if (text) {
     let tokens = []
     const effectiveHighlights = highlights.slice()
-    if (hasEchoBlockHighlight) {
-      effectiveHighlights.push({
-        start: 0,
-        end: text.length,
-        active: true,
-        className: 'ag-echo-highlight'
-      })
-    }
 
     if (effectiveHighlights.length === 0 && this.tokenCache.has(text)) {
       tokens = this.tokenCache.get(text)
@@ -134,16 +124,6 @@ export default function renderLeafBlock (parent, block, activeBlocks, matches, u
       spellcheck: 'false',
       contenteditable: 'false'
     })
-  }
-
-  if (hasEchoBlockHighlight) {
-    const echoHighlightClassNames = echoHighlights
-      .filter(item => item.scope !== 'token')
-      .map(item => String(item.className || 'ag-echo-highlight').trim())
-      .filter(Boolean)
-    if (echoHighlightClassNames.length) {
-      selector += `.${echoHighlightClassNames.join('.')}`
-    }
   }
 
   if (type === 'div') {

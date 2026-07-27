@@ -99,6 +99,28 @@
   box-shadow: 0 0 0 1px rgba(30, 136, 229, 0.4);
 }
 
+/* ====================== nice（<mark> 高亮行内文本） ====================== */
+mark.ag-rune-nice-highlight {
+  background: linear-gradient(120deg, rgba(255, 235, 59, 0.55), rgba(255, 193, 7, 0.45));
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  transition: background 0.25s ease;
+}
+mark.ag-rune-nice-highlight:hover {
+  background: linear-gradient(120deg, rgba(255, 235, 59, 0.75), rgba(255, 193, 7, 0.65));
+}
+body.body--dark mark.ag-rune-nice-highlight {
+  background: linear-gradient(120deg, rgba(255, 213, 79, 0.32), rgba(255, 167, 38, 0.32));
+  color: #FFFDE7;
+}
+.ag-rune-nice-active {
+  outline: 1px dashed rgba(76, 175, 80, 0.45);
+  outline-offset: 2px;
+}
+
 /* ====================== 双生花 ====================== */
 .ag-rune-twinbloom-clone {
   position: relative;

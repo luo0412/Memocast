@@ -330,7 +330,7 @@ Muya 在生成 DOM 时识别 `<div data-rune-name="...">`，把它替换为 `<Ru
 | **编辑字段** | `template`（Vue SFC 字符串） | `anno_source`（JS 对象字面量字符串） |
 | **Monaco language** | `html` | `javascript` |
 | **模板辅助** | `createBlankTemplate()` 等 | `createDefaultEchoAnnoSource()` 等 |
-| **特有功能** | 分类选择 + 远端导入 + power 滑块 | 注解语法帮助提示 |
+| **特有功能** | 分类选择 + 远端导入 | 注解语法帮助提示 |
 | **编辑的内容** | `<template><script><style>` 三段式 SFC | `export default { kind, render, handler, ... }` |
 
 ## 8. 关键常量

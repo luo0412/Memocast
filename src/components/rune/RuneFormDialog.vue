@@ -82,6 +82,17 @@ const createUuid = () => {
   })
 }
 
+const createRuneForm = (rune = {}, defaultCategory = RuneCategoryEnum.General) => ({
+  id: rune.id || createUuid(),
+  name: rune.name || '',
+  desc: rune.desc || '',
+  color: rune.color || '#7E57C2',
+  icon: rune.icon || 'whatshot',
+  template: rune.template || createInheritDemoTemplate(),
+  category: rune.category || defaultCategory,
+  inherit_from_previous: rune.inherit_from_previous == null ? 1 : rune.inherit_from_previous
+})
+
 export default {
   name: 'RuneFormDialog',
   model: {
@@ -114,17 +125,7 @@ export default {
   data () {
     return {
       dialog: null,
-      form: {
-        id: '',
-        name: '',
-        desc: '',
-        power: 50,
-        color: '#7E57C2',
-        icon: 'whatshot',
-        template: createInheritDemoTemplate(),
-        category: RuneCategoryEnum.General,
-        inherit_from_previous: 1
-      },
+      form: createRuneForm(),
       remoteImportDialogVisible: false,
       remoteImportUrl: '',
       remoteImportCategory: '',
@@ -162,26 +163,16 @@ export default {
       immediate: true,
       handler (val) {
         if (val) {
-          this._prevRuneId = val.id
-          const template = val.template || createBlankTemplate()
-          this.form = { ...val, category: val.category }
+          const form = createRuneForm(val, val.category)
+          if (!val.template) form.template = createBlankTemplate()
+          this.form = form
           console.log('\n[RuneFormDialog.rune watcher] Loaded editing rune:', {
             id: this.form.id,
             name: this.form.name,
             templateLen: (this.form.template || '').length
           })
         } else {
-          this.form = {
-            id: createUuid(),
-            name: '',
-            desc: '',
-            power: 50,
-            color: '#7E57C2',
-            icon: 'whatshot',
-            template: createInheritDemoTemplate(),
-            category: this.defaultCategory || RuneCategoryEnum.General,
-            inherit_from_previous: 1
-          }
+          this.form = createRuneForm({}, this.defaultCategory || RuneCategoryEnum.General)
           console.log('\n[RuneFormDialog.rune watcher] Initialized new rune form:', {
             id: this.form.id
           })

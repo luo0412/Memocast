@@ -380,48 +380,14 @@ export const backfillEchoAnnotationsInMarkdown = ({ markdown = '', echoCards = [
 // safeEvalFactory(source, prelude?) —— 把 anno_source 编译成一个工厂函数。
 //   - source:  'export default {...}' 形式的 anno_source 字符串
 //   - prelude: 可选顶层声明（如 helper 常量），拼接在 source 前面。
-//     这样 anno_source 的 handlerExample 函数体可直接引用 prelude 中
-//     定义的 __resolveScopeContainer / __safeQueryAll / __withAttrs。
+//     当前 prelude 只注入 `const $ = window.jQuery`，
+//     让 handler 函数体能直接用 jQuery 操作 DOM。
 //
-// HANDLER_PRELUDE_SOURCE：默认注入到 anno_source 编译环境的 helper 常量源码。
-//   所有 builtinEchoes.js 提供的 handlerExample 模板都依赖这三个 helper。
-//   用户自定义 rune 的 handlerExample 函数体也可直接使用。
-//
-//   2026-07 jQuery 化改造：在 prelude 顶部加
-//     const $ = window.jQuery || window.$
-//   + __resolveScopeContainer / __safeQueryAll / __withAttrs 一并保持 jQuery 语义
-//     （__safeQueryAll 返回 jQuery 实例，__resolveScopeContainer 返回原生 DOM 以
-//      兼容部分 .style / .dataset 直接读写的场景）。
-const HANDLER_PRELUDE_SOURCE = [
-  "const __safeDollarRuntime = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null",
-  "if (!__safeDollarRuntime) console.warn('[EchoRuntime] jQuery is missing on window; echo handlers will fall back to no-op')",
-  "const $ = __safeDollarRuntime",
-  "const __resolveScopeContainer = (node, scope) => {",
-  "  if (!node || typeof node.closest !== 'function') return null",
-  "  const $node = $(node)",
-  "  const block = $node.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol').get(0) || node.parentElement",
-  "  const documentRoot = $node.closest('[data-echo-document], .mu-editor, article, [data-doc-id]').get(0) || document.body",
-  "  switch (String(scope || 'siblings').toLowerCase()) {",
-  "    case 'prev-block': {",
-  "      let prev = block && block.previousElementSibling",
-  "      while (prev && !prev.firstElementChild && (prev.textContent || '').trim() === '') {",
-  "        prev = prev.previousElementSibling",
-  "      }",
-  "      return prev || block",
-  "    }",
-  "    case 'block':      return block",
-  "    case 'document':   return documentRoot",
-  "    case 'siblings':",
-  "    default:           return block && block.parentElement ? block.parentElement : documentRoot",
-  "  }",
-  "}",
-  "const __safeQueryAll = (root, sel) => {",
-  "  if (!root || typeof root.querySelectorAll !== 'function') return $([])",
-  "  try { return $(root).find(sel) } catch (error) { return $([]) }",
-  "}",
-  "const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})",
-  ""
-].join('\n')
+// HANDLER_PRELUDE_SOURCE：默认注入到 anno_source 编译环境的常量源码。
+//   jQuery 由应用层（Muya 编辑器 / app boot）保证 window.jQuery 存在，
+//   不在此处做运行时判空，示例越简单越好。
+//   handler 模板直接用 `const $ = window.jQuery` 拿到 jQuery 对象。
+const HANDLER_PRELUDE_SOURCE = 'const $ = window.jQuery\n'
 
 const safeEvalFactory = (source = '', prelude = '') => {
   const normalized = String(source || '').replace(/export\s+default/, 'return ')
@@ -839,8 +805,8 @@ export default class EchoRuntime {
     let definition = null
     try {
       if (source) {
-        // 为 anno_source 注入共享 helper 常量，让 handlerExample 函数体
-        // 能直接调用 __resolveScopeContainer / __safeQueryAll / __withAttrs。
+        // 为 anno_source 注入 `const $ = window.jQuery`，让 handler 函数体
+        // 能直接调用 jQuery 操作 DOM。
         const factory = safeEvalFactory(source, HANDLER_PRELUDE_SOURCE)
         definition = factory()
       }
@@ -855,24 +821,15 @@ export default class EchoRuntime {
       }
     }
 
-    // === 自动从 handlerExample 提升为 handler ===
-    // 约定：内置 rune 的 anno_source 只写 handlerExample（演示槽），
-    // 运行时 compileDefinition 在缺省 handler 时**自动复制**一份给 handler。
-    // 模仿者如果想禁用此行为，显式声明 `handler: null` 即可。
-    if (!definition.handler && definition.handlerExample) {
-      definition.handler = definition.handlerExample
-    }
-
     // === 自动注册 anno_source 内置的 echo-chant handler ===
     // 约定：definition.handler = function (chantNode, scopeContainer, meta) { ... }
-    // 注释里为了与运行时的 echoChantMeta 区分，写成 chantNode / meta。
     // 同时 definition.kind === 'echo-chant' | 'echo-tbd' 且
-    // definition.id 已声明（早期模板可能叫 runeId，向后兼容读）。
+    // definition.id 已声明。
     try {
       const kind = String(definition.kind || definition?.attrs?.kind || '').trim()
       if (isChantKind(kind)) {
         const handlerSpec = definition.handler || definition
-        const fallbackId = String(definition.id || definition.runeId || cacheKey || '').trim()
+        const fallbackId = String(definition.id || cacheKey || '').trim()
         if (typeof handlerSpec?.handler === 'function' || typeof handlerSpec === 'function' || typeof handlerSpec?.match === 'function') {
           const normalizedHandler = normalizeCustomHandler({
             ...(typeof handlerSpec === 'object' ? handlerSpec : {}),
@@ -880,7 +837,7 @@ export default class EchoRuntime {
             handler: (typeof handlerSpec === 'function')
               ? handlerSpec
               : (typeof handlerSpec?.handler === 'function' ? handlerSpec.handler : undefined),
-            id: String(definition.id || definition.runeId || fallbackId || '').trim(),
+            id: String(definition.id || fallbackId || '').trim(),
             source: `definition:${cacheKey}`
           }, fallbackId)
           if (normalizedHandler) {
@@ -1007,6 +964,16 @@ export default class EchoRuntime {
 
   renderToHtml (token = {}, echo = null) {
     const rendered = this.render(token, echo)
+    // 注释保留：调试时把下面 block 解开即可
+    // if (typeof window !== 'undefined' && window.__ECHO_TRACE__ !== false) {
+    //   console.log('[EchoRuntime.renderToHtml]', {
+    //     echoName: token?.echoName || echo?.name || '',
+    //     echoId: token?.echoId || '',
+    //     matchedEchoId: echo?.id || '',
+    //     kind: rendered?.attrs?.kind || '',
+    //     htmlLen: (rendered?.html || '').length
+    //   })
+    // }
     const icon = escapeHtml(rendered.icon || DEFAULT_ECHO_ICON)
     const color = escapeHtml(rendered.color || DEFAULT_ECHO_COLOR)
     const title = escapeHtml(rendered.title || '回响')
@@ -1111,6 +1078,15 @@ export default class EchoRuntime {
         node.__agEchoChantCleanup = boundCleanup
       }
     })
+    // 注释保留：调试时把下面 block 解开即可
+    // if (typeof window !== 'undefined' && window.__ECHO_TRACE__ !== false) {
+    //   console.log('[EchoRuntime._doAfterRender] chant dispatch', {
+    //     containerTag: container?.tagName || '',
+    //     chantCount: chantNodes.length,
+    //     installedCount: installed.length,
+    //     chantNodes: traceNodes
+    //   })
+    // }
 
     this._installed = installed
     return installed

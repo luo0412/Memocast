@@ -19,7 +19,7 @@ const PRE_BLOCK_HASH = {
   'vega-lite': `.${CLASS_OR_ID.AG_VEGA_LITE}`
 }
 
-export default function renderContainerBlock (parent, block, activeBlocks, matches, useCache = false, echoBlockHighlights = []) {
+export default function renderContainerBlock (parent, block, activeBlocks, matches, useCache = false) {
   let selector = this.getSelector(block, activeBlocks)
   const {
     key,
@@ -42,7 +42,7 @@ export default function renderContainerBlock (parent, block, activeBlocks, match
     this.renderingRowContainer = block
   }
 
-  const children = block.children.map(child => renderContainerBlockChild(this, child, activeBlocks, matches, useCache, echoBlockHighlights))
+  const children = block.children.map(child => renderContainerBlockChild(this, child, activeBlocks, matches, useCache))
   const data = {
     attrs: {},
     dataset: {}
@@ -184,17 +184,6 @@ export default function renderContainerBlock (parent, block, activeBlocks, match
     }
   }
 
-  const echoHighlights = this.getEchoHighlightsForBlock(block, echoBlockHighlights)
-  if (echoHighlights.some(item => item.scope !== 'token')) {
-    const echoHighlightClassNames = echoHighlights
-      .filter(item => item.scope !== 'token')
-      .map(item => String(item.className || 'ag-echo-highlight').trim())
-      .filter(Boolean)
-    if (echoHighlightClassNames.length) {
-      selector += `.${echoHighlightClassNames.join('.')}`
-    }
-  }
-
   if (!block.parent) {
     children.unshift(this.renderIcon(block))
   }
@@ -202,10 +191,10 @@ export default function renderContainerBlock (parent, block, activeBlocks, match
   return h(selector, data, children)
 }
 
-function renderContainerBlockChild (self, block, activeBlocks, matches, useCache, echoBlockHighlights) {
+function renderContainerBlockChild (self, block, activeBlocks, matches, useCache) {
   const method = Array.isArray(block.children) && block.children.length > 0
     ? 'renderContainerBlock'
     : 'renderLeafBlock'
 
-  return self[method](null, block, activeBlocks, matches, useCache, echoBlockHighlights)
+  return self[method](null, block, activeBlocks, matches, useCache)
 }

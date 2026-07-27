@@ -675,7 +675,6 @@ export default {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       "desc" TEXT,
-      power INTEGER DEFAULT 50,
       color TEXT DEFAULT '#7E57C2',
       icon TEXT DEFAULT 'auto_awesome',
       template TEXT,
@@ -697,6 +696,17 @@ export default {
   try {
     db.run('ALTER TABLE runes ADD COLUMN inherit_from_previous INTEGER DEFAULT 0')
   } catch (error) {}
+  try {
+    const runeTableInfo = db.exec('PRAGMA table_info(runes)')
+    const runeColumns = runeTableInfo.length > 0 ? runeTableInfo[0].values.map(row => row[1]) : []
+    if (runeColumns.includes('power')) {
+      db.run('ALTER TABLE runes DROP COLUMN power')
+      saveDatabase()
+      log.info('[DB] Removed deprecated runes.power column')
+    }
+  } catch (error) {
+    log.warn('[DB] Failed to remove deprecated runes.power column:', error.message)
+  }
 
   // 符文名称全局唯一（不区分大小写，去除首尾空白）
   db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_runes_name_unique ON runes(LOWER(TRIM(name)))`)
@@ -834,16 +844,16 @@ export default {
   if (count && count.count === 0) {
     const now = Date.now()
     const defaultRunes = [
-      { id: 'rune-1', name: '火焰之魂', desc: '释放灼烧伤害，持续灼烧敌人', power: 85, color: '#FF6B35', icon: 'whatshot' },
-      { id: 'rune-2', name: '寒冰护盾', desc: '生成冰霜护盾，减免30%伤害', power: 72, color: '#4FC3F7', icon: 'ac_unit' },
-      { id: 'rune-3', name: '雷霆一击', desc: '召唤雷电攻击，造成群体眩晕', power: 95, color: '#AB47BC', icon: 'flash_on' },
-      { id: 'rune-4', name: '生命汲取', desc: '攻击时恢复自身生命值', power: 60, color: '#66BB6A', icon: 'favorite' },
-      { id: 'rune-5', name: '暗影之刃', desc: '提升暴击率与移动速度', power: 78, color: '#7E57C2', icon: 'nights_stay' },
-      { id: 'rune-6', name: '圣光庇护', desc: '免疫一次负面效果并治疗', power: 88, color: '#FFD54F', icon: 'wb_sunny' }
+      { id: 'rune-1', name: '火焰之魂', desc: '释放灼烧伤害，持续灼烧敌人', color: '#FF6B35', icon: 'whatshot' },
+      { id: 'rune-2', name: '寒冰护盾', desc: '生成冰霜护盾，减免30%伤害', color: '#4FC3F7', icon: 'ac_unit' },
+      { id: 'rune-3', name: '雷霆一击', desc: '召唤雷电攻击，造成群体眩晕', color: '#AB47BC', icon: 'flash_on' },
+      { id: 'rune-4', name: '生命汲取', desc: '攻击时恢复自身生命值', color: '#66BB6A', icon: 'favorite' },
+      { id: 'rune-5', name: '暗影之刃', desc: '提升暴击率与移动速度', color: '#7E57C2', icon: 'nights_stay' },
+      { id: 'rune-6', name: '圣光庇护', desc: '免疫一次负面效果并治疗', color: '#FFD54F', icon: 'wb_sunny' }
     ]
     for (const r of defaultRunes) {
-      db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, template, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [r.id, r.name, r.desc, r.power, r.color, r.icon, createDefaultRuneTemplate(r.name), 'general', now, now])
+      db.run(`INSERT INTO runes (id, name, "desc", color, icon, template, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [r.id, r.name, r.desc, r.color, r.icon, createDefaultRuneTemplate(r.name), 'general', now, now])
     }
     saveDatabase()
     log.info('[DB] Default runes seeded')
@@ -2954,12 +2964,12 @@ function registerDatabaseHandlers() {
       const sortOrder = Number.isFinite(Number(rune.sort_order)) ? Number(rune.sort_order) : 0
       const inheritFromPrevious = rune.inherit_from_previous === true || rune.inherit_from_previous === 1 || rune.inherit_from_previous === '1' ? 1 : 0
       if (existing) {
-        await db.run(`UPDATE runes SET name = ?, "desc" = ?, power = ?, color = ?, icon = ?, template = ?, category = ?, sort_order = ?, inherit_from_previous = ?, updated_at = ? WHERE id = ?`, [
-          name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, category, sortOrder, inheritFromPrevious, now, rune.id
+        await db.run(`UPDATE runes SET name = ?, "desc" = ?, color = ?, icon = ?, template = ?, category = ?, sort_order = ?, inherit_from_previous = ?, updated_at = ? WHERE id = ?`, [
+          name, rune.desc || '', rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, category, sortOrder, inheritFromPrevious, now, rune.id
         ])
       } else {
-        await db.run(`INSERT INTO runes (id, name, "desc", power, color, icon, template, category, sort_order, inherit_from_previous, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [rune.id, name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, category, sortOrder, inheritFromPrevious, now, now])
+        await db.run(`INSERT INTO runes (id, name, "desc", color, icon, template, category, sort_order, inherit_from_previous, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [rune.id, name, rune.desc || '', rune.color || '#7E57C2', rune.icon || 'auto_awesome', template, category, sortOrder, inheritFromPrevious, now, now])
       }
       saveDatabase()
       return { success: true, data: execOne('SELECT * FROM runes WHERE id = ?', [rune.id]) }
@@ -3009,8 +3019,8 @@ function registerDatabaseHandlers() {
         const category = typeof rune.category === 'string' && rune.category.trim() ? rune.category.trim() : 'general'
         const sortOrder = Number.isFinite(Number(rune.sort_order)) ? Number(rune.sort_order) : 0
         const inheritFromPrevious = rune.inherit_from_previous === true || rune.inherit_from_previous === 1 || rune.inherit_from_previous === '1' ? 1 : 0
-        await db.run(`INSERT OR REPLACE INTO runes (id, name, "desc", power, color, icon, template, category, sort_order, inherit_from_previous, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [rune.id, rune.name, rune.desc || '', rune.power || 50, rune.color || '#7E57C2', rune.icon || 'auto_awesome', rune.template || '', category, sortOrder, inheritFromPrevious, rune.created_at || now, now])
+        await db.run(`INSERT OR REPLACE INTO runes (id, name, "desc", color, icon, template, category, sort_order, inherit_from_previous, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [rune.id, rune.name, rune.desc || '', rune.color || '#7E57C2', rune.icon || 'auto_awesome', rune.template || '', category, sortOrder, inheritFromPrevious, rune.created_at || now, now])
       }
       saveDatabase()
       return { success: true }
@@ -3236,22 +3246,37 @@ function registerDatabaseHandlers() {
     }
   })
 
-  // 清空所有回响
-  ipcMain.handle('db:clearEchoes', async () => {
+  // 重置回响：用 renderer 端推送的最新内置 echo 列表覆盖 DB 内置行，保留自定义回响
+  //  - 若 renderer 推 cards：以其为准（解决 main / renderer 双源漂移问题）。
+  //  - 若 renderer 没传：fallback 到 main 镜像版 BUILTIN_ECHO_CARDS（保持兼容）。
+  ipcMain.handle('db:clearEchoes', async (_event, payload) => {
     try {
-      if (!BUILTIN_ECHO_CARDS || !BUILTIN_ECHO_CARDS.length) {
+      const incoming = Array.isArray(payload && payload.builtins) ? payload.builtins : null
+      const hasIncoming = Array.isArray(incoming) && incoming.length > 0
+      const sourceList = hasIncoming
+        ? incoming
+        : (BUILTIN_ECHO_CARDS || [])
+      if (!Array.isArray(sourceList) || sourceList.length === 0) {
         return { success: false, code: 'NO_BUILTIN_ECHO_CARDS' }
       }
       const now = Date.now()
-      const builtinIds = new Set(BUILTIN_ECHO_CARDS.map(e => e.id))
+      // 取 renderer 推过来的内置 id 集合（与 main 镜像 id 完全等价，因为内置 echo id 是稳定的）
+      const builtinIds = new Set(sourceList.map(e => e && e.id).filter(Boolean))
       // 先查出所有非内置的回响，保留下来
       const customEchoes = execToObjects('SELECT id FROM echoes')
-      const customEchoes2 = (customEchoes || []).filter(e => !builtinIds.has(e.id))
-      const customIds = customEchoes2.map(e => e.id)
-      // 删掉所有内置回响（按 id 前缀判断，避免遗漏 showy/marker 分类）
-      await db.run(`DELETE FROM echoes WHERE ${Array.from(builtinIds).map(() => 'id = ?').join(' OR ')}`, [...builtinIds])
-      // 重新插入内置回响
-      for (const builtinEcho of BUILTIN_ECHO_CARDS) {
+      const customIds = (customEchoes || [])
+        .filter(e => !builtinIds.has(e.id))
+        .map(e => e.id)
+      // 删掉所有内置回响
+      const builtinIdList = Array.from(builtinIds)
+      if (builtinIdList.length > 0) {
+        await db.run(
+          `DELETE FROM echoes WHERE ${builtinIdList.map(() => 'id = ?').join(' OR ')}`,
+          builtinIdList
+        )
+      }
+      // 按 renderer / main 镜像列表重新插入
+      for (const builtinEcho of sourceList) {
         if (!builtinEcho || !builtinEcho.id) continue
         await db.run(
           `INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -3261,7 +3286,7 @@ function registerDatabaseHandlers() {
             builtinEcho.desc || '',
             builtinEcho.color || '#26A69A',
             builtinEcho.icon || 'graphic_eq',
-            builtinEcho.anno_source,
+            builtinEcho.anno_source || '',
             'anno',
             builtinEcho.category || 'builtin',
             Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
@@ -3271,8 +3296,10 @@ function registerDatabaseHandlers() {
         )
       }
       saveDatabase()
-      log.info(`[DB] Reset echoes: re-inserted ${BUILTIN_ECHO_CARDS.length} builtins, kept ${customIds.length} custom`)
-      return { success: true, count: BUILTIN_ECHO_CARDS.length, customKept: customIds.length }
+      log.info(
+        `[DB] Reset echoes: re-inserted ${sourceList.length} builtins (source=${hasIncoming ? 'renderer' : 'main-fallback'}), kept ${customIds.length} custom`
+      )
+      return { success: true, count: sourceList.length, customKept: customIds.length, source: hasIncoming ? 'renderer' : 'main-fallback' }
     } catch (error) {
       log.error('[DB] clearEchoes error:', error)
       return { success: false, code: 'CLEAR_ECHOES_FAILED', message: String(error) }
