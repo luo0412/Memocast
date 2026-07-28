@@ -1436,6 +1436,7 @@ export default {
     const rawTitle = typeof payload === 'string' ? payload : payload?.title
     const prefix = typeof payload === 'string' ? '' : (payload?.prefix || '')
     const noteMethod = typeof payload === 'string' ? '' : (payload?.noteMethod || '')
+    const templateId = typeof payload === 'string' ? '' : String(payload?.templateId || '').trim()
 
     let finalTitle = rawTitle || i18n.t('untitled')
     try {
@@ -1447,7 +1448,27 @@ export default {
       console.warn('[createNote] Failed to check duplicate titles:', err)
     }
 
-    const initialContent = `# ${finalTitle}`
+    // 模板正文：H1 标题永远在最前；找不到模板 / 模板内容为空 → 仅写 # 标题
+    // 直接走 DatabaseClient.noteTemplates.getAll()，不依赖 store 缓存（避免「必须先打开设置」）。
+    // 读取路径防御：未知字段、空内容、错误类型一律 graceful fallback。
+    let templateBody = ''
+    if (templateId) {
+      try {
+        const list = await DatabaseClient.noteTemplates.getAll()
+        const arr = Array.isArray(list) ? list : []
+        const matched = arr.find(t => t && t.id === templateId)
+        if (matched) {
+          templateBody = String(matched.content || '').trim()
+        } else {
+          console.warn('[createNote] noteTemplate not found, fallback to empty template:', templateId)
+        }
+      } catch (err) {
+        console.warn('[createNote] load noteTemplates failed, fallback:', err)
+      }
+    }
+    const initialContent = templateBody
+      ? `# ${finalTitle}\n\n${templateBody}`
+      : `# ${finalTitle}`
     const now = Date.now()
     const draftPayload = {
       ...(isLogin && kbGuid ? { kbGuid } : {}),

@@ -379,18 +379,19 @@ class StateRender {
       const echo = echoMap.get(lookupKey) || (echoId ? echoMap.get(echoName) : null) || null
 
       // 判断是否为 echo-chant 类特效（离析/生生不息等）
+      // anno_source 顶层 type 直接承担分类语义（v2026-07-28 起）
       const isEchoEffect = (() => {
         if (!echo) return false
-        const kindFromSource = (() => {
+        const typeFromSource = (() => {
           try {
             const src = String(echo.anno_source || echo.template || '')
-            const m = src.match(/kind\s*:\s*['"]([^'"]+)['"]/)
+            const m = src.match(/type\s*:\s*['"]([^'"]+)['"]/)
             return m ? m[1] : ''
           } catch (error) { return '' }
         })()
-        if (kindFromSource === 'echo-chant' || kindFromSource === 'echo-tbd') return true
-        const dsKind = String(dataset.kind || '')
-        return dsKind === 'echo-chant' || dsKind === 'echo-tbd'
+        if (typeFromSource === 'echo-chant' || typeFromSource === 'echo-tbd') return true
+        const dsType = String(dataset.type || '')
+        return dsType === 'echo-chant' || dsType === 'echo-tbd'
       })()
 
       const cacheKey = JSON.stringify({

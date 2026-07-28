@@ -18,7 +18,12 @@
     "build-all": "quasar build -m electron -T all -P",
     "build": "quasar build -m electron",
     "build-7z": "cross-env ELECTRON_BUILDER_COMPRESSION_LEVEL=9 ELECTRON_BUILDER_7Z_FILTER=bcj2 quasar build -m electron",
-    "build-7z-develop": "cross-env ELECTRON_BUILDER_COMPRESSION_LEVEL=9 ELECTRON_BUILDER_7Z_FILTER=bcj2 quasar build -m electron -d"
+    "build-7z-develop": "cross-env ELECTRON_BUILDER_COMPRESSION_LEVEL=9 ELECTRON_BUILDER_7Z_FILTER=bcj2 quasar build -m electron -d",
+    "verify": "node scripts/verify-runner.js",
+    "verify:echo": "node scripts/verify-runner.js echo",
+    "verify:rune": "node scripts/verify-runner.js rune",
+    "verify:inherit": "node scripts/verify-runner.js inherit",
+    "verify:main-builtin": "node scripts/verify-runner.js main-builtin"
   },
   "dependencies": {
     "@electron/remote": "^2.1.3",

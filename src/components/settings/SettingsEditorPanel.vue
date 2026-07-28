@@ -68,6 +68,16 @@
           </div>
         </div>
       </SettingsSectionContent>
+
+      <!-- 模板 -->
+      <SettingsNoteTemplatePanel
+        v-if='subTab === $enums.EditorSubEnum.Template'
+        :note-templates='noteTemplates'
+        @add-template='$emit("add-template")'
+        @edit-template='$emit("edit-template", $event)'
+        @delete-template='$emit("delete-template", $event)'
+        @batch-delete='$emit("batch-delete-templates", $event)'
+      />
     </div>
   </div>
 </template>
@@ -75,13 +85,15 @@
 <script>
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
+import SettingsNoteTemplatePanel from 'components/settings/SettingsNoteTemplatePanel'
 import { NoteOrderTypeEnum } from 'src/utils/enum'
 
 export default {
   name: 'SettingsEditorPanel',
   components: {
     CategoryTabs,
-    SettingsSectionContent
+    SettingsSectionContent,
+    SettingsNoteTemplatePanel
   },
   props: {
     markdownOnly: {
@@ -99,6 +111,10 @@ export default {
     quickInsertColumns: {
       type: Number,
       required: true
+    },
+    noteTemplates: {
+      type: Array,
+      default: () => []
     }
   },
   data () {

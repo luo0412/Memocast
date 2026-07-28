@@ -44,6 +44,7 @@ export default function () {
     calendarDateBasis: DEFAULT_CALENDAR_DATE_BASIS,
     leftInnerSplitterRatio: 280,
     runeCards: [],
+    noteTemplates: [],
     echoCards: BUILTIN_ECHO_CARDS.map(echo => ({ ...echo })),
     // 右上角 AI 助手入口使用的实现由 AiAssistantProviderEnum 管理
     aiAssistantProvider: DEFAULT_AI_ASSISTANT_PROVIDER,

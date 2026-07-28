@@ -1,6 +1,23 @@
 <template>
   <div class='cloudfn-config'>
     <div class='cloudfn-form'>
+      <div class='cloudfn-provider-toggle q-mb-md'>
+        <div class='cloudfn-provider-label text-caption text-grey-6'>
+          {{ $t('cloudFunctionProvider') }}
+        </div>
+        <q-option-group
+          v-model='provider'
+          :options='providerOptions'
+          color='blue-7'
+          type='radio'
+          inline
+          class='cloudfn-provider-options'
+        />
+        <div class='cloudfn-provider-hint text-caption text-grey-7'>
+          {{ $t('cloudFunctionProviderHint') }}
+        </div>
+      </div>
+
       <div class='text-caption text-grey-6 q-mb-sm'>
         {{ $t('cloudFunctionIntro') }}
       </div>
@@ -136,6 +153,7 @@ export default {
   },
   data () {
     return {
+      provider: 'uniCloud',
       form: {
         baseUrl: '',
         appId: '',
@@ -146,6 +164,10 @@ export default {
       savedAt: '',
       testing: false,
       testResult: null,
+      providerOptions: [
+        { label: 'uniCloud', value: 'uniCloud' },
+        { label: 'sealaf', value: 'sealaf' }
+      ],
       platformOptions: [
         { label: 'h5', value: 'h5' },
         { label: 'electron', value: 'electron' },
@@ -213,6 +235,26 @@ export default {
 }
 .cloudfn-form {
   max-width: 560px;
+}
+
+.cloudfn-provider-toggle {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(120, 120, 120, 0.25);
+  background: rgba(0, 0, 0, 0.02);
+}
+.body--dark .cloudfn-provider-toggle {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.cloudfn-provider-label {
+  margin-bottom: 4px;
+}
+.cloudfn-provider-options {
+  margin-bottom: 2px;
+}
+.cloudfn-provider-hint {
+  margin-top: 2px;
 }
 
 </style>

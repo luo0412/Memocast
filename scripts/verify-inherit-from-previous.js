@@ -1,82 +1,50 @@
-// 验证 EchoRuntime 新增的「上一节点 value 继承」helper。
-// 直接 require EchoRuntime 是 ESM，所以用 import() 动态加载。
+// 验证「上一节点 value 继承」helper。
+// 这些 helper 当前散落在 echoInherit.js / echoPayloadCodec.js / echoCore.js 里，
+// 我们走 echoCore 聚合入口拿。
 const path = require('path')
 
 async function main () {
-  const url = `file:///${path.resolve('src/components/ui/editor/echo/EchoRuntime.js').replace(/\\/g, '/')}`
-  const mod = await import(url)
+  const echoCoreUrl = `file:///${path.resolve('src/components/echo/echoCore.js').replace(/\\/g, '/')}`
+  const mod = await import(echoCoreUrl)
   const {
     isInheritFromPreviousEnabled,
     echoInheritFromPrevious,
     extractPrevEchoTokenValue,
-    applyInheritedEchoValue,
-    createEchoPlaceholderPayload,
     encodeEchoPayload,
-    decodeEchoPayload
+    decodeEchoPayload,
+    createEchoPlaceholderPayload
   } = mod
 
-  const cases = []
   let pass = 0
   let fail = 0
+  const fails = []
 
   function check (name, cond, info) {
     if (cond) {
       console.log(`[OK]   ${name}`)
       pass += 1
     } else {
-      console.log(`[FAIL] ${name} ${info ? 'info=' + JSON.stringify(info) : ''}`)
-      cases.push({ name, info })
+      console.log(`[FAIL] ${name}${info ? ' info=' + JSON.stringify(info) : ''}`)
+      fails.push({ name, info })
       fail += 1
     }
   }
 
-  // --- 1. 默认不开启 ---
-  check(
-    'isInheritFromPreviousEnabled 默认 false（attrs 为空）',
-    isInheritFromPreviousEnabled({}) === false
-  )
-  check(
-    'isInheritFromPreviousEnabled({value: "abc"}) === false',
-    isInheritFromPreviousEnabled({ value: 'abc' }) === false
-  )
+  // --- 1. isInheritFromPreviousEnabled 各种 truthy 形式 ---
+  check('isInheritFromPreviousEnabled 默认 false（空对象）', isInheritFromPreviousEnabled({}) === false)
+  check('isInheritFromPreviousEnabled({value: "abc"}) === false', isInheritFromPreviousEnabled({ value: 'abc' }) === false)
+  check('isInheritFromPreviousEnabled({inheritFromPrevious: true})', isInheritFromPreviousEnabled({ inheritFromPrevious: true }) === true)
+  check('isInheritFromPreviousEnabled({inheritFromPrevious: "true"})', isInheritFromPreviousEnabled({ inheritFromPrevious: 'true' }) === true)
+  check('isInheritFromPreviousEnabled({inheritFromPrevious: "yes"})', isInheritFromPreviousEnabled({ inheritFromPrevious: 'yes' }) === true)
+  check('isInheritFromPreviousEnabled({inheritFromPrevious: "false"})', isInheritFromPreviousEnabled({ inheritFromPrevious: 'false' }) === false)
+  check('isInheritFromPreviousEnabled({inherit_from_previous: true})', isInheritFromPreviousEnabled({ inherit_from_previous: true }) === true)
 
-  // --- 2. 各种 truthy 形式 ---
-  check(
-    'isInheritFromPreviousEnabled({inheritFromPrevious: true})',
-    isInheritFromPreviousEnabled({ inheritFromPrevious: true }) === true
-  )
-  check(
-    'isInheritFromPreviousEnabled({inheritFromPrevious: "true"})',
-    isInheritFromPreviousEnabled({ inheritFromPrevious: 'true' }) === true
-  )
-  check(
-    'isInheritFromPreviousEnabled({inheritFromPrevious: "yes"})',
-    isInheritFromPreviousEnabled({ inheritFromPrevious: 'yes' }) === true
-  )
-  check(
-    'isInheritFromPreviousEnabled({inheritFromPrevious: "false"})',
-    isInheritFromPreviousEnabled({ inheritFromPrevious: 'false' }) === false
-  )
-  check(
-    'isInheritFromPreviousEnabled({inherit_from_previous: true})',
-    isInheritFromPreviousEnabled({ inherit_from_previous: true }) === true
-  )
+  // --- 2. echoInheritFromPrevious 多挂载位置（顶层 + echo.props）---
+  check('echoInheritFromPrevious 顶层字段', echoInheritFromPrevious({ inheritFromPrevious: true }) === true)
+  check('echoInheritFromPrevious echo.props 字段', echoInheritFromPrevious({ props: { inheritFromPrevious: true } }) === true)
+  check('echoInheritFromPrevious 顶层 + props 双 false', echoInheritFromPrevious({ props: {} }) === false)
 
-  // --- 3. echoInheritFromPrevious 多挂载位置 ---
-  check(
-    'echoInheritFromPrevious 顶层字段',
-    echoInheritFromPrevious({ inheritFromPrevious: true }) === true
-  )
-  check(
-    'echoInheritFromPrevious attrs 字段',
-    echoInheritFromPrevious({ attrs: { inheritFromPrevious: true } }) === true
-  )
-  check(
-    'echoInheritFromPrevious 顶层 + attrs 双 false',
-    echoInheritFromPrevious({ attrs: {} }) === false
-  )
-
-  // --- 4. extractPrevEchoTokenValue 提取上一节点 value ---
+  // --- 3. extractPrevEchoTokenValue 提取上一节点 value ---
   const md = [
     '前面一段普通 markdown。',
     '',
@@ -90,70 +58,42 @@ async function main () {
   const target = '@笔记摘录{id: "b"}'
   const targetIdx = md.indexOf(target)
   const prevA = extractPrevEchoTokenValue(md, targetIdx)
-  check(
-    'prev 提取任意 echo token (id=b 之前)',
-    prevA === '今天读了浪潮之巅',
-    { prevA }
-  )
+  check('prev 提取任意 echo token (id=b 之前)', prevA === '今天读了浪潮之巅', { prevA })
 
   const prevByName = extractPrevEchoTokenValue(md, targetIdx, { echoName: '笔记摘录' })
-  check(
-    'prev 按 echoName 过滤',
-    prevByName === '今天读了浪潮之巅',
-    { prevByName }
-  )
+  check('prev 按 echoName 过滤', prevByName === '今天读了浪潮之巅', { prevByName })
 
   const prevUnknown = extractPrevEchoTokenValue(md, targetIdx, { echoName: '不存在的' })
-  check(
-    'prev echoName 不匹配返回空',
-    prevUnknown === '',
-    { prevUnknown }
-  )
+  check('prev echoName 不匹配返回空', prevUnknown === '', { prevUnknown })
 
-  // --- 5. applyInheritedEchoValue ---
-  const r1 = applyInheritedEchoValue({ inheritFromPrevious: true, value: '已存在' }, 'prev')
-  check(
-    'applyInheritedEchoValue 已存在 value 不被覆盖',
-    r1.inherited === false && r1.attrs.value === '已存在',
-    r1
-  )
+  // --- 4. encode/decode payload round-trip（新结构：解出 { version, prompt, props }）---
+  const enc = encodeEchoPayload({ prompt: 'prompt X', props: { value: 'v1', n: 2 } })
+  const dec = decodeEchoPayload(enc)
+  check('encode/decode round-trip prompt', dec.prompt === 'prompt X', { dec })
+  check('encode/decode round-trip props.value', dec.props && dec.props.value === 'v1', { dec })
 
-  const r2 = applyInheritedEchoValue({ inheritFromPrevious: true }, 'prev value!')
-  check(
-    'applyInheritedEchoValue 空 value 用 prev 填充',
-    r2.inherited === true && r2.attrs.value === 'prev value!',
-    r2
-  )
-
-  const r3 = applyInheritedEchoValue({ inheritFromPrevious: false }, 'prev')
-  check(
-    'applyInheritedEchoValue 关闭时不填充',
-    r3.inherited === false && r3.attrs.value === undefined,
-    r3
-  )
-
-  // --- 6. createEchoPlaceholderPayload echo 名片层声明开启 + 传入 inheritedValue ---
+  // --- 5. createEchoPlaceholderPayload echo 名片层声明开启 + 传入 inheritedValue ---
   const echo = { id: 'd1', name: '笔记摘录', inheritFromPrevious: true }
   const ph = createEchoPlaceholderPayload(echo, { inheritFromPrevious: true, inheritedValue: '继承段落前文' })
   const decoded = decodeEchoPayload(ph)
   check(
-    'createEchoPlaceholderPayload inherit=true + prevValue 注入 value/prompt',
-    decoded.prompt === '继承段落前文' && decoded.attrs.value === '继承段落前文' && decoded.attrs.inheritFromPrevious === true,
+    'createEchoPlaceholderPayload inherit=true + prevValue 注入 props.value/prompt',
+    decoded.prompt === '继承段落前文' && decoded.props.value === '继承段落前文' && decoded.props.inheritFromPrevious === true,
     { decoded }
   )
   check(
     'createEchoPlaceholderPayload output 携带 definitionId',
-    decoded.attrs.definitionId === 'd1',
+    decoded.props.definitionId === 'd1',
     { decoded }
   )
 
-  // --- 7. echo 名片层未声明时，createEchoPlaceholderPayload 默认不开启 ---
+  // --- 6. echo 名片层未声明时，createEchoPlaceholderPayload 默认不开启 ---
   const plain = { id: 'd2', name: 'nice' }
   const ph2 = createEchoPlaceholderPayload(plain)
   const decoded2 = decodeEchoPayload(ph2)
   check(
     'createEchoPlaceholderPayload 默认未开启（inheritFromPrevious !== true）',
-    decoded2.attrs.inheritFromPrevious === false && decoded2.attrs.value === '',
+    decoded2.props.inheritFromPrevious === false && decoded2.props.value === '',
     { decoded2 }
   )
 

@@ -42,8 +42,13 @@
                   :note-list-dense-mode='noteListDenseMode'
                   :note-order-type='noteOrderType'
                   :quick-insert-columns='quickInsertColumns'
+                  :note-templates='noteTemplates'
                   @toggle-change='handleToggleChange'
                   @update-state='handleUpdateState'
+                  @add-template='openAddTemplate'
+                  @edit-template='openEditTemplate'
+                  @delete-template='confirmDeleteTemplate'
+                  @batch-delete-templates='confirmBatchDeleteTemplates'
                 />
               </q-tab-panel>
 
@@ -142,6 +147,15 @@
       @input='onEchoFormVisibleChange'
       @submit='onEchoSubmit'
     />
+    <NoteTemplateFormDialog
+      v-if='noteTemplateFormVisible'
+      :key='noteTemplateFormKey'
+      v-model='noteTemplateFormVisible'
+      :template='editingTemplate'
+      :read-only='noteTemplateReadOnly'
+      @input='onNoteTemplateFormVisibleChange'
+      @submit='onNoteTemplateSubmit'
+    />
     <SettingsAiModelDialog ref='aiModelDialog' @saved='loadAiModelConfigs' />
     <SettingsAiSkillDialog ref='aiSkillDialog' @saved='loadAiSkillConfigs' />
   </q-dialog>
@@ -155,6 +169,7 @@ import UpdateDialog from 'components/update/UpdateDialog'
 import RuneCard from 'components/rune/RuneCard'
 import RuneFormDialog from 'components/rune/RuneFormDialog'
 import EchoFormDialog from 'components/echo/EchoFormDialog'
+import NoteTemplateFormDialog from 'components/noteTemplate/NoteTemplateFormDialog'
 import NavigationDialog from 'components/navigation/NavigationDialog'
 import { BUILTIN_ECHO_CARDS } from 'components/echo/echoCore'
 
@@ -193,6 +208,7 @@ export default {
     RuneCard,
     RuneFormDialog,
     EchoFormDialog,
+    NoteTemplateFormDialog,
     NavigationDialog,
     SettingsNav,
     SettingsGeneralPanel,
@@ -216,6 +232,10 @@ export default {
       echoFormKey: 0,
       editingEcho: null,
       echoCategory: DEFAULT_ECHO_CATEGORY,
+      noteTemplateFormVisible: false,
+      noteTemplateFormKey: 0,
+      editingTemplate: null,
+      noteTemplateReadOnly: false,
       navigationDialogVisible: false,
       checkingNotify: null,
       // AI 配置
@@ -246,6 +266,14 @@ export default {
         this.updateStateAndStore({ echoCards: val })
       }
     },
+    localNoteTemplates: {
+      get () {
+        return this.noteTemplates
+      },
+      set (val) {
+        this.updateStateAndStore({ noteTemplates: val })
+      }
+    },
     version () {
       return version
     },
@@ -260,6 +288,7 @@ export default {
       'theme',
       'themes',
       'runeCards',
+      'noteTemplates',
       'echoCards',
       'aiAssistantProvider',
       'cloudSyncProvider',
@@ -290,6 +319,7 @@ export default {
       this._dataLoaded = true
       this.loadRunes()
       this.loadEchoes()
+      this.loadNoteTemplates()
       this.loadAiModelConfigs()
       this.loadAiSkillConfigs()
       await this.initCdnDeps()
@@ -788,6 +818,123 @@ export default {
       })
     },
 
+    // ==================== Note Template 面板事件 ====================
+    openAddTemplate () {
+      this.editingTemplate = null
+      this.noteTemplateReadOnly = false
+      this.openNoteTemplateFormDialog()
+    },
+    openEditTemplate (tpl) {
+      this.editingTemplate = tpl ? { ...tpl } : null
+      // 内置模板在打包环境下仅可查看
+      this.noteTemplateReadOnly = Boolean(tpl && tpl.is_builtin && process.env.PROD === true)
+      this.openNoteTemplateFormDialog()
+    },
+    openNoteTemplateFormDialog () {
+      this.noteTemplateFormKey += 1
+      this.noteTemplateFormVisible = true
+    },
+    onNoteTemplateFormVisibleChange (visible) {
+      this.noteTemplateFormVisible = visible
+      if (!visible) {
+        this.$nextTick(() => {
+          this.editingTemplate = null
+          this.noteTemplateReadOnly = false
+        })
+      }
+    },
+    isTemplateReadOnly (tpl) {
+      return Boolean(tpl && tpl.is_builtin && process.env.PROD === true)
+    },
+    async onNoteTemplateSubmit (data) {
+      // 防御：内置模板在打包环境下禁止保存
+      if (data && data.id && this.isTemplateReadOnly(this.localNoteTemplates.find(t => t && t.id === data.id))) {
+        this.$q.notify({ message: this.$t('noteTemplateReadOnly'), type: 'warning', position: 'top' })
+        return
+      }
+      const name = String(data && data.name || '').trim()
+      if (!name) {
+        this.$q.notify({ message: this.$t('noteTemplateNameRequired'), type: 'warning', position: 'top' })
+        return
+      }
+      // 同名检查
+      const dupNameKey = name.toLowerCase()
+      const storeConflict = (this.localNoteTemplates || []).find(item => {
+        if (!item || !item.name || item.id === data.id) return false
+        return String(item.name).trim().toLowerCase() === dupNameKey
+      })
+      if (storeConflict) {
+        this.$q.notify({ message: this.$t('noteTemplateNameExists'), type: 'warning', position: 'top' })
+        return
+      }
+      const result = await this.saveNoteTemplate({
+        id: data.id,
+        name,
+        desc: String(data.desc || ''),
+        content: String(data.content || ''),
+        sort_order: Number(data.sort_order) || 0,
+        // created_at / updated_at 由主进程 saveOne 用 now 生成；前端不要再传 null
+        created_at: data.created_at || null,
+        updated_at: data.updated_at || null,
+        // 显式标记「非内置」，主进程会有自己默认值
+        is_builtin: data.is_builtin ? 1 : 0
+      })
+      if (result && result.success && result.data) {
+        const list = [...this.localNoteTemplates]
+        const idx = list.findIndex(t => t.id === result.data.id)
+        if (idx >= 0) list.splice(idx, 1, result.data)
+        else list.push(result.data)
+        this.updateStateAndStore({ noteTemplates: list })
+      } else {
+        const code = result && result.code
+        let message = this.$t('noteTemplateSaveFailed')
+        if (code === 'NAME_REQUIRED') message = this.$t('noteTemplateNameRequired')
+        else if (result && result.message) message = `${message}: ${result.message}`
+        this.$q.notify({ message, type: 'warning', position: 'top' })
+      }
+    },
+    confirmDeleteTemplate (tpl) {
+      if (!tpl) return
+      if (this.isTemplateReadOnly(tpl)) {
+        this.$q.notify({ message: this.$t('noteTemplateReadOnly'), type: 'warning', position: 'top' })
+        return
+      }
+      this.$q.dialog({
+        title: this.$t('noteTemplateDelete'),
+        message: this.$t('noteTemplateDeleteConfirm', { name: tpl.name }),
+        cancel: { label: this.$t('cancel') },
+        persistent: true
+      }).onOk(async () => {
+        await this.deleteNoteTemplate(tpl.id)
+        const list = (this.localNoteTemplates || []).filter(t => t.id !== tpl.id)
+        this.updateStateAndStore({ noteTemplates: list })
+      })
+    },
+    confirmBatchDeleteTemplates (selectedIds) {
+      if (!Array.isArray(selectedIds) || selectedIds.length === 0) return
+      // 防御：打包环境下过滤掉内置模板
+      const deletableIds = selectedIds.filter(id => {
+        const item = (this.localNoteTemplates || []).find(t => t && t.id === id)
+        return item && !this.isTemplateReadOnly(item)
+      })
+      if (deletableIds.length === 0) {
+        this.$q.notify({ message: this.$t('noteTemplateReadOnly'), type: 'warning', position: 'top' })
+        return
+      }
+      this.$q.dialog({
+        title: this.$t('noteTemplateBatchDelete'),
+        message: this.$t('noteTemplateBatchDeleteConfirm', { count: deletableIds.length }),
+        cancel: { label: this.$t('cancel') },
+        persistent: true
+      }).onOk(async () => {
+        for (const id of deletableIds) {
+          await this.deleteNoteTemplate(id)
+        }
+        const list = (this.localNoteTemplates || []).filter(t => !deletableIds.includes(t.id))
+        this.updateStateAndStore({ noteTemplates: list })
+      })
+    },
+
     // ==================== 更新相关 ====================
     updateAvailableHandler (info) {
       if (this.checkingNotify && this.checkingNotify instanceof Function) {
@@ -844,12 +991,16 @@ export default {
       'updateStateAndStore',
       'loadRunes',
       'loadEchoes',
+      'loadNoteTemplates',
       'saveRune',
       'saveEcho',
+      'saveNoteTemplate',
       'deleteRune',
       'deleteEcho',
+      'deleteNoteTemplate',
       'saveRunes',
-      'saveEchoes'
+      'saveEchoes',
+      'saveNoteTemplates'
     ]),
     ...mapClientMutations({ UPDATE_SYNC_STATUS: 'update_sync_status' }),
     async initCdnDeps () {

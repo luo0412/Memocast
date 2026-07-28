@@ -8,11 +8,14 @@
 // user-defined / builtin echo 都基于这套模板机制。
 //
 // handler 函数体统一用 jQuery：`const $ = window.jQuery` 由 HANDLER_PRELUDE 注入。
+// 防御性 fallback：Node 端 / 测试场景没有 window.jQuery，$ 退化为 null。
+// 此时 compile 仍可成功（render(props) 不依赖 $）；handler 里 `$(node).x` 调用会 NPE，
+// 但这是 handler 自带的事，按 §3.5 graceful skip 路径兜住（EchoRuntime 已捕获）。
 // ============================================================================
 
 import { DEFAULT_ECHO_COLOR, DEFAULT_ECHO_ICON } from './builtin-echo-shared.js'
 
-export const HANDLER_PRELUDE = 'const $ = window.jQuery\n'
+export const HANDLER_PRELUDE = "const $ = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null\n"
 
 export const safeEvalAnnoSource = (source = '', prelude = '') => {
   const normalized = String(source || '').replace(/export\s+default/, 'return ')
@@ -20,7 +23,8 @@ export const safeEvalAnnoSource = (source = '', prelude = '') => {
 }
 
 export const createDefaultEchoAnnoSource = (echoName = '回响') => `export default {
-  kind: 'echo',
+  // === 顶层 type 直接承担分类语义（'echo' | 'echo-chant' | 'echo-tbd'）===
+  // 不再保留独立 kind 字段——type 就是分类，简洁一致。
   type: 'echo',
   field: '回响',
   title: '${String(echoName || '回响').replace(/'/g, "\\'")}',

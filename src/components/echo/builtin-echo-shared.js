@@ -35,14 +35,23 @@ export const DEFAULT_ECHO_ICON = 'graphic_eq'
 //   与 form-create 的 rule.props / rule.on / rule.options / rule.info 字段对齐，
 //   方便 EchoInstanceDialog 直接透传给 form-create 控件。
 //
-//   - props.value       文本内容（prompt 同步；基础设施字段，handler 不要直接覆盖）
-//   - props.id          实例 id
-//   - props.definitionId  echo 定义 id
-//   - props.kind        echo-chant / echo / echo-tbd
-//   - props.inheritFromPrevious  是否继承上一节点 value
+//   === EchoRuntime 注入到 handler / render 拿到的 props（v2026-07-28 起）===
+//     - props.type          'echo' | 'echo-chant' | 'echo-tbd'  （来自 definition.type）
+//     - props.field         echo 名片 id（来自 definition.field）
+//     - props.title         echo 名片中文名（来自 definition.title）
+//     - props.version       definition.version（默认 1）
+//     - props.definitionId  matchedEcho.id（echo 名片稳定 id）
+//     - props.<自定义字段>   anno_source 顶层 props 声明的 defaults ∪ 实例 mergedProps
+//     - props.value         resolved value（基础设施字段，handler 不要直接覆盖）
+//     - props.id            resolved id（基础设施字段，handler 不要直接覆盖）
+//
+//   === form-create 弹框隐藏字段（不让用户编辑）===
+//   EchoInstanceDialog 用 `RESERVED_PROPS_FIELDS` 把以下字段从 form-create schema 里过滤掉，
+//   因为这些字段由 EchoRuntime / 弹框自动管理：
+//     - id, definitionId, value, inheritFromPrevious, type
 //
 // 渲染层（render 返回值）的 props 字段就是实例参数对象，handler 体内访问统一 `props.xxx`。
-export const DEFAULT_ECHO_PROPS_RESERVED = Object.freeze(['value', 'id', 'definitionId', 'kind', 'inheritFromPrevious'])
+export const DEFAULT_ECHO_PROPS_RESERVED = Object.freeze(['value', 'id', 'definitionId', 'type', 'inheritFromPrevious'])
 
 // 捕获组：[name, propsRaw, promptRaw]；propsRaw 可缺省，因此 @name() 也匹配得上。
 // 单行 prompt（[^)]*）以避免误吞下游 markdown；name 必须 1+ 字符。

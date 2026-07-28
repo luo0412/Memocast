@@ -117,6 +117,29 @@ export default {
       console.error('[Runes] loadRunes error:', err)
     }
   },
+  async loadNoteTemplates ({ commit }) {
+    try {
+      const templates = await DatabaseClient.noteTemplates.getAll()
+      if (Array.isArray(templates)) {
+        // 读取路径防御：丢弃缺 id/name 的脏数据
+        const sanitized = templates
+          .filter(t => t && t.id && String(t.name || '').trim())
+          .map(t => ({
+            id: String(t.id),
+            name: String(t.name || ''),
+            desc: String(t.desc || ''),
+            content: String(t.content || ''),
+            is_builtin: t.is_builtin ? 1 : 0,
+            sort_order: Number(t.sort_order) || 0,
+            created_at: Number(t.created_at) || 0,
+            updated_at: Number(t.updated_at) || 0
+          }))
+        commit(types.TOGGLE_CHANGED, { key: 'noteTemplates', value: sanitized })
+      }
+    } catch (err) {
+      console.error('[NoteTemplates] loadNoteTemplates error:', err)
+    }
+  },
   async loadEchoes ({ commit }) {
     try {
       const storedFromDb = await DatabaseClient.echoes.getAll()
@@ -153,6 +176,9 @@ export default {
   async saveRune (_, rune) {
     return await DatabaseClient.runes.save(rune)
   },
+  async saveNoteTemplate (_, template) {
+    return await DatabaseClient.noteTemplates.save(template)
+  },
   async saveEcho (_, echo) {
     // 内置回响在本地 dev 模式 (!isProd) 下允许入库（覆盖代码版默认模板），
     // 生产模式 (isProd) 仍只写非 builtin 行，避免污染云端默认模板。
@@ -166,11 +192,17 @@ export default {
   async deleteRune (_, id) {
     return await DatabaseClient.runes.remove(id)
   },
+  async deleteNoteTemplate (_, id) {
+    return await DatabaseClient.noteTemplates.remove(id)
+  },
   async deleteEcho (_, id) {
     return await DatabaseClient.echoes.remove(id)
   },
   async saveRunes (_, runes) {
     return await DatabaseClient.runes.saveMany(runes)
+  },
+  async saveNoteTemplates (_, templates) {
+    return await DatabaseClient.noteTemplates.saveMany(templates)
   },
   async saveEchoes (_, echoes) {
     // 内置回响在本地 dev 模式 (!isProd) 下允许入库（覆盖代码版默认模板），

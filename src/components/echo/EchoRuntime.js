@@ -9,9 +9,9 @@
 //   5. disposeAll()            —— 清掉所有已注册的 cleanup
 //
 // === anno_source definition 新结构（v2026-07-28）===
-//   definition = { kind, type, field, title, version, props, render, afterRender }
-//   - kind      'echo' | 'echo-chant' | 'echo-tbd'        （顶层 kind）
-//   - type      'echo'                                    （顶层 type 标识，保留扩展位）
+//   definition = { type, field, title, version, props, render, afterRender }
+//   - type      'echo' | 'echo-chant' | 'echo-tbd'        （顶层 type 直接承担分类语义，
+//                                                            不再有独立的 kind 字段）
 //   - field     '<id>'                                    （id 别名）
 //   - title     '<name>'                                  （name 别名）
 //   - props     {}                                       （echo 卡片声明的可配置参数默认值）
@@ -155,7 +155,7 @@ export default class EchoRuntime {
     // definition 兜底：必须至少有 render(node, props) 函数；afterRender 可选。
     // 没有 render 时返回占位空 span，让上游 fallback 卡片样式兜底。
     if (!definition || typeof definition !== 'object') {
-      definition = { kind: 'echo', type: 'echo', field: echo.id || '', title: echo.name || '回响', version: 1, props: {}, render: () => '' }
+      definition = { type: 'echo', field: echo.id || '', title: echo.name || '回响', version: 1, props: {}, render: () => '' }
     } else {
       if (typeof definition.render !== 'function') definition.render = () => ''
     }
@@ -203,9 +203,28 @@ export default class EchoRuntime {
 
     const definition = this.compileDefinition(matchedEcho)
 
-    // === 新结构：definition.props（卡片声明默认） ∪ mergedProps（实例运行时）→ finalProps ===
+    // === 新结构：finalProps = metadata (type/field/title/version/definitionId)
+    //                   ∪ definition.props (卡片声明默认)
+    //                   ∪ mergedProps (实例运行时)
+    //                   ∪ { value: resolvedValue, id: resolvedId } (基础设施字段强制覆盖)
+    //
+    // metadata 注入是为了让 handler 体里能直接 `props.title` / `props.field` / `props.type`
+    // 读到 echo 名片元数据，与 `props.value` / `props.id` 风格一致；
+    // 不破坏已有的 defaults / instance props 合并顺序。
     const defaultProps = (definition && typeof definition.props === 'object' && definition.props) || {}
-    const finalProps = Object.assign({}, defaultProps, mergedProps, { value: resolvedValue, id: resolvedId })
+    const finalProps = Object.assign(
+      {},
+      {
+        type: definition?.type || matchedEcho.type || 'echo',
+        field: definition?.field || matchedEcho.id || '',
+        title: definition?.title || matchedEcho.name || context.name || '回响',
+        version: typeof definition?.version === 'number' ? definition.version : 1,
+        definitionId: matchedEcho.id || ''
+      },
+      defaultProps,
+      mergedProps,
+      { value: resolvedValue, id: resolvedId }
+    )
     context.props = finalProps
 
     // === 新结构：definition.render(finalProps) → HTML 字符串 ===
@@ -231,8 +250,7 @@ export default class EchoRuntime {
     const normalized = createFallbackRenderResult(context)
     normalized.html = html || normalized.html
     if (afterRenderHook) normalized.afterRenderHook = afterRenderHook
-    normalized.kind = definition?.kind || matchedEcho.kind || 'echo'
-    normalized.type = definition?.type || 'echo'
+    normalized.type = definition?.type || matchedEcho.type || 'echo'
     normalized.field = definition?.field || matchedEcho.id || ''
     normalized.title = definition?.title || matchedEcho.name || context.name || '回响'
     normalized.props = finalProps

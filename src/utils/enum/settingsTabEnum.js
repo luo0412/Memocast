@@ -27,8 +27,9 @@ const GeneralSubEnum = Enum({
 
 // ---------- 编辑器 ----------
 const EditorSubEnum = Enum({
-  Note:  { value: 'note',  label: 'editorNote',  icon: 'article' },
-  Panel: { value: 'panel', label: 'editorPanel', icon: 'dashboard' }
+  Note:     { value: 'note',     label: 'editorNote',     icon: 'article' },
+  Panel:    { value: 'panel',    label: 'editorPanel',    icon: 'dashboard' },
+  Template: { value: 'template', label: 'editorTemplate', icon: 'description' }
 })
 
 // ---------- AI ----------

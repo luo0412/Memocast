@@ -1,0 +1,148 @@
+---
+description: 符文 / 回响 / 云函数的 verify 脚本是 AI 时代的契约护城河 —— 必须维护、必须跑、必须扩
+alwaysApply: true
+---
+
+# 符文 / 回响 / 云函数 —— 测试护城河规则
+
+> **AI 时代，测试用例才是真正的护城河。**
+>
+> 代码会被重构、命名会改、字段会搬——只要 verify 脚本锁住了"事实契约"，下游消费者永远安全。
+>
+> 本规则约束 rune / echo / 云函数 三类试验特性的 verify 脚本（位于 `scripts/verify-*.js`）的**维护义务**：什么时候必须加、什么时候必须跑、什么时候必须改。
+
+---
+
+## 1. 适用范围
+
+| 特性 | 主战场 | verify 脚本覆盖 |
+|---|---|---|
+| **符文（Rune）** | `src/components/rune/`、`src/components/muya/Muya.vue` | `verify-rune-templates.js` |
+| **回响（Echo）** | `src/components/echo/`、`src/muya/lib/parser/render/index.js`、`src-electron/main-process/service/builtin-echoes.js` | `verify-jquery-echo-compile.js`、`verify-jquery-afterrender.js`、`verify-echo-runtime-props.js`、`verify-main-builtin-echoes.js`、`verify-builtin-echo-upsert.js` |
+| **云函数** | `src/utils/cloud-router.js`、`src/services/cloud/`、`src/components/ui/dialog/CloudFnConfigDialog.vue` | （目前**没有**专门的云函数 verify 脚本——见 §5） |
+| **跨三特性公共** | `src/components/echo/echoInherit.js`、`src/components/echo/echoPayloadCodec.js`、`src/components/echo/echoCore.js` | `verify-inherit-from-previous.js` |
+
+---
+
+## 2. 核心原则（一句话）
+
+> **任何对 rune / echo / 云函数的实质性改动，必须同步更新 verify 脚本；任何 verify 脚本的失败，必须当作破坏性 bug 处理，不能静默放行。**
+
+---
+
+## 3. 必须维护的 verify 脚本清单
+
+### 3.1 当前已有的护城河（v2026-07-28 起）
+
+| 脚本 | 锁定的契约 | 触发失败的典型改动 |
+|---|---|---|
+| `verify-echo-runtime-props.js` | `definition.render(props)` / `definition.afterRender(node, props)` 真的能拿到参数；props 合并顺序；fallback 路径（no anno_source / compile fail / render throws / echo 未注册）；graceful skip（未知 type）；payload round-trip | 改 HANDLER_PRELUDE 让 compile 失败、动 `finalProps` 合并顺序、删 fallback、误把 `$emit('input', ...)` 改成别的通道 |
+| `verify-jquery-echo-compile.js` | 16 张内置 anno_source **顶层结构**（`type` / `field` / `title` / `version` / `props`）；`render` 必须返回 string；`type=echo-chant` 必须有 `afterRender`；**`kind` 字段不能再出现**（已合并到 `type`） | 改 `createAnnoSource` 拼装模板时漏字段、改 `baseRender` 让它返回 object、改 type 三态分类 |
+| `verify-jquery-afterrender.js` | 16 张 handlerBody 用 `$(node)` 直 jQuery 化；无 native fallback（`document.querySelector` / `.classList.add` / `.previousElementSibling` / `.style.x = `）；`echoAnnoSource.js` 导出 `HANDLER_PRELUDE` / `createDefaultEchoAnnoSource`；旧命名 `safeDollarRef` / `createDefaultChantAnnoSource` 不再出现 | 给 handlerBody 偷加原生兜底、改 HANDLER_PRELUDE 不再注入 $、把 `createDefaultEchoAnnoSource` 改名 |
+| `verify-main-builtin-echoes.js` | main 端 CJS 镜像里 16 张卡的 anno_source **类型契约**与 renderer 端一致；`type` 三态合法；`kind` 不再出现 | 改 renderer 端 echoBuiltins.js 但忘了跑 `transform-main-builtin-echoes.js` 同步镜像；或 transform 脚本里的 import/export 正则坏掉 |
+| `verify-builtin-echo-upsert.js` | DB 落库的 anno_source 与代码侧**逐字节一致**；二次覆盖幂等；删一条后再 upsert 能重新插入；时间戳语义（created_at 保留、updated_at 刷成 now） | 改 echoBuiltins.js 但忘了触发 upsert；改 DB schema；改 seedBuiltinEchoes 写入路径 |
+| `verify-rune-templates.js` | 14 个内置 rune SFC 模板的**源文件级转义**（`</script>` 必须写成 `<\/script>`，否则 .vue 文件 import 时会被截断）；运行时**语法可编译**；**`props.value` 必须声明**（`mountRuneVueHosts` 硬约定）；非纯展示型 rune 必须有 `$emit('input', ...)` 回写通道 | 在 rune-templates.js 源文件里直接写 `</script>`；删 props.value；改 `$emit('input')` 为别的通道 |
+| `verify-inherit-from-previous.js` | `isInheritFromPreviousEnabled` 各种 truthy 形式；`echoInheritFromPrevious` 看顶层 + `echo.props`；`extractPrevEchoTokenValue` 按 echoName 过滤；`encodeEchoPayload` / `decodeEchoPayload` round-trip；`createEchoPlaceholderPayload` 注入 `definitionId` / `title` / `inheritFromPrevious` 标记 | 改 inherit helper 真值表；把 `decodeEchoPayload` 输出形态从 `{ version, prompt, props }` 改成 `{ version, prompt, attrs }` |
+| `verify-enum-boot-smoke.js` | `$enums.ServerSubEnum` / `$enums.AiSubEnum` / `$enums.runeEchoCategoriesEnum` / `$enums.noteOrderTypeEnum` 等核心 enum 在 boot 阶段挂载完整 | 改 enum 目录结构、改 enumSetup.js 加载顺序 |
+| `verify-util-boot-smoke.js` | `$utils.emptyUtil.isNullOrEmpty` / `$utils.treeUtil.wizIsPredefinedLocation` / `$utils.dateUtil.displayDateElegantly` 在 boot 阶段挂载完整 | 改 util 文件夹命名 / 改 boot 加载 |
+| `verify-enum-util-regex.js` | 文件命名规范自检：`[a-z]\w*Util.js$` 匹配 / 大驼峰 PascalCase 不匹配 | 改 component-naming.mdc 规范本身 |
+
+### 3.2 一键入口
+
+| 命令 | 作用 |
+|---|---|
+| `yarn verify` | 跑全部 verify 脚本（10 个），失败任意一个 exit 1 |
+| `yarn verify:echo` | 只跑 echo 相关（5 个） |
+| `yarn verify:rune` | 只跑 rune 相关（1 个） |
+| `yarn verify:inherit` | 只跑 inherit 相关（1 个） |
+| `yarn verify:main-builtin` | 只跑 main 端镜像（1 个） |
+| `node scripts/verify-runner.js <filter>` | 自定义过滤（脚本名含子串） |
+
+---
+
+## 4. 何时必须更新 verify 脚本
+
+### 4.1 触发新增 / 修改 verify 用例
+
+- **新增 / 删除 / 重命名 anno_source 顶层字段**（如 v2026-07-28 的 `kind` → `type` 合并）→ 必须更新对应 verify 脚本的字段断言
+- **改 `definition.render` / `definition.afterRender` 签名** → `verify-echo-runtime-props.js` 必须跟着改
+- **新增 / 删除内置 rune 模板**（`rune-templates.js` 里加 export）→ 必须更新 `verify-rune-templates.js` 的 `TEMPLATE_NAMES` 列表
+- **改 props 合并优先级 / fallback 策略** → 必须更新 `verify-echo-runtime-props.js` 第 3 节
+- **改 `HANDLER_PRELUDE` 形态**（`$ = window.jQuery` 这种）→ 必须更新 `verify-echo-compile.js` 让 Node 端能跑（fallback）
+- **改 mountRuneVueHosts 对 SFC props 的硬约定**（如要求 `runeId` / `nodeId` 必填）→ 必须更新 `verify-rune-templates.js` 的 props 字段断言
+
+### 4.2 触发新增 verify 脚本（新规则）
+
+任何**新出现的契约**（之前没人锁过的），且满足以下条件之一，必须新增脚本：
+
+1. **跨文件、跨模块的语义约定**（如 props 合并顺序、handlerDoc 签名）
+2. **会被未来 agent / 重构改动冲掉的代码模式**（如 `safeDollarRef` 这类容易复活的死代码）
+3. **运行时高风险路径**（compile / render / payload codec）
+4. **AI agent 容易踩坑的边缘 case**（如 fall-through 的 fallback、graceful skip）
+
+### 4.3 触发新增 / 修复 verify 失败
+
+任何 verify 脚本的 FAIL 输出 = **破坏性 bug 信号**，必须按以下顺序处理：
+
+1. **先确认是代码 bug 还是测试 bug**：
+   - 测试断言过期（被新方案替代）→ 改测试，按 §4.1
+   - 实际代码不满足契约 → 修代码，**不允许删测试用例来放行**
+2. **修完后必须重新跑 `yarn verify` 整轮**，确保没引入回归
+3. **失败明细必须写到对话上下文**，让用户能看到（按 §3.1 失败不静默）
+
+---
+
+## 5. 当前缺口（待补）
+
+> 这些是**已知**但**还没补**的契约层，列入 backlog：
+
+| 缺口 | 建议 verify 脚本 | 优先级 |
+|---|---|---|
+| 云函数调用链路（`cloud.invoke` / `unwrap` / token 注入） | `verify-cloud-invoke-unwrap.js` | 高（云函数是稳定功能的入口） |
+| Muya parser 里 `echo_anno` 规则正则 | `verify-muya-echo-anno-re.js` | 中 |
+| DB schema 与 `app_state` / `rune` / `echo` 表结构 | `verify-db-schema-rune-echo.js` | 高 |
+| `transform-main-builtin-echoes.js` 的输出与 renderer 端**逐字节一致**（目前只验类型契约，不验字节） | 加 `verify-main-renderer-byte-equal.js` | 中 |
+| `Muya.vue` 的 `createRuneRendererCtor` 输出形态 | `verify-rune-renderer-ctor.js` | 中 |
+
+新增 verify 脚本后，必须：
+1. 更新本规则 §3.1 清单
+2. 在 `package.json` 加对应 `yarn verify:*` 短命令（或合并到现有 filter）
+3. 在 verify-runner.js 的顶部注释里同步登记
+
+---
+
+## 6. 禁止的反模式
+
+```javascript
+// ❌ 禁止：为了"通过 verify"而删用例
+// （verify-jquery-echo-compile.js 里看到 16/16 通过，但实际只跑了 8 张卡——这种"凑数"绝对禁止）
+
+// ❌ 禁止：把 verify 脚本改成"warn 而不 throw"
+process.exit(0) // ← 任何 verify 失败都不允许绕过
+
+// ❌ 禁止：把测试断言写成"匹配任意"（如 toMatch(/.*/)）
+check('render 输出 HTML', /.*/.test(html))
+
+// ❌ 禁止：硬编码 16 张卡数量但实际只有 15 张
+// 必须用 BUILTIN_ECHO_CARDS.length 这种动态来源
+```
+
+---
+
+## 7. 自检清单（改 rune / echo / 云函数前默念）
+
+1. 我改的是 rune / echo / 云函数相关代码吗？
+2. 这个改动是否会影响 anno_source 顶层结构 / render 签名 / props 合并 / fallback 路径？
+3. 对应的 verify 脚本里是否已经有覆盖？
+4. 如果没有，按 §4.2 新增一个；如果已有，按 §4.1 更新断言。
+5. 跑 `yarn verify` 整轮确认无回归。
+6. 任何 FAIL 都按 §4.3 处理。
+
+---
+
+## 8. 与其它规则的关系
+
+- **本规则优先于**通用的"测试可有可无"直觉——rune / echo / 云函数的契约**必须有 verify**。
+- **`rune-echo-cloudfn-experimental.mdc`** 仍然适用：本规则负责"测试护城河"，那个规则负责"代码简洁性 / 不背历史包袱"。两者不冲突：可以删兼容分支，但必须删之前用 verify 锁住现状。
+- **`package-manager.mdc`** 仍然适用：依赖用 yarn；新增 verify 脚本不引入新依赖（verify 脚本只用 Node 内置 + 项目已有依赖）。
+- **`safe-shell.mdc`** 仍然适用：跑 `yarn verify` 前如有破坏性操作先备份。

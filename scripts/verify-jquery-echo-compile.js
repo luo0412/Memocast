@@ -39,7 +39,6 @@ function loadBuiltinEchoes () {
 
 const HANDLER_PRELUDE_SOURCE = [
   "const __safeDollarRuntime = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null",
-  "if (!__safeDollarRuntime) console.warn('[EchoRuntime] jQuery is missing on window; echo handlers will fall back to no-op')",
   "const $ = __safeDollarRuntime"
 ].join('\n')
 
@@ -63,8 +62,8 @@ function main () {
   for (const ec of BUILTIN_ECHO_CARDS) {
     const label = `[${ec.id}] ${ec.name}`
     try {
-      const normalized = ec.anno_source.replace(/export\s+default/, 'return ')
-      const code = HANDLER_PRELUDE_SOURCE + normalized
+      const normalized = ec.anno_source.replace(/export\s+default/, 'return')
+      const code = HANDLER_PRELUDE_SOURCE + '\n' + normalized + '\n'
       // eslint-disable-next-line no-new-func
       const fn = new Function(code)
       if (typeof fn !== 'function') throw new Error('new Function() 没返回 function')
@@ -73,9 +72,10 @@ function main () {
       if (!def || typeof def !== 'object') throw new Error('definition 不是对象')
 
       // === 新结构（v2026-07-28）：顶层元数据 ===
-      const validKinds = new Set(['echo', 'echo-chant', 'echo-tbd'])
-      if (!validKinds.has(def.kind)) throw new Error('顶层 kind 必须是 echo / echo-chant / echo-tbd，实际=' + def.kind)
-      if (def.type !== 'echo') throw new Error('顶层 type 必须等于 echo，实际=' + def.type)
+      // type 直接承担分类语义（echo / echo-chant / echo-tbd），不再有独立 kind 字段
+      const validTypes = new Set(['echo', 'echo-chant', 'echo-tbd'])
+      if (!validTypes.has(def.type)) throw new Error('顶层 type 必须是 echo / echo-chant / echo-tbd，实际=' + def.type)
+      if ('kind' in def) throw new Error('definition 不应再含顶层 kind 字段（已合并到 type）')
       if (!def.field) throw new Error('顶层 field 不能为空（id 别名）')
       if (!def.title) throw new Error('顶层 title 不能为空（name 别名）')
       if (typeof def.version !== 'number') throw new Error('顶层 version 必须为 number')
@@ -87,14 +87,14 @@ function main () {
       const rendered = def.render({})
       if (typeof rendered !== 'string') throw new Error('render() 必须返回 string，实际=' + typeof rendered)
 
-      // === afterRender：kind=echo-chant 必有；kind=echo 不强求 ===
+      // === afterRender：type=echo-chant 必有；type=echo 不强求 ===
       const hasAfterRender = typeof def.afterRender === 'function'
-      if (def.kind === 'echo-chant' && !hasAfterRender) {
+      if (def.type === 'echo-chant' && !hasAfterRender) {
         throw new Error('echo-chant 缺少 afterRender')
       }
 
       pass += 1
-      console.log('[OK]   ' + label + ' (kind=' + def.kind + ', afterRender=' + hasAfterRender + ')')
+      console.log('[OK]   ' + label + ' (type=' + def.type + ', afterRender=' + hasAfterRender + ')')
     } catch (err) {
       fail += 1
       console.log('[FAIL] ' + label + ' -> ' + err.message)

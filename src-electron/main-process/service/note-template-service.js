@@ -86,9 +86,12 @@ function createNoteTemplateService ({ db, execToObjects, execOne, saveDatabase, 
           [...params, row.id]
         )
       } else {
+        // 表 8 列：id, name, "desc", content, is_builtin, sort_order, created_at, updated_at
+        // params = [name, desc, content, is_builtin, sort_order, now(updated_at)]
+        // created_at 也用 now；[row.id, ...params, now] = 1+6+1 = 8 个
         db.run(
           `INSERT INTO note_templates (id, name, "desc", content, is_builtin, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [row.id, ...params]
+          [row.id, ...params, now]
         )
       }
       if (typeof saveDatabase === 'function') saveDatabase()

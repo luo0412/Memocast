@@ -20,7 +20,7 @@ const { banner, handlerDoc } = require('./builtin-echo-shared')
 
 // ---------------------------------------------------------------------------
 // render(props) 工厂：直接产出 echo host HTML 字符串
-//   - 元数据（kind / field / title / version）由 createAnnoSource 顶层写死
+//   - 元数据（type / field / title / version）由 createAnnoSource 顶层写死
 //   - render() 只返回 HTML，不再打包 type/icon/color/... 那些运行时再补
 // ---------------------------------------------------------------------------
 const baseRender = (meta = {}) => `render (props = {}) {
@@ -39,22 +39,20 @@ const baseAfterRender = (handlerBody = '', meta = {}) => `${handlerDoc([`【hand
 //
 // === 新结构（v2026-07-28 起固定）===
 //   export default {
-//     kind: 'echo' | 'echo-chant' | 'echo-tbd',
-//     type: 'echo',                          // 顶层 type（原 render 返回值里的 type）
-//     field: '<id>',                         // 顶层 field，原 id 的别名
-//     title: '<name>',                       // 顶层 title，原 name 的别名
+//     type: 'echo' | 'echo-chant' | 'echo-tbd',  // 顶层 type 直接承担分类语义
+//     field: '<id>',                            // 顶层 field，原 id 的别名
+//     title: '<name>',                          // 顶层 title，原 name 的别名
 //     version: 1,
-//     props: {                                // ★ 实例可配置参数提到顶层
+//     props: {                                   // ★ 实例可配置参数提到顶层
 //       ...meta.propsDefaults,
 //     },
-//     render (props = {}) { ... },           // 只返回 HTML 字符串
-//     afterRender (node, props = {}) { ... } // 签名不变
+//     render (props = {}) { ... },              // 只返回 HTML 字符串
+//     afterRender (node, props = {}) { ... }    // 签名不变
 //   }
 // ---------------------------------------------------------------------------
 const createAnnoSource = ({ meta, renderBody, handlerBody }) => `export default {
   ${banner(meta.banner || [])},
-  kind: '${meta.kind}',
-  type: 'echo',
+  type: '${meta.type}',
   field: '${meta.id}',
   title: '${meta.name}',
   version: 1,
@@ -71,7 +69,7 @@ const createAnnoSource = ({ meta, renderBody, handlerBody }) => `export default 
 // ============================================================================
 const BUILTIN_ECHO_META = [
   {
-    id: 'nice', name: 'nice', icon: 'thumb_up', color: '#4CAF50', category: 'builtin', kind: 'echo-chant',
+    id: 'nice', name: 'nice', icon: 'thumb_up', color: '#4CAF50', category: 'builtin', type: 'echo-chant',
     desc: '把所在行除 @nice 之外的文本用 <mark> 包裹',
     banner: ['【nice】 —— 把所在行 / block 内除 @nice 之外的节点用 <mark> 包裹',
       '使用示例：',
@@ -91,7 +89,7 @@ const BUILTIN_ECHO_META = [
     $parent.attr('data-nice-marked', 'true')`
   },
   {
-    id: 'growth', name: '生生不息', icon: 'park', color: '#43A047', category: 'showy', kind: 'echo-chant',
+    id: 'growth', name: '生生不息', icon: 'park', color: '#43A047', category: 'showy', type: 'echo-chant',
     desc: '为附近符合条件的元素加上生长的动画特效',
     banner: ['【生生不息 / growth】 —— 给附近符合条件的元素加上"生长"的动画特效',
       '影响范围（scope）：',
@@ -122,7 +120,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'shatter', name: '破万法', icon: 'block', color: '#E53935', category: 'showy', kind: 'echo-chant',
+    id: 'shatter', name: '破万法', icon: 'block', color: '#E53935', category: 'showy', type: 'echo-chant',
     desc: '使附近一行或一个块的回响作用都失效',
     banner: ['【破万法 / shatter】 —— 让附近一行或一个块的回响作用都失效',
       '影响范围（target）：line(默认) 同段落的兄弟 echo；block 整个当前 block',
@@ -144,7 +142,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'skywalk', name: '天行健', icon: 'auto_awesome', color: '#1E88E5', category: 'showy', kind: 'echo-chant',
+    id: 'skywalk', name: '天行健', icon: 'auto_awesome', color: '#1E88E5', category: 'showy', type: 'echo-chant',
     desc: '强化排版并指定某种主题',
     banner: ['【天行健 / skywalk】 —— 强化排版并切换主题（document 级别）',
       '参数：theme(light/dark/sepia/auto) + layout(compact/enhanced/luxe)',
@@ -171,7 +169,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'twinbloom', name: '双生花', icon: 'local_florist', color: '#8E24AA', category: 'showy', kind: 'echo-chant',
+    id: 'twinbloom', name: '双生花', icon: 'local_florist', color: '#8E24AA', category: 'showy', type: 'echo-chant',
     desc: '复制前/后一个 block 并生成占位副本',
     banner: ['【双生花 / twinbloom】 —— 用 jQuery .clone() 复制「上一个元素 / 上一行」作占位',
       '【核心】影响范围 source：',
@@ -235,7 +233,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'mindsteal', name: '夺心魄', icon: 'psychology', color: '#F4511E', category: 'showy', kind: 'echo-chant',
+    id: 'mindsteal', name: '夺心魄', icon: 'psychology', color: '#F4511E', category: 'showy', type: 'echo-chant',
     desc: '使附近符合条件的咏唱叠加或篡改某种制定的效果',
     banner: ['【夺心魄 / mindsteal】 —— 篡改附近符合条件的符文效果',
       '参数：mode=override|stack|disable；targets=其它 id（逗号分隔）',
@@ -261,7 +259,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'lucky', name: '强运', icon: 'casino', color: '#FB8C00', category: 'showy', kind: 'echo-chant',
+    id: 'lucky', name: '强运', icon: 'casino', color: '#FB8C00', category: 'showy', type: 'echo-chant',
     desc: '点击后触发 AI 识别当前 Markdown 的错别字并修正',
     banner: ['【强运 / lucky】 —— 点击触发 AI 校对，是"事件型 echo-chant"样板',
       '事件流：handler 给节点加 role=button / tabindex=0；点击时调用',
@@ -295,7 +293,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'scapegoat', name: '替罪', icon: 'shield', color: '#6D4C41', category: 'showy', kind: 'echo-chant',
+    id: 'scapegoat', name: '替罪', icon: 'shield', color: '#6D4C41', category: 'showy', type: 'echo-chant',
     desc: '在作用域内接住后续 echo / DOM 抛出的错误，并以受伤态提示',
     banner: ['【替罪 / scapegoat】 —— 作用域内的"救场位"',
       '回响种类：echo-chant（影响附近元素、做防灾 / 占位 / 兜底）',
@@ -335,7 +333,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'calamity', name: '招灾', icon: 'thunderstorm', color: '#5E35B1', category: 'showy', kind: 'echo-chant',
+    id: 'calamity', name: '招灾', icon: 'thunderstorm', color: '#5E35B1', category: 'showy', type: 'echo-chant',
     desc: '在作用域内随机给文字片段染上哥特渐变彩',
     banner: ['【招灾 / calamity】 —— "随机哥德"：作用域内随机给文字片段染上哥特渐变彩',
       '回响种类：echo-chant',
@@ -365,7 +363,7 @@ const BUILTIN_ECHO_META = [
     return () => { $(picked).removeClass('ag-rune-calamity-gothic') }`
   },
   {
-    id: 'disperse', name: '离析', icon: 'call_split', color: '#00897B', category: 'showy', kind: 'echo-chant',
+    id: 'disperse', name: '离析', icon: 'call_split', color: '#00897B', category: 'showy', type: 'echo-chant',
     desc: '使附近的元素使用更加宽松的排版',
     banner: ['【离析 / disperse】 —— 让附近元素使用更宽松排版（block 级别）',
       '参数：density=tight|normal|loose（loose 是默认）',
@@ -386,7 +384,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'peek', name: 'peek', icon: 'visibility', color: '#FF7043', category: 'builtin', kind: 'echo-chant',
+    id: 'peek', name: 'peek', icon: 'visibility', color: '#FF7043', category: 'builtin', type: 'echo-chant',
     desc: '高亮展示内容，支持折叠展开',
     banner: ['【peek】 —— 高亮展示内容，支持折叠展开',
       '参数：collapsed=true|false（默认 false），level=1-3（高亮强度）',
@@ -404,7 +402,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'ignore', name: 'ignore', icon: 'visibility_off', color: '#90A4AE', category: 'builtin', kind: 'echo-chant',
+    id: 'ignore', name: 'ignore', icon: 'visibility_off', color: '#90A4AE', category: 'builtin', type: 'echo-chant',
     desc: '标记为可忽略内容，视觉淡化',
     banner: ['【ignore】 —— 标记为可忽略内容，视觉淡化',
       '参数：opacity=0.1-1（淡化透明度，默认 0.4）',
@@ -422,7 +420,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'ad', name: 'ad', icon: 'campaign', color: '#FFB300', category: 'builtin', kind: 'echo-chant',
+    id: 'ad', name: 'ad', icon: 'campaign', color: '#FFB300', category: 'builtin', type: 'echo-chant',
     desc: '插入广告占位或标注为广告内容',
     banner: ['【ad】 —— 插入广告占位或标注为广告内容',
       '参数：type=banner|inline|sidebar（默认 banner）',
@@ -440,7 +438,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'diff', name: 'diff', icon: 'difference', color: '#7E57C2', category: 'builtin', kind: 'echo-chant',
+    id: 'diff', name: 'diff', icon: 'difference', color: '#7E57C2', category: 'builtin', type: 'echo-chant',
     desc: '标记差异对比内容',
     banner: ['【diff】 —— 标记差异对比内容',
       '参数：mode=add|remove|change（默认 change）',
@@ -458,7 +456,7 @@ const BUILTIN_ECHO_META = [
     }`
   },
   {
-    id: 'ref', name: 'ref', icon: 'link', color: '#29B6F6', category: 'builtin', kind: 'echo-chant',
+    id: 'ref', name: 'ref', icon: 'link', color: '#29B6F6', category: 'builtin', type: 'echo-chant',
     desc: '标记为参考资料，可跳转链接',
     banner: ['【ref】 —— 标记为参考资料，可跳转链接',
       '参数：url=外部链接（可选），title=标题（可选）',
@@ -479,7 +477,7 @@ const BUILTIN_ECHO_META = [
     return () => { $rune.removeClass('ag-rune-ref').css('cursor', '').off('click') }`
   },
   {
-    id: 'todo', name: 'todo', icon: 'check_box', color: '#26A69A', category: 'builtin', kind: 'echo-chant',
+    id: 'todo', name: 'todo', icon: 'check_box', color: '#26A69A', category: 'builtin', type: 'echo-chant',
     desc: '标记待办事项，可交互勾选',
     banner: ['【todo】 —— 标记待办事项，可交互勾选',
       '参数：checked=true|false（默认 false）',

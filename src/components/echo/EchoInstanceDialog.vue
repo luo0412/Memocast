@@ -89,7 +89,7 @@ import {
 } from 'components/echo/echoCore'
 
 // 基础设施字段：EchoRuntime / 弹框自动管理，不应让用户编辑，也不参与 schema
-const RESERVED_PROPS_FIELDS = new Set(['id', 'definitionId', 'value', 'inheritFromPrevious', 'kind'])
+const RESERVED_PROPS_FIELDS = new Set(['id', 'definitionId', 'value', 'inheritFromPrevious', 'type'])
 
 // 按值类型推断未声明字段的 form-create rule
 const inferRuleFromValue = (key, value) => {

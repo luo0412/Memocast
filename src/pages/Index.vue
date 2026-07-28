@@ -219,7 +219,8 @@ export default {
       'rightClickCategoryItem',
       'sidebarTreeType',
       'noteMethod',
-      'noteMethodPrefix'
+      'noteMethodPrefix',
+      'noteTemplates'
     ])
   },
   data () {
@@ -336,29 +337,61 @@ export default {
             date: `${yyyy}${String(now.getMonth() + 1).padStart(2, '0')}`
           })
 
+      // 模板下拉选项：空（默认）置首位，其余按 sort_order 升序
+      const templateOptions = this.buildTemplateOptions()
+
       if (!isSixDaoMode) {
-        this.$q
-          .dialog({
-            title: this.$t('createNote'),
-            prompt: {
-              model: defaultTitle,
-              type: 'text',
-              attrs: {
-                spellcheck: false
-              },
-              label: this.$t('title')
-            },
-            ok: this.$t('confirm'),
-            cancel: this.$t('cancel')
-          })
-          .onOk(data => {
-            this.createNote(data)
-          })
+        // 普通模式：单容器 DOM 渲染模板下拉 + 标题输入
+        const templateFieldClass = 'memocast-template-select-field'
+        const noteTitleInputClass = 'memocast-note-title-input'
+        const container = document.createElement('div')
+        container.className = 'normal-create-note-dialog'
+        container.innerHTML = `
+          <div class="q-mb-md">
+            <div class="text-caption text-grey-7 q-mb-xs">${this.$t('noteTemplate')}</div>
+            <select class="q-field__native q-placeholder ${templateFieldClass}">
+              ${templateOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <div class="text-caption text-grey-7 q-mb-xs">${this.$t('title')}</div>
+            <input class="q-input-target q-field__native ${noteTitleInputClass}" type="text" spellcheck="false" value="${defaultTitle.replace(/"/g, '&quot;')}">
+          </div>
+        `
+        const dialog = this.$q.dialog({
+          title: this.$t('createNote'),
+          message: '<div class="normal-create-note-dialog-mount"></div>',
+          html: true,
+          ok: this.$t('confirm'),
+          cancel: this.$t('cancel'),
+          focus: 'ok'
+        })
+        dialog.onOk(() => {
+          const titleEl = container.querySelector(`.${noteTitleInputClass}`)
+          const tplEl = container.querySelector(`.${templateFieldClass}`)
+          const title = titleEl ? titleEl.value : defaultTitle
+          const templateId = tplEl ? tplEl.value : ''
+          this.createNote({ title, templateId })
+        })
+        dialog.onDismiss(() => {
+          if (container.parentNode) container.parentNode.removeChild(container)
+        })
+        this.$nextTick(() => {
+          const mountPoint = document.querySelector('.normal-create-note-dialog-mount')
+          if (!mountPoint) return
+          mountPoint.appendChild(container)
+          const titleEl = container.querySelector(`.${noteTitleInputClass}`)
+          if (titleEl) {
+            titleEl.focus()
+            titleEl.select()
+          }
+        })
         return
       }
 
       const prefixFieldClass = 'memocast-prefix-select-field'
       const noteTitleInputClass = 'memocast-note-title-input'
+      const templateFieldClass = 'memocast-template-select-field'
       const container = document.createElement('div')
       container.className = 'six-dao-create-note-dialog'
       container.innerHTML = `
@@ -366,6 +399,12 @@ export default {
           <div class="text-caption text-grey-7 q-mb-xs">${this.$t('notePrefix')}</div>
           <select class="q-field__native q-placeholder ${prefixFieldClass}">
             ${prefixOptions.map(option => `<option value="${option}" ${option === selectedPrefix ? 'selected' : ''}>${option}</option>`).join('')}
+          </select>
+        </div>
+        <div class="q-mb-md">
+          <div class="text-caption text-grey-7 q-mb-xs">${this.$t('noteTemplate')}</div>
+          <select class="q-field__native q-placeholder ${templateFieldClass}">
+            ${templateOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
           </select>
         </div>
         <div>
@@ -393,10 +432,12 @@ export default {
       dialog.onOk(() => {
         const prefixEl = container.querySelector(`.${prefixFieldClass}`)
         const titleEl = container.querySelector(`.${noteTitleInputClass}`)
+        const tplEl = container.querySelector(`.${templateFieldClass}`)
         const prefix = prefixEl ? prefixEl.value : selectedPrefix
         const title = titleEl ? titleEl.value : defaultTitle
+        const templateId = tplEl ? tplEl.value : ''
         this.toggleChanged({ key: 'noteMethodPrefix', value: prefix })
-        this.createNote({ title, prefix, noteMethod: this.noteMethod })
+        this.createNote({ title, prefix, noteMethod: this.noteMethod, templateId })
       })
 
       dialog.onDismiss(() => {
@@ -419,6 +460,20 @@ export default {
           titleEl.select()
         }
       })
+    },
+    buildTemplateOptions () {
+      const list = Array.isArray(this.noteTemplates) ? this.noteTemplates : []
+      const emptyOption = { value: '', label: this.$t('noteTemplateEmptyOption') }
+      const custom = list
+        .filter(t => t && t.id && String(t.name || '').trim())
+        .sort((a, b) => {
+          const sa = Number(a.sort_order) || 0
+          const sb = Number(b.sort_order) || 0
+          if (sa !== sb) return sa - sb
+          return (Number(a.created_at) || 0) - (Number(b.created_at) || 0)
+        })
+        .map(t => ({ value: String(t.id), label: String(t.name) }))
+      return [emptyOption, ...custom]
     },
     addCategoryHandler: function () {
       this.$q

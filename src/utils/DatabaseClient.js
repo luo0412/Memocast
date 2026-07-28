@@ -383,6 +383,29 @@ const runeTemplates = {
   }
 }
 
+/**
+ * 笔记模板（note_templates 表）。
+ * 由用户在 Settings → 编辑器 → 模板中维护；新建笔记时按选中的 templateId
+ * 将模板内容拼到 `# {标题}` 之后（标题规则在最前不变）。
+ */
+const noteTemplates = {
+  async getAll() {
+    return await invoke('db:getNoteTemplates')
+  },
+
+  async save(item) {
+    return await invoke('db:saveNoteTemplate', item)
+  },
+
+  async saveMany(list) {
+    return await invoke('db:saveNoteTemplates', list)
+  },
+
+  async remove(id) {
+    return await invoke('db:deleteNoteTemplate', id)
+  }
+}
+
 const echoes = {
   async getAll() {
     return await invoke('db:getEchoes')
@@ -442,6 +465,7 @@ const DatabaseClient = {
   aiSkills,
   runes,
   runeTemplates,
+  noteTemplates,
   echoes,
   cdnDeps,
   microApps
