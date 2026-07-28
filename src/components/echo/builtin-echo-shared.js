@@ -7,8 +7,8 @@
 // === 主要导出 ===
 //   banner(lines)                把多行教学注释格式化进 anno_source 顶部
 //   DEFAULT_ECHO_COLOR / ICON    echo 默认颜色 / 图标
-//   CURRENT_ECHO_PLACEHOLDER_RE  @name{attrs}(prompt) 当前形态的正则；
-//                                attrs 段可选，因此旧式 @name{}() 也匹配得上。
+//   CURRENT_ECHO_PLACEHOLDER_RE  @name{props}(prompt) 当前形态的正则；
+//                                props 段可选，因此旧式 @name{}() 也匹配得上。
 //                                与 parser/rules.js 中 echo_anno 的结构同源。
 //
 // === anno_source 约定 ===
@@ -29,14 +29,29 @@ export const banner = (lines) => lines.map(line => `//   ${line}`).join('\n  ')
 export const DEFAULT_ECHO_COLOR = '#26A69A'
 export const DEFAULT_ECHO_ICON = 'graphic_eq'
 
-// 捕获组：[name, attrsRaw, promptRaw]；attrsRaw 可缺省（兼容早期 @name{}() 形态）。
+// === props 命名约定（v2026-07 起固定） ===
+//
+//   echo 的"实例可配置"参数在 anno_source / payload / host dataset 里统一叫 `props`，
+//   与 form-create 的 rule.props / rule.on / rule.options / rule.info 字段对齐，
+//   方便 EchoInstanceDialog 直接透传给 form-create 控件。
+//
+//   - props.value       文本内容（prompt 同步；基础设施字段，handler 不要直接覆盖）
+//   - props.id          实例 id
+//   - props.definitionId  echo 定义 id
+//   - props.kind        echo-chant / echo / echo-tbd
+//   - props.inheritFromPrevious  是否继承上一节点 value
+//
+// 渲染层（render 返回值）的 props 字段就是实例参数对象，handler 体内访问统一 `props.xxx`。
+export const DEFAULT_ECHO_PROPS_RESERVED = Object.freeze(['value', 'id', 'definitionId', 'kind', 'inheritFromPrevious'])
+
+// 捕获组：[name, propsRaw, promptRaw]；propsRaw 可缺省，因此 @name() 也匹配得上。
 // 单行 prompt（[^)]*）以避免误吞下游 markdown；name 必须 1+ 字符。
 export const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)/g
 
 // ============================================================================
 // handlerDoc(docLines) —— 生成 afterRender 方法前缀：
 //   // doc...
-//   afterRender (node, attrs = {}) {
+//   afterRender (node, props = {}) {
 //   ↑ caller 只要在拼接时把函数体跟在后面：
 //     ${handlerDoc([...])}
 //       const $rune = $(node)
@@ -51,5 +66,5 @@ export const handlerDoc = (docLines = []) => {
   const banner = (Array.isArray(docLines) ? docLines : [])
     .map(line => `//   ${line}`)
     .join('\n  ')
-  return `${banner}\n  afterRender (node, attrs = {}) {`
+  return `${banner}\n  afterRender (node, props = {}) {`
 }

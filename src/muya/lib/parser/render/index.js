@@ -417,21 +417,6 @@ class StateRender {
       host.classList.add(ECHO_HOST_CLASS)
       host.setAttribute('contenteditable', 'false')
 
-      // 将 attrs 序列化到 dataset，让 echoRuntime 能读取
-      const echoAttrsJson = (() => {
-        try {
-          // 必须是解析后的对象（@nice{scope:'block'}() 这种），不能是 anno_source 字符串。
-          // 这里是读 echo 的「实例参数」，anno_source 是 echo 定义源码，不是同一个东西。
-          const parsed = (echo && echo.__parsedAttrs && typeof echo.__parsedAttrs === 'object')
-            ? echo.__parsedAttrs
-            : null
-          return parsed ? JSON.stringify(parsed) : ''
-        } catch (error) { return '' }
-      })()
-      if (echo && echoAttrsJson) {
-        host.dataset.echoAttrsJson = echoAttrsJson
-      }
-
       let innerHtml = ''
       // 注释保留：调试时把下面 block 解开即可
       // if (typeof window !== 'undefined' && window.__ECHO_TRACE__ !== false) {
@@ -446,8 +431,8 @@ class StateRender {
           const token = {
             echoName,
             echoId,
-            attrsParsed: simAttrs,
-            attrsRaw: '',
+            propsParsed: simAttrs,
+            propsRaw: '',
             prompt: value,
             value,
             raw: '',
@@ -457,7 +442,7 @@ class StateRender {
           const matchedEcho = echo || null
           innerHtml = echoRuntime.renderToHtml(token, matchedEcho)
 
-          // 补充 data-echo-chant-attrs 到第一个 span
+          // 补充 data-echo-chant-props 到第一个 span
           try {
             const baselineAttrs = Object.assign({}, simAttrs, {
               echoName,
@@ -467,13 +452,15 @@ class StateRender {
             })
             const attrJson = JSON.stringify(baselineAttrs)
             if (attrJson) {
+              const escapeOnce = (s) => escapeAttrString(s)
+              const attrStr = `data-echo-chant-props="${escapeOnce(attrJson)}"`
               innerHtml = innerHtml.replace(
                 /<span\b/,
-                `<span data-echo-chant-attrs="${escapeAttrString(attrJson)}"`,
+                `<span ${attrStr}`,
                 1
               )
-              if (innerHtml.indexOf('data-echo-chant-attrs=') === -1) {
-                innerHtml = `<span data-echo-chant-attrs="${escapeAttrString(attrJson)}">${innerHtml}</span>`
+              if (innerHtml.indexOf('data-echo-chant-props=') === -1) {
+                innerHtml = `<span ${attrStr}>${innerHtml}</span>`
               }
             }
           } catch (error) { /* ignore */ }

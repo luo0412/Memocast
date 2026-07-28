@@ -1,4 +1,4 @@
-<template>
+  <template>
   <div id='q-app'>
     <a-config-provider :locale='antdZhCN'>
       <router-view />

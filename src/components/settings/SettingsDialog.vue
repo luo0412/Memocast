@@ -156,7 +156,7 @@ import RuneCard from 'components/rune/RuneCard'
 import RuneFormDialog from 'components/rune/RuneFormDialog'
 import EchoFormDialog from 'components/echo/EchoFormDialog'
 import NavigationDialog from 'components/navigation/NavigationDialog'
-import { BUILTIN_ECHO_CARDS } from 'components/echo/builtinEchoes'
+import { BUILTIN_ECHO_CARDS } from 'components/echo/echoCore'
 
 import SettingsNav from './SettingsNav'
 import SettingsGeneralPanel from './SettingsGeneralPanel'
@@ -612,8 +612,28 @@ export default {
       const idx = cards.findIndex(item => item.id === data.id)
       let saved = null
       if (isBuiltin) {
+        // === 内置回响保存策略（v2026-07 调整后） ===
+        // - 本地 dev 模式 (!isProd)：调用 saveEcho 持久化到 SQLite，覆盖代码版默认模板
+        // - 生产模式 (isProd)：只在内存里改，不入库；保证云端 / 内置回响默认模板不被污染
+        // 注：Quasar DefinePlugin 把 process.env.PROD 注入为 dev='true'(字符串) / prod=false，
+        // 所以用 Boolean(process.env.PROD) 而非 === true，与项目其它 isProd 风格一致。
+        const devMode = !Boolean(process.env.PROD)
         const savedEcho = builtinMatch ? { ...builtinMatch, ...payload } : { ...payload }
         savedEcho.category = builtinMatch ? builtinMatch.category : (payload.category || 'builtin')
+        if (devMode) {
+          const result = await this.saveEcho(savedEcho)
+          if (result && result.success && result.data) {
+            Object.assign(savedEcho, result.data)
+          } else {
+            const code = result && result.code
+            let message = this.$t('echoSaveFailed')
+            if (code === 'ECHO_DUPLICATE_NAME') message = this.$t('echoNameExists')
+            else if (code === 'ECHO_NAME_REQUIRED') message = this.$t('echoNameRequired')
+            else if (result && result.message) message = `${message}: ${result.message}`
+            this.$q.notify({ message, type: 'warning', position: 'top' })
+            return
+          }
+        }
         saved = savedEcho
       } else {
         const dupNameKey = String(payload.name || '').trim().toLowerCase()

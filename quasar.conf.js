@@ -21,6 +21,7 @@ module.exports = function (/* ctx */) {
     boot: [
       'monaco-env',
       'i18n',
+      'globalGlobals',
       'request',
       'element-ui',
       'form-create-element',

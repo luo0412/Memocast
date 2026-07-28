@@ -116,7 +116,7 @@
       <div class='echo-form-help'>
         <div><code>@{{ formData.name || '回响名' }}{}()</code></div>
         <div class='echo-form-help__desc'>
-          attrs 会作为 <code>attrs</code> 注入，圆括号里的内容会作为 <code>prompt</code> 注入。
+          大括号里的字段会作为 <code>props</code> 注入（与 form-create 的 rule.props / rule.on 对齐），圆括号里的内容会作为 <code>prompt</code> 注入。
         </div>
       </div>
     </div>

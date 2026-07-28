@@ -32,9 +32,16 @@ import Transformer from 'src/muya/lib/ui/transformer'
 import debugLogger from 'src/utils/debugLogger'
 import { attachThemeColor } from 'src/utils/theme'
 import { showContextMenu as showEditorContextMenu } from 'src/components/contextMenu/muya'
-import EchoRegistry from '../echo/EchoRegistry.js'
-import EchoRuntime from '../echo/EchoRuntime.js'
-import { decodeEchoPayload, encodeEchoPayload, createEchoPlaceholderPayload, parseEchoAttrs, extractPrevEchoTokenValue, echoInheritFromPrevious } from '../echo/EchoRuntime.js'
+import {
+  EchoRegistry,
+  EchoRuntime,
+  decodeEchoPayload,
+  encodeEchoPayload,
+  createEchoPlaceholderPayload,
+  parseEchoProps,
+  extractPrevEchoTokenValue,
+  echoInheritFromPrevious
+} from '../echo/echoCore.js'
 import { CURRENT_ECHO_PLACEHOLDER_RE } from '../echo/builtin-echo-shared.js'
 import AiProofreadService from 'src/services/AiProofreadService'
 
@@ -194,9 +201,9 @@ const buildEchoAttrSource = ({ value = '', echoId = '', definitionId = '' } = {}
 
 const buildEchoAnnotationText = (echoName = '回响', payload = '', options = {}) => {
   const decoded = decodeEchoPayload(payload)
-  const value = decoded.prompt || decoded?.attrs?.value || ''
-  const echoId = String(options.echoId || decoded?.attrs?.id || '').trim() || createEchoInstanceId()
-  const definitionId = String(options.definitionId || decoded?.attrs?.definitionId || '').trim()
+  const value = decoded.prompt || decoded?.props?.value || ''
+  const echoId = String(options.echoId || decoded?.props?.id || '').trim() || createEchoInstanceId()
+  const definitionId = String(options.definitionId || decoded?.props?.definitionId || '').trim()
   return `@${echoName}{${buildEchoAttrSource({ value, echoId, definitionId })}}()`
 }
 
@@ -456,7 +463,7 @@ const EchoPreviewRenderer = Vue.extend({
           value: this.value,
           payload: encodeEchoPayload({
             prompt: this.value,
-            attrs: {
+            props: {
               id: this.echoId || '',
               definitionId: this.echo?.id || '',
               value: this.value
@@ -561,7 +568,7 @@ export default {
     updateEchoPlaceholderPayload ({ echoId = '', nodeId = '', echoName = '', payload = '', mode = '', value = '' } = {}) {
       if (mode === 'open-instance') {
         appBus.$emit(appEvents.ECHO_EVENTS.openInstanceEditor, {
-          echoId: String(echoId || '').trim() || String(decodeEchoPayload(payload)?.attrs?.id || '').trim(),
+          echoId: String(echoId || '').trim() || String(decodeEchoPayload(payload)?.props?.id || '').trim(),
           nodeId: String(nodeId || '').trim(),
           echoName: String(echoName || '').trim(),
           payload: payload || ''
@@ -570,7 +577,7 @@ export default {
       }
       if (mode === 'open-definition') {
         appBus.$emit(appEvents.ECHO_EVENTS.openManager, {
-          echoId: String(echoId || '').trim() || String(decodeEchoPayload(payload)?.attrs?.id || '').trim(),
+          echoId: String(echoId || '').trim() || String(decodeEchoPayload(payload)?.props?.id || '').trim(),
           nodeId: String(nodeId || '').trim(),
           echoName: String(echoName || '').trim(),
           payload: payload || ''
@@ -581,37 +588,37 @@ export default {
       const markdown = this.contentEditor.getMarkdown()
       if (!markdown) return false
 
-      const resolvedValue = typeof value === 'string' ? value : (decodeEchoPayload(payload)?.prompt || decodeEchoPayload(payload)?.attrs?.value || '')
+      const resolvedValue = typeof value === 'string' ? value : (decodeEchoPayload(payload)?.prompt || decodeEchoPayload(payload)?.props?.value || '')
       const normalizedEchoId = String(echoId || '').trim()
       const decoded = decodeEchoPayload(payload)
-      const attrsFromPayload = decoded?.attrs || {}
-      const normalizedDefinitionId = String(attrsFromPayload?.definitionId || this.echoCards?.find(e => e.name === echoName)?.id || '').trim()
+      const propsFromPayload = decoded?.props || {}
+      const normalizedDefinitionId = String(propsFromPayload?.definitionId || this.echoCards?.find(e => e.name === echoName)?.id || '').trim()
 
       const nextPayload = encodeEchoPayload({
         prompt: resolvedValue,
-        attrs: {
-          ...attrsFromPayload,
-          id: normalizedEchoId || String(attrsFromPayload?.id || '').trim() || createEchoInstanceId(),
+        props: {
+          ...propsFromPayload,
+          id: normalizedEchoId || String(propsFromPayload?.id || '').trim() || createEchoInstanceId(),
           definitionId: normalizedDefinitionId,
           value: resolvedValue
         }
       })
 
       let updated = false
-      const nextMarkdown = markdown.replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, matchedName = '', matchedAttrs = '', matchedPrompt = '') => {
+      const nextMarkdown = markdown.replace(CURRENT_ECHO_PLACEHOLDER_RE, (match, matchedName = '', matchedProps = '', matchedPrompt = '') => {
         const currentName = String(matchedName || echoName || '').trim()
-        const attrs = parseEchoAttrs(matchedAttrs)
-        const matchedId = String(attrs.id || '').trim()
+        const props = parseEchoProps(matchedProps)
+        const matchedId = String(props.id || '').trim()
         if (updated) return match
         // For anonymous echo (@{}), match by echoId only
         const isAnonymous = !matchedName
         if (normalizedEchoId && matchedId && matchedId !== normalizedEchoId) return match
         if (!isAnonymous && !normalizedEchoId && echoName && currentName !== echoName) return match
         updated = true
-        const resolvedEchoId = normalizedEchoId || matchedId || String(attrsFromPayload?.id || '').trim() || createEchoInstanceId()
+        const resolvedEchoId = normalizedEchoId || matchedId || String(propsFromPayload?.id || '').trim() || createEchoInstanceId()
         return buildEchoAnnotationText(currentName || '回响', nextPayload, {
           echoId: resolvedEchoId,
-          definitionId: String(attrs.definitionId || normalizedDefinitionId || '').trim()
+          definitionId: String(props.definitionId || normalizedDefinitionId || '').trim()
         })
       })
 
@@ -623,8 +630,8 @@ export default {
       return true
     },
     // lucky 全局回调：@强运() 点击后真正调 AI 校对。
-    // 入参由 EchoRuntime 在 handler 内传 {chantNode, meta, scopeContainer}
-    async handleLuckyChantTrigger ({ chantNode, meta = {}, scopeContainer } = {}) {
+    // 入参由 EchoRuntime 在 handler 内传 {node, props}
+    async handleLuckyChantTrigger ({ node, props = {} } = {}) {
       try {
         if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return
         const markdown = this.contentEditor.getMarkdown() || ''
@@ -633,9 +640,9 @@ export default {
           return
         }
         const loadingClass = 'ag-rune-lucky-loading'
-        if (chantNode && chantNode.classList) chantNode.classList.add(loadingClass)
+        if (node && node.classList) node.classList.add(loadingClass)
         try {
-          const result = await AiProofreadService.proofread(markdown, { model: meta?.attrs?.model || undefined })
+          const result = await AiProofreadService.proofread(markdown, { model: props?.model || undefined })
           if (!result || !result.corrected) {
             this.$q && this.$q.notify && this.$q.notify({ message: this.$t('aiLuckyNoChange'), type: 'info', position: 'top' })
             return
@@ -655,7 +662,7 @@ export default {
             position: 'top'
           })
         } finally {
-          if (chantNode && chantNode.classList) chantNode.classList.remove(loadingClass)
+          if (node && node.classList) node.classList.remove(loadingClass)
         }
       } catch (error) {
         console.error('[lucky] handler failed:', error)
@@ -1061,7 +1068,7 @@ const echoCaptureHandler = (event) => {
     value,
     payload: encodeEchoPayload({
       prompt: value,
-      attrs: { id: echoId, definitionId, value }
+      props: { id: echoId, definitionId, value }
     }),
     mode: 'open-instance'
   })

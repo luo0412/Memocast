@@ -10,33 +10,28 @@ const createEchoNodeId = (token, echoId, definitionId, echoName) => {
 export default function echoAnno (h, cursor, block, token, outerClass) {
   const className = this.getClassName(outerClass, block, token, cursor)
   const echoName = String(token.echoName || '').trim() || '回响'
+  const instProps = (token && token.propsParsed && typeof token.propsParsed === 'object')
+    ? token.propsParsed
+    : {}
   const value = String(
-    typeof token?.attrsParsed?.value === 'string'
-      ? token.attrsParsed.value
+    typeof instProps.value === 'string'
+      ? instProps.value
       : token.prompt || ''
   )
   const echoId = String(
     token.echoId ||
-    token?.attrsParsed?.id ||
+    instProps.id ||
     (token.echoName ? echoName : '')
   ).trim()
   const definitionId = String(
     token.definitionId ||
-    token?.attrsParsed?.definitionId ||
+    instProps.definitionId ||
     ''
   ).trim()
-  const hasExplicitWidth = token?.attrsParsed?.width !== undefined || token?.attrsParsed?.W !== undefined
-  const hasExplicitHeight = token?.attrsParsed?.height !== undefined || token?.attrsParsed?.H !== undefined
-  const width = String(
-    token?.attrsParsed?.width ||
-    token?.attrsParsed?.W ||
-    ''
-  ).trim()
-  const height = String(
-    token?.attrsParsed?.height ||
-    token?.attrsParsed?.H ||
-    ''
-  ).trim()
+  const hasExplicitWidth = instProps.width !== undefined || instProps.W !== undefined
+  const hasExplicitHeight = instProps.height !== undefined || instProps.H !== undefined
+  const width = String(instProps.width || instProps.W || '').trim()
+  const height = String(instProps.height || instProps.H || '').trim()
   const summary = String(value || '').replace(/\s+/g, ' ').trim()
   const title = summary ? `${echoName}: ${summary}` : echoName
   const echoNodeId = createEchoNodeId(token, echoId, definitionId, echoName)
@@ -59,18 +54,15 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
   }
   if (hasExplicitWidth) dataset.echoWidth = width
   if (hasExplicitHeight) dataset.echoHeight = height
-  // 把 token 的 attrsParsed（@离析{density:'very-loose'} 这种）原样写到 host.dataset，
-  // 让 EchoRuntime._readChantAttrs() 在 afterRender() 时能拿到实例参数。
-  const parsedAttrs = (token && token.attrsParsed && typeof token.attrsParsed === 'object')
-    ? token.attrsParsed
-    : null
-  let echoAttrsJson = ''
-  if (parsedAttrs) {
+  // 把 token 的 propsParsed（@离析{density:'very-loose'} 这种）原样写到 host.dataset，
+  // 让 EchoRuntime._readEchoProps() 在 afterRender() 时能拿到实例参数。
+  let echoPropsJson = ''
+  if (instProps) {
     try {
-      // 把 value/width/height 这种已知字段合并到 props，让 _readChantAttrs 的 dataset 回退分支能直接读到实例参数。
-      const merged = { ...parsedAttrs, value, echoName, echoId, definitionId }
-      echoAttrsJson = JSON.stringify(merged)
-      dataset.echoAttrsJson = echoAttrsJson
+      // 把 value/width/height 这种已知字段合并到 props，让 _readEchoProps 的 dataset 回退分支能直接读到实例参数。
+      const merged = { ...instProps, value, echoName, echoId, definitionId }
+      echoPropsJson = JSON.stringify(merged)
+      dataset.echoPropsJson = echoPropsJson
     } catch (error) { /* ignore */ }
   }
 
@@ -83,7 +75,7 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
           title,
           contenteditable: 'false'
         },
-        echoAttrsJson ? { 'data-echo-attrs-json': echoAttrsJson } : {}
+        echoPropsJson ? { 'data-echo-props-json': echoPropsJson } : {}
       ),
       style: hostStyle
     }, [

@@ -489,12 +489,12 @@ const enterCtrl = ContentState => {
             const echoTokens = tokens.filter(t => t.type === 'echo_anno')
             if (echoTokens.length === 1 && tokens.length === 1) {
               // Single echo token in paragraph — extract value as plain text, then create new paragraph
-              const echoToken = echoTokens[0]
-              const echoValue = String(
-                echoToken.prompt ||
-                echoToken?.attrsParsed?.value ||
-                ''
-              ).trim()
+            const echoToken = echoTokens[0]
+            const echoValue = String(
+              echoToken.prompt ||
+              echoToken?.propsParsed?.value ||
+              ''
+            ).trim()
               block.text = echoValue
               const { key } = block
               const offset = block.text.length

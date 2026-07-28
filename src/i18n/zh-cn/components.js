@@ -140,6 +140,7 @@ export default {
   echoCardDeleteConfirm: '确定要删除该回响吗？',
   echoBuiltinReadonlyTag: '只读',
   echoBuiltinCannotDelete: '内置回响无法删除',
+  echoBuiltinResetSource: '恢复默认',
   echoBatchDelete: '批量删除',
   echoBatchDeleteConfirm: '确定要删除已选的 {count} 个回响吗？',
   echoBatchDeleteConfirmWithBuiltin: '确定要删除已选的 {count} 个回响吗？（{builtin} 个内置回响将被跳过）',

@@ -9,19 +9,18 @@
         </div>
         <q-icon name='info' size='14px' class='echo-form-info-icon'>
           <q-tooltip anchor='top middle' self='bottom middle' :offset='[0, 6]'>
-            导出默认对象，支持 <code>render(node, ancestors)</code> 和 <code>afterRender(node, attrs)</code>。可通过 <code>$(node)</code> 拿到 echo host jQuery 对象；<code>attrs</code> 是实例的业务参数。
+            导出默认对象，支持 <code>render(node, props)</code> 和 <code>afterRender(node, props)</code>。可通过 <code>$(node)</code> 拿到 echo host jQuery 对象；<code>props</code> 是编译期算好的实例参数（含 resolved value）。
           </q-tooltip>
         </q-icon>
       </div>
       <q-btn
-        v-if='!isBuiltin'
         flat
         dense
         no-caps
         size='sm'
         color='teal-5'
         icon='refresh'
-        label='重置模板'
+        :label="$t('echoBuiltinResetSource')"
         @click='resetTemplate'
       />
     </div>
@@ -39,7 +38,7 @@
 <script>
 import * as monaco from 'monaco-editor'
 import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
-import { createDefaultEchoAnnoSource } from 'components/echo/EchoRuntime'
+import { createDefaultEchoAnnoSource, BUILTIN_ECHO_CARDS } from 'components/echo/echoCore'
 
 export default {
   name: 'EchoFormEditor',
@@ -121,7 +120,15 @@ export default {
   },
   methods: {
     resetTemplate () {
-      const nextSource = createDefaultEchoAnnoSource(this.echoName || '回响')
+      // builtin echo：用代码版默认镜像（BUILTIN_ECHO_CARDS）还原 anno_source
+      // 非 builtin echo：用 createDefaultEchoAnnoSource 工厂还原
+      let nextSource
+      if (this.isBuiltin && this.echoName) {
+        const builtin = BUILTIN_ECHO_CARDS.find(e => e.name === this.echoName)
+        nextSource = builtin ? builtin.anno_source : createDefaultEchoAnnoSource(this.echoName || '回响')
+      } else {
+        nextSource = createDefaultEchoAnnoSource(this.echoName || '回响')
+      }
       this.$emit('update-source', nextSource)
       if (this.monacoEditor && this.monacoReady) {
         this.monacoEditor.setValue(nextSource)

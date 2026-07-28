@@ -96,7 +96,7 @@
 import { ipcRenderer } from 'electron'
 import { createNamespacedHelpers } from 'vuex'
 import { skinMixin } from 'src/mixins/skinMixin'
-import { decodeEchoPayload } from 'components/echo/EchoRuntime'
+import { decodeEchoPayload } from 'components/echo/echoCore'
 import bus from 'components/common/bus'
 import { EVENTS as events } from 'src/utils/const/eventsConst'
 
@@ -256,7 +256,7 @@ export default {
         echoId: String(payload?.echoId || '').trim(),
         nodeId: String(payload?.nodeId || '').trim(),
         echoName: String(payload?.echoName || '').trim(),
-        definitionId: String(payload?.definitionId || decodeEchoPayload(String(payload?.payload || ''))?.attrs?.definitionId || '').trim(),
+        definitionId: String(payload?.definitionId || decodeEchoPayload(String(payload?.payload || ''))?.props?.definitionId || '').trim(),
         payload: String(payload?.payload || '')
       }
       this.echoInstanceDialogVisible = true

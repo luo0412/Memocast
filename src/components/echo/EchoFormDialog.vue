@@ -59,8 +59,11 @@
 
 <script>
 import { v4 as uuidv4 } from 'uuid'
-import { createDefaultEchoAnnoSource } from 'components/echo/EchoRuntime'
-import { DEFAULT_ECHO_COLOR, DEFAULT_ECHO_ICON } from 'components/echo/builtin-echo-shared'
+import {
+  createDefaultEchoAnnoSource,
+  DEFAULT_ECHO_COLOR,
+  DEFAULT_ECHO_ICON
+} from 'components/echo/echoCore'
 import { DEFAULT_ECHO_CATEGORY, EchoCategoryEnum } from 'src/utils/enum'
 import { normalizeEchoCategory } from 'src/utils/const/runeEchoCategoryLogic'
 

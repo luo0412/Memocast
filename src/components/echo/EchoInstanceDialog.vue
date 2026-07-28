@@ -52,7 +52,7 @@
           />
         </div>
 
-        <!-- 未声明字段（schema 没覆盖、attrs 里又有值的字段）按值类型推断渲染 -->
+        <!-- 未声明字段（schema 没覆盖、props 里又有值的字段）按值类型推断渲染 -->
         <div v-if='inferredRule.length' class='echo-instance-field'>
           <div class='echo-instance-label echo-instance-label--minor'>未声明字段</div>
           <form-create
@@ -66,7 +66,7 @@
         </div>
 
         <div class='echo-instance-help'>
-          这里只会更新当前笔记中这个回响实例的 <code>attrs</code>（含 <code>value</code> 与所有声明字段），不会修改回响定义源码。
+          这里只会更新当前笔记中这个回响实例的 <code>props</code>（含 <code>value</code> 与所有声明字段），不会修改回响定义源码。
         </div>
       </q-card-section>
 
@@ -81,11 +81,15 @@
 </template>
 
 <script>
-import { decodeEchoPayload, encodeEchoPayload } from 'components/echo/EchoRuntime'
-import { buildFormCreateRule, resolveAttrsSchema } from 'components/echo/builtinEchoAttrsSchema'
+import {
+  decodeEchoPayload,
+  encodeEchoPayload,
+  buildFormCreateRule,
+  resolvePropsSchema
+} from 'components/echo/echoCore'
 
 // 基础设施字段：EchoRuntime / 弹框自动管理，不应让用户编辑，也不参与 schema
-const RESERVED_ATTRS_FIELDS = new Set(['id', 'definitionId', 'value', 'inheritFromPrevious', 'kind'])
+const RESERVED_PROPS_FIELDS = new Set(['id', 'definitionId', 'value', 'inheritFromPrevious', 'kind'])
 
 // 按值类型推断未声明字段的 form-create rule
 const inferRuleFromValue = (key, value) => {
@@ -156,12 +160,12 @@ export default {
     accentColorClass () {
       return 'teal-5'
     },
-    // 当前实例的 attrs（合并基础设施字段 + 用户声明字段 + 推断字段的运行时值）
-    currentAttrs () {
+    // 当前实例的 props（合并基础设施字段 + 用户声明字段 + 推断字段的运行时值）
+    currentProps () {
       const payload = String(this.form.payload || '')
       const decoded = decodeEchoPayload(payload)
-      const fromPayload = (decoded && decoded.attrs && typeof decoded.attrs === 'object') ? decoded.attrs : {}
-      // 把 form.value 也回填到 attrs.value（保持单一来源）
+      const fromPayload = (decoded && decoded.props && typeof decoded.props === 'object') ? decoded.props : {}
+      // 把 form.value 也回填到 props.value（保持单一来源）
       return {
         ...fromPayload,
         id: this.form.echoId || fromPayload.id || '',
@@ -171,16 +175,16 @@ export default {
     },
     // 用户在 form-create 里编辑的字段集合（合并所有 rule 的 field）
     formCreateRule () {
-      return buildFormCreateRule(this.echoMeta, this.currentAttrs)
+      return buildFormCreateRule(this.echoMeta, this.currentProps)
     },
-    // 未声明字段：attrs 里出现、但 schema 没列、又不是基础设施的字段
+    // 未声明字段：props 里出现、但 schema 没列、又不是基础设施的字段
     inferredRule () {
-      const schema = resolveAttrsSchema(this.echoMeta)
+      const schema = resolvePropsSchema(this.echoMeta)
       const declaredFields = new Set(schema.map(item => String(item?.field || '').trim()).filter(Boolean))
-      const attrs = this.currentAttrs
-      return Object.keys(attrs)
-        .filter(key => !RESERVED_ATTRS_FIELDS.has(key) && !declaredFields.has(key))
-        .map(key => inferRuleFromValue(key, attrs[key]))
+      const props = this.currentProps
+      return Object.keys(props)
+        .filter(key => !RESERVED_PROPS_FIELDS.has(key) && !declaredFields.has(key))
+        .map(key => inferRuleFromValue(key, props[key]))
     },
     formCreateOption () {
       return {
@@ -197,11 +201,11 @@ export default {
         const payload = String(val?.payload || '')
         const decoded = decodeEchoPayload(payload)
         this.form = {
-          echoId: String(val?.echoId || decoded?.attrs?.id || '').trim(),
+          echoId: String(val?.echoId || decoded?.props?.id || '').trim(),
           nodeId: String(val?.nodeId || '').trim(),
           echoName: String(val?.echoName || '').trim(),
-          definitionId: String(val?.definitionId || decoded?.attrs?.definitionId || '').trim(),
-          value: typeof decoded?.attrs?.value === 'string' ? decoded.attrs.value : decoded.prompt || '',
+          definitionId: String(val?.definitionId || decoded?.props?.definitionId || '').trim(),
+          value: typeof decoded?.props?.value === 'string' ? decoded.props.value : decoded.prompt || '',
           payload
         }
         this.$nextTick(() => this.reSyncFormCreate())
@@ -214,7 +218,7 @@ export default {
   methods: {
     // 把 form-create 控件里的当前值拉回到 this.form（用 fApi.formData()）
     collectFormCreateValues () {
-      const merged = { ...this.currentAttrs }
+      const merged = { ...this.currentProps }
       const pull = (fApi) => {
         if (!fApi || typeof fApi.formData !== 'function') return
         const data = fApi.formData() || {}
@@ -231,29 +235,29 @@ export default {
       merged.inheritFromPrevious = false
       return merged
     },
-    // 弹框打开 / instance 变化时，把当前 attrs 值刷到 form-create 控件
+    // 弹框打开 / instance 变化时，把当前 props 值刷到 form-create 控件
     reSyncFormCreate () {
-      const push = (fApi, rule, attrs) => {
+      const push = (fApi, rule, props) => {
         if (!fApi || typeof fApi.setValue !== 'function' || !rule.length) return
         const payload = {}
         rule.forEach(item => {
           const key = String(item.field || '').trim()
           if (!key) return
-          payload[key] = attrs[key] !== undefined ? attrs[key] : (item.value !== undefined ? item.value : '')
+          payload[key] = props[key] !== undefined ? props[key] : (item.value !== undefined ? item.value : '')
         })
         try { fApi.setValue(payload) } catch (e) { /* ignore */ }
       }
-      push(this.fApi, this.formCreateRule, this.currentAttrs)
-      push(this.fApiInferred, this.inferredRule, this.currentAttrs)
+      push(this.fApi, this.formCreateRule, this.currentProps)
+      push(this.fApiInferred, this.inferredRule, this.currentProps)
     },
     buildPayload () {
-      const mergedAttrs = this.collectFormCreateValues()
+      const mergedProps = this.collectFormCreateValues()
       // 保留原 prompt 文本，避免 schema 里没显式管的字段（如长文本 prompt）被覆盖
       const originalDecoded = decodeEchoPayload(this.form.payload || '')
       const originalPrompt = String(originalDecoded?.prompt || '')
       return encodeEchoPayload({
         prompt: originalPrompt,
-        attrs: mergedAttrs
+        props: mergedProps
       })
     },
     submit () {

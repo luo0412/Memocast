@@ -4,7 +4,7 @@ import {
   DEFAULT_AI_ASSISTANT_PROVIDER,
   DEFAULT_CLOUD_SYNC_PROVIDER
 } from 'src/utils/enum'
-import { BUILTIN_ECHO_CARDS } from 'components/echo/builtinEchoes'
+import { BUILTIN_ECHO_CARDS } from 'components/echo/echoCore'
 
 export default function () {
   return {

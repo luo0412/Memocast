@@ -27,9 +27,7 @@
 </template>
 
 <script>
-import _ from 'lodash'
 import { createNamespacedHelpers } from 'vuex'
-import helper from 'src/utils/helper'
 import DatabaseClient from 'src/utils/DatabaseClient'
 
 const {
@@ -82,14 +80,14 @@ export default {
   computed: {
     fileIcon () {
       const title = this.data.title || ''
-      if (_.endsWith(title, '.md')) return 'description'
-      if (_.endsWith(title, '.txt')) return 'text_snippet'
-      if (_.endsWith(title, '.html') || _.endsWith(title, '.htm')) return 'html'
-      if (_.endsWith(title, '.pdf')) return 'pdf'
+      if (this.$lodash.endsWith(title, '.md')) return 'description'
+      if (this.$lodash.endsWith(title, '.txt')) return 'text_snippet'
+      if (this.$lodash.endsWith(title, '.html') || this.$lodash.endsWith(title, '.htm')) return 'html'
+      if (this.$lodash.endsWith(title, '.pdf')) return 'pdf'
       return 'note'
     },
     summary () {
-      if (helper.isNullOrEmpty(this.data.abstractText) && !helper.isNullOrEmpty(this.data.highlight)) {
+      if (this.$utils.emptyUtil.isNullOrEmpty(this.data.abstractText) && !this.$utils.emptyUtil.isNullOrEmpty(this.data.highlight)) {
         const { highlight: { text = [] } } = this.data
         const summary = text.join('')
         return summary.length > this.maxSummaryLength
@@ -102,7 +100,7 @@ export default {
         : this.data.abstractText
     },
     title () {
-      if (!helper.isNullOrEmpty(this.data.highlight)) {
+      if (!this.$utils.emptyUtil.isNullOrEmpty(this.data.highlight)) {
         const { highlight: { title = [] } } = this.data
         const tempTitle = title.join('')
         if (this.titleWrap) {
@@ -128,16 +126,16 @@ export default {
       return this.dense ? 'dense' : ''
     },
     modifiedDate () {
-      return helper.displayDateElegantly(this.data.dataModified)
+      return this.$utils.dateUtil.displayDateElegantly(this.data.dataModified)
     },
     // 是否待同步（dirty=1）
     isDirty () {
       return this.data.dirty === 1
     },
     category () {
-      if (helper.isNullOrEmpty(this.data.category)) return ''
+      if (this.$utils.emptyUtil.isNullOrEmpty(this.data.category)) return ''
       try {
-        if (helper.wizIsPredefinedLocation(this.data.category)) return this.$t(this.data.category)
+        if (this.$utils.treeUtil.wizIsPredefinedLocation(this.data.category)) return this.$t(this.data.category)
         const categoryList = this.data.category.split('/')
         return categoryList[categoryList.length - 2]
       } catch (e) {

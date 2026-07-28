@@ -7,7 +7,7 @@ import { i18n } from 'boot/i18n'
 import _ from 'lodash'
 import { importImage, uploadImages } from 'src/ApiInvoker'
 import DatabaseClient from 'src/utils/DatabaseClient'
-import { BUILTIN_ECHO_CARDS } from 'components/echo/builtinEchoes'
+import { BUILTIN_ECHO_CARDS } from 'components/echo/echoCore'
 
 const applyQuickInsertColumns = (value) => {
   if (typeof document === 'undefined') return
@@ -122,23 +122,22 @@ export default {
       const storedFromDb = await DatabaseClient.echoes.getAll()
       const dbCards = Array.isArray(storedFromDb) ? storedFromDb : []
 
-      // === 内置回响以代码版 BUILTIN_ECHO_CARDS 为权威 ===
-      // 1) DB 中已存在的 builtin 行（可能是 sync seed 写入的）作为底
-      // 2) 用代码版补全缺失项（保证 16 个总在场）
-      // 3) 附加非 builtin 的 dbCards
-      // DB schema 没有 isBuiltin 列；按 id 前缀约定补标记，仅用于 UI 区分显示
-      // 维护责任归开发者——内置回响不允许运行时覆盖（也不持久化），这里不做 store override
+      // === 内置回响装配策略（v2026-07 调整后） ===
+      // DB 中存的 builtin 行（来自本地 dev 模式编辑内置回响）优先覆盖代码版默认模板，
+      // DB 没有的 builtin 用 BUILTIN_ECHO_CARDS 兜底，保证 16 个总在场。
+      // DB schema 没有 isBuiltin 列；按 id 前缀约定补标记，仅用于 UI 区分显示。
+      // 生产 (isProd) 也允许读取 DB 里的 builtin 行（同样的覆盖语义），但
+      // saveEcho / saveEchoes 在 isProd 时已经过滤掉 builtin 写入，
+      // 所以生产时 DB 里的 builtin 行通常为空，本策略实际上不会改变默认模板。
       const builtinIds = new Set(BUILTIN_ECHO_CARDS.map(echo => echo.id))
-      const dbBuiltins = dbCards
-        .filter(echo => builtinIds.has(echo.id))
-        .map(echo => ({ ...echo, isBuiltin: true }))
-      const missingBuiltins = BUILTIN_ECHO_CARDS
-        .filter(template => !dbBuiltins.some(echo => echo.id === template.id))
-        .map(template => ({ ...template, isBuiltin: true }))
-      const builtinEchoes = [
-        ...dbBuiltins,
-        ...missingBuiltins
-      ]
+      const dbBuiltins = dbCards.filter(echo => builtinIds.has(echo.id))
+      const dbBuiltinsById = new Map(dbBuiltins.map(echo => [echo.id, echo]))
+      const builtinEchoes = BUILTIN_ECHO_CARDS.map(template => {
+        const override = dbBuiltinsById.get(template.id)
+        if (!override) return { ...template, isBuiltin: true }
+        // DB 行覆盖代码版默认模板；保留代码版里 DB 没存的元数据
+        return { ...template, ...override, id: template.id, isBuiltin: true }
+      })
       const nonBuiltinDbCards = dbCards.filter(echo => !builtinIds.has(echo.id))
 
       const mergedEchoes = [
@@ -155,6 +154,13 @@ export default {
     return await DatabaseClient.runes.save(rune)
   },
   async saveEcho (_, echo) {
+    // 内置回响在本地 dev 模式 (!isProd) 下允许入库（覆盖代码版默认模板），
+    // 生产模式 (isProd) 仍只写非 builtin 行，避免污染云端默认模板。
+    // 注：Quasar 用 webpack DefinePlugin 注入 process.env.PROD，dev 下是字符串 'true'，prod 下是 false，
+    // 所以用 Boolean(...) 而非 === true，与项目其它 isProd computed 风格一致。
+    if (echo && echo.isBuiltin && Boolean(process.env.PROD)) {
+      return { success: true, data: echo, skipped: 'builtin-in-prod' }
+    }
     return await DatabaseClient.echoes.save(echo)
   },
   async deleteRune (_, id) {
@@ -167,9 +173,12 @@ export default {
     return await DatabaseClient.runes.saveMany(runes)
   },
   async saveEchoes (_, echoes) {
-    // 内置回响不入库，避免被持久化为普通卡片导致下次丢失 isBuiltin 标记
-    const persistable = (Array.isArray(echoes) ? echoes : []).filter(echo => !(echo && echo.isBuiltin))
-    if (persistable.length === 0) return persistable
+    // 内置回响在本地 dev 模式 (!isProd) 下允许入库（覆盖代码版默认模板），
+    // 生产模式 (isProd) 过滤掉 isBuiltin 行，避免污染云端默认模板。
+    const isProd = Boolean(process.env.PROD)
+    const persistable = (Array.isArray(echoes) ? echoes : [])
+      .filter(echo => !(echo && echo.isBuiltin && isProd))
+    if (persistable.length === 0) return []
     return await DatabaseClient.echoes.saveMany(persistable)
   },
   /**

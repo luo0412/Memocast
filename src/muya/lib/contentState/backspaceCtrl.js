@@ -520,7 +520,7 @@ const backspaceCtrl = ContentState => {
       const echoToken = tokens[0]
       const echoValue = String(
         echoToken.prompt ||
-        echoToken?.attrsParsed?.value ||
+        echoToken?.propsParsed?.value ||
         ''
       ).trim()
       block.text = echoValue

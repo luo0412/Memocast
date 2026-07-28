@@ -141,6 +141,7 @@ export default {
   echoCardDeleteConfirm: 'Are you sure to delete this echo?',
   echoBuiltinReadonlyTag: 'Read-only',
   echoBuiltinCannotDelete: 'Built-in echoes cannot be deleted',
+  echoBuiltinResetSource: 'Restore Default',
   echoBatchDelete: 'Batch Delete',
   echoBatchDeleteConfirm: 'Are you sure you want to delete {count} selected echoes?',
   echoBatchDeleteConfirmWithBuiltin: 'Are you sure you want to delete {count} selected echoes? ({builtin} built-in echoes will be skipped)',

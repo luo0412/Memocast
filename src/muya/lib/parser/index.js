@@ -2,7 +2,7 @@ import { beginRules, inlineRules, inlineExtensionRules } from './rules'
 import { isLengthEven, union } from '../utils'
 import { findClosingBracket } from './marked/utils'
 import { getAttributes, parseSrcAndTitle, validateEmphasize, lowerPriority } from './utils'
-import { parseEchoAttrs } from 'src/components/echo/EchoRuntime'
+import { parseEchoProps } from 'src/components/echo/echoCore'
 
 // const CAN_NEST_RULES = ['strong', 'em', 'link', 'del', 'a_link', 'reference_link', 'html_tag']
 // disallowed html tags in https://github.github.com/gfm/#raw-html
@@ -187,7 +187,7 @@ const tokenizerFac = (src, beginRules, inlineRules, pos = 0, top, labels, option
             backlash: to[3]
           })
         } else if (rule === 'echo_anno') {
-          const attrsParsed = parseEchoAttrs(to[2] || '')
+          const propsParsed = parseEchoProps(to[2] || '')
           tokens.push({
             type: 'echo_anno',
             raw: to[0],
@@ -195,9 +195,9 @@ const tokenizerFac = (src, beginRules, inlineRules, pos = 0, top, labels, option
             marker,
             parent: tokens,
             echoName: to[1] || '',
-            echoId: typeof attrsParsed.id === 'string' ? attrsParsed.id : '',
-            attrsRaw: to[2] || '',
-            attrsParsed,
+            echoId: typeof propsParsed.id === 'string' ? propsParsed.id : '',
+            propsRaw: to[2] || '',
+            propsParsed,
             prompt: to[3]
           })
         } else {
