@@ -18,11 +18,15 @@ import CryptoJS from 'crypto-js'
 import Portkey from 'portkey-ai'
 const { DEFAULT_ROOT_CATEGORY } = require('./constants')
 const createRuneTemplateService = require('./service/rune-template-service')
+const createNoteTemplateService = require('./service/note-template-service')
 const { BUILTIN_ECHO_CARDS } = require('./service/builtin-echoes')
 
 // rune 预设模板服务（schema + CRUD）。仅在 initSchema 阶段真正调用 createRuneTemplateService，
 // registerDatabaseHandlers 阶段直接复用 module 级 runeTemplateService，避免重复闭包。
 let runeTemplateService = null
+
+// 笔记模板服务（schema + CRUD）。结构与 runeTemplateService 一致，复用同一份模块级实例避免重复闭包。
+let noteTemplateService = null
 
 // sql.js 数据库
 let db = null
@@ -1044,6 +1048,12 @@ export default {
       console.warn('[DB] seedRuneTemplates skipped:', seedError && seedError.message)
     }
   }
+
+  // === 笔记模板 (note_templates) ===
+  // 与 rune_templates 结构一致；只承担"笔记新建模板下拉 / 内容填充"职责，不内置 seed。
+  // 用户新增的第一份模板走表单保存路径。
+  noteTemplateService = createNoteTemplateService({ db, execToObjects, execOne, saveDatabase, log })
+  noteTemplateService.ensureSchema()
 
   log.info('[Main] Database schema initialized')
 }
@@ -3071,6 +3081,37 @@ function registerDatabaseHandlers() {
 
   ipcMain.handle('rune-template:fetchRemote', async (event, payload) => {
     return await runeTemplateService.importFromRemote(payload || {})
+  })
+
+  // === 笔记模板（独立 note_templates 表）===
+  // 与 rune_templates 结构对齐；只承担"新建笔记时下拉模板 + 填入模板正文"职责。
+  // 复用 initSchema 阶段创建的 noteTemplateService，避免重复闭包。
+  if (!noteTemplateService) {
+    noteTemplateService = createNoteTemplateService({ db, execToObjects, execOne, saveDatabase, log })
+    noteTemplateService.ensureSchema()
+  }
+
+  ipcMain.handle('db:getNoteTemplates', async () => {
+    try {
+      const rows = noteTemplateService.listAll()
+      console.log(`[NOTE-TPL] IPC db:getNoteTemplates -> ${rows.length} rows`)
+      return rows
+    } catch (error) {
+      log.error('[DB] getNoteTemplates error:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle('db:saveNoteTemplate', async (event, row) => {
+    return noteTemplateService.saveOne(row || {})
+  })
+
+  ipcMain.handle('db:saveNoteTemplates', async (event, rows) => {
+    return noteTemplateService.saveMany(rows || [])
+  })
+
+  ipcMain.handle('db:deleteNoteTemplate', async (event, id) => {
+    return noteTemplateService.remove(id)
   })
 
   // 获取所有回响

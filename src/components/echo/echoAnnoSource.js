@@ -21,28 +21,19 @@ export const safeEvalAnnoSource = (source = '', prelude = '') => {
 
 export const createDefaultEchoAnnoSource = (echoName = '回响') => `export default {
   kind: 'echo',
+  type: 'echo',
+  field: '回响',
+  title: '${String(echoName || '回响').replace(/'/g, "\\'")}',
   version: 1,
-  name: '${String(echoName || '回响').replace(/'/g, "\\'")}',
-  namespace: '回响',
 
-  // === 模板签名（v2026-07 调整后）：node + props ===
-  //   - node  : token = { type:'echo_anno', echoName, echoId, propsParsed, prompt, raw, range, ... }
-  //   - props : 合并后的实例参数对象（payload.props ∪ token.propsParsed ∪ value 兜底），
-  //              字段名与 form-create 的 rule.props / rule.on / rule.options / rule.info 对齐。
-  render (node, props) {
-    const inst = props || (node && node.propsParsed) || {}
-    const prompt = (node && node.prompt) || ''
-    const echoMeta = (node && node._echoMeta) || {}
-    return {
-      type: 'card',
-      icon: inst.icon || echoMeta.icon || '${DEFAULT_ECHO_ICON}',
-      color: inst.color || echoMeta.color || '${DEFAULT_ECHO_COLOR}',
-      title: inst.title || echoMeta.name || '${String(echoName || '回响').replace(/'/g, "\\'")}',
-      description: inst.desc || echoMeta.desc || '',
-      prompt,
-      props: { ...inst },
-      html: inst.html || ''
-    }
+  // === 实例可配置参数顶层声明（与 builtin echo 工厂对齐）===
+  props: {},
+
+  // === render 仅返回 echo host HTML 字符串 ===
+  // 卡片外观（icon/color/title/desc）由 EchoRuntime 根据 echo 名片元数据 + props 兜底拼装，
+  // render 不再负责卡片元数据拼装，只输出 DOM 片段。
+  render (props = {}) {
+    return '<span class="ag-rune ag-rune--default" data-echo-chant-id="回响">${String(echoName || '回响').replace(/'/g, "\\'")}</span>'
   },
 
   // === 后渲染钩子：domElement 已插入到 DOM ===

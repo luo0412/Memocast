@@ -136,6 +136,7 @@ import Illustration from 'components/common/Illustration.vue'
 import ImportDialog from 'components/import/ImportDialog.vue'
 import BlogDeployDialog from 'components/blog/BlogDeployDialog.vue'
 import BlogDeployProgressDialog from 'components/blog/BlogDeployProgressDialog.vue'
+import * as serverActions from 'src/store/server/actions'
 
 const {
   mapGetters: mapServerGetters,
@@ -526,9 +527,42 @@ export default {
         this.$q.notify({ message: 'No notes found', type: 'warning' })
         return
       }
-      const text = notes.map(n => `## ${n.title}\n\n${n.content || ''}`).join('\n\n---\n\n')
+      const _getContent = serverActions._getContent
+      const sections = []
+      for (const noteField of notes) {
+        const docGuid = noteField.docGuid || noteField.doc_guid
+        if (!docGuid) {
+          sections.push(`## ${noteField.title || ''}\n\n`)
+          continue
+        }
+        let result
+        try {
+          result = await _getContent(kbGuid, docGuid)
+        } catch (err) {
+          console.warn(`[copyMarkdown] _getContent failed for ${docGuid}:`, err)
+          continue
+        }
+        if (!result || !result.info) continue
+        const isHtml = !this.$lodash.endsWith(result.info.title, '.md')
+        const { html, resources } = result
+        let content
+        if (isHtml) {
+          content = helper.convertHtml2Markdown(html, kbGuid, docGuid, resources || [])
+        } else {
+          content = helper.extractMarkdownFromMDNote(html, kbGuid, docGuid, resources || [])
+        }
+        const displayTitle = isHtml
+          ? result.info.title
+          : result.info.title.replace(/\.md$/, '')
+        sections.push(`## ${displayTitle}\n\n${content || ''}`)
+      }
+      if (sections.length === 0) {
+        this.$q.notify({ message: 'No notes found', type: 'warning' })
+        return
+      }
+      const text = sections.join('\n\n---\n\n')
       this.$q.electron.clipboard.writeText(text)
-      this.$q.notify({ message: `Copied ${notes.length} notes`, type: 'positive', icon: 'check' })
+      this.$q.notify({ message: `Copied ${sections.length} notes`, type: 'positive', icon: 'check' })
     },
     async onBlogDeploy ({ config }) {
       this.$refs.blogDeployProgressDialog.show()

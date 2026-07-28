@@ -19,26 +19,16 @@
 import { banner, handlerDoc } from './builtin-echo-shared.js'
 
 // ---------------------------------------------------------------------------
-// render(node, props) 工厂：每张卡片的 render 返回值由 baseRender(...) 统一拼装
+// render(props) 工厂：直接产出 echo host HTML 字符串
+//   - 元数据（kind / field / title / version）由 createAnnoSource 顶层写死
+//   - render() 只返回 HTML，不再打包 type/icon/color/... 那些运行时再补
 // ---------------------------------------------------------------------------
-const baseRender = (meta = {}) => `render (node, props = {}) {
-    const inst = props || {}
-    const prompt = (node && node.prompt) || ''
-    const echoMeta = (node && node._echoMeta) || {}
-    return {
-      type: 'card',
-      icon: inst.icon || echoMeta.icon || '${meta.icon}',
-      color: inst.color || echoMeta.color || '${meta.color}',
-      title: inst.title || echoMeta.name || '${meta.name}',
-      description: inst.desc || echoMeta.desc || ${JSON.stringify(meta.desc || '')},
-      prompt,
-      props: { ...inst, kind: '${meta.kind}', id: '${meta.id}', inheritFromPrevious: false },
-      html: '<span class="ag-rune ag-rune--${meta.id}" data-echo-chant-id="${meta.id}">${meta.name}</span>'
-    }
+const baseRender = (meta = {}) => `render (props = {}) {
+    return '<span class="ag-rune ag-rune--${meta.id}" data-echo-chant-id="${meta.id}">${meta.name}</span>'
   }`
 
 // ---------------------------------------------------------------------------
-// 通用 afterRender 工厂
+// 通用 afterRender 工厂（签名 (node, props) → cleanup|undefined，与旧版一致）
 // ---------------------------------------------------------------------------
 const baseAfterRender = (handlerBody = '', meta = {}) => `${handlerDoc([`【handler】${meta.handlerDesc || ''}`])}
     ${handlerBody}
@@ -46,13 +36,30 @@ const baseAfterRender = (handlerBody = '', meta = {}) => `${handlerDoc([`【hand
 
 // ---------------------------------------------------------------------------
 // 把 meta + render + afterRender 拼装成 anno_source 字符串
+//
+// === 新结构（v2026-07-28 起固定）===
+//   export default {
+//     kind: 'echo' | 'echo-chant' | 'echo-tbd',
+//     type: 'echo',                          // 顶层 type（原 render 返回值里的 type）
+//     field: '<id>',                         // 顶层 field，原 id 的别名
+//     title: '<name>',                       // 顶层 title，原 name 的别名
+//     version: 1,
+//     props: {                                // ★ 实例可配置参数提到顶层
+//       ...meta.propsDefaults,
+//     },
+//     render (props = {}) { ... },           // 只返回 HTML 字符串
+//     afterRender (node, props = {}) { ... } // 签名不变
+//   }
 // ---------------------------------------------------------------------------
 const createAnnoSource = ({ meta, renderBody, handlerBody }) => `export default {
   ${banner(meta.banner || [])},
   kind: '${meta.kind}',
-  id: '${meta.id}',
+  type: 'echo',
+  field: '${meta.id}',
+  title: '${meta.name}',
   version: 1,
-  name: '${meta.name}',
+
+  props: ${JSON.stringify(meta.propsDefaults || {})},
 
   ${renderBody},
 

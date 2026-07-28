@@ -2,18 +2,38 @@
 // echoRuntime —— EchoRuntime 类（registry 的运行时引擎）
 //
 // 职责：
-//   1. compileDefinition(echo) —— 把 anno_source 字符串编译成 definition 对象（render + afterRender）
+//   1. compileDefinition(echo) —— 把 anno_source 字符串编译成 definition 对象（render + afterRender + props）
 //   2. render(token, echo)     —— 给定 token + echo 定义，输出 { type, icon, color, title, description, prompt, props, html, afterRenderHook }
 //   3. renderToHtml(token, echo)—— 输出注入 ABI 属性的最终 HTML
 //   4. afterRender(container)  —— DOM paint 后对所有 [data-echo-inline] 调 definition.afterRender
 //   5. disposeAll()            —— 清掉所有已注册的 cleanup
 //
+// === anno_source definition 新结构（v2026-07-28）===
+//   definition = { kind, type, field, title, version, props, render, afterRender }
+//   - kind      'echo' | 'echo-chant' | 'echo-tbd'        （顶层 kind）
+//   - type      'echo'                                    （顶层 type 标识，保留扩展位）
+//   - field     '<id>'                                    （id 别名）
+//   - title     '<name>'                                  （name 别名）
+//   - props     {}                                       （echo 卡片声明的可配置参数默认值）
+//   - render    (props = {}) => string                    （只返回 echo host HTML 字符串）
+//   - afterRender (node, props = {}) => cleanup|undefined  （签名不变）
+//
 // 不变量：
-//   - definition.render 签名 = (node, props) -> result
+//   - definition.render 签名 = (props) -> string  （注意：只接 props，不再接 node/ancestors）
 //   - definition.afterRender 签名 = (node, props) -> cleanup|undefined
 //     （node = echo host DOM element，props = 编译期算好的 context.props，含 resolved value）
 //   - DOM ABI：data-echo-inline / data-echo-name / data-echo-id / data-echo-definition-id
 //     / data-echo-value / data-echo-props / data-echo-props-json / data-echo-node-id
+//
+// === 渲染期数据流 ===
+//   1. context.props  = { ...definition.props, ...mergedProps（含 inherit/value/id/...） }
+//        即「echo 名片默认值」被子「实例运行时 props」覆盖。
+//   2. definition.render(context.props) → HTML 字符串
+//   3. 卡片元数据 icon/color/title/desc 完全由 EchoRuntime 拼装：
+//        - icon  = props.icon || matchedEcho.icon || DEFAULT_ECHO_ICON
+//        - color = props.color || matchedEcho.color || DEFAULT_ECHO_COLOR
+//        - title = props.title || matchedEcho.name || context.name || '回响'
+//        - desc  = props.desc || matchedEcho.desc || ''
 // ============================================================================
 
 import {
@@ -132,8 +152,12 @@ export default class EchoRuntime {
       console.error('[echoRuntime] compileDefinition failed:', error)
     }
 
+    // definition 兜底：必须至少有 render(node, props) 函数；afterRender 可选。
+    // 没有 render 时返回占位空 span，让上游 fallback 卡片样式兜底。
     if (!definition || typeof definition !== 'object') {
-      definition = { name: echo.name || '', render: context => createFallbackRenderResult(context) }
+      definition = { kind: 'echo', type: 'echo', field: echo.id || '', title: echo.name || '回响', version: 1, props: {}, render: () => '' }
+    } else {
+      if (typeof definition.render !== 'function') definition.render = () => ''
     }
 
     this.definitionCache.set(cacheKey, { source, definition })
@@ -144,8 +168,8 @@ export default class EchoRuntime {
     const matchedEcho = echo || this.registry?.getByName?.(token.echoName)
     const payload = decodeEchoPayload(token.payloadRaw || token.payload || '')
     const tokenProps = (token.propsParsed && typeof token.propsParsed === 'object') ? token.propsParsed : {}
-    const mergedProps = { ...(payload.props || {}), ...tokenProps }
 
+    let mergedProps = { ...(payload.props || {}), ...tokenProps }
     if (token && isInheritFromPreviousEnabled(mergedProps) && !String(mergedProps.value || '').trim()) {
       const inheritedValue = String(token.prevValue || '')
       if (inheritedValue) mergedProps.value = inheritedValue
@@ -159,6 +183,7 @@ export default class EchoRuntime {
     const resolvedPrompt = tokenPrompt || payloadPrompt || resolvedValue || ''
     const resolvedId = String(token.echoId || tokenProps.id || payload?.props?.id || '').trim()
 
+    // definition 没拿到前，临时 props = mergedProps；下面 compileDefinition 后会再覆盖
     const context = {
       name: token.echoName || matchedEcho?.name || '',
       id: resolvedId,
@@ -177,38 +202,40 @@ export default class EchoRuntime {
     }
 
     const definition = this.compileDefinition(matchedEcho)
-    let result = null
+
+    // === 新结构：definition.props（卡片声明默认） ∪ mergedProps（实例运行时）→ finalProps ===
+    const defaultProps = (definition && typeof definition.props === 'object' && definition.props) || {}
+    const finalProps = Object.assign({}, defaultProps, mergedProps, { value: resolvedValue, id: resolvedId })
+    context.props = finalProps
+
+    // === 新结构：definition.render(finalProps) → HTML 字符串 ===
+    let html = ''
     let afterRenderHook = null
     try {
       if (definition && typeof definition.render === 'function') {
-        const tokenWithMeta = Object.assign({}, token, { propsParsed: mergedProps, _echoMeta: matchedEcho })
-        result = definition.render(tokenWithMeta, context.props)
-        if (typeof definition.afterRender === 'function') {
-          const def = definition
-          afterRenderHook = (domElement) => {
-            try { def.afterRender(domElement, context.props) }
-            catch (error) { console.error('[echoRuntime] afterRender hook failed:', error) }
-          }
+        const renderedHtml = definition.render(finalProps)
+        html = (typeof renderedHtml === 'string') ? renderedHtml : ''
+      }
+      if (definition && typeof definition.afterRender === 'function') {
+        const def = definition
+        afterRenderHook = (domElement) => {
+          try { def.afterRender(domElement, finalProps) }
+          catch (error) { console.error('[echoRuntime] afterRender hook failed:', error) }
         }
       }
     } catch (error) {
       console.error('[echoRuntime] render failed:', error)
     }
 
-    const normalized = {
-      ...createFallbackRenderResult(context),
-      ...(result && typeof result === 'object' ? result : {})
-    }
+    // 卡片元数据完全由 EchoRuntime 拼（不再依赖 definition.render 返回值里的 type/icon/...）
+    const normalized = createFallbackRenderResult(context)
+    normalized.html = html || normalized.html
     if (afterRenderHook) normalized.afterRenderHook = afterRenderHook
-
-    normalized.icon = normalized.icon || matchedEcho.icon || DEFAULT_ECHO_ICON
-    normalized.color = normalized.color || matchedEcho.color || DEFAULT_ECHO_COLOR
-    normalized.title = normalized.title || matchedEcho.name || context.name || '回响'
-    normalized.description = typeof normalized.description === 'string' ? normalized.description : matchedEcho.desc || ''
-    normalized.prompt = typeof normalized.prompt === 'string' ? normalized.prompt : context.prompt || ''
-    normalized.value = typeof normalized.value === 'string' ? normalized.value : context.value
-    normalized.html = typeof normalized.html === 'string' ? normalized.html : ''
-    normalized.props = (normalized.props && typeof normalized.props === 'object') ? normalized.props : context.props
+    normalized.kind = definition?.kind || matchedEcho.kind || 'echo'
+    normalized.type = definition?.type || 'echo'
+    normalized.field = definition?.field || matchedEcho.id || ''
+    normalized.title = definition?.title || matchedEcho.name || context.name || '回响'
+    normalized.props = finalProps
     normalized.echo = matchedEcho
 
     return normalized
