@@ -24,7 +24,10 @@ const { banner, handlerDoc } = require('./builtin-echo-shared')
 //   - render() 只返回 HTML，不再打包 type/icon/color/... 那些运行时再补
 // ---------------------------------------------------------------------------
 const baseRender = (meta = {}) => `render (props = {}) {
-    return '<span class="ag-rune ag-rune--${meta.id}" data-echo-chant-id="${meta.id}">${meta.name}</span>'
+    const metaId = '${meta.id}'
+    const metaName = '${meta.name}'
+    const displayTitle = (props && (props.title || props.name)) || metaName
+    return '<span class="ag-rune ag-rune--' + metaId + '" data-echo-chant-id="' + metaId + '">' + displayTitle + '</span>'
   }`
 
 // ---------------------------------------------------------------------------
@@ -176,15 +179,15 @@ const BUILTIN_ECHO_META = [
       '  - prev-sibling(默认) 同行上一个 inline / element 兄弟节点',
       '  - prev-line          上一行 block 节点',
       '  - next-line          下一行 block 节点',
-      '参数：placeholder=占位文本（若被克隆节点没有可见文本则用此填充）',
+      '参数：placeholderText=占位文本（若被克隆节点没有可见文本则用此填充）',
       '示例：@twinbloom{source: "prev-line"}(克隆上一行)'],
     handlerDesc: 'jQuery .clone()：按 source 复制 prev-sibling / prev-line / next-line；cleanup 时移除克隆块',
     handlerBody: `
     const $rune = $(node)
     if (!$rune.length) return () => {}
-    const mergedProps = Object.assign({ source: 'prev-sibling', placeholder: '双生节点' }, props || {})
+    const mergedProps = Object.assign({ source: 'prev-sibling', placeholderText: '双生节点' }, props || {})
     const source = String(mergedProps.source || 'prev-sibling').toLowerCase()
-    const placeholder = mergedProps.placeholder || '双生节点'
+    const placeholderText = mergedProps.placeholderText || '双生节点'
     const twinId = $rune.attr('data-echo-chant-id') || 'twinbloom'
     const $block = $rune.closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote').first()
     if (!$block.length) return () => {}
@@ -214,7 +217,7 @@ const BUILTIN_ECHO_META = [
       if (!$clone.find('[data-twinbloom-badge]').length) {
         $clone.prepend(
           $('<span></span>').attr('data-twinbloom-badge', twinId)
-            .text('🌸 双生花 · ' + placeholder)
+            .text('🌸 双生花 · ' + placeholderText)
             .css({ 'font-size': '11px', color: '#8E24AA',
               padding: '2px 8px', 'background-color': 'rgba(142,36,170,.12)',
               border: '1px solid rgba(142,36,170,.4)', 'border-radius': '4px',
@@ -222,7 +225,7 @@ const BUILTIN_ECHO_META = [
         )
       }
       if (!$clone.text().replace(/🌸.*$/, '').trim()) {
-        $clone.append($('<span></span>').attr('data-twinbloom-placeholder', 'true').text(placeholder))
+        $clone.append($('<span></span>').attr('data-twinbloom-placeholder', 'true').text(placeholderText))
       }
       insertBefore ? $target.before($clone) : $target.after($clone)
     }

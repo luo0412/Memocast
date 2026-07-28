@@ -15,7 +15,6 @@ scripts/
 ├── verify-jquery-echo-compile.js      # 验证 renderer 端 builtinEchoes.js 编译正确性
 ├── verify-jquery-afterrender.js       # 验证 afterRender 使用 jQuery 而非原生 DOM
 ├── verify-inherit-from-previous.js    # 验证「上一节点 value 继承」helper 正确性
-├── verify-builtin-echo-upsert.js      # 验证 electron-main 强制覆盖逻辑正确性
 ├── verify-enum-util-regex.js          # 直接打 require.context 正则命中情况
 ├── verify-enum-boot-smoke.js          # 验证 $enums 扫描正则能命中所有 enum 文件
 ├── verify-util-boot-smoke.js          # 验证 $utils 扫描正则能命中所有 util 文件
@@ -89,16 +88,9 @@ const HANDLER_PRELUDE_SOURCE = [
 | `applyInheritedEchoValue(attrs, prevValue)` | 应用继承值到当前 attrs |
 | `createEchoPlaceholderPayload(echo, opts)` | 创建开启继承的 echo 占位 payload |
 
-### 场景 4：数据库强制覆盖验证（verify-builtin-echo-upsert）
+### 场景 4：已删除（v2026-07-28）
 
-**目的**：验证 electron-main 的 `seedBuiltinEchoes` 逻辑能正确覆盖老数据。
-
-**验证点**：
-1. `insertedCount === 0`（全部走 UPDATE 而非 INSERT）
-2. `updatedCount === 16`（16 个内置回响全部被覆盖）
-3. 所有 `anno_source` 与代码侧一致
-4. `created_at` 保留旧值，`updated_at` 刷新为 now
-5. 二次覆盖幂等性
+主进程不再在启动时自动 sync 内置回响到 DB——用户在「设置 → 重置回响」里点一下走 `db:clearEchoes`。原来的 `seedBuiltinEchoes` 已拆，对应的 `verify-builtin-echo-upsert.js` 也一并删除。
 
 ---
 
@@ -115,7 +107,6 @@ node scripts/verify-main-builtin-echoes.js
 node scripts/verify-jquery-echo-compile.js
 node scripts/verify-jquery-afterrender.js
 node scripts/verify-inherit-from-previous.js
-node scripts/verify-builtin-echo-upsert.js
 
 # 验证（Boot 扫描正则回归）
 node scripts/verify-enum-util-regex.js
@@ -183,7 +174,6 @@ node scripts/verify-util-boot-smoke.js
 | 修改 `builtinEchoes.js` 后 | `transform-main-builtin-echoes.js` → `verify-main-builtin-echoes.js` |
 | 修改 `EchoRuntime.js` 后 | `verify-inherit-from-previous.js` |
 | 修改 afterRender 签名后 | `verify-jquery-afterrender.js` |
-| 修改 builtin echo 数量/结构后 | `verify-builtin-echo-upsert.js` |
 | 任何 echo 相关改动的最终验证 | 全部跑一遍 |
 | 修改 `boot/globalGlobals.js` 的 require.context 正则后 | `verify-enum-util-regex.js` / `verify-enum-boot-smoke.js` / `verify-util-boot-smoke.js` |
 | `src/utils/enum/` 新增/删除/改名 enum 文件后 | `verify-enum-boot-smoke.js` |

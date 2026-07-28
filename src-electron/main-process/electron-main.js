@@ -930,82 +930,13 @@ export default {
     log.info(`[DB] Backfilled default anno sources for ${emptyAnnoSourceEchoes.length} echo(es)`)
   }
 
-  // === Sync 内置回响到 SQLite（强制覆盖） ===
-  // 11 个 __builtin_* 回响以 BUILTIN_ECHO_CARDS 为权威源：每次启动都会把 DB row 的
-  // name / desc / color / icon / anno_source / render_type / category / sort_order / updated_at
-  // 强制覆盖到代码当前版本（id / created_at 保留）。
-  // 这样：
-  //   1. 升级时改动了 BUILTIN_ECHO_CARDS（例如给内置回响加上 inheritFromPrevious: false），
-  //      下次启动 DB 自动同步，不再需要手动清表；
-  //   2. 内置回响在前端 isBuiltin=true 始终只读，但代码侧的演进仍能落到 DB。
-  try {
-    const now = Date.now()
-    let insertedCount = 0
-    let updatedCount = 0
-    for (const builtinEcho of BUILTIN_ECHO_CARDS) {
-      if (!builtinEcho || !builtinEcho.id) continue
-      const builtinId = String(builtinEcho.id)
-      // 2026-07：sync seed 不再硬编码 'builtin'，改用 BUILTIN_ECHO_CARDS 的 category 字段，
-      // 让 showy / builtin 等分类一次写到位，依赖前端 loadEchoes 兜底回填的"硬编码 + 迁移回填"
-      // 旧逻辑会在每次启动把 category 反复重写为 'builtin'。
-      const builtinCategory = builtinEcho.category || 'builtin'
-      const existing = execOne('SELECT id, created_at FROM echoes WHERE id = ?', [builtinId])
-      if (existing) {
-        // 已存在 → 强制覆盖，保留 id / created_at
-        db.run(
-          `UPDATE echoes SET
-            name = ?,
-            "desc" = ?,
-            color = ?,
-            icon = ?,
-            anno_source = ?,
-            render_type = ?,
-            category = ?,
-            sort_order = ?,
-            updated_at = ?
-          WHERE id = ?`,
-          [
-            builtinEcho.name,
-            builtinEcho.desc || '',
-            builtinEcho.color || '#26A69A',
-            builtinEcho.icon || 'graphic_eq',
-            builtinEcho.anno_source,
-            'anno',
-            builtinCategory,
-            Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
-            now,
-            builtinId
-          ]
-        )
-        updatedCount += 1
-      } else {
-        // 不存在 → INSERT；created_at 一律用 now（首建时间由本机时钟决定）
-        db.run(
-          `INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            builtinId,
-            builtinEcho.name,
-            builtinEcho.desc || '',
-            builtinEcho.color || '#26A69A',
-            builtinEcho.icon || 'graphic_eq',
-            builtinEcho.anno_source,
-            'anno',
-            builtinCategory,
-            Number.isFinite(Number(builtinEcho.sort_order)) ? Number(builtinEcho.sort_order) : 0,
-            now,
-            now
-          ]
-        )
-        insertedCount += 1
-      }
-    }
-    if (insertedCount > 0 || updatedCount > 0) {
-      saveDatabase()
-      log.info(`[DB] Synced builtin echoes (inserted=${insertedCount}, updated=${updatedCount})`)
-    }
-  } catch (builtinEchoSeedError) {
-    log.error('[DB] Failed to sync builtin echoes:', builtinEchoSeedError)
-  }
+  // === 内置回响落库策略（v2026-07-28 调整） ===
+  // 不再在主进程启动时强制覆盖 DB 内 __builtin_* 行的 anno_source / name / desc / color / icon 等字段。
+  // 用户在 UI 里手动改过 DB 行（典型场景：直接改 sqlite 试验 / 调试）必须能"活下来"。
+  // 新装机时 DB 里没有 __builtin_* 行是正常的：
+  //   - 前端 store/client/state.js 的 echoCards 初始值就是 BUILTIN_ECHO_CARDS 的拷贝；
+  //   - 真正需要"DB 落后于代码"时，用户在「设置 → 重置回响」里点一下走 db:clearEchoes。
+  // 因此这条 sync seed 已删除，不再自动覆盖。
 
   // === rune 预设模板 (rune_templates) ===
   // 单独的服务（service/rune-template-service.js）只负责 schema + CRUD。
@@ -3184,8 +3115,8 @@ function registerDatabaseHandlers() {
   // 删除回响
   ipcMain.handle('db:deleteEcho', async (event, id) => {
     try {
-      // 内置回响（id 以 __builtin_ 开头）不可删除：它们由 BUILTIN_ECHO_CARDS 权威定义，
-      // 若误删，下次启动 sync seed 会重新插入（保证状态可恢复），但仍拒绝显式删除操作。
+      // 内置回响（id 以 __builtin_ 开头）不可删除：它们由 BUILTIN_ECHO_CARDS 权威定义。
+      // 若误删，需要在「设置 → 重置回响」走 db:clearEchoes 恢复；这里仍拒绝显式删除操作。
       if (typeof id === 'string' && id.startsWith('__builtin_')) {
         log.warn(`[DB] deleteEcho blocked: builtin echo ${id} cannot be removed`)
         return { success: false, code: 'ECHO_BUILTIN_DELETE_FORBIDDEN', message: '内置回响不可删除' }
@@ -3290,6 +3221,8 @@ function registerDatabaseHandlers() {
   // 重置回响：用 renderer 端推送的最新内置 echo 列表覆盖 DB 内置行，保留自定义回响
   //  - 若 renderer 推 cards：以其为准（解决 main / renderer 双源漂移问题）。
   //  - 若 renderer 没传：fallback 到 main 镜像版 BUILTIN_ECHO_CARDS（保持兼容）。
+  //  - v2026-07-28 起：主进程启动时不再自动 sync 内置回响（seed 已拆），DB 落库完全由本接口承载，
+  //    用户在「设置 → 重置回响」里点一下走这里。
   ipcMain.handle('db:clearEchoes', async (_event, payload) => {
     try {
       const incoming = Array.isArray(payload && payload.builtins) ? payload.builtins : null

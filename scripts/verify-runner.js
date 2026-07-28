@@ -15,8 +15,7 @@
 //     scripts/verify-jquery-echo-compile.js        16 张内置 anno_source 顶层结构 + render 返回 string
 //     scripts/verify-jquery-afterrender.js         handlerBody jQuery 直用 + 历史包袱清理
 //     scripts/verify-main-builtin-echoes.js        main 端镜像编译 + 与 renderer 一致
-//     scripts/verify-builtin-echo-upsert.js        DB 落库幂等性 + anno_source 一致性
-//     scripts/verify-echo-schema-formcreate-align.js  echo propsSchema 贴合 form-create rule
+  //     scripts/verify-echo-schema-formcreate-align.js  echo propsSchema 贴合 form-create rule
 //                                                       （禁止 default/placeholder 顶层字段、规则透传一致性）
 //     scripts/verify-rune-templates.js             14 个 rune SFC 模板：源转义 / script 可编译 / props.value / $emit
 //     scripts/verify-inherit-from-previous.js      inheritFromPrevious helper 全套语义

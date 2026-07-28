@@ -24,7 +24,10 @@ import { banner, handlerDoc } from './builtin-echo-shared.js'
 //   - render() 只返回 HTML，不再打包 type/icon/color/... 那些运行时再补
 // ---------------------------------------------------------------------------
 const baseRender = (meta = {}) => `render (props = {}) {
-    return '<span class="ag-rune ag-rune--${meta.id}" data-echo-chant-id="${meta.id}">${meta.name}</span>'
+    const metaId = '${meta.id}'
+    const metaName = '${meta.name}'
+    const displayTitle = (props && (props.title || props.name)) || metaName
+    return '<span class="ag-rune ag-rune--' + metaId + '" data-echo-chant-id="' + metaId + '">' + displayTitle + '</span>'
   }`
 
 // ---------------------------------------------------------------------------

@@ -18,7 +18,7 @@ alwaysApply: true
 | 特性 | 主战场 | verify 脚本覆盖 |
 |---|---|---|
 | **符文（Rune）** | `src/components/rune/`、`src/components/muya/Muya.vue` | `verify-rune-templates.js` |
-| **回响（Echo）** | `src/components/echo/`、`src/muya/lib/parser/render/index.js`、`src-electron/main-process/service/builtin-echoes.js` | `verify-jquery-echo-compile.js`、`verify-jquery-afterrender.js`、`verify-echo-runtime-props.js`、`verify-main-builtin-echoes.js`、`verify-builtin-echo-upsert.js` |
+| **回响（Echo）** | `src/components/echo/`、`src/muya/lib/parser/render/index.js`、`src-electron/main-process/service/builtin-echoes.js` | `verify-jquery-echo-compile.js`、`verify-jquery-afterrender.js`、`verify-echo-runtime-props.js`、`verify-main-builtin-echoes.js` |
 | **云函数** | `src/utils/cloud-router.js`、`src/services/cloud/`、`src/components/ui/dialog/CloudFnConfigDialog.vue` | （目前**没有**专门的云函数 verify 脚本——见 §5） |
 | **跨三特性公共** | `src/components/echo/echoInherit.js`、`src/components/echo/echoPayloadCodec.js`、`src/components/echo/echoCore.js` | `verify-inherit-from-previous.js` |
 
@@ -40,7 +40,6 @@ alwaysApply: true
 | `verify-jquery-echo-compile.js` | 16 张内置 anno_source **顶层结构**（`type` / `field` / `title` / `version` / `props`）；`render` 必须返回 string；`type=echo-chant` 必须有 `afterRender`；**`kind` 字段不能再出现**（已合并到 `type`） | 改 `createAnnoSource` 拼装模板时漏字段、改 `baseRender` 让它返回 object、改 type 三态分类 |
 | `verify-jquery-afterrender.js` | 16 张 handlerBody 用 `$(node)` 直 jQuery 化；无 native fallback（`document.querySelector` / `.classList.add` / `.previousElementSibling` / `.style.x = `）；`echoAnnoSource.js` 导出 `HANDLER_PRELUDE` / `createDefaultEchoAnnoSource`；旧命名 `safeDollarRef` / `createDefaultChantAnnoSource` 不再出现 | 给 handlerBody 偷加原生兜底、改 HANDLER_PRELUDE 不再注入 $、把 `createDefaultEchoAnnoSource` 改名 |
 | `verify-main-builtin-echoes.js` | main 端 CJS 镜像里 16 张卡的 anno_source **类型契约**与 renderer 端一致；`type` 三态合法；`kind` 不再出现 | 改 renderer 端 echoBuiltins.js 但忘了跑 `transform-main-builtin-echoes.js` 同步镜像；或 transform 脚本里的 import/export 正则坏掉 |
-| `verify-builtin-echo-upsert.js` | DB 落库的 anno_source 与代码侧**逐字节一致**；二次覆盖幂等；删一条后再 upsert 能重新插入；时间戳语义（created_at 保留、updated_at 刷成 now） | 改 echoBuiltins.js 但忘了触发 upsert；改 DB schema；改 seedBuiltinEchoes 写入路径 |
 | `verify-rune-templates.js` | 14 个内置 rune SFC 模板的**源文件级转义**（`</script>` 必须写成 `<\/script>`，否则 .vue 文件 import 时会被截断）；运行时**语法可编译**；**`props.value` 必须声明**（`mountRuneVueHosts` 硬约定）；非纯展示型 rune 必须有 `$emit('input', ...)` 回写通道 | 在 rune-templates.js 源文件里直接写 `</script>`；删 props.value；改 `$emit('input')` 为别的通道 |
 | `verify-inherit-from-previous.js` | `isInheritFromPreviousEnabled` 各种 truthy 形式；`echoInheritFromPrevious` 看顶层 + `echo.props`；`extractPrevEchoTokenValue` 按 echoName 过滤；`encodeEchoPayload` / `decodeEchoPayload` round-trip；`createEchoPlaceholderPayload` 注入 `definitionId` / `title` / `inheritFromPrevious` 标记 | 改 inherit helper 真值表；把 `decodeEchoPayload` 输出形态从 `{ version, prompt, props }` 改成 `{ version, prompt, attrs }` |
 | `verify-enum-boot-smoke.js` | `$enums.ServerSubEnum` / `$enums.AiSubEnum` / `$enums.runeEchoCategoriesEnum` / `$enums.noteOrderTypeEnum` 等核心 enum 在 boot 阶段挂载完整 | 改 enum 目录结构、改 enumSetup.js 加载顺序 |
@@ -51,8 +50,8 @@ alwaysApply: true
 
 | 命令 | 作用 |
 |---|---|
-| `yarn verify` | 跑全部 verify 脚本（10 个），失败任意一个 exit 1 |
-| `yarn verify:echo` | 只跑 echo 相关（5 个） |
+| `yarn verify` | 跑全部 verify 脚本（9 个），失败任意一个 exit 1 |
+| `yarn verify:echo` | 只跑 echo 相关（4 个） |
 | `yarn verify:rune` | 只跑 rune 相关（1 个） |
 | `yarn verify:inherit` | 只跑 inherit 相关（1 个） |
 | `yarn verify:main-builtin` | 只跑 main 端镜像（1 个） |
