@@ -71,28 +71,17 @@ const BUILTIN_ECHO_META = [
       '  - 你好世界 @nice              → li 内「你好世界」被 <mark> 高亮',
       '  # 今天天气真好 @nice          → h1 文本被 <mark> 高亮',
       '  普通段落 xxx @nice            → p 文本被 <mark> 高亮'],
-    handlerDesc: '把 block 内除 @nice 之外的节点用 <mark> 包起来；cleanup 时解包',
+    handlerDesc: '把 block 内除 @nice 之外的节点用 <mark> 包起来',
     handlerBody: `
     const $rune = $(node)
-    if (!$rune.length) return () => {}
-    const $block = $rune.closest('li, p, pre, h1, h2, h3, h4, h5, h6, blockquote, [data-block-type], .mu-block').first()
-    if (!$block.length || $block.attr('data-nice-marked')) return () => {}
-    const targets = $block.contents().filter(function () {
-      const $n = $(this)
-      if (this === node) return false
-      if ($n.is('[data-echo-chant-id]')) return false
-      if ($n.is('mark.ag-rune-nice-highlight')) return false
-      if (this.nodeType === 3 && !this.nodeValue.trim()) return false
-      return true
-    })
-    const $mark = targets.length ? $('<mark class="ag-rune-nice-highlight"></mark>').append(targets) : $()
-    if ($mark.length) $rune.after($mark)
-    $rune.remove()
-    $block.attr('data-nice-marked', 'true')
-    return () => {
-      if ($mark.length) $mark.replaceWith($mark.contents())
-      $block.removeAttr('data-nice-marked')
-    }`
+    if (!$rune.length) return
+    const $prev = $rune.prev()
+    if (!$prev.length) return
+    const $parent = $prev.parent()
+    if ($parent.attr('data-nice-marked')) return
+    const $mark = $('<mark class="ag-rune-nice-highlight"></mark>').append($prev.clone())
+    $prev.replaceWith($mark)
+    $parent.attr('data-nice-marked', 'true')`
   },
   {
     id: 'growth', name: '生生不息', icon: 'park', color: '#43A047', category: 'showy', kind: 'echo-chant',

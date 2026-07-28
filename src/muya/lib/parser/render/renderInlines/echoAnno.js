@@ -66,6 +66,8 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
     } catch (error) { /* ignore */ }
   }
 
+  const isHideSelf = instProps.isHideSelf === true || instProps.isHideSelf === 'true'
+
   return [
     h(`span.${className}.ag-echo-anno-token.${CLASS_OR_ID.AG_INLINE_RULE}`, {
       dataset,
@@ -78,7 +80,7 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
         echoPropsJson ? { 'data-echo-props-json': echoPropsJson } : {}
       ),
       style: hostStyle
-    }, [
+    }, isHideSelf ? [] : [
       h('span.ag-echo-placeholder-marker', {
         attrs: {
           contenteditable: 'false'
