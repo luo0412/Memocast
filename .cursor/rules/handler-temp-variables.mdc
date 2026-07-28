@@ -1,0 +1,57 @@
+# Echo Handler 临时变量命名规范：`script` / `_temp`
+
+写 `afterRender`、`render` 等 handler 脚本时，所有**仅用于暂存、不参与持久化的临时变量**，命名规则：
+
+1. **对象类型临时变量** → 放在 `const script = {}` 对象里（字段即临时变量），后续统一在 script 最后 `return script`
+2. **非对象的单值临时变量** → 变量名以 `_temp` 前缀开头（如 `const _tempTimer = null`）
+
+禁止把临时变量直接散落在顶层 `const` 声明里（会污染全局/外层作用域）。
+
+---
+
+## 示例
+
+### ✅ 正确
+
+```javascript
+afterRender (node, props = {}) {
+  const script = {}
+  const $node = $(node)
+  script.target = $node.closest('[data-block-type]').get(0)
+  script.$siblings = $node.siblings('.mu-block')
+  script.$siblings.addClass('ag-echo-active')
+  script._tempCleanup = () => {
+    script.$siblings.removeClass('ag-echo-active')
+  }
+  return script._tempCleanup
+}
+```
+
+```javascript
+afterRender (node, props = {}) {
+  const $node = $(node)
+  const _tempTimer = setTimeout(() => {
+    $node.addClass('ag-echo-mounted')
+  }, 100)
+  return () => clearTimeout(_tempTimer)
+}
+```
+
+### ❌ 错误
+
+```javascript
+afterRender (node, props = {}) {
+  const target = node.closest('[data-block-type]') // ❌ 临时变量没放 script，也没 _temp 前缀
+  const $siblings = node.siblings('.mu-block')     // ❌ 同样问题
+  return () => {}
+}
+```
+
+---
+
+## 适用文件范围
+
+- `src/components/echo/echoBuiltins.js`（所有 builtin echo 的 `handlerBody`）
+- `src/components/echo/echoAnnoSource.js`（模板示例）
+- `src/components/echo/EchoFormEditor.vue`（tooltip 注释说明）
+- 任何用户自定义 echo 定义的 `afterRender` / `render` 函数体
