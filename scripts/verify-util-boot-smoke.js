@@ -1,11 +1,13 @@
 // 模拟 boot/globalGlobals.js 的 require.context 扫描逻辑
-// 验证：正则改成 ^[a-z]\w*Util\.js$ 后能匹配到 emptyUtil / treeUtil / markdownUtil / domUtil / dateUtil
+// 验证：项目文件名是小驼峰（camelCase），所以 require.context 用
+// /[A-Z]\w+Util\.js$/ 这类 PascalCase 正则会全部漏掉。
+// 正确写法是 /^[a-z]\w*Util\.js$/，能匹配到 emptyUtil / treeUtil / markdownUtil / domUtil / dateUtil。
 
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+const fs = require('fs')
+const path = require('path')
 
-const utilDir = './src/utils/util'
-const files = readdirSync(utilDir).filter(f => f.endsWith('.js'))
+const utilDir = path.resolve(__dirname, '..', 'src', 'utils', 'util')
+const files = fs.readdirSync(utilDir).filter(f => f.endsWith('.js'))
 console.log('util 目录文件：', files.join(', '))
 
 // 旧正则（首字母大写）—— 报错原因
@@ -43,3 +45,9 @@ console.log('为防止 $utils / $enums / $cloudfns 下子模块仍缺失，建�
 console.log('1) 在 NoteItem.vue 等组件里对 this.$utils.xxx 加可选链 (this.$utils?.emptyUtil?.isNullOrEmpty(...))')
 console.log('2) 或在 globalGlobals.js 给每个 namespace 加 fallback（empty object）')
 console.log('3) 当前修复已让 boot 注册完整，业务代码可保留 this.$utils.emptyUtil 写法')
+
+if (newHits.length !== 5) {
+  console.log('\n❌ 新正则未命中全部 util 文件，请检查 src/utils/util/ 是否有遗漏或改名')
+  process.exit(1)
+}
+console.log('\n=== summary: pass ===')

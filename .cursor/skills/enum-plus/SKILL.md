@@ -107,12 +107,40 @@ StatusEnum.toMap({ keySelector: 'key', valueSelector: 'value' })  // { Draft: 1,
 
 ## 全局访问：`Vue.prototype.$enums`
 
-Memocast 在 `boot/i18n.js` 中将所有业务 enum **统一挂载到 Vue 原型**（复数语义：一个对象里多个 enum 实例的集合）：
+Memocast 在 `boot/globalGlobals.js` 中将所有业务 enum **统一挂载到 Vue 原型**（复数语义：一个对象里多个 enum 实例的集合）：
 
 ```javascript
-// src/boot/i18n.js（节选）
-import { NoteOrderTypeEnum, ..., GeneralSubEnum, EditorSubEnum, ... } from 'src/utils/enum'
-Vue.prototype.$enums = { NoteOrderTypeEnum, ..., GeneralSubEnum, EditorSubEnum, ... }
+// src/boot/globalGlobals.js（节选）
+import 'src/utils/enum/index.js'
+import {
+  NoteOrderTypeEnum,
+  CalendarDateBasisEnum,
+  AiAssistantProviderEnum,
+  CloudSyncProviderEnum,
+  SettingsTabEnum,
+  GeneralSubEnum,
+  EditorSubEnum,
+  AiSubEnum,
+  ServerSubEnum,
+  CloudFnSubEnum,
+  RuneCategoryEnum,
+  EchoCategoryEnum
+} from 'src/utils/enum/index.js'
+
+Vue.prototype.$enums = {
+  NoteOrderTypeEnum,
+  CalendarDateBasisEnum,
+  AiAssistantProviderEnum,
+  CloudSyncProviderEnum,
+  SettingsTabEnum,
+  GeneralSubEnum,
+  EditorSubEnum,
+  AiSubEnum,
+  ServerSubEnum,
+  CloudFnSubEnum,
+  RuneCategoryEnum,
+  EchoCategoryEnum,
+}
 ```
 
 这样**任何 .vue 模板中**都可以直接通过 `$enums.XxxEnum` 访问，**无需 import，也无需 mixin**：
@@ -137,9 +165,13 @@ computed: {
 }
 ```
 
-> **设计原因**：避免每个组件都写 `import { XxxEnum } from 'src/utils/enum'` + 在 `export default` 中把 XxxEnum 挂在实例上。新增 enum 后只需在 `boot/i18n.js` 的 `$enums` 对象里加一行即可。
+> **设计原因**：避免每个组件都写 `import { XxxEnum } from 'src/utils/enum'` + 在 `export default` 中把 XxxEnum 挂在实例上。新增 enum 后只需在 `boot/globalGlobals.js` 的 `$enums` 对象里加一行即可。
 >
 > **命名说明**：用复数 `$enums` 而非 `$enum` 是为了语义清晰——对象里装的是"多个 enum 实例的集合"，而不是"一个 enum"。
+
+> **boot 文件分工**：
+> - `boot/globalGlobals.js`：挂 `$enums` / `$utils` / `$lodash` / `$cloudfns`（运行时命名空间）
+> - `boot/i18n.js`：初始化 vue-i18n 并把 `Enum.localize` 指向 `i18n.t`（让 enum-plus 的 label 自动翻译）
 
 ---
 
@@ -249,13 +281,15 @@ src/utils/const/
 
 ## 扫描 enum 并挂到 `$enums`（require.context 写法）
 
-**目标**：新增 `src/utils/enum/<Xxx>Enum.js` 后，无需改 `boot/i18n.js` 即可在所有组件用 `$enums.XxxEnum`。
+**当前状态**：`boot/globalGlobals.js` 用的是**直接 import + 显式列举**写法（见上节）。下面给出的是**等价的 require.context 写法**，供未来重构或参考。
+
+**目标**：新增 `src/utils/enum/<Xxx>Enum.js` 后，无需改 `boot/globalGlobals.js` 即可在所有组件用 `$enums.XxxEnum`。
 
 Quasar v1 + webpack 用 `require.context` 实现：
 
 ```javascript
-// src/boot/i18n.js
-const enumContext = require.context('src/utils/enum/', false, /[A-Z]\w+Enum\.js$/)
+// src/boot/globalGlobals.js（重构后示意）
+const enumContext = require.context('src/utils/enum/', false, /^[a-z]\w*Enum\.js$/)
 const enumMap = {}
 enumContext.keys().forEach(key => {
   // key 形如 './noteOrderTypeEnum.js'
@@ -272,9 +306,22 @@ enumContext.keys().forEach(key => {
 Vue.prototype.$enums = enumMap
 ```
 
-> **正则约束 `/[A-Z]\w+Enum\.js$/`**：只匹配 `XxxEnum.js` 命名的文件，跳过 `enumSetup.js` / `index.js` 等基础设施文件。
+> **正则必须用 `/^[a-z]\w*Enum\.js$/`，不能用 `/[A-Z]\w+Enum\.js$/`**：
+> - 项目文件名约定是**小驼峰**（camelCase），如 `noteOrderTypeEnum.js` / `settingsTabEnum.js`。
+> - `/[A-Z]\w+Enum\.js$/` 要求**首字母大写**（PascalCase），会**全部漏掉**当前的 camelCase 文件。
+> - 同理 `$utils` 的正则也要用 `/^[a-z]\w*Util\.js$/`，否则会漏掉 `emptyUtil.js` / `treeUtil.js` / `dateUtil.js` 等。
 >
-> 当前项目 `boot/i18n.js` 直接用 `import { ... } from 'src/utils/enum'`，但**后续可平滑迁移到 require.context 写法**，无需改动模板（模板一律通过 `$enums` 访问）。
+> **回归验证脚本**：
+>
+> | 脚本 | 作用 |
+> |---|---|
+> | `scripts/verify-enum-util-regex.js` | 直接打 regex 命中情况，便于肉眼对比 |
+> | `scripts/verify-enum-boot-smoke.js` | 扫 `src/utils/enum/` 实际目录，校验新正则能否命中全部 6 个 enum 文件 |
+> | `scripts/verify-util-boot-smoke.js` | 扫 `src/utils/util/` 实际目录，校验新正则能否命中全部 5 个 util 文件 + 模拟 buildNameSpacedMap |
+>
+> 重写 boot 扫描逻辑前**必须**先跑这 3 个脚本确认正则不会漏文件。
+
+> **当前 `boot/globalGlobals.js` 仍然走显式 import**（更稳，避免扫描漏文件、新增 enum 需同步改两处）。`$cloudfns` 当前**已经**用 `require.context` + `/[A-Z]\w+CloudFn\.js$/`，但 `src/cloudfns/` 暂未填充任何文件，等真有 cloud function 文件落地时**必须**先按上面的命名约定调整正则（或重命名为 PascalCase 保持正则兼容）。
 
 ---
 

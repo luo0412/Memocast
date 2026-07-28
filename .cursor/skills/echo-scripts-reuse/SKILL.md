@@ -1,6 +1,8 @@
-# Echo 脚本复用规范
+# Echo / Boot 脚本复用规范
 
-本项目在 `scripts/` 目录下放置可复用的工具脚本，主要服务于 Echo（回响）系统的构建、验证和数据同步。
+本项目在 `scripts/` 目录下放置可复用的工具脚本，主要服务于：
+1. **Echo（回响）系统**的构建、验证和数据同步（见下文"Echo 相关脚本"）；
+2. **`boot/globalGlobals.js` 扫描逻辑的回归验证**（见下文"Boot 扫描正则回归脚本"）。
 
 ---
 
@@ -14,6 +16,9 @@ scripts/
 ├── verify-jquery-afterrender.js       # 验证 afterRender 使用 jQuery 而非原生 DOM
 ├── verify-inherit-from-previous.js    # 验证「上一节点 value 继承」helper 正确性
 ├── verify-builtin-echo-upsert.js      # 验证 electron-main 强制覆盖逻辑正确性
+├── verify-enum-util-regex.js          # 直接打 require.context 正则命中情况
+├── verify-enum-boot-smoke.js          # 验证 $enums 扫描正则能命中所有 enum 文件
+├── verify-util-boot-smoke.js          # 验证 $utils 扫描正则能命中所有 util 文件
 └── blog/                              # 博客部署相关脚本
 ```
 
@@ -105,13 +110,49 @@ const HANDLER_PRELUDE_SOURCE = [
 # 转译 renderer → main
 node scripts/transform-main-builtin-echoes.js
 
-# 验证
+# 验证（Echo）
 node scripts/verify-main-builtin-echoes.js
 node scripts/verify-jquery-echo-compile.js
 node scripts/verify-jquery-afterrender.js
 node scripts/verify-inherit-from-previous.js
 node scripts/verify-builtin-echo-upsert.js
+
+# 验证（Boot 扫描正则回归）
+node scripts/verify-enum-util-regex.js
+node scripts/verify-enum-boot-smoke.js
+node scripts/verify-util-boot-smoke.js
 ```
+
+---
+
+## Boot 扫描正则回归脚本
+
+`boot/globalGlobals.js` 当前用 `require.context` 扫描 `src/cloudfns/`，未来也计划扫描 `src/utils/enum/` 和 `src/utils/util/`。**项目文件名约定是小驼峰（camelCase）**，所以任何 `require.context` 的正则必须用 `/^[a-z]\w*Xxx\.js$/`，**不能用** `/[A-Z]\w+Xxx\.js$/`（后者要求首字母大写，会全部漏掉）。
+
+> 历史教训：早期草稿正则 `/[A-Z]\w+Util\.js$/` 配项目 `emptyUtil.js` / `treeUtil.js` 等 camelCase 文件会**一个都匹配不到**，导致 `this.$utils.emptyUtil` 在组件里全是 undefined。这三个脚本就是为了"打脸"那个旧正则、固化正确写法而写的。
+
+### `verify-enum-util-regex.js`
+
+直接跑 RegExp 打几个文件名，打印 true/false，肉眼对照。
+
+### `verify-enum-boot-smoke.js`
+
+扫 `src/utils/enum/` 实际目录：
+
+- 对每个文件跑旧正则 `/[A-Z]\w+Enum\.js$/` 和新正则 `/^[a-z]\w*Enum\.js$/`，打印命中数。
+- 期望新正则命中 6 个 enum 文件（`aiAssistantProvider` / `calendarDateBasis` / `cloudSyncProvider` / `noteOrderType` / `runeEchoCategories` / `settingsTab`），不命中 `index.js` / `enumSetup.js` 基础设施。
+- 新增 enum 时**只**需要把 `EXPECTED_ENUM_FILES` 同步加 1 即可。
+
+### `verify-util-boot-smoke.js`
+
+扫 `src/utils/util/` 实际目录：
+
+- 跑旧/新正则对比。
+- 模拟 `buildNameSpacedMap` 把命中文件转成 `$utils.emptyUtil` / `$utils.treeUtil` / `$utils.dateUtil` 这种 namespace map，确认 `NoteItem.vue` 用到的三个 key 都存在。
+
+> **何时跑**：
+> - 修改 `boot/globalGlobals.js` 的 require.context 正则时**必须**先跑这 3 个脚本。
+> - 在 `src/utils/enum/` 或 `src/utils/util/` 新增/删除/改名文件后跑对应脚本，确认正则仍然覆盖到位。
 
 ---
 
@@ -144,3 +185,6 @@ node scripts/verify-builtin-echo-upsert.js
 | 修改 afterRender 签名后 | `verify-jquery-afterrender.js` |
 | 修改 builtin echo 数量/结构后 | `verify-builtin-echo-upsert.js` |
 | 任何 echo 相关改动的最终验证 | 全部跑一遍 |
+| 修改 `boot/globalGlobals.js` 的 require.context 正则后 | `verify-enum-util-regex.js` / `verify-enum-boot-smoke.js` / `verify-util-boot-smoke.js` |
+| `src/utils/enum/` 新增/删除/改名 enum 文件后 | `verify-enum-boot-smoke.js` |
+| `src/utils/util/` 新增/删除/改名 util 文件后 | `verify-util-boot-smoke.js` |
