@@ -6,10 +6,16 @@
 const fs = require('fs')
 const path = require('path')
 
-const ROOT_BUILTINS = path.resolve(__dirname, '../src/components/echo/echoBuiltins.js')
+const ROOT_BUILTINS_DIR = path.resolve(__dirname, '../src/components/echo/echoBuiltins')
 const ROOT_RUNTIME = path.resolve(__dirname, '../src/components/echo/echoRuntime.js')
 
-const source = fs.readFileSync(ROOT_BUILTINS, 'utf8')
+// v2026-07-29 拆分后，源已迁移到 echoBuiltins/ 子目录；这里把整个目录里所有
+// *.js 的源码拼接成一份"虚拟源"，让原来的字符串扫描（handlerBody / 禁用模式）继续生效。
+const dirEntries = fs.readdirSync(ROOT_BUILTINS_DIR).filter(f => f.endsWith('.js'))
+const source = dirEntries
+  .map(f => `// === ${f} ===\n` + fs.readFileSync(path.join(ROOT_BUILTINS_DIR, f), 'utf8'))
+  .join('\n')
+
 const runtimeSrc = fs.readFileSync(ROOT_RUNTIME, 'utf8')
 
 const checks = []

@@ -11,8 +11,8 @@ alwaysApply: true
 
 | 特性 | 相关文件 |
 |------|----------|
-| **符文（Rune）** | `src/components/ui/editor/Muya.vue` 的 `createRuneRendererCtor` / `RunePreviewRenderer`、`src/components/ui/dialog/RuneFormDialog.vue`、`src/components/ui/dialog/RuneCard.vue`、`src/components/ui/dialog/rune-templates.js`、`src/boot/rune-deps.js`、`src/constants/runeEchoCategories.js` 等所有 rune 相关代码 |
-| **回响（Echo）** | `src/components/echo/` 整个目录（`echoRuntime.js`、`echoRegistry.js`、`echoBuiltins.js`、`echoBuiltinsShared.js` 等）、`src/components/echo/echoFormDialog.vue`、`src/components/echo/echoInstanceDialog.vue`、`src/muya/lib/parser/render/renderInlines/echoAnno.js`、`src/muya/lib/parser/rules.js` 中的 `echo_anno` 规则等所有 echo 相关代码 |
+| **符文（Rune）** | `src/components/muya/Muya.vue` 的 `createRuneRendererCtor` / `RunePreviewRenderer`、`src/components/rune/runeFormDialog.vue`、`src/components/rune/runeCard.vue`、`src/components/rune/runeTemplates/`（14 张内置 rune SFC 模板分散在子目录各自的 `runeTemplates*.js` 文件里，入口聚合在 `./runeTemplates.js`）、`src/boot/rune-deps.js`、`src/constants/runeEchoCategories.js` 等所有 rune 相关代码 |
+| **回响（Echo）** | `src/components/echo/` 整个目录（`echoRuntime.js`、`echoRegistry.js`、`echoBuiltins/` 子目录里 16 张卡片分散在 `echoBuiltins*.js` 文件 + 聚合入口 `echoBuiltins.js`、`echoBuiltinsShared.js` 等）、`src/components/echo/echoFormDialog.vue`、`src/components/echo/echoInstanceDialog.vue`、`src/muya/lib/parser/render/renderInlines/echoAnno.js`、`src/muya/lib/parser/rules.js` 中的 `echo_anno` 规则等所有 echo 相关代码 |
 | **云函数（Cloud Function）** | `src/utils/cloud-router.js`、`src/services/cloud/` 整个目录（`CloudFunctionProvider.js`、`VkFilesService.js`、`BspAppDemoService.js` 等）、`src/components/ui/dialog/CloudFnConfigDialog.vue`、`_todo/TODO-云函数调研存档-*.md` 及所有 `cloud.invoke(...)` 调用点 |
 
 ## 2. 核心原则（一句话）
@@ -26,7 +26,7 @@ alwaysApply: true
 - **不要**为了保留"老字段 / 老枚举值 / 老分支"而在代码里写 `if (kind === 'old-name') ... else (kind === 'new-name')` 之类的兼容分支。
 - **不要**为"将来可能回滚"留 dead code / feature flag / `legacyXxx` 兼容层。
 - **不要**保留已被弃用的命名、参数、返回值结构 —— 反正都没有外部调用方（试验阶段），直接删。
-- 已经做过重命名的（如 `kind: 'rune'` → `kind: 'echo-chant'`），**继续往前走**，不要回头给老数据留逃生通道。
+- 已经做过重命名的（如 `kind: 'rune'` → `type: 'echo-chant'`，`apply()` → `afterRender()`，`name` → `title`，`runeId` → `id`），**继续往前走**，不要回头给老数据留逃生通道。
 
 ### 3.2 维持代码简洁
 
@@ -55,30 +55,30 @@ alwaysApply: true
 这是**唯一**不能妥协的红线：
 
 - **读取路径必须有防御**：渲染 / 解析 / 加载 echo、rune、云端数据时，对**未知字段、未知枚举值、未知 shape**要 graceful 降级（忽略、跳过、fallback），**不允许抛错 / 白屏 / crash**。
-  - 例：遍历 `BUILTIN_ECHO_CARDS` 时，遇到 `kind` 不在 `['echo', 'echo-chant', 'echo-tbd']` 集合里 → 跳过该条，记一次 warn，不要 throw。
-  - 例：`renderToHtml(token, echo)` 拿到 `echo.definition` 为 `null` / `undefined` → 输出占位空 span 而不是崩溃。
+  - 例：遍历 `BUILTIN_ECHO_CARDS` 时，遇到 `type` 不在 `['echo', 'echo-chant', 'echo-tbd']` 集合里 → 跳过该条，记一次 warn，不要 throw。
+  - 例：`renderToHtml(token, echo)` 拿到 `definition` 为 `null` / `undefined` → 输出占位空 span 而不是崩溃。
   - 例：`CloudFunctionProvider.invoke` 拿到服务端返回的旧字段名（如 `returnCode` / `code` / `result` 三种形态）→ `unwrap` 里继续兼容多种返回包络（这部分已经在做，保留即可）。
   - 例：Muya 解析 `@xxx{}(...)` 时，`xxx` 是历史遗留的、当前已删除的 echo id → 解析失败时降级为普通文本，不要让整个段落解析失败。
 - **写入路径可以激进**：序列化 / 落库 / 持久化时按最新方案来，不要为旧数据写补丁代码。
 - **迁移只在数据层做、且只做一次性**：
-  - 旧数据 → 新数据 的转换（如 `kind: 'rune'` → `kind: 'echo-chant'`）可以在 `migrateLegacyXxx` 这类**启动期**钩子里跑一次，写完即销毁。
+  - 旧数据 → 新数据 的转换（如 `kind: 'rune'` → `type: 'echo-chant'`）可以在 `migrateLegacyXxx` 这类**启动期**钩子里跑一次，写完即销毁。
   - **不要**在 hot path（每次渲染 / 每次调用）里加 `migrateIfNeeded` 兼容分支。
 
 ## 4. 禁止的反模式（反面教材）
 
 ```javascript
 // ❌ 禁止：保留旧枚举值兼容分支
-if (kind === 'rune') {
+if (echo.kind === 'rune') {
   // 兼容老数据
-} else if (kind === 'echo-chant') {
+} else if (echo.kind === 'echo-chant') {
   // 新方案
 }
 
-// ✅ 正确：只认新枚举，遇到未知跳过
-if (kind === 'echo-chant') { /* 新方案 */ }
-else if (kind === 'echo-tbd') { /* 兜底 */ }
-else if (kind === 'echo') { /* 普通 echo */ }
-// 其他 kind → 跳过，记 warn，不抛错
+// ✅ 正确：只认新枚举（type 字段），遇到未知跳过
+if (echo.type === 'echo-chant') { /* 新方案 */ }
+else if (echo.type === 'echo-tbd') { /* 兜底 */ }
+else if (echo.type === 'echo') { /* 普通 echo */ }
+// 其他 type → 跳过，记 warn，不抛错
 ```
 
 ```javascript
@@ -99,17 +99,17 @@ function createRuneRendererCtor (rune) { /* Vue SFC + Vue.extend */ }
 ```javascript
 // ❌ 禁止：每次渲染都做迁移
 function renderEcho (echo) {
-  if (echo.kind === 'rune') echo.kind = 'echo-chant'  // 老数据迁移
+  if (echo.kind === 'rune') echo.type = 'echo-chant'  // 老数据迁移
   // ...
 }
 
 // ✅ 正确：迁移只在启动期做一次，渲染期只做防御
 // (启动钩子里)
-// echoRegistry.all().forEach(e => { if (e.kind === 'rune') e.kind = 'echo-chant' })
+// echoRegistry.all().forEach(e => { if (e.kind === 'rune') e.type = 'echo-chant' })
 // (渲染期)
 function renderEcho (echo) {
-  if (!['echo', 'echo-chant', 'echo-tbd'].includes(echo.kind)) {
-    console.warn('[echo] unknown kind, skip:', echo.kind)
+  if (!['echo', 'echo-chant', 'echo-tbd'].includes(echo.type)) {
+    console.warn('[echo] unknown type, skip:', echo.type)
     return null  // graceful skip
   }
 }
@@ -124,24 +124,32 @@ function renderEcho (echo) {
 5. 读取路径对未知 shape 是否 graceful 降级？→ 没做的话补上。
 6. 这个改动会不会牵连稳定功能？→ 会的话**停下来问用户**。
 
-## 6. 命名空间隔离（rune vs echo-chant）
+## 6. 命名空间隔离（rune vs echo）
 
-> echo-chant 命名空间不要套用 `rune` 前缀，避免和 rune 系统本身混淆。
+> rune 系统（用户自定义的 Vue SFC 卡片）和 echo 系统（`@xxx{}(prompt)` 占位符）是**两条完全独立的管线**。命名 / 字段 / DOM 属性不要混用。
 
-| 概念 | rune 系统（rune 占位符） | echo-chant 子系统 |
-|------|--------------------------|-------------------|
-| JS 对象 id 字段 | `runeId`（保留） | `id`（**已统一**） |
-| 元数据 / kind 字段 | — | `id`、`kind`（**已统一**） |
-| anno_source 顶层 id | `runeId`（保留） | `id`（**已统一**） |
-| DOM 属性（写入侧） | `data-rune-name` / `data-rune-id` / `data-rune-node-id` / `data-rune-value` / `data-rune-mounted` / `data-rune-prop-*` / `data-rune-scope-*` | `data-echo-chant-id` / `data-echo-chant-kind` / `data-echo-chant-attrs` / `data-echo-chant-attr-*`（**已重命名**） |
-| JS handler 函数名 | — | `handler`（**已统一**），旧名 `apply` 已废除 |
+| 概念 | rune 系统（rune 占位符） | echo 系统（`@xxx{}(prompt)` 占位符） |
+|---|---|---|
+| anno_source 顶层 type 取值 | — | `'echo'` / `'echo-chant'` / `'echo-tbd'`（**已统一为 `type`**，旧 `kind` 字段**已废除**） |
+| anno_source 顶层 id | `runeId`（SFC 名片 id） | `id`（**已统一为 `id`**，旧 `runeId` 已废除） |
+| anno_source 顶层 name | `name` | `title`（**已统一为 `title`**，旧 `name` 已废除） |
+| anno_source 顶层 field | — | `field`（= id 别名，**新增**） |
+| anno_source handler 函数 | — | **`afterRender(node, props)`**（**已统一**，旧 `handler.apply` 已废除，旧 `handler()` 已废除） |
+| JS 对象 id 字段 | `runeId` / `nodeId`（实例用） | `id`（**已统一**）/ `definitionId` |
+| 渲染产物 DOM（host） | `<div data-rune-name data-rune-id data-rune-node-id data-rune-value>` | `<span data-echo-host data-echo-name data-echo-id data-echo-definition-id data-echo-value data-echo-inline data-echo-props-json>`（host 由 `echoAnno.js` 生成） |
+| 渲染产物 DOM（render 输出） | — | `<span class="ag-echo-placeholder-marker ag-rune ag-rune--${id}" data-echo-chant-id="${id}">`（render 自己决定要不要写 `data-echo-chant-id`） |
 | CSS class（视觉锚点） | `ag-rune-*`（保留） | `ag-rune-*`（**保留**）—— class 名沿用前缀仅为视觉稳定，不表示 rune 系统 |
+| Vue prop | `runeId` / `nodeId` / `rune` / `value` | 不挂 Vue props（echo 不挂 Vue SFC） |
 
-> 旧的 `data-rune-id` / `data-rune-kind` / `data-rune-attrs` / `data-rune-attr-*` 在 echo 上下文中**已重命名**；不做兼容分支，旧笔记会失去 echo-chant 视觉效果但**不报错**（见 §3.5）。
+> **DOM 字面量保留**：笔记里历史写到 `<div data-rune-name="...">` / `@生生不息{...}()` 这种 ABI 不动；读取时按 `data-echo-name` / `data-echo-id` 取（不是 `data-rune-*`）。
 >
-> `attrs.runeId` / `definition.runeId` 在 echo anno_source 中**已重命名**为 `attrs.id` / `definition.id`；读取时仍保留 `|| attrs.runeId` 之类的 graceful fallback。
+> **`data-echo-chant-id` 不是 host 上的属性**，是 echo 的 `render(props)` 输出里的逻辑 id 锚点（用于 mindsteal / shatter 等 echo 锁定目标），由 `echoBuiltinsBase.js` 的 `baseRender` 工厂统一写入。
 >
-> CSS class 名（`ag-rune-growth-target` 等）刻意**不改**，避免视觉回归；运行时仍是 echo-chant 体系。
+> **CSS class 名（`ag-rune-*`）刻意不改**，避免视觉回归；运行时是 echo / rune 体系，**视觉与逻辑实体不绑定**。
+>
+> **`kind` 字段已彻底废除**——anno_source 顶层只有 `type`。`echoBuiltinsBase.js` 的 `createAnnoSource` 工厂统一写 `type: '${meta.type}'`。`definition.render` / `definition.afterRender` 通过 `props.type` 读取分类，**不再有 `props.kind`**。
+>
+> **`afterRender` 签名**：`(node, props = {}) => cleanup | undefined`。`node` = host 的 `firstElementChild`（即 `definition.render(props)` 输出）。handler 内部一律用 jQuery（`HANDLER_PRELUDE` 注入了 `$ = window.jQuery`）。
 
 ## 7. 与其它规则的关系
 

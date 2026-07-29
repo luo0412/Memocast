@@ -42,18 +42,21 @@ function check (name, cond, info) {
 }
 
 async function main () {
-  // 关键：用 fs 读源文件本身，而不是 import 后的运行时结果。
-  // 源文件 rune-templates.js 必须把 SFC 闭合标签 </script> 转义成 <\/script>，
-  // 因为这个 .js 文件会被 .vue 文件 import；如果源文件里写裸 </script>，
+  // v2026-07-29 拆分后，原 file 已经被拆成 14 个独立文件（每个一份 rune 模板函数）。
+  // 关键约束：每个文件**自身**的源代码里，</script> 必须转义成 <\/script>，
+  // 因为这些 .js 文件最终会被某个 .vue 文件 import 进去；如果文件里是裸 </script>，
   // 会让 .vue 文件的 <script> 块被 Vue 编译器提前截断。
   // 运行时 createXxxTemplate() 返回的字符串里</script> 是合法的（SFC 内容），
   // 这一点是**有意为之**——源文件转义、运行时不解转义。
   const fs = require('fs')
-  const fileSrc = fs.readFileSync(
-    path.resolve('src/components/rune/rune-templates.js'),
-    'utf8'
-  )
-  const url = `file:///${path.resolve('src/components/rune/rune-templates.js').replace(/\\/g, '/')}`
+  const SRC_DIR = path.resolve('src/components/rune/runeTemplates')
+  const fileEntries = fs.readdirSync(SRC_DIR).filter(f => f.endsWith('.js'))
+  // 把所有 .js 文件拼成"虚拟单一源"，TEMPLATE_NAMES 仍然按名字定位函数体
+  const fileSrc = fileEntries
+    .map(f => `// === ${f} ===\n` + fs.readFileSync(path.join(SRC_DIR, f), 'utf8'))
+    .join('\n')
+  // 入口（聚合模块）仍然从 src/components/rune/runeTemplates/runeTemplates.js require
+  const url = `file:///${path.resolve('src/components/rune/runeTemplates/runeTemplates.js').replace(/\\/g, '/')}`
   const mod = await import(url)
 
   for (const name of TEMPLATE_NAMES) {
@@ -64,22 +67,31 @@ async function main () {
 
     const runtime = mod[name]()
 
-    // === 1) 源文件级：createXxxTemplate 字符串字面量里必须把 SFC 闭合标签转义 ===
-    //    我们抽取源文件中 name 对应的 createXxxTemplate 函数体内的字面量行，
-    //    断言里面写的是 <\/script> / <\/template> / <\/style>，而不是裸闭合。
+    // === 1) 源文件级：拆分后每个 runeTemplate 都有一份独立 .js 文件，
+    //    文件里 `export const runeTemplates<Name> = () => { ... }` 内部的
+    //    SFC 闭合标签（</script>）必须写成 <\/script>，否则 .vue 文件 import 这个
+    //    .js 时会被 Vue 编译器提前截断。
     //
-    //    用粗定位：在源文件里找 `const NAME = () => {` 到下一个 `}\n` 之间的内容。
-    const fnHeaderRegex = new RegExp(`(const|export\\s+const)\\s+${name}\\s*=\\s*\\(?\\s*\\)?\\s*=>\\s*\\{`, 'm')
-    const headerMatch = fileSrc.match(fnHeaderRegex)
-    if (!headerMatch) {
-      check(`${name} 在源文件里能找到函数定义`, false)
+    //    create*Template 名称 -> 文件内 runeTemplates* 导出名：
+    //      例：createBlankTemplate           → runeTemplatesBlank（导出）
+    //          createElDatePickerTemplate   → runeTemplatesElDatePicker
+    //          createResumeBasicInfoTemplate→ runeTemplatesResumeBasicInfo
+    if (!name.startsWith('create') || !name.endsWith('Template')) {
+      check(`${name} 命名应符合 create*Template 模式`, false)
       continue
     }
-    check(`${name} 在源文件里能找到函数定义`, true)
+    const exportName = 'runeTemplates' + name.slice('create'.length, -'Template'.length)
+    const fnHeaderRegex = new RegExp(`(const|export\\s+const)\\s+${exportName}\\s*=\\s*\\(?\\s*\\)?\\s*=>\\s*\\{`, 'm')
+    const headerMatch = fileSrc.match(fnHeaderRegex)
+    if (!headerMatch) {
+      check(`${name} 在源文件里能找到函数定义（导出名 ${exportName}）`, false)
+      continue
+    }
+    check(`${name} 在源文件里能找到函数定义（导出名 ${exportName}）`, true)
     const fnBodyStart = headerMatch.index + headerMatch[0].length
     // 模板字符串字面量是 return `<template>...</template><script>...<\/script><style>...<\/style>`
     // 在源文件里，闭合标签必须写成 <\/script> / <\/template> / <\/style>
-    const fnBody = fileSrc.slice(fnBodyStart, fnBodyStart + 20000)
+    const fnBody = fileSrc.slice(fnBodyStart, fnBodyStart + 30000)
     const hasEscapedScriptClose = /<\\\/script>/.test(fnBody)
     check(`${name} 源文件内 </script> 必须转义成 <\\/script>（避免被 .vue 文件 import 时误截断）`,
       hasEscapedScriptClose,

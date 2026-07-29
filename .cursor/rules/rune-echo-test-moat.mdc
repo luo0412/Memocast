@@ -20,7 +20,7 @@ alwaysApply: true
 | 特性 | 主战场 | Jest 用例覆盖 |
 |---|---|---|
 | **符文（Rune）** | `src/components/rune/`、`src/components/muya/Muya.vue` | `tests/unit/rune/templates.test.js` |
-| **回响（Echo）** | `src/components/echo/`、`src/muya/lib/parser/render/index.js`、`src-electron/main-process/service/builtin-echoes.js` | `tests/unit/echo/jquery-echo-compile.test.js`、`tests/unit/echo/jquery-afterrender.test.js`、`tests/unit/echo/runtime-props.test.js`、`tests/unit/echo/main-builtin-echoes.test.js`、`tests/unit/echo/schema-formcreate-align.test.js` |
+| **回响（Echo）** | `src/components/echo/echoBuiltins/`（16 张卡片分散在子目录）、`src/muya/lib/parser/render/index.js`、`src-electron/main-process/service/builtin-echoes.js` | `tests/unit/echo/jquery-echo-compile.test.js`、`tests/unit/echo/jquery-afterrender.test.js`、`tests/unit/echo/runtime-props.test.js`、`tests/unit/echo/main-builtin-echoes.test.js`、`tests/unit/echo/schema-formcreate-align.test.js` |
 | **云函数** | `src/utils/cloud-router.js`、`src/services/cloud/`、`src/components/ui/dialog/CloudFnConfigDialog.vue` | （目前**没有**专门的云函数 jest 用例——见 §5） |
 | **跨三特性公共** | `src/components/echo/echoInherit.js`、`src/components/echo/echoPayloadCodec.js`、`src/components/echo/echoCore.js` | `tests/unit/echo/inherit-from-previous.test.js` |
 | **工具链（Vue 2.7 + Jest 29）** | `tests/fixtures/jquery-setup.js`、`jest.config.js`、`babel.config.test.js` | `tests/smoke/vue-mount.test.js` |
@@ -40,11 +40,11 @@ alwaysApply: true
 | 用例 | 锁定的契约 | 触发失败的典型改动 |
 |---|---|---|
 | `tests/unit/echo/runtime-props.test.js` | `definition.render(props)` / `definition.afterRender(node, props)` 真的能拿到参数；props 合并顺序；fallback 路径（no anno_source / compile fail / render throws / echo 未注册）；graceful skip（未知 type）；payload round-trip | 改 HANDLER_PRELUDE 让 compile 失败、动 `finalProps` 合并顺序、删 fallback、误把 `$emit('input', ...)` 改成别的通道 |
-| `tests/unit/echo/jquery-echo-compile.test.js` | 16 张内置 anno_source **顶层结构**（`type` / `field` / `title` / `version` / `props`）；`render` 必须返回 string；`type=echo-chant` 必须有 `afterRender`；**`kind` 字段不能再出现**（已合并到 `type`） | 改 `createAnnoSource` 拼装模板时漏字段、改 `baseRender` 让它返回 object、改 type 三态分类 |
-| `tests/unit/echo/jquery-afterrender.test.js` | 16 张 handlerBody 用 `$(node)` 直 jQuery 化；无 native fallback（`document.querySelector` / `.classList.add` / `.previousElementSibling` / `.style.x = `）；`echoAnnoSource.js` 导出 `HANDLER_PRELUDE` / `createDefaultEchoAnnoSource`；旧命名 `safeDollarRef` / `createDefaultChantAnnoSource` 不再出现 | 给 handlerBody 偷加原生兜底、改 HANDLER_PRELUDE 不再注入 $、把 `createDefaultEchoAnnoSource` 改名 |
-| `tests/unit/echo/main-builtin-echoes.test.js` | main 端 CJS 镜像里 16 张卡的 anno_source **类型契约**与 renderer 端一致；`type` 三态合法；`kind` 不再出现 | 改 renderer 端 echoBuiltins.js 但忘了跑 `transform-main-builtin-echoes.js` 同步镜像；或 transform 脚本里的 import/export 正则坏掉 |
+| `tests/unit/echo/jquery-echo-compile.test.js` | 16 张内置 anno_source **顶层结构**（`type` / `field` / `title` / `version` / `props`）；`render` 必须返回 string；`type=echo-chant` 必须有 `afterRender`；**`kind` 字段不能再出现**（已合并到 `type`）。v2026-07-29 起 16 张卡片从 `./echoBuiltins.js` 单文件拆到 `./echoBuiltins/` 子目录，测试改为 `require('./echoBuiltins/echoBuiltins.js')` 直接拿 `BUILTIN_ECHO_CARDS`。 | 改 `createAnnoSource` 拼装模板时漏字段、改 `baseRender` 让它返回 object、改 type 三态分类 |
+| `tests/unit/echo/jquery-afterrender.test.js` | 16 张 handlerBody 用 `$(node)` 直 jQuery 化；无 native fallback（`document.querySelector` / `.classList.add` / `.previousElementSibling` / `.style.x = `）；`echoAnnoSource.js` 导出 `HANDLER_PRELUDE` / `createDefaultEchoAnnoSource`；旧命名 `safeDollarRef` / `createDefaultChantAnnoSource` 不再出现。v2026-07-29 起测试改为递归读 `echoBuiltins/` 子目录的所有 `.js`，仍然能定位每个 handlerBody、`safeDollarRef` 等历史包袱必须清空；旧路径 `./echoBuiltins.js` 单文件必须不存在（被覆盖测试看住）。 | 给 handlerBody 偷加原生兜底、改 HANDLER_PRELUDE 不再注入 $、把 `createDefaultEchoAnnoSource` 改名 |
+| `tests/unit/echo/main-builtin-echoes.test.js` | main 端 CJS 镜像里 16 张卡的 anno_source **类型契约**与 renderer 端一致；`type` 三态合法；`kind` 不再出现 | 改 renderer 端 `echoBuiltins/` 卡片但忘了跑 `transform-main-builtin-echoes.js` 同步镜像；或 transform 脚本里的 import/export 正则坏掉（拆分后 transform 会用 IIFE 包每张卡片，避免 `const META` 重复声明） |
 | `tests/unit/echo/schema-formcreate-align.test.js` | echo propsSchema 贴合 form-create rule：禁止 `placeholder` / `default` 顶层字段、每项 schema 至少含 `type` + `field`、rule 字段必须是 form-create 标准字段、`buildFormCreateRule` 默认值与实例 props 优先级 | 改 schema 项自造 form-create 不认的字段、删 `type` 或 `field`、改 defaultValue 优先级 |
-| `tests/unit/rune/templates.test.js` | 14 个内置 rune SFC 模板的**源文件级转义**（`</script>` 必须写成 `<\/script>`，否则 .vue 文件 import 时会被截断）；运行时**语法可编译**；**`props.value` 必须声明**（`mountRuneVueHosts` 硬约定）；非纯展示型 rune 必须有 `$emit('input', ...)` 回写通道 | 在 rune-templates.js 源文件里直接写 `</script>`；删 props.value；改 `$emit('input')` 为别的通道 |
+| `tests/unit/rune/templates.test.js` | 14 个内置 rune SFC 模板分散在 `runeTemplates/` 子目录各自的 `runeTemplates*.js` 文件里；测试扫描每个文件，验证**源文件级转义**（`</script>` 必须写成 `<\/script>`，否则 .vue 文件 import 时会被截断）；运行时**语法可编译**；**`props.value` 必须声明**（`mountRuneVueHosts` 硬约定）；非纯展示型 rune 必须有 `$emit('input', ...)` 回写通道。`create*Template → runeTemplates*` 命名映射：测试会去掉 `create` 前缀和 `Template` 后缀，拼出对应的导出名。 | 在 `runeTemplates*/.js` 源文件里直接写 `</script>`；删 props.value；改 `$emit('input')` 为别的通道；新增 rune 模板没在 `TEMPLATE_NAMES` 列表里登记 |
 | `tests/unit/echo/inherit-from-previous.test.js` | `isInheritFromPreviousEnabled` 各种 truthy 形式；`echoInheritFromPrevious` 看顶层 + `echo.props`；`extractPrevEchoTokenValue` 按 echoName 过滤；`encodeEchoPayload` / `decodeEchoPayload` round-trip；`createEchoPlaceholderPayload` 注入 `definitionId` / `title` / `inheritFromPrevious` 标记 | 改 inherit helper 真值表；把 `decodeEchoPayload` 输出形态从 `{ version, prompt, props }` 改成 `{ version, prompt, attrs }` |
 | `tests/unit/boot/enum-boot-smoke.test.js` | `$enums.ServerSubEnum` / `$enums.AiSubEnum` / `$enums.runeEchoCategoriesEnum` / `$enums.noteOrderTypeEnum` 等核心 enum 在 boot 阶段挂载完整 | 改 enum 目录结构、改 enumSetup.js 加载顺序 |
 | `tests/unit/boot/util-boot-smoke.test.js` | `$utils.emptyUtil.isNullOrEmpty` / `$utils.treeUtil.wizIsPredefinedLocation` / `$utils.dateUtil.displayDateElegantly` 在 boot 阶段挂载完整 | 改 util 文件夹命名 / 改 boot 加载 |
@@ -73,11 +73,12 @@ alwaysApply: true
 
 - **新增 / 删除 / 重命名 anno_source 顶层字段**（如 v2026-07-28 的 `kind` → `type` 合并）→ 必须更新对应 `tests/unit/echo/jquery-echo-compile.test.js` 的字段断言
 - **改 `definition.render` / `definition.afterRender` 签名** → `tests/unit/echo/runtime-props.test.js` 必须跟着改
-- **新增 / 删除内置 rune 模板**（`rune-templates.js` 里加 export）→ 必须更新 `tests/unit/rune/templates.test.js` 的 `TEMPLATE_NAMES` 列表
+- **新增 / 删除 / 重命名内置 rune 模板**（`runeTemplates/` 目录里加 / 删 / 改名 `runeTemplates*.js` 文件后）→ 必须更新 `tests/unit/rune/templates.test.js` 的 `TEMPLATE_NAMES` 列表（添加 / 删 / 改名都对），并确认 `create*Template → runeTemplates*` 命名映射仍成立
 - **改 props 合并优先级 / fallback 策略** → 必须更新 `tests/unit/echo/runtime-props.test.js` 第 3 节
 - **改 `HANDLER_PRELUDE` 形态**（`$ = window.jQuery` 这种）→ 必须更新 `tests/unit/echo/jquery-echo-compile.test.js` 让 Node 端能跑（fallback）
 - **改 mountRuneVueHosts 对 SFC props 的硬约定**（如要求 `runeId` / `nodeId` 必填）→ 必须更新 `tests/unit/rune/templates.test.js` 的 props 字段断言
 - **改 Schema 字段标准**（新增 form-create 字段、改禁止的顶层字段）→ 必须更新 `tests/unit/echo/schema-formcreate-align.test.js` 的白名单
+- **新增 / 删除 / 重命名 echo 卡片文件**（`echoBuiltins/echoBuiltins*.js` 里加 / 删 / 改名）→ 必须确认：(a) `echoBuiltins/echoBuiltins.js`（聚合入口）同步增 / 减 import 卡片；(b) `scripts/transform-main-builtin-echoes.js` 仍是按 `cardFiles.sort()` 自动发现，不会漏掉新文件；(c) `tests/unit/echo/jquery-echo-compile.test.js` / `jquery-afterrender.test.js` 默认仍能扫到新增的卡片
 
 ### 4.2 触发新增 Jest 用例（新规则）
 

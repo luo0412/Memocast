@@ -20,21 +20,10 @@ const handlerDoc = (docLines = []) => {
 `
 
 function loadBuiltinEchoes () {
-  const builtinRaw = fs.readFileSync(path.join(ROOT, 'echoBuiltins.js'), 'utf8')
-  const builtinStripped = builtinRaw
-    .replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]+['"];?\s*$/gm, '')
-    .replace(/^export\s+const\s+/gm, 'const ')
-    .replace(/^export\s+function\s+/gm, 'function ')
-    .replace(/^export\s+default\s+/gm, 'const __echoRuntimeDefault = ')
-
-  const fullCode = helperInjection + '\n' + builtinStripped
-  // eslint-disable-next-line no-new-func
-  const fn = new Function('globalThis', `
-    ${fullCode}
-    globalThis.__TEST_BUILTIN_ECHO_CARDS__ = BUILTIN_ECHO_CARDS
-    return globalThis.__TEST_BUILTIN_ECHO_CARDS__
-  `)
-  return fn(globalThis)
+  // v2026-07-29 拆分后，源已迁移到 echoBuiltins/ 子目录。
+  // 这里直接 require() 新入口拿 BUILTIN_ECHO_CARDS，比之前"读源码 + 字符串剥离 import/export + new Function 现场跑"更稳。
+  const { BUILTIN_ECHO_CARDS } = require(path.join(ROOT, 'echoBuiltins', 'echoBuiltins.js'))
+  return BUILTIN_ECHO_CARDS
 }
 
 const HANDLER_PRELUDE_SOURCE = [
@@ -60,7 +49,7 @@ function main () {
   let fail = 0
 
   for (const ec of BUILTIN_ECHO_CARDS) {
-    const label = `[${ec.id}] ${ec.name}`
+    const label = `[${ec.metaId}] ${ec.name}`
     try {
       const normalized = ec.anno_source.replace(/export\s+default/, 'return')
       const code = HANDLER_PRELUDE_SOURCE + '\n' + normalized + '\n'

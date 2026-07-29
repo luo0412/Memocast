@@ -9,7 +9,7 @@
 //   - echoRuntime.js         EchoRuntime 类
 //   - echoRegistry.js        EchoRegistry 类
 //   - echoPropsSchema.js     BUILTIN_ECHO_PROPS_SCHEMA / resolvePropsSchema / buildFormCreateRule
-//   - echoBuiltins.js        BUILTIN_ECHO_CARDS / isBuiltinEchoChantId / BUILTIN_ECHO_CHANT_IDS
+//   - echoBuiltins/echoBuiltins.js   BUILTIN_ECHO_CARDS / isBuiltinEchoChantId / BUILTIN_ECHO_CHANT_IDS（拆分后聚合在子目录）
 //
 // 16 个内置 echo 的 anno_source 字符串模板仍由 echoBuiltinsShared.js 的
 // handlerDoc / banner 工厂拼装（保留 jQuery handler 的初始化模板）。
@@ -41,7 +41,7 @@ export {
   BUILTIN_ECHO_CARDS,
   BUILTIN_ECHO_CHANT_IDS,
   isBuiltinEchoChantId
-} from './echoBuiltins.js'
+} from './echoBuiltins/echoBuiltins.js'
 
 export { default as EchoRuntime } from './echoRuntime.js'
 export { default as EchoRegistry } from './echoRegistry.js'

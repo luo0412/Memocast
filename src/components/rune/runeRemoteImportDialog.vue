@@ -1,5 +1,5 @@
 <!--
-  RemoteRuneImportDialog - rune 远端导入子表单
+  RuneRemoteImportDialog - rune 远端导入子表单
   从 RuneFormDialog 内触发，承载 GitHub URL 输入 + 分类选择 + 错误提示。
   视觉/交互风格与 RuneFormDialog 保持一致（Element-UI 表单 + quasar 弹层外框）。
 -->
@@ -178,7 +178,7 @@
 
 <script>
 export default {
-  name: 'remoteRuneImportDialog',
+  name: 'runeRemoteImportDialog',
   model: {
     prop: 'value',
     event: 'input'

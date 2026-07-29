@@ -42,50 +42,47 @@ scripts/
 
 ### 场景 1：Renderer → Main 端同步（最常见）
 
-**目的**：将 renderer 端 `src/components/ui/editor/echo/builtinEchoes.js` 转译为 main 端 `src-electron/main-process/service/builtin-echoes.js`，实现 main 进程也能使用相同的内置回响定义。
+**目的**：将 renderer 端 `src/components/echo/echoBuiltins/echoBuiltins.js`（16 张内置回响的聚合入口）转译为 main 端 `src-electron/main-process/service/builtin-echoes.js`，实现 main 进程也能使用相同的内置回响定义。
 
 **执行链**：
 
 ```
 scripts/transform-main-builtin-echoes.js
-    ↓ 读取 renderer 端 ESM 源码
+    ↓ 读取 renderer 端 ESM 源码（按字母序遍历 echoBuiltins/*.js 单文件 + 聚合入口 echoBuiltins.js）
     ↓ 替换 import → require，export → module.exports
-    ↓ 内联 createDefaultEchoAnnoSource 实现
-    ↓ 写入 main 端 CJS 文件
+    ↓ 内联 echoBuiltinsBase.js 工厂（baseRender / createAnnoSource / buildEchoCard）
+    ↓ 每张卡片包成 IIFE 避免 const META 重复声明
+    ↓ 内联 createDefaultEchoAnnoSource 实现（避免跨目录 require）
+    ↓ 末尾追加 module.exports = { BUILTIN_ECHO_CARDS, BUILTIN_ECHO_CHANT_IDS, isBuiltinEchoChantId }
 ```
 
 **转译步骤**：
-1. 去掉 ES import（`createDefaultEchoAnnoSource`、`banner`、`handlerExampleDoc` 等）
-2. 插入 `require('./builtin-echo-shared')`
-3. 内联 `createDefaultEchoAnnoSource` 实现（避免跨目录 require）
+1. 去掉 ES import（`buildEchoCard`、`banner`、`handlerDoc` 等）
+2. 插入 `require('./echoBuiltinsBase.js')` 等内部依赖
+3. 每张卡片（`echoBuiltinsNice.js` / `echoBuiltinsGrowth.js` / ...）包成 IIFE：`(() => { const META = {...}; module.exports.____allCards = [module.exports.____allCards, buildEchoCard(META)] })()`
 4. `export const` → `const`
-5. 末尾追加 `module.exports = { BUILTIN_ECHO_CARDS, ... }`
+5. 末尾追加 `module.exports = { BUILTIN_ECHO_CARDS, BUILTIN_ECHO_CHANT_IDS, isBuiltinEchoChantId }`
 
 ### 场景 2：验证脚本的公共逻辑
 
 所有 `verify-*.js` 脚本共享以下模式：
 
-**HANDLER_PRELUDE_SOURCE**：所有 anno_source 编译时注入的公共 helper 函数。
+**HANDLER_PRELUDE_SOURCE**：所有 anno_source 编译时注入的公共 helper 函数（从 `src/components/echo/echoAnnoSource.js` 导出）。
 
 ```javascript
-const HANDLER_PRELUDE_SOURCE = [
-  "const __safeDollarRuntime = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null",
-  "if (!__safeDollarRuntime) console.warn('[EchoRuntime] jQuery is missing')",
-  "const $ = __safeDollarRuntime",
-  "const __resolveScopeContainer = (node, scope) => { ... }",
-  "const __safeQueryAll = (root, sel) => { ... }",
-  "const __withAttrs = (meta, defaults) => Object.assign({}, defaults || {}, (meta && meta.attrs) || {})",
-  ""
-].join('\n')
+// 当前实际值（echoAnnoSource.js 导出）
+const HANDLER_PRELUDE = "const $ = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null\n"
 ```
+
+handler body 统一用 jQuery（`$ = window.jQuery`）。Node 端 `$` 退化为 `null`，但 `render(props)` 不依赖 `$`，`afterRender` 报错由 `EchoRuntime._doAfterRender` try-catch 兜住（graceful skip）。
 
 **公共验证逻辑**：
 
 | 检查项 | verify-main | verify-jquery | verify-afterrender |
 |-------|------------|---------------|-------------------|
 | 编译通过 | ✅ | ✅ | - |
-| render() 返回对象 | ✅ | ✅ | - |
-| handler/handlerExample 存在 | ✅ | ✅ | - |
+| render() 返回 string | ✅ | ✅ | - |
+| afterRender 是函数 | ✅ | ✅ | - |
 | jQuery 化（无 native fallback） | - | ✅ | ✅ |
 | afterRender 直接用 `$()` | - | - | ✅ |
 
@@ -163,9 +160,9 @@ yarn jest tests/unit/echo   # 任意子集
 
 | 脚本位置 | 目标文件 | 路径写法 |
 |---------|---------|---------|
-| `scripts/` | `src/components/ui/editor/echo/` | `path.resolve(__dirname, '../src/components/ui/editor/echo')` |
+| `scripts/` | `src/components/echo/echoBuiltins/` | `path.resolve(__dirname, '../src/components/echo/echoBuiltins')` |
 | `scripts/` | `src-electron/main-process/service/` | `path.resolve(__dirname, '../src-electron/main-process/service')` |
-| `scripts/` | renderer 端 ESM（动态 import） | `path.resolve('src/components/...')`（相对项目根） |
+| `scripts/` | renderer 端 ESM（动态 import） | `path.resolve('src/components/echo/echoBuiltins/echoBuiltins.js')`（相对项目根） |
 
 ---
 
@@ -183,7 +180,7 @@ yarn jest tests/unit/echo   # 任意子集
 
 | 时机 | 跑的脚本 |
 |-----|---------|
-| 修改 `echoBuiltins.js` 后 | `transform-main-builtin-echoes.js` → `verify-main-builtin-echoes.js` |
+| 修改 `echoBuiltins/` 子目录的卡片 / 工厂后 | `transform-main-builtin-echoes.js` → `verify-main-builtin-echoes.js`（拆分后 transform 会按 `cardFiles.sort()` 自动发现新文件，仍包成 IIFE 避免 `const META` 重复声明） |
 | 修改 `echoRuntime.js` 后 | `verify-inherit-from-previous.js` |
 | 修改 afterRender 签名后 | `verify-jquery-afterrender.js` |
 | 任何 echo 相关改动的最终验证 | 全部跑一遍 |

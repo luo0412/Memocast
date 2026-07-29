@@ -1,6 +1,6 @@
 // ============================================================================
 // tests/unit/echo/jquery-echo-compile.test.js
-// 从 scripts/verify-jquery-echo-compile.js 迁移而来（v2026-07-29 接入 Jest）。
+// 从 scripts/verify-jquery-echo-compile.js 迁移而来（v2026-07-29 接入 Jest，2026-07-29 适配拆分）。
 //
 // 锁定的契约（v2026-07-28 起 echo 新结构）：
 //   1) 16 张内置 anno_source 都能被 new Function(prelude + source) 编译
@@ -9,47 +9,27 @@
 //   4) kind 字段已合并到 type（不应再出现独立 kind 字段）
 //   5) type=echo-chant 必须有 afterRender
 //   6) jQuery 化的 helper 不抛 ReferenceError
+//
+// === 拆分后的源文件位置 ===
+//   拆分前是 src/components/echo/echoBuiltins.js（单文件）。
+//   拆分后是 src/components/echo/echoBuiltins/ 子目录，入口 ./echoBuiltins.js
+//   （聚合 ./echoBuiltinsBase.js 工厂 + 16 张 ./echoBuiltins*.js 卡片）。
 // ============================================================================
-const fs = require('fs')
+
 const path = require('path')
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', 'src', 'components', 'echo')
 
-// 注入精简版 helper：renderer 端 echoBuiltinsShared.js 当前只导出 banner + handlerDoc
-const helperInjection = `
-const banner = (lines) => lines.map(line => '//   ' + line).join('\\n  ')
-const handlerDoc = (docLines = []) => {
-  const b = (Array.isArray(docLines) ? docLines : []).map(line => '//   ' + line).join('\\n  ')
-  return b + '\\n  afterRender (node, props = {}) {'
-}
-`
-
-function loadBuiltinEchoes () {
-  const builtinRaw = fs.readFileSync(path.join(ROOT, 'echoBuiltins.js'), 'utf8')
-  const builtinStripped = builtinRaw
-    .replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]+['"];?\s*$/gm, '')
-    .replace(/^export\s+const\s+/gm, 'const ')
-    .replace(/^export\s+function\s+/gm, 'function ')
-    .replace(/^export\s+default\s+/gm, 'const __echoRuntimeDefault = ')
-
-  const fullCode = helperInjection + '\n' + builtinStripped
-  // eslint-disable-next-line no-new-func
-  const fn = new Function('globalThis', `
-    ${fullCode}
-    globalThis.__TEST_BUILTIN_ECHO_CARDS__ = BUILTIN_ECHO_CARDS
-    return globalThis.__TEST_BUILTIN_ECHO_CARDS__
-  `)
-  return fn(globalThis)
-}
-
-// 注入 jQuery 化后的 prelude（jsdom 环境下 window.jQuery 已由 tests/fixtures/jquery-setup.js 注入）
+// === 注入 jQuery 化后的 prelude（jsdom 环境下 window.jQuery 已由 tests/fixtures/jquery-setup.js 注入）===
 const HANDLER_PRELUDE_SOURCE = [
   "const __safeDollarRuntime = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null",
   "const $ = __safeDollarRuntime"
 ].join('\n')
 
-// 同步加载：describe.each / test.each 必须在 describe 阶段就拿到数组，所以不能放进 beforeAll
-const BUILTIN_ECHO_CARDS = loadBuiltinEchoes()
+// === 直接 require() 新入口拿到 16 张卡片 ===
+//  拆分前曾是"读源文件 + new Function() 剥离 import/export + 现场执行"。
+//  拆分后源文件分散到子目录，硬拼 import 字符串容易坏；用 require() 拿 frozen 数组更稳。
+const { BUILTIN_ECHO_CARDS } = require(path.join(ROOT, 'echoBuiltins', 'echoBuiltins.js'))
 
 // 静默 echoBaseRender 的 FALLBACK 警告 log（运行时噪音，不影响契约）
 let logSpy
@@ -66,7 +46,7 @@ describe('echo/renderer 端 16 张内置 anno_source 编译', () => {
     expect(BUILTIN_ECHO_CARDS.length).toBe(16)
   })
 
-  describe.each(BUILTIN_ECHO_CARDS.map(ec => [ec.id, ec]))('[%s] %s', (id, ec) => {
+  describe.each(BUILTIN_ECHO_CARDS.map(ec => [ec.metaId, ec]))('[%s]', (id, ec) => {
     let def
     beforeAll(() => {
       const normalized = ec.anno_source.replace(/export\s+default/, 'return')

@@ -50,7 +50,7 @@
     </q-dialog>
 
     <!-- 远端导入弹框 -->
-    <remoteRuneImportDialog
+    <runeRemoteImportDialog
       v-model='remoteImportDialogVisible'
       :url='remoteImportUrl'
       :category='remoteImportCategory'
@@ -64,12 +64,12 @@
 
 <script>
 import { RuneCategoryEnum } from 'src/utils/enum'
-import { createBlankTemplate, createInheritDemoTemplate } from './rune-templates.js'
+import { createBlankTemplate, createInheritDemoTemplate } from './runeTemplates/runeTemplates.js'
 import runeTemplateService from 'src/services/RuneTemplateService'
 
 import runeFormFields from './runeFormFields.vue'
 import runeFormEditor from './runeFormEditor.vue'
-import remoteRuneImportDialog from './remoteRuneImportDialog.vue'
+import runeRemoteImportDialog from './runeRemoteImportDialog.vue'
 
 const createUuid = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -102,7 +102,7 @@ export default {
   components: {
     runeFormFields,
     runeFormEditor,
-    remoteRuneImportDialog
+    runeRemoteImportDialog
   },
   props: {
     value: {

@@ -1,50 +1,181 @@
-# Rune 与 Echo 架构深入分析
+# Rune 与 Echo 架构深度解析（源码级）
 
-## 1. 命名澄清（最重要）
+> 本文档是 `SKILL.md` 的**源码级补充**：聚焦具体代码、具体行号、具体数据流。所有信息以当前 `src/` / `src-electron/` / `src/muya/` 实际状态为准（截至 v2026-07-29）。
 
-| 名称 | 用户语义 | 实现机制 | main 功能 |
-|------|---------|---------|---------|
-| **rune（符文）** | Vue SFC + Vue.extend 卡片 | 用户通过 RuneFormDialog 自定义 | **自身就是完整卡片，不影响其他元素** |
-| **echo（回响）** | `@xxx{}(prompt)` 占位符 | anno_source + handler | **main 功能是影响附近元素** |
+---
 
-### 代码内部枚举口径
+## 1. anno_source 完整形态与生命周期
 
-代码内部有一个 enum 字段叫 `kind`，三个取值：
+### 1.1 字符串模板（用户/builtin 都用这一份）
 
-| kind 值 | 所属体系 | 含义 |
-|--------|---------|------|
-| `'echo'` | echo | 普通 echo，纯标记卡片（nice 等） |
-| `'echo-chant'` | echo | "echo 的回响作用派发"，由 10 个内置 echo + 用户自定义 handler 组成 |
-| `'echo-tbd'` | echo | 兜底 echo，无真实 handler |
+```javascript
+// 形态：'export default { ... }' 字符串
+// 编译：safeEvalAnnoSource(source, HANDLER_PRELUDE) → new Function(prelude + normalized)()
+// 标准化：把 'export default' 替换成 'return'，再拼到工厂函数里
 
-**改名的动机**：原 `kind: 'rune'`、原 `kind: 'rune-tbd'`、原 `RUNE_KINDS`、`RUNE_HANDLERS` 等字段属于 echo 体系，但历史命名与 rune（符文）字面重名。v2026-07-15 起统一改名 `echo-chant` / `echo-tbd`，代码内**已全面替换**，**不保留任何 `kind: 'rune'` 兼容分支**（项目尚未对外发版）。
+const annoSource = `export default {
+  // 顶层 metadata
+  type: 'echo-chant',                  // 'echo' | 'echo-chant' | 'echo-tbd'
+  field: 'growth',                     // = id 别名
+  title: '生生不息',                    // = name 别名
+  version: 1,
 
-> **真正走 Vue SFC + Vue.extend 路径的 rune，只有用户通过 RuneFormDialog 自定义的那些**。
+  // ★ 实例可配置参数顶层声明
+  props: {
+    scope: 'siblings',
+    trigger: 'auto',
+    target: 'p, h1, h2, h3, h4, h5, h6, li, blockquote, table'
+  },
 
-## 2. 两条管线的文件分布
+  // render 只接 props，返回 echo host HTML 字符串
+  render (props = {}) {
+    if (typeof props.render === 'function') {
+      const out = props.render(props)
+      if (out != null && String(out) !== '') return out
+    }
+    return '<span class="ag-echo-placeholder-marker ag-rune ag-rune--' +
+      (props.id || props.definitionId || '回响') + '" data-echo-chant-id="' +
+      (props.id || props.definitionId || '回响') + '">' +
+      (props.title || '回响') + '</span>'
+  },
 
+  // afterRender 是 echo 改附近元素的唯一入口
+  afterRender (node, props = {}) {
+    // handler body 用 jQuery（HANDLER_PRELUDE 注入了 `const $ = window.jQuery`）
+    const $rune = $(node)
+    const merged = Object.assign({ scope: 'siblings' }, props || {})
+    $rune.addClass('ag-rune-growth-active')
+    // ... 改附近 DOM
+    return () => { /* cleanup，可选 */ }
+  }
+}`
 ```
-src/components/ui/editor/Muya.vue
-├── 第 102-167 行  normalizeRuneSfc + injectScopedAttribute  ← RUNE 路径
-├── 第 220-248 行  migrateLegacyRunePlaceholders            ← RUNE 路径
-├── 第 319-413 行  createRuneRendererCtor (Vue.extend)      ← RUNE 路径
-├── 第 415-479 行  RunePreviewRenderer                      ← RUNE 路径
-├── 第 481-...行   EchoPreviewRenderer                      ← ECHO 路径
-└── 第 809-827 行  updateRunePlaceholderValue               ← RUNE 路径
 
-src/components/echo/
-├── echoRegistry.js           ← ECHO 路径
-├── echoRuntime.js            ← ECHO 路径
-├── echoBuiltins.js           ← ECHO 路径（11 个内置"rune"）
-└── echoBuiltinsShared.js     ← ECHO 路径
+### 1.2 编译（`src/components/echo/echoAnnoSource.js`）
+
+```javascript
+export const HANDLER_PRELUDE = "const $ = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null\n"
+
+export const safeEvalAnnoSource = (source = '', prelude = '') => {
+  const normalized = String(source || '').replace(/export\s+default/, 'return ')
+  return new Function(String(prelude || '') + normalized)
+}
 ```
 
-## 3. rune 路径详解（Vue SFC）
+调用 `safeEvalAnnoSource(annoSource, HANDLER_PRELUDE)` 返回**工厂函数**；调用工厂函数 `factory()` 返回 definition 对象 `{ type, field, title, version, props, render, afterRender }`。
 
-### 3.1 占位符生成（quickInsert 阶段）
+`EchoRuntime.compileDefinition(echo)` 内部用 `safeEvalAnnoSource(source, HANDLER_PRELUDE)` 并加 `definitionCache`（按 `echoId` 缓存）。
+
+### 1.3 render 阶段（`src/components/echo/echoRuntime.js`）
+
+```javascript
+// === finalProps 合并顺序（renderer 期）===
+const finalProps = Object.assign(
+  {},
+  // 1. metadata
+  {
+    type: definition?.type || matchedEcho.type || 'echo',
+    field: definition?.field || matchedEcho.id || '',
+    title: definition?.title || matchedEcho.name || context.name || '回响',
+    version: typeof definition?.version === 'number' ? definition.version : 1,
+    definitionId: matchedEcho.id || ''
+  },
+  // 2. definition.props（卡片声明的默认值）
+  defaultProps,
+  // 3. mergedProps（实例运行时 props：@离析{density:'tight'}）
+  mergedProps,
+  // 4. 基础设施字段强制覆盖
+  { value: resolvedValue, id: resolvedId }
+)
+context.props = finalProps
+
+// === definition.render(finalProps) → HTML 字符串 ===
+let html = ''
+if (definition && typeof definition.render === 'function') {
+  const renderedHtml = definition.render(finalProps)
+  html = (typeof renderedHtml === 'string') ? renderedHtml : ''
+}
+```
+
+### 1.4 renderToHtml（`src/components/echo/echoRuntime.js`）
+
+```javascript
+renderToHtml (token = {}, echo = null) {
+  const rendered = this.render(token, echo)
+  const renderedHtml = String(rendered.html || '').trim()
+
+  if (renderedHtml) {
+    // 完全按 definition.render() 的返回值渲染 —— 不包 span、不注入 attrs、不补 class
+    return renderedHtml
+  }
+
+  // 静态 fallback（render 没返回 html 时才走）
+  const icon = escapeHtml(rendered.icon || DEFAULT_ECHO_ICON)
+  const color = escapeHtml(rendered.color || DEFAULT_ECHO_COLOR)
+  const title = escapeHtml(rendered.title || '回响')
+  // ... 返回 ag-echo-inline 包裹的 HTML
+  return `<span class="ag-echo-inline ag-echo-anno-token" ...>`
+}
+```
+
+注意：**只有 render 返回空字符串时**才走 fallback 的 `ag-echo-inline` 包裹。builtin echo 全部走 render 返回的字符串路径。
+
+### 1.5 afterRender 派发（`src/components/echo/echoRuntime.js`）
+
+```javascript
+afterRender (container, options = {}) {
+  if (!container || typeof container.querySelectorAll !== 'function') return []
+  // 250ms debounce，避免高频渲染期重复派发
+  if (this._afterRenderTimer) {
+    clearTimeout(this._afterRenderTimer)
+    this._afterRenderTimer = null
+  }
+  this._afterRenderTimer = setTimeout(() => this._doAfterRender(container, options), 250)
+}
+
+_doAfterRender (container, options = {}) {
+  if (options.cleanupFirst) this.disposeAll(container)
+
+  const installed = []
+  // 扫 host（renderEchoPlaceholders 已打过 data-echo-host="true"）
+  safeQueryAll(container, '[data-echo-host="true"]').forEach(host => {
+    const echoName = host.getAttribute('data-echo-name') || ''
+    const echoId = host.getAttribute('data-echo-id') || ''
+    const definitionId = host.getAttribute('data-echo-definition-id') || ''
+    const matchedEcho = (definitionId && this.registry?.getById?.(definitionId))
+      || (echoName && this.registry?.getByName?.(echoName))
+      || null
+    if (!matchedEcho) return
+    const definition = this.compileDefinition(matchedEcho)
+    if (!definition || typeof definition.afterRender !== 'function') return
+
+    let cleanup = null
+    try {
+      const node = host.firstElementChild || host  // ★ host 的 firstElementChild = render 输出的 DOM
+      const props = readEchoPropsFromHost(host)
+      cleanup = definition.afterRender(node, props) || null
+    } catch (error) {
+      console.error('[echoRuntime] afterRender hook failed:', echoName, error)
+    }
+    installed.push({ node, id: `__afterRender_${echoName}_${echoId}`, cleanup })
+  })
+
+  // 记录所有 cleanup，disposeAll 时一起执行
+  // ...
+}
+```
+
+`node` 参数 = host 的 `firstElementChild`，**即 `definition.render(props)` 的输出**。所以 `afterRender` 里 `$(node)` 拿到的就是 `render` 写进去的那个 span。
+
+---
+
+## 2. Rune 路径详解（Vue SFC）
+
+### 2.1 占位符生成（quickInsert 阶段）
+
+笔记中实际存储的格式：
 
 ```html
-<!-- 笔记中实际存储的格式 -->
 <div data-rune-name="我的符文"
      data-rune-id="uuid-instance-id"
      data-rune-node-id="rune-uuid-node-id"
@@ -53,40 +184,66 @@ src/components/echo/
 </div>
 ```
 
-### 3.2 SFC 解析（normalizeRuneSfc）
+Muya 把这个 div 当 inline block 节点（不是自定义 token）。
+
+### 2.2 SFC 解析（`src/components/muya/Muya.vue` 的 `normalizeRuneSfc`）
 
 ```javascript
-// 用 vue-template-compiler 解析 SFC 字符串
-const parsed = vueSfcCompiler.parseComponent(rune.template)
-// 返回 { template: {content}, script: {content}, styles: [...] }
-
-const template = parsed.template.content  // <template>...</template> 里的内容
-const script = parsed.script.content      // <script>export default {...}</script>
-const styles = parsed.styles              // <style>...</style> 数组
+const normalizeRuneSfc = (template = '') => {
+  const source = String(template || '').trim()
+  if (!source) {
+    return {
+      template: EMPTY_RUNE_TEMPLATE,
+      script: 'export default {}',
+      styles: [],
+      hasTemplate: false
+    }
+  }
+  if (!vueSfcCompiler) {
+    return {
+      template: source,
+      script: '',
+      styles: [],
+      hasTemplate: true
+    }
+  }
+  const parsed = vueSfcCompiler.parseComponent(source)
+  // parsed = { template: { content }, script: { content }, styles: [{ content, ...}] }
+  // ...
+}
 ```
 
-### 3.3 脚本 eval（evalRuneScript）
+### 2.3 脚本 eval（`evalRuneScript`）
 
 ```javascript
-// 把 'export default {...}' 转成 'return {...}'
-const sanitized = script.replace(/export\s+default/, 'return ')
-const factory = new Function(sanitized)
-const componentOptions = factory()
-// componentOptions = Vue 组件选项 { props, data, methods, computed, ... }
+const evalRuneScript = (scriptContent = '') => {
+  // 把 'export default {...}' 转成 'return {...}'，new Function 调用
+  const normalized = String(scriptContent || '').replace(/export\s+default/, 'return ')
+  const factory = new Function(normalized)
+  return factory()
+}
 ```
 
-### 3.4 模板编译（compileToFunctions）
+### 2.4 模板编译（`compileTemplateToFunctions` + `injectScopedAttribute`）
 
 ```javascript
-// scopeId 注入：给所有顶层标签加 data-rune-scope-${runeId}
-const scopedTemplate = injectScopedAttribute(template, `data-rune-scope-${rune.id}`)
-// 例如：<div class="x"> → <div class="x" data-rune-scope-uuid>
+const injectScopedAttribute = (template = '', scopeId = '') => {
+  // 给所有顶层标签加 data-rune-scope-${runeId}（scope 隔离）
+  if (!scopeId || !template) return template
+  return template.replace(/<([a-zA-Z][^\s/>]*)(\s[^<>]*?)?(\/?\s*)>/g, (match, tagName, attrs = '', tail = '') => {
+    if (/^(template|slot)$/i.test(tagName) || attrs.includes(scopeId)) {
+      return match
+    }
+    return `<${tagName}${attrs} ${scopeId}${tail}>`
+  })
+}
 
-const compiled = vueSfcCompiler.compileToFunctions(scopedTemplate)
+// compileTemplateToFunctions = vueSfcCompiler.compileToFunctions.bind(vueSfcCompiler)
+const compiled = compileTemplateToFunctions(injectScopedAttribute(template, scopeId))
 // compiled = { render, staticRenderFns }
 ```
 
-### 3.5 CSS 注入（ensureRuneStyle）
+### 2.5 CSS 注入（`ensureRuneStyle`）
 
 ```javascript
 const ensureRuneStyle = (styleId, cssText) => {
@@ -96,26 +253,125 @@ const ensureRuneStyle = (styleId, cssText) => {
     styleEl.id = styleId
     document.head.appendChild(styleEl)
   }
-  styleEl.textContent = cssText
+  if (styleEl.textContent !== cssText) {
+    styleEl.textContent = cssText
+  }
 }
 
 // 用法
-ensureRuneStyle(`rune-style-${rune.id}`, styles.map(s => s.content).join('\n'))
+ensureRuneStyle(`rune-style-${rune.id || 'default'}`, styles.map(style => style.content || '').join('\n'))
 ```
 
-### 3.6 构造 Vue 组件
+### 2.6 构造 Vue 组件（`createRuneRendererCtor`）
 
 ```javascript
-return Vue.extend({
-  ...componentOptions,
-  name: componentOptions.name || 'RunePreviewRenderer',
-  props: { runeId, nodeId, rune, value },  // 外层注入的 props
-  render: compiled.render,
-  staticRenderFns: compiled.staticRenderFns
+const createRuneRendererCtor = (rune = {}) => {
+  const { template, script, styles, hasTemplate } = normalizeRuneSfc(rune.template)
+  if (!hasTemplate) return null
+
+  const scopeId = `data-rune-scope-${rune.id || 'default'}`
+  const styleText = styles.map(style => style.content || '').join('\n')
+  const componentOptions = evalRuneScript(script)
+  const baseData = typeof componentOptions.data === 'function' ? componentOptions.data : () => ({})
+  // 收集 SFC 里声明的 props（数组或对象形式都支持）
+  const declaredPropNames = Array.isArray(componentOptions.props)
+    ? componentOptions.props.map(propName => String(propName || '').trim()).filter(Boolean)
+    : (componentOptions.props && typeof componentOptions.props === 'object'
+      ? Object.keys(componentOptions.props)
+      : [])
+
+  if (!compileTemplateToFunctions) return null
+  const compiled = compileTemplateToFunctions(injectScopedAttribute(template, scopeId))
+  ensureRuneStyle(`rune-style-${rune.id || 'default'}`, styleText)
+
+  return Vue.extend({
+    ...componentOptions,
+    name: componentOptions.name || 'RunePreviewRenderer',
+    // 合并 props：SFC 已声明的 + 外层强制注入的（runeId / nodeId / rune / value）
+    props: {
+      ...(Array.isArray(componentOptions.props)
+        ? declaredPropNames.reduce((props, propName) => { props[propName] = null; return props }, {})
+        : (componentOptions.props && typeof componentOptions.props === 'object'
+          ? componentOptions.props
+          : {})),
+      runeId: { type: String, default: '' },
+      nodeId: { type: String, default: '' },
+      rune:   { type: Object, default: null },
+      value:  { type: String, default: '' }
+    },
+    data () { return { ...baseData.call(this) } },
+    render (h) {
+      const vnode = compiled.render.call(this, h)
+      if (vnode && typeof vnode === 'object') {
+        const existingChildren = Array.isArray(vnode.children) ? vnode.children : []
+        if (!existingChildren.length) {
+          vnode.children = [String(this.value == null ? '' : this.value)]
+        }
+      }
+      return vnode
+    },
+    staticRenderFns: compiled.staticRenderFns,
+    _scopeId: scopeId
+  })
+}
+```
+
+### 2.7 外层包裹 `RunePreviewRenderer`
+
+```javascript
+const RunePreviewRenderer = Vue.extend({
+  name: 'RunePreviewRenderer',
+  props: {
+    runeId: { type: String, default: '' },
+    nodeId: { type: String, default: '' },
+    rune:   { type: Object, default: null },
+    value:  { type: String, default: '' },
+    onValueChange: { type: Function, default: null }
+  },
+  computed: {
+    rendererCtor () { return createRuneRendererCtor(this.rune || {}) }
+  },
+  render (h) {
+    if (!this.rendererCtor) return h('div')
+    const self = this
+    return h(this.rendererCtor, {
+      props: { runeId: this.runeId, nodeId: this.nodeId, rune: this.rune, value: this.value },
+      on: {
+        input: function (...args) {
+          if (typeof self.onValueChange !== 'function') return
+          self.onValueChange({
+            runeId: self.runeId,
+            nodeId: self.nodeId,
+            value: args[0] == null ? '' : String(args[0])
+          })
+        }
+      }
+    })
+  }
 })
 ```
 
-### 3.7 渲染流程
+### 2.8 数据回写 `updateRunePlaceholderValue`
+
+```javascript
+updateRunePlaceholderValue ({ runeId = '', nodeId = '', value = '' } = {}) {
+  if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return false
+  const markdown = this.contentEditor.getMarkdown()
+  if (!markdown) return false
+  const targetNodeId = String(nodeId || '').trim() || this.findRunePlaceholderNodeIdByRuneInstance(markdown, runeId)
+  if (!targetNodeId) return false
+  const nextMarkdown = rewriteRunePlaceholderByNodeId(markdown, targetNodeId, value)
+  if (nextMarkdown === markdown) return false
+  const cursor = this.contentEditor.getCursor()
+  this.contentEditor.setMarkdown(nextMarkdown, cursor, false)
+  // ...
+  return true
+}
+```
+
+`rewriteRunePlaceholderByNodeId` 按 nodeId 精准替换 `<div data-rune-node-id="..." data-rune-value="...">innerText</div>`。
+
+### 2.9 完整渲染流程
 
 ```
 Muya 解析 <div data-rune-name="...">
@@ -141,260 +397,588 @@ rewriteRunePlaceholderByNodeId → contentEditor.setMarkdown(...)
 Muya 重渲染整个文档
 ```
 
-## 4. echo 路径详解（@xxx{}() + handler）
+---
 
-### 4.1 Muya 解析 echo_anno token
+## 3. Echo 路径详解（`@xxx{}()` + `render` + `afterRender`）
+
+### 3.1 Muya 解析 `echo_anno` token
 
 ```javascript
-// src/libs/muya/lib/parser/rules.js
-echo_anno: /^@([^\s\{\(\)@]+)?(?:\{([\s\S]*?)\})?\(([\s\S]*?)\)$/
+// src/muya/lib/parser/rules.js
+echo_anno: /^@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)$/
+```
 
-// 匹配结果
+匹配结果：
+```javascript
 {
   type: 'echo_anno',
   echoName: '生生不息',
-  attrsParsed: { scope: 'siblings', trigger: 'auto' },
+  propsParsed: { density: 'very-loose' },
   prompt: '春风吹又生',
-  raw: '@生生不息{scope: "siblings", trigger: "auto"}(春风吹又生)'
+  raw: '@生生不息{scope: "siblings"}(春风吹又生)'
 }
 ```
 
-### 4.2 anno_source 编译（safeEvalFactory）
+`propsParsed` 由 `echoPropsParser.parseEchoProps()` 解析 `{...}` 段。
+
+### 3.2 行内渲染器（`src/muya/lib/parser/render/renderInlines/echoAnno.js`）
 
 ```javascript
-// 用户在 echoFormDialog 写的 anno_source 字符串
-const source = `export default {
-  kind: 'echo-chant',
-  runeId: 'growth',
-  render (context) {
-    return { type: 'card', icon: 'park', color: '#43A047', ... }
-  },
-  // handler 是关键：改附近元素的入口
-  handler (chantNode, container, meta) {
-    const targets = container.querySelectorAll('p, h1, ...')
-    targets.forEach(node => node.classList.add('ag-rune-growth-target'))
-    return () => targets.forEach(node => node.classList.remove('ag-rune-growth-target'))
+export default function echoAnno (h, cursor, block, token, outerClass) {
+  // 收集 token 的字段
+  const echoName = String(token.echoName || '').trim() || '回响'
+  const instProps = (token && token.propsParsed && typeof token.propsParsed === 'object')
+    ? token.propsParsed : {}
+  const value = String(typeof instProps.value === 'string' ? instProps.value : token.prompt || '')
+  const echoId = String(token.echoId || instProps.id || (token.echoName ? echoName : '')).trim()
+  const definitionId = String(token.definitionId || instProps.definitionId || '').trim()
+  // ...width / height 处理（@离析{width: '300px'}）
+
+  const echoNodeId = createEchoNodeId(token, echoId, definitionId, echoName)
+  const dataset = {
+    start: token.range.start,
+    end: token.range.end,
+    raw: token.raw,
+    echoName,
+    echoId: echoId || '',
+    echoDefinitionId: definitionId,
+    echoNodeId,
+    echoValue: value,
+    echoInline: 'true'  // 永远是 inline placeholder
   }
+  if (hasExplicitWidth) dataset.echoWidth = width
+  if (hasExplicitHeight) dataset.echoHeight = height
+  // 把 propsParsed 原样写到 dataset（让 _readEchoProps 在 afterRender 能取到）
+  const merged = { ...instProps, value, echoName, echoId, definitionId }
+  const echoPropsJson = JSON.stringify(merged)
+  dataset.echoPropsJson = echoPropsJson
+
+  // 返回 vnode
+  return [
+    h(`span.${className}.ag-echo-anno-token.${CLASS_OR_ID.AG_INLINE_RULE}`, {
+      dataset,
+      attrs: Object.assign({
+        spellcheck: 'false', title, contenteditable: 'false'
+      }, echoPropsJson ? { 'data-echo-props-json': echoPropsJson } : {}),
+      style: hostStyle
+    }, /* ...内层 vnode 节点... */)
+  ]
+}
+```
+
+### 3.3 StateRender 的渲染流程（`src/muya/lib/parser/render/index.js`）
+
+#### 3.3.1 `renderRunePlaceholderNodes()`
+
+```javascript
+renderRunePlaceholderNodes () {
+  const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+  if (!root) return
+  const runeMap = this.getRuneMap()
+  const hosts = root.querySelectorAll(RUNE_PLACEHOLDER_SELECTOR)  // [data-rune-name][data-rune-id][data-rune-node-id]
+
+  hosts.forEach(host => {
+    const dataset = host.dataset || {}
+    const runeName = String(dataset.runeName || '').trim()
+    const instanceId = String(dataset.runeId || '')
+    const nodeId = String(dataset.runeNodeId || '')
+    const rune = runeMap.get(runeName) || null
+    // cacheKey：runeName + instanceId + nodeId + innerText + template
+    const cacheKey = JSON.stringify({ runeName, instanceId, nodeId, innerText: host.textContent || '', template: rune?.template || '' })
+
+    if (this.runePlaceholderCache.get(host) === cacheKey) return  // 幂等
+
+    host.classList.add(RUNE_HOST_CLASS)
+    host.setAttribute('contenteditable', 'false')
+    host.innerHTML = this.createRunePlaceholderMarkup(rune, dataset)
+    host.dataset.runeRenderKey = cacheKey
+    this.runePlaceholderCache.set(host, cacheKey)
+  })
+}
+
+createRunePlaceholderMarkup (rune, dataset = {}) {
+  const runeName = rune?.name || dataset.runeName || 'Rune'
+  return `
+    <div class="${RUNE_CARD_CLASS}" data-rune-mounted="true">
+      <div class="ag-rune-placeholder-body">
+        <div class="ag-rune-placeholder-title">${runeName}</div>
+      </div>
+    </div>
+  `
+}
+```
+
+#### 3.3.2 `renderEchoPlaceholders()`
+
+```javascript
+renderEchoPlaceholders () {
+  const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+  if (!root) return
+  const echoMap = this.getEchoMap()
+  const echoRuntime = this.muya?.options?.echoRuntime || null
+  const hosts = root.querySelectorAll(ECHO_PLACEHOLDER_SELECTOR)  // [data-echo-node-id]
+
+  hosts.forEach(host => {
+    const dataset = host.dataset || {}
+    const echoName = String(dataset.echoName || '').trim() || '回响'
+    const echoId = String(dataset.echoId || '').trim()
+    const definitionId = String(dataset.echoDefinitionId || '').trim()
+    const nodeId = String(dataset.echoNodeId || '').trim()
+    const value = String(dataset.echoValue || '').trim()
+    const hasExplicitWidth = dataset.echoWidth !== undefined
+    const hasExplicitHeight = dataset.echoHeight !== undefined
+    const width = String(dataset.echoWidth || '').trim()
+    const height = String(dataset.echoHeight || '').trim()
+
+    const echo = definitionId ? echoMap.get(definitionId) : echoMap.get(echoName)
+    const hasEcho = !!echo
+
+    // cacheKey 决定是否重新渲染
+    const cacheKey = JSON.stringify({
+      echoName, echoId, definitionId, nodeId, value,
+      desc: echo?.desc || '', color: echo?.color || '', icon: echo?.icon || '',
+      annoSource: echo?.anno_source || echo?.template || '',
+      hasExplicitWidth, hasExplicitHeight, width, height
+    })
+    if (this.echoPlaceholderCache.get(host) === cacheKey) return
+
+    host.classList.add(ECHO_HOST_CLASS)
+    host.setAttribute('contenteditable', 'false')
+
+    let innerHtml = ''
+    if (hasEcho && echoRuntime && typeof echoRuntime.renderToHtml === 'function') {
+      try {
+        const simAttrs = { id: echoId, definitionId, value }
+        const token = {
+          echoName, echoId,
+          propsParsed: simAttrs, propsRaw: '',
+          prompt: value, value,
+          raw: '', payload: '', payloadRaw: ''
+        }
+        innerHtml = echoRuntime.renderToHtml(token, echo)
+      } catch (error) {
+        console.warn('[StateRender.renderEchoPlaceholders] echoRuntime.renderToHtml failed:', error)
+        innerHtml = ''
+      }
+    }
+    if (!innerHtml) {
+      innerHtml = this.createEchoPlaceholderMarkup(echo, { ...dataset, hasExplicitWidth, hasExplicitHeight, width, height })
+    }
+    host.innerHTML = innerHtml
+
+    // 在 host 上打 attr（不污染 render 输出），让 afterRender 能找到 host
+    if (echoName) host.setAttribute('data-echo-name', echoName)
+    if (echoId) host.setAttribute('data-echo-id', echoId)
+    if (definitionId) host.setAttribute('data-echo-definition-id', definitionId)
+    host.setAttribute('data-echo-host', 'true')
+    host.dataset.echoRenderKey = cacheKey
+    this.echoPlaceholderCache.set(host, cacheKey)
+  })
+
+  // ★ handler 派发（在所有 host 都更新完之后）
+  if (echoRuntime && typeof echoRuntime.afterRender === 'function' && root) {
+    try {
+      echoRuntime.afterRender(root, { cleanupFirst: true })
+    } catch (error) {
+      console.warn('[StateRender.renderEchoPlaceholders] echoRuntime.afterRender failed:', error)
+    }
+  }
+}
+```
+
+#### 3.3.3 `mountRuneVueHosts()`（`enableRuneVueRenderer === true` 时执行）
+
+```javascript
+mountRuneVueHosts () {
+  const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
+  if (!root) return
+  // 扫 [data-rune-mounted="true"] host
+  const hosts = root.querySelectorAll('[data-rune-mounted="true"]')
+  hosts.forEach(host => {
+    const dataset = host.dataset || {}
+    const runeName = String(dataset.runeName || '').trim()
+    const instanceId = String(dataset.runeId || '')
+    const nodeId = String(dataset.runeNodeId || '')
+    // 找 rune 定义
+    const rune = runeMap.get(runeName) || null
+    if (!rune) return
+
+    // props 合并优先级
+    const finalProps = {
+      runeId: instanceId,
+      nodeId,
+      rune,
+      value: dataset.runeValue || host.textContent || ''
+    }
+
+    // 复用 vm（按 nodeId）
+    const existing = this.runeVmMap.get(nodeId)
+    if (existing && !existing._destroyed) {
+      // 重渲只更新 props
+      existing.rune = rune
+      existing.value = finalProps.value
+      return
+    }
+
+    // 销毁陈旧 vm
+    if (existing && existing._destroyed) {
+      this.runeVmMap.delete(nodeId)
+    }
+
+    // 新建 vm
+    const rendererCtor = createRuneRendererCtor(rune)
+    if (!rendererCtor) return
+    const vm = new RunePreviewRenderer({
+      propsData: finalProps,
+      onValueChange: ({ runeId, nodeId, value }) => {
+        // 转发到 Muya.vue.updateRunePlaceholderValue
+        // （实际绑定在 muya 实例上，见下）
+      }
+    })
+    vm.$mount()
+    host.appendChild(vm.$el)
+    this.runeVmMap.set(nodeId, vm)
+  })
+}
+```
+
+> `onValueChange` 在 `StateRender` 调用 mountRuneVueHosts 时绑定到 muya 实例的 `updateRunePlaceholderValue`（具体由 Muya.vue 在初始化时注入）。
+
+#### 3.3.4 `mountEchoVueHosts()`（默认**不**执行）
+
+```javascript
+mountEchoVueHosts () {
+  if (!this.muya?.options?.enableEchoVueRenderer) {
+    // 默认 disable，renderToHtml 已写入 innerHTML，不需要 Vue 包裹
+    return
+  }
+  // ... 逻辑类似 mountRuneVueHosts，但用 EchoPreviewRenderer
+}
+```
+
+> 默认 `enableEchoVueRenderer: false`。Echo 是纯 HTML + handler 派发，不需要 Vue 组件层级。
+
+### 3.4 afterRender 完整流程
+
+```
+StateRender.renderRunes() 在以下时机被调用：
+  - render() 全量渲染
+  - partialRender() 局部渲染
+  - singleRender() 单块渲染
+  - 单个用户动作（如输入框修改）
+       ↓
+renderRunes() 调用链：
+  1. renderRunePlaceholderNodes()       ← jQuery 模式，rune 占位卡片
+  2. renderEchoPlaceholders()           ← jQuery 模式，echo 渲染 + 立即派发 afterRender
+  3. cleanupDetachedRunePlaceholders()  ← 清 host.dataset.runeRenderKey 已不在 DOM 的
+  4. cleanupDetachedEchoPlaceholders()
+  5. enableRuneVueRenderer
+       ? renderRunesWithVue() → mountRuneVueHosts() + mountEchoVueHosts() + cleanup
+       : cleanupDetachedRuneVms(true) + cleanupDetachedEchoVms(true)
+  6. echoRuntime.afterRender(root, { cleanupFirst: true })  ← handler 派发
+     └─ 内部：setTimeout(..., 250ms) debounce → _doAfterRender
+        └─ 扫 [data-echo-host="true"] → definition.afterRender(node, props)
+```
+
+> 第 2 步和第 6 步都会调 `echoRuntime.afterRender`，但都走 250ms debounce，所以实际只会执行最后一次。
+
+---
+
+## 4. 16 张内置 echo 工厂详解
+
+### 4.1 工厂入口（`src/components/echo/echoBuiltins/echoBuiltinsBase.js`）
+
+```javascript
+// baseRender 工厂：产出 render(props) 函数字符串
+const baseRender = (meta = {}) => `render (props = {}) {
+    const metaName = '${meta.name}'
+    // 优先级 1: props.render 是函数且返回非空 → 无条件采纳
+    if (props && typeof props.render === 'function') {
+      let out
+      try { out = props.render(props) }
+      catch (e) { console.error('[echoBaseRender]', metaName, 'props.render threw:', e); out = undefined }
+      if (out != null && String(out) !== '') return out
+    }
+    // 优先级 2/3 兜底: props.title > metaName
+    const displayTitle = (props && props.title) || metaName
+    const idTag = (props && (props.id || props.definitionId)) || metaName
+    return '<span class="ag-echo-placeholder-marker ag-rune ag-rune--' + idTag + '" data-echo-chant-id="' + idTag + '">' + displayTitle + '</span>'
+  }`
+
+// baseAfterRender 工厂：handlerDoc + handler body
+const baseAfterRender = (handlerBody = '', meta = {}) => `${handlerDoc([\`【handler】${meta.handlerDesc || ''}\`])}
+    ${handlerBody}
+  }`
+
+// createAnnoSource：拼成完整 anno_source 字符串
+const createAnnoSource = ({ meta, renderBody, handlerBody }) => `export default {
+  ${banner(meta.banner || [])},
+  type: '${meta.type}',
+  field: '${meta.id}',
+  title: '${meta.name}',
+  version: 1,
+  props: ${JSON.stringify(meta.propsDefaults || {})},
+  ${renderBody},
+  ${baseAfterRender(handlerBody, meta)}
 }`
 
-// 编译为 JS 对象
-const factory = safeEvalFactory(source)
-const definition = factory()
-```
-
-### 4.3 渲染卡片（renderToHtml）
-
-```javascript
-renderToHtml(token, echo) {
-  const rendered = this.render(token, echo)
-  return `<span class="ag-echo-inline"
-            data-echo-inline="true"
-            data-echo-name="${echoName}"
-            data-echo-id="${echoId}"
-            data-echo-value="${value}"
-            data-rune-id="${runeMeta?.runeId}"
-            data-rune-kind="${runeMeta?.kind}"
-            style="--echo-color:${color}">
-            <span class="ag-echo-inline__badge">
-              <i class="material-icons">${icon}</i>
-              <span class="ag-echo-inline__title">${title}</span>
-            </span>
-          </span>`
-}
-```
-
-### 4.4 handler 派发（afterRender）
-
-```javascript
-// EchoRuntime.afterRender(container) 是 echo 改附近元素的入口
-afterRender (container, options) {
-  // 1. 对每个 echo host 调一次 definition.afterRender（可选）
-  echoNodes.forEach(node => {
-    const definition = this.compileDefinition(matchedEcho)
-    if (typeof definition.afterRender === 'function') {
-      cleanup = definition.afterRender(token, node, ancestors)
-    }
-  })
-
-  // 2. 对每个 [data-rune-id] 派发到对应 handler（关键路径）
-  const chantNodes = safeQueryAll(container, '[data-rune-id]')
-  chantNodes.forEach(node => {
-    const meta = { runeId, kind, attrs }
-    const handler = this.resolveEchoChantHandler(meta)
-    const cleanup = handler.apply(node, container, meta)
-    if (typeof cleanup === 'function') {
-      this._installed.push({ node, runeId, cleanup })
-      node.__agRuneCleanup = cleanup
-    }
+// buildEchoCard：meta + factory → 一张完整 echo 卡
+const buildEchoCard = (meta) => {
+  const renderBody = baseRender(meta)
+  const anno_source = createAnnoSource({ meta, renderBody, handlerBody: meta.handlerBody || '' })
+  return Object.freeze({
+    id: \`__builtin_${meta.id}__\`,
+    metaId: meta.id,
+    name: meta.name,
+    desc: meta.desc,
+    icon: meta.icon,
+    color: meta.color,
+    category: meta.category,
+    anno_source,
+    isBuiltin: true
   })
 }
 ```
 
-### 4.5 handler 解析优先级
+### 4.2 单张卡片模板（`src/components/echo/echoBuiltins/echoBuiltinsGrowth.js`）
 
 ```javascript
-// EchoRuntime.resolveEchoChantHandler(meta)
-resolveEchoChantHandler (meta) {
-  const { runeId, kind } = meta
+import { buildEchoCard } from './echoBuiltinsBase.js'
 
-  // 1. 用户动态注册的自定义 handler（按 id 精确匹配）
-  if (runeId && this.echoChantHandlers.has(runeId)) {
-    return this.echoChantHandlers.get(runeId)
-  }
+const META = {
+  id: 'growth', name: '生生不息', icon: 'park', color: '#43A047', category: 'showy', type: 'echo-chant',
+  desc: '为附近符合条件的元素加上生长的动画特效',
+  banner: ['【生生不息 / growth】 —— ...'],
+  handlerDesc: '自动给目标元素加生长动画；trigger=auto 时按 index 设置 stagger delay',
+  propsDefaults: { scope: 'siblings', trigger: 'auto', target: '[data-block-type], p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table' },
+  handlerBody: `
+    const mergedProps = Object.assign({ scope: 'siblings', trigger: 'auto', target: '[data-block-type], p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table' }, props || {})
+    const targetSelector = mergedProps.target
+    const $container = $(node).closest('[data-block-type], .mu-block, p, pre, li, h1, h2, h3, h4, h5, h6, blockquote, table, ul, ol').parent()
+    if (!$container.length) return () => {}
+    const container = $container.get(0)
+    const $targets = $(container).find(targetSelector)
+    $targets.each((i, el) => {
+      $(el).addClass('ag-rune-growth-target')
+      if (mergedProps.trigger === 'auto') $(el).css('--ag-rune-growth-delay', (Math.min(i, 8) * 120) + 'ms')
+    })
+    $(node).addClass('ag-rune-growth-active')
+    return () => {
+      $targets.removeClass('ag-rune-growth-target').css('--ag-rune-growth-delay', '')
+      $(node).removeClass('ag-rune-growth-active')
+    }`
+}
 
-  // 2. 用户动态注册的自定义 handler（按 match 探测）
-  for (const handler of this.echoChantHandlers.values()) {
-    if (handler.match(meta)) return handler
-  }
+export default buildEchoCard(META)
+```
 
-  // 3. 10 个内置 handler
-  const builtIn = findEchoChantHandler(runeId)
-  if (builtIn) return builtIn
+### 4.3 聚合入口（`src/components/echo/echoBuiltins/echoBuiltins.js`）
 
-  // 4. echo-tbd 兜底
-  if (kind === 'echo-tbd') return findEchoChantHandler('__echo_chant_tbd__')
-  return null
+```javascript
+import nice from './echoBuiltinsNice.js'
+import growth from './echoBuiltinsGrowth.js'
+// ... 16 个 import
+
+const BUILTIN_ECHO_CARDS = Object.freeze([
+  nice, growth, shatter, skywalk, twinbloom, mindsteal, lucky, scapegoat, calamity, disperse,
+  peek, ignore, ad, diff, ref, todo
+])
+
+const BUILTIN_ECHO_CHANT_IDS = Object.freeze(BUILTIN_ECHO_CARDS.map(card => card.metaId))
+const isBuiltinEchoChantId = (id = '') => BUILTIN_ECHO_CHANT_IDS.includes(String(id || '').trim())
+
+export { BUILTIN_ECHO_CARDS, BUILTIN_ECHO_CHANT_IDS, isBuiltinEchoChantId }
+export default BUILTIN_ECHO_CARDS
+```
+
+### 4.4 主进程镜像（`scripts/transform-main-builtin-echoes.js`）
+
+由于 main 进程没有 ES Module，每个 `echoBuiltins*.js` 文件的 `const META = {...}` 声明会被 IIFE 包裹以避免重名冲突：
+
+```javascript
+// 生成的 src-electron/main-process/service/builtin-echoes.js 形态：
+;(function () {
+  const META = { id: 'growth', name: '生生不息', ... }
+  // ...
+  module.exports = module.exports || {}
+  // 把 buildEchoCard 的结果挂到 __allCards
+})()
+;(function () {
+  const META = { id: 'shatter', ... }
+  // ...
+})()
+// ...
+const __allCards = [/* 16 张 */]
+module.exports = { BUILTIN_ECHO_CARDS: __allCards, ... }
+```
+
+---
+
+## 5. 14 个内置 rune 模板详解
+
+### 5.1 工厂入口（`src/components/rune/runeTemplates/runeTemplates.js`）
+
+```javascript
+import runeTemplatesBlank from './runeTemplatesBlank.js'
+// ... 14 个 import
+
+const createBlankTemplate = runeTemplatesBlank
+const createInheritDemoTemplate = runeTemplatesInheritDemo
+// ...
+
+export {
+  createBlankTemplate,
+  createInheritDemoTemplate,
+  createInputTemplate,
+  createHolyShieldTemplate,
+  createFireflyTemplate,
+  createJsxGraphTemplate,
+  createElInputTemplate,
+  createElSelectTemplate,
+  createElDatePickerTemplate,
+  createResumeBasicInfoTemplate,
+  createResumeTitleTemplate,
+  createResumeExperienceTemplate,
+  createResumeTextTemplate,
+  createResumeSkillTemplate
 }
 ```
 
-### 4.6 9 个内置 handler 详解
-
-| handler id | 影响元素 | 主要副作用 | cleanup |
-|------------|---------|-----------|---------|
-| growth | 同段落 / 块的兄弟节点 | 加 `ag-rune-growth-target` class + `--ag-rune-growth-delay` CSS 变量 | 移除 class |
-| shatter | 同段落 echo 节点 | 给其他 echo 加 `data-shatter-disabled` + `ag-rune-shatter-disabled` | 移除属性和 class |
-| skywalk | document 根容器 | 加 `data-skywalk-theme` / `data-skywalk-layout` | 移除属性 |
-| twinbloom | 当前 block | 克隆当前 block 插入到 prev/next | 移除克隆块 |
-| mindsteal | 附近的 rune 节点 | 加 `data-mindsteal-mode` + `animation: none` | 移除属性和样式 |
-| lucky | 当前 rune 节点 | 加 `role=button` + click/keydown 事件 | 移除属性 + 解绑事件 |
-| scapegoat | 当前 block | 加 `ag-rune-scapegoat-standby` + 监听 `error` / `ag:rune:error` | 移除 class + 解绑监听 |
-| calamity | 同段落文字节点 | 给随机文字片段加 `ag-rune-calamity-gothic` | 移除 class |
-| disperse | 当前 block | 加 `data-disperse-density` | 移除属性 |
-
-> `__echo_chant_tbd__` 是 echo-tbd 的兜底 handler，只给节点加 `ag-echo-tbd-active` class，没有真实副作用。
-
-### 4.7 scope 解析（resolveScopeContainer）
+### 5.2 单张模板（`src/components/rune/runeTemplates/runeTemplatesBlank.js`）
 
 ```javascript
-const resolveScopeContainer = (chantNode, scope = 'siblings') => {
-    const block = chantNode.closest('[data-block-type], .mu-block, p, pre, li, h1~h6, blockquote, table, ul, ol')
-    const documentRoot = chantNode.closest('[data-echo-document], .mu-editor, article, [data-doc-id]') || document.body
+export const runeTemplatesBlank = () => {
+  return `<template>
+  <div class="blank-page">
+    <!-- HTML 结构区域 -->
+    <p>Vue2 空白组件</p>
+  </div>
+</template>
 
-  switch (String(scope).toLowerCase()) {
-    case 'prev-block': {
-      let prev = block?.previousElementSibling
-      while (prev && !prev.firstElementChild && prev.textContent.trim() === '') {
-        prev = prev.previousElementSibling
-      }
-      return prev || block
+<script>
+export default {
+  name: 'BlankDemo',
+  // 接收父组件参数
+  props: {},
+  data() {
+    return {
+      // 响应式数据
     }
-    case 'block':      return block
-    case 'document':   return documentRoot
-    case 'siblings':
-    default:           return block?.parentElement || documentRoot
-  }
+  },
+  computed: {
+    // 计算属性
+  },
+  watch: {},
+  methods: {},
+  // 生命周期钩子
+  created() {},
+  mounted() {},
+  updated() {},
+  destroyed() {}
 }
+<\/script>   <!-- ★ 注意：<\/script> 是字面字符串，不是 HTML 闭合 -->
+
+<style lang="less" scoped>
+
+</style>`
+}
+
+export default runeTemplatesBlank
 ```
 
-## 5. 与 Muya 编辑器集成
+**关键点**：`</script>` 必须写成 `<\/script>`——这是因为模板字符串本身在外层 JS 字符串里会被当作 HTML / ES module 字面量解析，原始 `</script>` 会让外层解析器认为这里是结束标签，截断模板。
 
-### 5.1 Muya 拦截 `<div data-rune-name="...">` 标签
+---
 
-Muya 在生成 DOM 时识别 `<div data-rune-name="...">`，把它替换为 `<RunePreviewRenderer>` 组件实例。
+## 6. Muya.vue 关键路径行号索引
 
-### 5.2 Muya 解析 `echo_anno` token
+> 行号截至 v2026-07-29，可能有 ±10 行浮动，详见具体文件。
 
-`src/libs/muya/lib/parser/render/renderInlines/echoAnno.js` 在渲染时调用 `EchoRegistry.render(token)` → `EchoRuntime.renderToHtml(token)` → 输出 `<span class="ag-echo-inline">`。
+| 路径 | 大致位置 |
+|---|---|
+| `normalizeRuneSfc` | ~132-230 |
+| `evalRuneScript` | ~231-237 |
+| `ensureRuneStyle` | ~238-249 |
+| `createRuneRendererCtor` | ~251-347 |
+| `RunePreviewRenderer` | ~349-415 |
+| `EchoPreviewRenderer` | ~418-525 |
+| `EchoPlaceholderHost`（EchoPreviewRenderer 别名） | ~529 |
+| `refreshEchoDefinitions` | ~682-706 |
+| `updateRunePlaceholderValue` | ~712-730 |
+| `findRunePlaceholderNodeIdByRuneInstance` | ~735-749 |
+| muya options 设置（enableRuneVueRenderer / enableEchoVueRenderer） | ~1000-1004 |
 
-### 5.3 afterRender 触发时机
+---
 
-- 每次 Muya 全量渲染（`render()`）
-- 每次局部渲染（`partialRender()`）
-- 每次单块渲染（`singleRender()`）
+## 7. render/index.js 关键路径行号索引
 
-每个入口都会调用 `this.renderRunes()` → `registry.afterRender(container)`。
+| 路径 | 大致位置 |
+|---|---|
+| `RUNE_PLACEHOLDER_SELECTOR` / `ECHO_PLACEHOLDER_SELECTOR` 常量 | ~11-13 |
+| `RUNE_HOST_CLASS` / `ECHO_HOST_CLASS` 等 CSS class 常量 | ~14-17 |
+| `createRunePlaceholderMarkup` | ~270-279 |
+| `createEchoPlaceholderMarkup` | ~281-309 |
+| `renderRunePlaceholderNodes` | ~312-348 |
+| `renderEchoPlaceholders` | ~358-467 |
+| `cleanupDetachedEchoPlaceholders` | ~469 |
+| `renderRunePlaceholders`（与 mountRuneVueHosts 一致路径） | ~485 |
+| `cleanupDetachedRunePlaceholders` | ~518 |
+| `cleanupDetachedEchoVms` | ~529 |
+| `cleanupDetachedRuneVms` | ~543 |
+| `mountEchoVueHosts`（默认 disable） | ~557 |
+| `mountRuneVueHosts`（默认 enable） | ~633 |
+| `postRenderEchoPlaceholders` | ~750 |
+| `postRenderRunePlaceholders` | ~764 |
+| `renderRunesWithVue` | ~1059-1064 |
+| `renderRunes` | ~1066-1090 |
 
-## 6. 数据回写对比
+---
 
-| | rune（Vue SFC） | echo（@xxx{}()） |
-|--|----------------|-----------------|
-| **回写入口** | `updateRunePlaceholderValue({runeId, nodeId, value})` | 直接编辑 Markdown 源 |
-| **修改位置** | `<div data-rune-node-id="..." data-rune-value="...">innerText` | `@xxx{value: 'new value'}(prompt)` |
-| **触发条件** | SFC 内 `$emit('input', value)` | 用户在编辑器里改 |
-| **存储同步** | 走 `contentEditor.setMarkdown()`，Muya 重渲染 | 同上，但 echo 是静态卡片，重渲不丢 |
+## 8. 性能优化（源码级）
 
-## 7. 表单对话框对比
+1. **definitionCache**（`echoRuntime.js`）：`compileDefinition` 内部 Map 按 echoId 缓存编译结果，新增/删除 echo 时 `invalidate()` 清掉。
+2. **runePlaceholderCache / echoPlaceholderCache**（`render/index.js`）：按 host DOM 节点缓存 renderKey，未变则跳过 `host.innerHTML = ...` 赋值。
+3. **scopeId 隔离**：`injectScopedAttribute` 给所有顶层标签加 `data-rune-scope-${runeId}`，SFC 的 `<style scoped>` 编译后只作用于自身。
+4. **cleanupFirst**：`renderRunes` → `echoRuntime.afterRender(root, { cleanupFirst: true })` 时先清旧 cleanup 再派发新 handler，避免属性累积。
+5. **250ms debounce**：`afterRender` 内部 setTimeout 250ms，确保高频渲染期只派发最后一次。
 
-| | RuneFormDialog.vue | echoFormDialog.vue |
-|--|---------------------|---------------------|
-| **编辑字段** | `template`（Vue SFC 字符串） | `anno_source`（JS 对象字面量字符串） |
-| **Monaco language** | `html` | `javascript` |
-| **模板辅助** | `createBlankTemplate()` 等 | `createDefaultEchoAnnoSource()` 等 |
-| **特有功能** | 分类选择 + 远端导入 | 注解语法帮助提示 |
-| **编辑的内容** | `<template><script><style>` 三段式 SFC | `export default { kind, render, handler, ... }` |
-
-## 8. 关键常量
-
-```javascript
-// echoRuntime.js
-const DEFAULT_ECHO_COLOR = '#26A69A'
-const DEFAULT_ECHO_ICON = 'graphic_eq'
-const ECHO_PAYLOAD_VERSION = 1
-
-// echo 占位符正则
-const CURRENT_ECHO_PLACEHOLDER_RE = /@([^\s{}()@]*)\{([\s\S]*?)\}\(([^)]*)\)/g
-
-// echo kind 集合（重命名后，原 `RUNE_KINDS = new Set(['rune','rune-tbd'])` 已废）
-const ECHO_CHANT_KINDS = new Set(['echo-chant', 'echo-tbd'])
-
-// 10 个内置 chant id（注意：这些是 echo 的咏唱卡片，不是 rune）
-const BUILTIN_ECHO_CHANT_IDS = [
-  'growth', 'shatter', 'skywalk', 'twinbloom',
-  'mindsteal', 'lucky', 'scapegoat', 'calamity',
-  'disperse', 'clock'
-]
-```
-
-## 9. 性能优化
-
-1. **definitionCache**：EchoRuntime 缓存编译过的 anno_source（按 echoId）
-2. **scopeId 隔离**：每个 rune 用独立 `data-rune-scope-${runeId}` 避免 CSS 污染
-3. **cleanupFirst**：Muya 重渲时先调 cleanup 再派发新 handler，避免属性累积
-4. **tokenCache**：Muya 的 tokenizer 缓存（无高亮时复用）
-
-## 10. 已知边界情况
+## 9. 已知边界情况
 
 1. **twinbloom 幂等**：克隆块用 `data-twinbloom-of` 标记，若已存在则跳过
 2. **disperse 累积**：`data-disperse-density` 属性可能覆盖而非累积
 3. **mindsteal 冲突**：多个 mindsteal 节点对同一目标操作时，后者覆盖前者
 4. **scapegoat 错误捕获**：依赖 `window.error` 和 `ag:rune:error` 自定义事件
-5. **clock 单例性**：每个 `@报时()` 实例独立计时，重渲后旧计时器被 cleanup 清理
+5. **echo NPE 兜底**：handler body 在 Node 端 `$` 为 null，但 `EchoRuntime._doAfterRender` 已 try-catch
+6. **renderRunes 重复派发**：renderEchoPlaceholders 和 renderRunes 都会触发 echoRuntime.afterRender，但都走 250ms debounce
 
-## 11. 重命名记录（2026-07-15）
+## 10. 调试技巧
 
-将 echo 体系内的 `kind: 'rune'` → `kind: 'echo-chant'`，`kind: 'rune-tbd'` → `kind: 'echo-tbd'`，`RUNE_KINDS` → `ECHO_CHANT_KINDS`，`RUNE_HANDLERS` → `ECHO_CHANT_HANDLERS`，`BUILTIN_ECHO_CARDS` 内 `kind: 'rune'` 们改名为 `kind: 'echo-chant'`，`BUILTIN_RUNE_IDS` → `BUILTIN_ECHO_CHANT_IDS`，`isBuiltinRuneId` → `isBuiltinEchoChantId`，anno_source 函数参数名 `runeNode` → `chantNode`，`resolveRuneHandler` / `findRuneHandler` / `registerRuneHandler` / `unregisterRuneHandler` / `listCustomRuneHandlers` / `extractRuneMeta` 全部改名，全局注册点 `window.__memocastRuneHandlers` → `window.__memocastEchoChantHandlers`，`KIND_ALIASES` / `normalizeKindAlias` / `customHandlers` / `_readRuneAttrs` 等兼容层全部移除（项目未对外发版，不需要保留旧名 fallback）。
+```javascript
+// 打开 echo trace
+window.__ECHO_TRACE__ = true  // renderEchoPlaceholders 内部会 console.log
 
-理由：
-- `RUNE_*` 这个名字过去在 echo 体系里被滥用（`kind`、`RUNE_HANDLERS`、`RUNE_KINDS`、表里属性 `data-rune-id`、`runeNode` 函数参数名、`__memocastRuneHandlers` 全局点），与 rune（Vue SFC 卡片）字面重名，**给人阅读造成严重混淆**。
-- `echo-chant`（echo 的咏唱 / 回响触发）+ `echo-tbd` 直接表明它们都属于 echo 体系，与 rune 彻底断开字面联系。
-- 维护者后续在做改动时，看到 `echo-*` 就归 echo，看到 `rune-*`（指 `data-rune-name`、`data-rune-id` 等元素标签属性、`Vue.extend` 的构造器、`RuneFormDialog` 表单）才算 rune，两套视觉上一刀切开。
-- 项目尚未对外发版，没有历史用户笔记需要兼容，趁机做彻底改名。
+// 列出所有 echoRegistry 卡片
+window.__memocastEchoRegistry?.getAll()
 
-> 注意：渲染产物上的 `data-rune-id="growth"` / `data-rune-kind="echo-chant"` 等**DOM 属性名未改名**，因为它们是 markdown 源 ABI，写到了历史笔记里；这是字面值的稳定。Skills 里以后看到 `data-rune-id`，**按值找到的逻辑实体是 echo-chant，不是 rune**。
-> 注意：`ag-rune-*` CSS class 名也未改名（视觉样式锚点，避免回归）。
+// 强制失效所有编译缓存
+window.__memocastEchoRegistry?.runtime?.invalidate()
 
-## 12. 何时用 Rune、何时用 Echo（决策树）
-
-```
-想让卡片影响其他元素吗？
-├── 是 → 用 echo
-│         ├── 选 builtin echo / 创建新 echo
-│         └── 在 anno_source 的 handler() 里改附近 DOM
-└── 否 → 用 rune
-          ├── Vue SFC 卡片，自身完整
-          └── 通过 $emit('input') 回写到自己的占位符
+// 强制重渲
+this.contentEditor.contentState.stateRender.renderRunes()
 ```
 
-**不要混淆**：
-- 用 rune 想做"影响附近元素" → 错。rune 不动兄弟节点。
-- 用 echo 想做"自包含 Vue 卡片" → 错。echo 只能输出 `<span class="ag-echo-inline">`，不能挂载 Vue SFC。
+## 11. 测试契约（护城河）
+
+详见 `.cursor/rules/rune-echo-test-moat.mdc`。每条契约对应一个 Jest suite：
+
+| 契约 | 测试用例 |
+|---|---|
+| `definition.render(props)` / `definition.afterRender(node, props)` 签名 | `tests/unit/echo/runtime-props.test.js` |
+| 16 张内置 anno_source 顶层结构（`type` / `field` / `title` / `version` / `props`） | `tests/unit/echo/jquery-echo-compile.test.js` |
+| 16 张 handlerBody 全 jQuery 化（无原生 fallback） | `tests/unit/echo/jquery-afterrender.test.js` |
+| main 端 CJS 镜像与 renderer 端类型契约一致 | `tests/unit/echo/main-builtin-echoes.test.js` |
+| echo propsSchema 贴合 form-create rule | `tests/unit/echo/schema-formcreate-align.test.js` |
+| 14 个 rune 模板源文件转义 + `props.value` + `$emit('input')` | `tests/unit/rune/templates.test.js` |
+| inherit helper + payload codec round-trip | `tests/unit/echo/inherit-from-previous.test.js` |
+
+任何对这些契约的改动，必须先更新对应 Jest 用例，再 `yarn verify` 全量验证。
