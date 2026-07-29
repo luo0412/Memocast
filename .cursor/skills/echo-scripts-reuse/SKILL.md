@@ -1,8 +1,11 @@
 # Echo / Boot 脚本复用规范
 
 本项目在 `scripts/` 目录下放置可复用的工具脚本，主要服务于：
-1. **Echo（回响）系统**的构建、验证和数据同步（见下文"Echo 相关脚本"）；
-2. **`boot/globalGlobals.js` 扫描逻辑的回归验证**（见下文"Boot 扫描正则回归脚本"）。
+
+1. **Echo（回响）系统**的 IPC payload 契约（见下文"场景 1"）；
+2. **`boot/globalGlobals.js` 扫描逻辑的回归验证**（见下文"场景 2"）。
+
+> v2026-07-29 起：所有 `verify-*.js` 已迁入 Jest 29（`tests/` 下），`scripts/` 只保留**打包 / 部署**相关脚本（`after-pack.js`、`blog/`）。测试统一走 `yarn verify`。
 
 ---
 
@@ -33,7 +36,7 @@ scripts/
 └── blog/                                     # 博客部署相关脚本
 ```
 
-> **过渡期（v2026-07-29 起 1 周内）**：旧的 `scripts/verify-*.js` 9 个脚本保留，作为参考。1 周后删除。`yarn verify` 当前已直接走 jest。
+> v2026-07-29 起：`scripts/verify-*.js` 已全部删除，所有验证走 `yarn verify`（Jest 29）。
 
 ---
 
@@ -60,9 +63,9 @@ scripts/
 
 **Jest 护城河**：`tests/unit/echo/main-builtin-echoes.test.js` 锁住 renderer 端 `BUILTIN_ECHO_CARDS` 具备完整 IPC payload 字段（`id` / `name` / `desc` / `icon` / `color` / `category` / `anno_source` / `isBuiltin` / `metaId`），并校验 `id` 形态（`__builtin_*__`）、`category` enum（`showy` / `builtin`）、`anno_source` 顶层 type 三态合法、`kind` 不再出现、可被 `new Function(prelude + source)` 编译。
 
-### 场景 2：验证脚本的公共逻辑
+### 场景 2：Jest 测试套件的公共逻辑
 
-所有 `verify-*.js` 脚本共享以下模式：
+所有 anno_source 编译套件共享以下模式：
 
 **HANDLER_PRELUDE_SOURCE**：所有 anno_source 编译时注入的公共 helper 函数（从 `src/components/echo/echoAnnoSource.js` 导出）。
 
@@ -88,7 +91,7 @@ handler body 统一用 jQuery（`$ = window.jQuery`）。Node 端 `$` 退化为 
 | `id` 形态：`__builtin_*__` | ✅ | - | - |
 | `category` enum：`showy` / `builtin` | ✅ | - | - |
 
-### 场景 3：继承关系验证（verify-inherit-from-previous）
+### 场景 3：继承关系验证（`inherit-from-previous.test.js`）
 
 **目的**：验证 EchoRuntime 新增的「上一节点 value 继承」helper 函数。
 
@@ -124,17 +127,17 @@ yarn jest tests/unit/echo   # 任意子集
 
 ---
 
-## Boot 扫描正则回归脚本
+## Boot 扫描正则回归测试
 
 `boot/globalGlobals.js` 当前用 `require.context` 扫描 `src/cloudfns/`，未来也计划扫描 `src/utils/enum/` 和 `src/utils/util/`。**项目文件名约定是小驼峰（camelCase）**，所以任何 `require.context` 的正则必须用 `/^[a-z]\w*Xxx\.js$/`，**不能用** `/[A-Z]\w+Xxx\.js$/`（后者要求首字母大写，会全部漏掉）。
 
-> 历史教训：早期草稿正则 `/[A-Z]\w+Util\.js$/` 配项目 `emptyUtil.js` / `treeUtil.js` 等 camelCase 文件会**一个都匹配不到**，导致 `this.$utils.emptyUtil` 在组件里全是 undefined。这三个脚本就是为了"打脸"那个旧正则、固化正确写法而写的。
+> 历史教训：早期草稿正则 `/[A-Z]\w+Util\.js$/` 配项目 `emptyUtil.js` / `treeUtil.js` 等 camelCase 文件会**一个都匹配不到**，导致 `this.$utils.emptyUtil` 在组件里全是 undefined。这 3 个 jest 用例就是为了"打脸"那个旧正则、固化正确写法而写的。
 
-### `verify-enum-util-regex.js`
+### `tests/unit/boot/enum-util-regex.test.js`
 
 直接跑 RegExp 打几个文件名，打印 true/false，肉眼对照。
 
-### `verify-enum-boot-smoke.js`
+### `tests/unit/boot/enum-boot-smoke.test.js`
 
 扫 `src/utils/enum/` 实际目录：
 
@@ -142,7 +145,7 @@ yarn jest tests/unit/echo   # 任意子集
 - 期望新正则命中 6 个 enum 文件（`aiAssistantProvider` / `calendarDateBasis` / `cloudSyncProvider` / `noteOrderType` / `runeEchoCategories` / `settingsTab`），不命中 `index.js` / `enumSetup.js` 基础设施。
 - 新增 enum 时**只**需要把 `EXPECTED_ENUM_FILES` 同步加 1 即可。
 
-### `verify-util-boot-smoke.js`
+### `tests/unit/boot/util-boot-smoke.test.js`
 
 扫 `src/utils/util/` 实际目录：
 
@@ -150,8 +153,8 @@ yarn jest tests/unit/echo   # 任意子集
 - 模拟 `buildNameSpacedMap` 把命中文件转成 `$utils.emptyUtil` / `$utils.treeUtil` / `$utils.dateUtil` 这种 namespace map，确认 `NoteItem.vue` 用到的三个 key 都存在。
 
 > **何时跑**：
-> - 修改 `boot/globalGlobals.js` 的 require.context 正则时**必须**先跑这 3 个脚本。
-> - 在 `src/utils/enum/` 或 `src/utils/util/` 新增/删除/改名文件后跑对应脚本，确认正则仍然覆盖到位。
+> - 修改 `boot/globalGlobals.js` 的 require.context 正则时**必须**先跑 `yarn verify:boot`。
+> - 在 `src/utils/enum/` 或 `src/utils/util/` 新增/删除/改名文件后跑对应 jest 套件，确认正则仍然覆盖到位。
 
 ---
 

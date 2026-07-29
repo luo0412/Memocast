@@ -63,7 +63,7 @@ alwaysApply: true
 | `yarn test` / `yarn test:watch` | 走 Jest 默认（色彩开启），开发时 watch |
 | `yarn jest <path>` | 任意子集（`yarn jest tests/unit/echo` / `yarn jest -t "type=echo-chant"`） |
 
-> **过渡期**（v2026-07-29 起 1 周内）：旧的 `node scripts/verify-runner.js` **仍可用**，但跑的是过期脚本，会在 PR 流程里被 `yarn verify` 替代。1 周后删除旧脚本。
+> v2026-07-29 起：`scripts/verify-*.js`（10 个旧脚本：9 个 verify-*.js + verify-runner.js）已全部删除，Jest 是唯一测试入口。
 
 ---
 

@@ -311,15 +311,15 @@ Vue.prototype.$enums = enumMap
 > - `/[A-Z]\w+Enum\.js$/` 要求**首字母大写**（PascalCase），会**全部漏掉**当前的 camelCase 文件。
 > - 同理 `$utils` 的正则也要用 `/^[a-z]\w*Util\.js$/`，否则会漏掉 `emptyUtil.js` / `treeUtil.js` / `dateUtil.js` 等。
 >
-> **回归验证脚本**：
+> **回归验证脚本**（v2026-07-29 起已迁入 Jest 29）：
 >
-> | 脚本 | 作用 |
+> | Jest 套件 | 作用 |
 > |---|---|
-> | `scripts/verify-enum-util-regex.js` | 直接打 regex 命中情况，便于肉眼对比 |
-> | `scripts/verify-enum-boot-smoke.js` | 扫 `src/utils/enum/` 实际目录，校验新正则能否命中全部 6 个 enum 文件 |
-> | `scripts/verify-util-boot-smoke.js` | 扫 `src/utils/util/` 实际目录，校验新正则能否命中全部 5 个 util 文件 + 模拟 buildNameSpacedMap |
+> | `tests/unit/boot/enum-util-regex.test.js` | 直接打 regex 命中情况，便于肉眼对比 |
+> | `tests/unit/boot/enum-boot-smoke.test.js` | 扫 `src/utils/enum/` 实际目录，校验新正则能否命中全部 6 个 enum 文件 |
+> | `tests/unit/boot/util-boot-smoke.test.js` | 扫 `src/utils/util/` 实际目录，校验新正则能否命中全部 5 个 util 文件 + 模拟 buildNameSpacedMap |
 >
-> 重写 boot 扫描逻辑前**必须**先跑这 3 个脚本确认正则不会漏文件。
+> 重写 boot 扫描逻辑前**必须**先跑 `yarn verify:boot` 确认正则不会漏文件。
 
 > **当前 `boot/globalGlobals.js` 仍然走显式 import**（更稳，避免扫描漏文件、新增 enum 需同步改两处）。`$cloudfns` 当前**已经**用 `require.context` + `/[A-Z]\w+CloudFn\.js$/`，但 `src/cloudfns/` 暂未填充任何文件，等真有 cloud function 文件落地时**必须**先按上面的命名约定调整正则（或重命名为 PascalCase 保持正则兼容）。
 
