@@ -184,8 +184,8 @@ src-electron/                         src-electron/
 | --- | --- | --- |
 | `components/ui/editor/echo/EchoRegistry.js` | `components/ui/editor/EchoRegistry.js` | 上提 1 层；文件名加 PascalCase 后缀保留 |
 | `components/ui/editor/echo/EchoRuntime.js` | `components/ui/editor/EchoRuntime.js` | 同上 |
-| `components/ui/editor/echo/builtinEchoes.js` | `components/ui/editor/builtinEchoes.js` | 同上 |
-| `components/ui/editor/echo/builtin-echo-shared.js` | `components/ui/editor/builtin-echo-shared.js` | 同上（保留 kebab-case） |
+| `components/ui/editor/echo/builtinEchoes.js` | `components/ui/editor/builtinEchoes.js` | 同上（v2026-07-29 已进一步拆为 `components/echo/echoBuiltins/` 子目录） |
+| `components/ui/editor/echo/builtin-echo-shared.js` | `components/ui/editor/builtin-echo-shared.js` | 同上（保留 kebab-case；v2026-07-29 已迁为 `components/echo/echoBuiltinsShared.js`） |
 | `components/Header.vue` 等顶层 `.vue` | 不动 | 已在第 2 层 |
 
 > 同时考虑把 `components/ui/editor/{Muya,Monaco,MarkMap}.vue` 上提到新建的 `components/editor/` 下，让"编辑器"成为独立顶层模块。但这会牵涉到所有 `pages/`、`layouts/` 的 import 路径，**取决于决策 A**（如果 muya 也走 `src/editor/muya/`，则业务 editor 应同步迁到 `src/editor/`）。当前按 A1，**这一改动不在本轮范围内**，留作后续 TODO。

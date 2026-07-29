@@ -19,7 +19,9 @@ import Portkey from 'portkey-ai'
 const { DEFAULT_ROOT_CATEGORY } = require('./constants')
 const createRuneTemplateService = require('./service/rune-template-service')
 const createNoteTemplateService = require('./service/note-template-service')
-const { BUILTIN_ECHO_CARDS } = require('./service/builtin-echoes')
+// 内置回响（echo）的真相源：renderer 端 src/components/echo/echoBuiltins/。
+// 主进程不再维护 builtin-echoes.js 镜像，DB 落库完全由 renderer 通过 IPC payload 推送。
+// 若以后 main 端需要在不依赖 renderer 的场景查内置 echo 列表，应改为读取 DB echoes 表里 id LIKE '__builtin_%' 的行。
 
 // rune 预设模板服务（schema + CRUD）。仅在 initSchema 阶段真正调用 createRuneTemplateService，
 // registerDatabaseHandlers 阶段直接复用 module 级 runeTemplateService，避免重复闭包。
@@ -635,15 +637,11 @@ export default {
   try {
     db.run("UPDATE echoes SET category = 'builtin' WHERE (id LIKE '\\_\\_builtin\\_%' ESCAPE '\\') AND (category IS NULL OR trim(category) = '')")
   } catch (error) {}
-  // 修正历史迁移错误：把原本被错误写成 'builtin' 的内置回响（showy/marker）恢复为正确分类
-  try {
-    const BUILTIN_ECHO_CARDS_MIGRATION = require('./service/builtin-echoes').BUILTIN_ECHO_CARDS
-    for (const meta of (BUILTIN_ECHO_CARDS_MIGRATION || [])) {
-      if (meta && meta.id && meta.category && meta.category !== 'builtin') {
-        db.run('UPDATE echoes SET category = ? WHERE id = ?', [meta.category, meta.id])
-      }
-    }
-  } catch (error) {}
+  // 注：原本这里有一段"启动期把内置回响 showy/marker 类纠正回正确 category"的迁移，
+  // 依赖 main 镜像 `BUILTIN_ECHO_CARDS`。v2026-07-29 起 main 不再维护镜像，
+  // 这部分修正由 renderer 端 loadEchoes 通过 `{ ...template, ...override }` 自然覆盖：
+  // DB 行的 category 永远是代码版默认值（template.category 来自 echoBuiltins 真相源）。
+  // 历史脏数据（showy 类 echo 被错写成 builtin）会在用户首次打开 Settings 时自动修复。
   try {
     db.run("UPDATE echoes SET category = 'marker' WHERE (id NOT LIKE '\\_\\_builtin\\_%' ESCAPE '\\') AND (category IS NULL OR trim(category) = '')")
   } catch (error) {}
@@ -3067,9 +3065,9 @@ function registerDatabaseHandlers() {
       }
 
       const isBuiltin = typeof echo.id === 'string' && echo.id.startsWith('__builtin_')
-      // 查找内置回响的真实分类（builtin / showy / marker）
-      const builtinMeta = BUILTIN_ECHO_CARDS && BUILTIN_ECHO_CARDS.find(e => e.id === echo.id)
-      const builtinCategory = builtinMeta && builtinMeta.category ? builtinMeta.category : 'builtin'
+      // category 真相源：renderer 端 echoBuiltins（payload.echo.category）。
+      // 主进程不再查内置 meta 表来强制覆盖——dev 模式下让 renderer 直接控制；
+      // 生产模式 saveEcho 在 renderer 端已过滤掉 builtin 写入，无需 main 再做保护。
 
       // 同名校验：不区分大小写、去首尾空白，且允许 id 自身（更新时）
       const dup = execOne(
@@ -3084,9 +3082,9 @@ function registerDatabaseHandlers() {
       const existing = execOne('SELECT id, created_at FROM echoes WHERE id = ?', [echo.id])
       const annoSource = echo.anno_source || echo.template || createDefaultEchoAnnoSource(name)
       const renderType = echo.render_type || 'anno'
-      const category = isBuiltin
-        ? builtinCategory
-        : (typeof echo.category === 'string' && echo.category.trim() ? echo.category.trim() : 'marker')
+      const category = (typeof echo.category === 'string' && echo.category.trim())
+        ? echo.category.trim()
+        : (isBuiltin ? 'builtin' : 'marker')
       const sortOrder = Number.isFinite(Number(echo.sort_order)) ? Number(echo.sort_order) : 0
       if (existing) {
         await db.run(`UPDATE echoes SET name = ?, "desc" = ?, color = ?, icon = ?, anno_source = ?, render_type = ?, category = ?, sort_order = ?, updated_at = ? WHERE id = ?`, [
@@ -3149,11 +3147,12 @@ function registerDatabaseHandlers() {
       for (const echo of list) {
         const annoSource = echo.anno_source || echo.template || createDefaultEchoAnnoSource(echo.name)
         const isBuiltin = typeof echo.id === 'string' && echo.id.startsWith('__builtin_')
-        const builtinMeta = BUILTIN_ECHO_CARDS && BUILTIN_ECHO_CARDS.find(e => e.id === echo.id)
-        const builtinCategory = builtinMeta && builtinMeta.category ? builtinMeta.category : 'builtin'
-        const category = isBuiltin
-          ? builtinCategory
-          : (typeof echo.category === 'string' && echo.category.trim() ? echo.category.trim() : 'marker')
+        // category 真相源：renderer 端 echoBuiltins（payload.echo.category）。
+        // 主进程不再查内置 meta 表来强制覆盖——dev 模式下让 renderer 直接控制；
+        // 生产模式 saveEchoes 在 renderer 端已过滤掉 builtin 写入，无需 main 再做保护。
+        const category = (typeof echo.category === 'string' && echo.category.trim())
+          ? echo.category.trim()
+          : (isBuiltin ? 'builtin' : 'marker')
         const sortOrder = Number.isFinite(Number(echo.sort_order)) ? Number(echo.sort_order) : 0
         await db.run(`INSERT OR REPLACE INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [echo.id, echo.name, echo.desc || '', echo.color || '#26A69A', echo.icon || 'graphic_eq', annoSource, echo.render_type || 'anno', category, sortOrder, echo.created_at || now, now])
@@ -3219,20 +3218,17 @@ function registerDatabaseHandlers() {
   })
 
   // 重置回响：用 renderer 端推送的最新内置 echo 列表覆盖 DB 内置行，保留自定义回响
-  //  - 若 renderer 推 cards：以其为准（解决 main / renderer 双源漂移问题）。
-  //  - 若 renderer 没传：fallback 到 main 镜像版 BUILTIN_ECHO_CARDS（保持兼容）。
-  //  - v2026-07-28 起：主进程启动时不再自动 sync 内置回响（seed 已拆），DB 落库完全由本接口承载，
-  //    用户在「设置 → 重置回响」里点一下走这里。
+  //  - 真相源是 renderer 端 echoBuiltins/（main 进程不再维护镜像），payload 必传。
+  //  - payload 缺省 / 空 → 直接拒绝（避免使用任何已不存在的"主进程镜像"兜底）。
+  //  - 主进程启动时不再自动 sync 内置回响；DB 落库完全由本接口承载。
   ipcMain.handle('db:clearEchoes', async (_event, payload) => {
     try {
       const incoming = Array.isArray(payload && payload.builtins) ? payload.builtins : null
       const hasIncoming = Array.isArray(incoming) && incoming.length > 0
-      const sourceList = hasIncoming
-        ? incoming
-        : (BUILTIN_ECHO_CARDS || [])
-      if (!Array.isArray(sourceList) || sourceList.length === 0) {
-        return { success: false, code: 'NO_BUILTIN_ECHO_CARDS' }
+      if (!hasIncoming) {
+        return { success: false, code: 'NO_BUILTIN_ECHO_CARDS', message: 'renderer payload.builtins is required and must be a non-empty array' }
       }
+      const sourceList = incoming
       const now = Date.now()
       // 取 renderer 推过来的内置 id 集合（与 main 镜像 id 完全等价，因为内置 echo id 是稳定的）
       const builtinIds = new Set(sourceList.map(e => e && e.id).filter(Boolean))
@@ -3271,9 +3267,9 @@ function registerDatabaseHandlers() {
       }
       saveDatabase()
       log.info(
-        `[DB] Reset echoes: re-inserted ${sourceList.length} builtins (source=${hasIncoming ? 'renderer' : 'main-fallback'}), kept ${customIds.length} custom`
+        `[DB] Reset echoes: re-inserted ${sourceList.length} builtins (source=renderer), kept ${customIds.length} custom`
       )
-      return { success: true, count: sourceList.length, customKept: customIds.length, source: hasIncoming ? 'renderer' : 'main-fallback' }
+      return { success: true, count: sourceList.length, customKept: customIds.length, source: 'renderer' }
     } catch (error) {
       log.error('[DB] clearEchoes error:', error)
       return { success: false, code: 'CLEAR_ECHOES_FAILED', message: String(error) }

@@ -10,7 +10,6 @@
 
 ```
 scripts/
-├── transform-main-builtin-echoes.js          # renderer → main 端转译（核心）
 ├── tests/                                    # Jest 29 测试用例（v2026-07-29 起，护城河来源）
 │   ├── smoke/
 │   │   └── vue-mount.test.js                 # Jest + Vue 2.7 + jsdom 工具链烟雾
@@ -20,7 +19,7 @@ scripts/
 │   │   ├── runtime-props.test.js             # EchoRuntime props / fallback / graceful skip
 │   │   ├── schema-formcreate-align.test.js   # propsSchema 贴合 form-create rule
 │   │   ├── inherit-from-previous.test.js     # inheritFromPrevious helper 全套语义
-│   │   └── main-builtin-echoes.test.js       # main 端镜像编译 + 与 renderer 一致
+│   │   └── main-builtin-echoes.test.js       # renderer → IPC payload 契约（main 镜像 v2026-07-29 删除）
 │   ├── unit/rune/
 │   │   └── templates.test.js                 # 14 个 rune SFC 模板契约
 │   └── unit/boot/
@@ -40,28 +39,26 @@ scripts/
 
 ## 复用场景与依赖关系
 
-### 场景 1：Renderer → Main 端同步（最常见）
+### 场景 1：Renderer → Main IPC payload 契约（v2026-07-29 起取代旧的"双源镜像"）
 
-**目的**：将 renderer 端 `src/components/echo/echoBuiltins/echoBuiltins.js`（16 张内置回响的聚合入口）转译为 main 端 `src-electron/main-process/service/builtin-echoes.js`，实现 main 进程也能使用相同的内置回响定义。
+**目的**：把 renderer 端 `src/components/echo/echoBuiltins/echoBuiltins.js`（16 张内置回响的聚合入口）通过 IPC 直接推到 main 进程，落 DB。
 
-**执行链**：
+**历史**（v2026-07-29 之前）：renderer 端 ESM 源文件经 `scripts/transform-main-builtin-echoes.js` 转译为 main 端 `src-electron/main-process/service/builtin-echoes.js`（CJS 镜像），main 进程通过 `require('./builtin-echoes').BUILTIN_ECHO_CARDS` 直接读内置 echo 列表。代价：每次改 `echoBuiltins/` 都要记得跑 transform 同步镜像。
 
-```
-scripts/transform-main-builtin-echoes.js
-    ↓ 读取 renderer 端 ESM 源码（按字母序遍历 echoBuiltins/*.js 单文件 + 聚合入口 echoBuiltins.js）
-    ↓ 替换 import → require，export → module.exports
-    ↓ 内联 echoBuiltinsBase.js 工厂（baseRender / createAnnoSource / buildEchoCard）
-    ↓ 每张卡片包成 IIFE 避免 const META 重复声明
-    ↓ 内联 createDefaultEchoAnnoSource 实现（避免跨目录 require）
-    ↓ 末尾追加 module.exports = { BUILTIN_ECHO_CARDS, BUILTIN_ECHO_CHANT_IDS, isBuiltinEchoChantId }
-```
+**现状**（v2026-07-29 起）：main 端**不再维护** `builtin-echoes.js` 镜像，`scripts/transform-main-builtin-echoes.js` 与 `scripts/verify-main-builtin-echoes.js` 已删除。DB 落库完全由 renderer 通过 IPC payload 推送：
 
-**转译步骤**：
-1. 去掉 ES import（`buildEchoCard`、`banner`、`handlerDoc` 等）
-2. 插入 `require('./echoBuiltinsBase.js')` 等内部依赖
-3. 每张卡片（`echoBuiltinsNice.js` / `echoBuiltinsGrowth.js` / ...）包成 IIFE：`(() => { const META = {...}; module.exports.____allCards = [module.exports.____allCards, buildEchoCard(META)] })()`
-4. `export const` → `const`
-5. 末尾追加 `module.exports = { BUILTIN_ECHO_CARDS, BUILTIN_ECHO_CHANT_IDS, isBuiltinEchoChantId }`
+| IPC handler | payload 来源 | 字段含义 |
+|---|---|---|
+| `db:clearEchoes` | `payload.builtins` = renderer 端 `BUILTIN_ECHO_CARDS` 完整数组 | 重置 DB 内置 echo 行（保留自定义） |
+| `db:saveEcho` | `echo` = 单个 echo 对象 | 增/改 echo 行；内置 echo 的 category 直接读 `echo.category`（renderer 真相源） |
+| `db:saveEchoes` | `echoes` = echo 对象数组 | 批量增/改 |
+
+**main 端契约**：
+- `db:clearEchoes`：`payload.builtins` 必传且为非空数组（缺省 → `{ success: false, code: 'NO_BUILTIN_ECHO_CARDS' }`）。
+- `db:saveEcho` / `db:saveEchoes`：内置 echo（id 前缀 `__builtin_`）的 category 直接读 `payload.echo.category`，主进程**不再查内置 meta 表强制覆盖**。`echo.category` 为空时按 id 前缀兜底：`isBuiltin ? 'builtin' : 'marker'`。
+- 启动期"内置 echo showy/marker 类纠正"迁移已删除——历史脏数据由 renderer 端 `loadEchoes` 通过 `{ ...template, ...override }` 自然覆盖（DB 行的 category 永远是代码版默认值）。
+
+**Jest 护城河**：`tests/unit/echo/main-builtin-echoes.test.js` 锁住 renderer 端 `BUILTIN_ECHO_CARDS` 具备完整 IPC payload 字段（`id` / `name` / `desc` / `icon` / `color` / `category` / `anno_source` / `isBuiltin` / `metaId`），并校验 `id` 形态（`__builtin_*__`）、`category` enum（`showy` / `builtin`）、`anno_source` 顶层 type 三态合法、`kind` 不再出现、可被 `new Function(prelude + source)` 编译。
 
 ### 场景 2：验证脚本的公共逻辑
 
@@ -76,15 +73,20 @@ const HANDLER_PRELUDE = "const $ = (typeof window !== 'undefined' && (window.jQu
 
 handler body 统一用 jQuery（`$ = window.jQuery`）。Node 端 `$` 退化为 `null`，但 `render(props)` 不依赖 `$`，`afterRender` 报错由 `EchoRuntime._doAfterRender` try-catch 兜住（graceful skip）。
 
-**公共验证逻辑**：
+**公共验证逻辑**（Jest 29 套件对应表）：
 
-| 检查项 | verify-main | verify-jquery | verify-afterrender |
-|-------|------------|---------------|-------------------|
-| 编译通过 | ✅ | ✅ | - |
-| render() 返回 string | ✅ | ✅ | - |
-| afterRender 是函数 | ✅ | ✅ | - |
-| jQuery 化（无 native fallback） | - | ✅ | ✅ |
+| 检查项 | main-builtin-echoes | jquery-echo-compile | jquery-afterrender |
+|-------|---------------------|---------------------|--------------------|
+| anno_source 能被 `new Function()` 编译 | ✅ | ✅ | - |
+| 顶层 type 三态合法（echo / echo-chant / echo-tbd） | ✅ | ✅ | - |
+| `kind` 字段已合并到 type（不再出现） | ✅ | ✅ | - |
+| `render({})` 返回 string | ✅ | ✅ | - |
+| `afterRender` 是函数（type=echo-chant 必填） | ✅ | ✅ | - |
+| jQuery 化（无 native fallback） | - | - | ✅ |
 | afterRender 直接用 `$()` | - | - | ✅ |
+| IPC payload 字段完整（id / name / desc / icon / color / category / anno_source / isBuiltin / metaId） | ✅ | - | - |
+| `id` 形态：`__builtin_*__` | ✅ | - | - |
+| `category` enum：`showy` / `builtin` | ✅ | - | - |
 
 ### 场景 3：继承关系验证（verify-inherit-from-previous）
 
@@ -111,9 +113,6 @@ handler body 统一用 jQuery（`$ = window.jQuery`）。Node 端 `$` 退化为 
 所有脚本从项目根目录执行：
 
 ```bash
-# 转译 renderer → main
-node scripts/transform-main-builtin-echoes.js
-
 # 验证（已迁移到 Jest 29）
 yarn verify                 # 全部 11 个 suite / 557 个 test
 yarn verify:echo            # 6 个 echo suite
@@ -180,10 +179,10 @@ yarn jest tests/unit/echo   # 任意子集
 
 | 时机 | 跑的脚本 |
 |-----|---------|
-| 修改 `echoBuiltins/` 子目录的卡片 / 工厂后 | `transform-main-builtin-echoes.js` → `verify-main-builtin-echoes.js`（拆分后 transform 会按 `cardFiles.sort()` 自动发现新文件，仍包成 IIFE 避免 `const META` 重复声明） |
-| 修改 `echoRuntime.js` 后 | `verify-inherit-from-previous.js` |
-| 修改 afterRender 签名后 | `verify-jquery-afterrender.js` |
-| 任何 echo 相关改动的最终验证 | 全部跑一遍 |
-| 修改 `boot/globalGlobals.js` 的 require.context 正则后 | `verify-enum-util-regex.js` / `verify-enum-boot-smoke.js` / `verify-util-boot-smoke.js` |
-| `src/utils/enum/` 新增/删除/改名 enum 文件后 | `verify-enum-boot-smoke.js` |
-| `src/utils/util/` 新增/删除/改名 util 文件后 | `verify-util-boot-smoke.js` |
+| 修改 `echoBuiltins/` 子目录的卡片 / 工厂后 | `yarn verify:echo`（Jest 29 直接跑 `main-builtin-echoes.test.js` 校验 IPC payload 契约） |
+| 修改 `echoRuntime.js` 后 | `yarn jest tests/unit/echo/inherit-from-previous.test.js` |
+| 修改 afterRender 签名后 | `yarn jest tests/unit/echo/jquery-afterrender.test.js` |
+| 任何 echo 相关改动的最终验证 | `yarn verify:echo` |
+| 修改 `boot/globalGlobals.js` 的 require.context 正则后 | `yarn jest tests/unit/boot/enum-util-regex.test.js` / `enum-boot-smoke.test.js` / `util-boot-smoke.test.js` |
+| `src/utils/enum/` 新增/删除/改名 enum 文件后 | `yarn jest tests/unit/boot/enum-boot-smoke.test.js` |
+| `src/utils/util/` 新增/删除/改名 util 文件后 | `yarn jest tests/unit/boot/util-boot-smoke.test.js` |

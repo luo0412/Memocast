@@ -791,26 +791,12 @@ export { BUILTIN_ECHO_CARDS, BUILTIN_ECHO_CHANT_IDS, isBuiltinEchoChantId }
 export default BUILTIN_ECHO_CARDS
 ```
 
-### 4.4 主进程镜像（`scripts/transform-main-builtin-echoes.js`）
-
-由于 main 进程没有 ES Module，每个 `echoBuiltins*.js` 文件的 `const META = {...}` 声明会被 IIFE 包裹以避免重名冲突：
-
-```javascript
-// 生成的 src-electron/main-process/service/builtin-echoes.js 形态：
-;(function () {
-  const META = { id: 'growth', name: '生生不息', ... }
-  // ...
-  module.exports = module.exports || {}
-  // 把 buildEchoCard 的结果挂到 __allCards
-})()
-;(function () {
-  const META = { id: 'shatter', ... }
-  // ...
-})()
-// ...
-const __allCards = [/* 16 张 */]
-module.exports = { BUILTIN_ECHO_CARDS: __allCards, ... }
-```
+> **v2026-07-29 起**：main 端**不再维护** `src-electron/main-process/service/builtin-echoes.js` 镜像，`scripts/transform-main-builtin-echoes.js` 也已删除。真相源单一在 renderer 端 `echoBuiltins/`；DB 落库完全由 renderer 通过 IPC payload（`db:clearEchoes` / `db:saveEcho` / `db:saveEchoes`）推送内置 echo 列表，避免双源漂移。
+>
+> main 端 IPC handler 的新契约：
+> - `db:clearEchoes`：`payload.builtins` 必传（renderer 端 `BUILTIN_ECHO_CARDS`），不再有"main 镜像兜底"分支。
+> - `db:saveEcho` / `db:saveEchoes`：内置 echo（id 前缀 `__builtin_`）的 category 直接读 `payload.echo.category`（renderer 真相源）；主进程不再查内置 meta 表强制覆盖。
+> - 启动期"内置 echo showy/marker 类纠正"迁移已删除——历史脏数据由 renderer 端 `loadEchoes` 通过 `{ ...template, ...override }` 自然覆盖（DB 行的 category 永远是代码版默认值）。
 
 ---
 

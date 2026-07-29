@@ -12,8 +12,9 @@ todos:
     content: 在 HelpDialog/新教程面板加「回响/符文演示」入口
     status: pending
   - id: transform-ast-extract
-    content: scripts/transform-main-builtin-echoes.js 改为 AST 抽取，不再硬编码
-    status: pending
+    content: ~~scripts/transform-main-builtin-echoes.js 改为 AST 抽取，不再硬编码~~ —— v2026-07-29 已解决（脚本整体删除，main 端不再维护镜像；DB 落库完全由 IPC payload 推送）
+    status: done
+    note: 解决方案不是 AST 抽取而是删脚本——真相源单一在 renderer 端 echoBuiltins/，main 端 db:clearEchoes / db:saveEcho / db:saveEchoes 直接读 payload。
   - id: rune-vs-echo-i18n
     content: SettingsDialog 在内置面板加 chip「类别: Rune / Echo」
     status: pending
@@ -46,7 +47,7 @@ isProject: false
 - **lucky 真接 AI**：`builtinEchoes.js` 的 lucky `handler` 调 `window.__memocastEchoChantHandlers.lucky`；`Muya.vue` 的 `handleLuckyChantTrigger` 调 [src/services/AiProofreadService.js](src/services/AiProofreadService.js) 走 Portkey AI；失败走 `aiLuckyNoConfig` / `aiLuckyConfigIncomplete` / `aiLuckyFailed` / `aiLuckyNoChange` 四类通知。
 - **scapegoat / calamity**：`builtinEchoes.js` 中两个 rune 的 `handler` 完整实装；前者监听 `window.error`（capture=true）+ `ag:rune:error` 自定义事件，后者按 `intensity` 在 scope 内随机给文本加 `ag-rune-calamity-gothic` 类。
 - **i18n 收口**：`runeBuiltin*` 已全部改名为 `echoBuiltin*`（中英各 20 条），`SettingsDialog.vue` 内置卡片已引用 desc。
-- **main 端 CJS**：[scripts/transform-main-builtin-echoes.js](scripts/transform-main-builtin-echoes.js) + [scripts/verify-main-builtin-echoes.js](scripts/verify-main-builtin-echoes.js) 完成转译与回归校验。
+- **main 端数据流**（v2026-07-29 起）：renderer 端 echoBuiltins/ 是真相源；DB 落库完全由 renderer 通过 IPC payload（`db:clearEchoes` / `db:saveEcho` / `db:saveEchoes`）推送；main 进程不再维护 `builtin-echoes.js` 镜像，相应 `transform-main-builtin-echoes.js` + `verify-main-builtin-echoes.js` 已删除。
 
 ### 待办（见文末）
 
@@ -240,7 +241,7 @@ isProject: false
 | 1 | lucky 校对后整篇替换 markdown，无 diff 预览 / 无导航跳转 | 早期规划 vs 实际实现 | 改造 `handleLuckyChantTrigger`：先做 markdown diff 再插入 + 高亮 + 跳转（见 todos `lucky-diff-preview`） |
 | 2 | Header.vue 无 AI 校对入口 | 早期规划遗漏 | 增设 Header 的 lucky 入口，作为 Muya 全局回调的替代/补充（见 `header-ai-entry`） |
 | 3 | 教程页 demo 入口未做 | demo-roadmap 风险表 | HelpDialog 或新教程面板加「回响/符文演示」入口，一键插入示例 markdown（见 `tutorial-page-demo`） |
-| 4 | `transform-main-builtin-echoes.js` 硬编码 `createDefaultEchoAnnoSource` 源码字符串 | demo-roadmap 风险表 | 改为 AST 抽取：从 `EchoRuntime.js` 读 `DEFAULT_ECHO_ANNO_SOURCE` 常量后做语法树抽取（见 `transform-ast-extract`） |
+| 4 | ~~`transform-main-builtin-echoes.js` 硬编码 `createDefaultEchoAnnoSource` 源码字符串~~ | demo-roadmap 风险表 | **已解决**（v2026-07-29 删脚本 + 删 main 镜像；详见 `transform-ast-extract`） |
 | 5 | SettingsDialog 中文 i18n 把 rune 与 echo 混用（无类别 chip） | demo-roadmap 风险表 | 在内置面板加 chip「类别：Rune / Echo」（见 `rune-vs-echo-i18n`） |
 | 6 | ECHO_EVENTS bus 与 `window.__memocastEchoChantHandlers` 并存 | demo-roadmap 风险表 | 评估两套事件机制统一方案（见 `echo-events-vs-window-handlers`） |
 | 7 | 11 个 rune 的回归测试 10 条人工执行，自动化未做 | demo-roadmap 风险表 | 把 10 条用例迁成 `scripts/regression-echo.js`，可重复执行（见 `regression-suite`） |
@@ -260,6 +261,4 @@ isProject: false
 | 设置页入口 | [src/components/ui/dialog/SettingsDialog.vue](src/components/ui/dialog/SettingsDialog.vue) |
 | AI 校对服务 | [src/services/AiProofreadService.js](src/services/AiProofreadService.js) |
 | i18n 中英 | [src/i18n/zh-cn/components/ui/SettingsDialog.js](src/i18n/zh-cn/components/ui/SettingsDialog.js) / [src/i18n/en-us/components/ui/SettingsDialog.js](src/i18n/en-us/components/ui/SettingsDialog.js) |
-| main 端 CJS 转译 | [scripts/transform-main-builtin-echoes.js](scripts/transform-main-builtin-echoes.js) |
-| main 端 CJS 校验 | [scripts/verify-main-builtin-echoes.js](scripts/verify-main-builtin-echoes.js) |
 | 样式 | `src/css/rune.css`（`ag-rune-*` 段） |
