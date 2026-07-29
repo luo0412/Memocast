@@ -51,13 +51,6 @@ import {
   safeEvalAnnoSource
 } from './echoAnnoSource.js'
 
-const escapeHtml = (value = '') => String(value)
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;')
-
 const safeQueryAll = (root, selector) => {
   if (!root || typeof root.querySelectorAll !== 'function') return []
   try { return Array.from(root.querySelectorAll(selector)) }
@@ -202,15 +195,6 @@ export default class EchoRuntime {
     }
 
     const definition = this.compileDefinition(matchedEcho)
-    console.log('[EchoRuntime.render] entered', {
-      echoName: context.name,
-      echoId: resolvedId,
-      hasDefinition: !!definition,
-      hasRenderFn: typeof definition?.render === 'function',
-      definitionRenderPreview: typeof definition?.render === 'function'
-        ? String(definition.render.toString()).substring(0, 200)
-        : '(no render fn)'
-    })
 
     // === 新结构：finalProps = metadata (type/field/title/version/definitionId)
     //                   ∪ definition.props (卡片声明默认)
@@ -241,19 +225,7 @@ export default class EchoRuntime {
     let afterRenderHook = null
     try {
       if (definition && typeof definition.render === 'function') {
-        console.log('[EchoRuntime.render] calling definition.render', {
-          echoName: context.name,
-          finalPropsKeys: Object.keys(finalProps),
-          hasPropsRender: typeof finalProps.render === 'function',
-          value: finalProps.value,
-          id: finalProps.id
-        })
         const renderedHtml = definition.render(finalProps)
-        console.log('[EchoRuntime.render] definition.render returned', {
-          echoName: context.name,
-          type: typeof renderedHtml,
-          preview: String(renderedHtml || '').substring(0, 200)
-        })
         html = (typeof renderedHtml === 'string') ? renderedHtml : ''
       }
       if (definition && typeof definition.afterRender === 'function') {
@@ -284,22 +256,13 @@ export default class EchoRuntime {
     const rendered = this.render(token, echo)
     const renderedHtml = String(rendered.html || '').trim()
 
-    if (renderedHtml) {
-      // 完全按 definition.render() 的返回值渲染 —— 不包 span、不注入 attrs、不补 class。
-      // 用户最新方案：echo 目前只有一种类型（一种视觉），所以渲染层不要再包壳子。
-      return renderedHtml
-    }
-
-    // 默认占位渲染（render 没返回 html 时才用得着）
-    const icon = escapeHtml(rendered.icon || DEFAULT_ECHO_ICON)
-    const color = escapeHtml(rendered.color || DEFAULT_ECHO_COLOR)
-    const title = escapeHtml(rendered.title || '回响')
-    const description = escapeHtml(rendered.description || '')
-    const prompt = escapeHtml(rendered.prompt || '')
-    const descriptionHtml = description ? `<div class="ag-echo-inline__desc">${description}</div>` : ''
-    const promptHtml = prompt ? `<div class="ag-echo-inline__prompt">${prompt}</div>` : ''
-
-    return `<span class="ag-echo-inline ag-echo-anno-token" data-echo-inline="true" data-echo-name="${escapeHtml(token?.echoName || echo?.name || '')}" data-echo-id="${escapeHtml(token?.echoId || echo?.id || '')}" data-echo-definition-id="${escapeHtml(token?.propsParsed?.definitionId || echo?.id || '')}" data-echo-value="${escapeHtml(rendered.value || rendered.prompt || '')}" style="--echo-color:${color}"><span class="ag-echo-inline__badge"><i class="material-icons ag-echo-inline__icon">${icon}</i><span class="ag-echo-inline__title">${title}</span></span><span class="ag-echo-inline__body">${descriptionHtml}${promptHtml}</span></span>`
+    // 一致性原则（v2026-07-29 起）：
+    //   - render() 返回了非空字符串 → 完全采纳，渲染层用这段 HTML 覆盖 host；
+    //   - render() 没写 / 抛错 / 返回空 → 返回空字符串，让 renderEchoPlaceholders 跳过 host.innerHTML 赋值，
+    //     保留 echoAnno.js 输出的 @xxx 圆形胶囊（ag-echo-placeholder-marker）作为兜底。
+    // 不要在这里再拼一个 ag-echo-inline 大卡片，否则同一个 token 在聚焦/失焦切换时会因为
+    // render 成功/失败状态切换而在大卡片和 render 自定义内容之间抖动。
+    return renderedHtml
   }
 
   afterRender (container, options = {}) {
@@ -330,15 +293,33 @@ export default class EchoRuntime {
       if (!definition || typeof definition.afterRender !== 'function') return
 
       let cleanup = null
+      let node = null
       try {
         // props 从 dataset（host 上有 echoValue / echoDefinitionId 等）读取
-        const node = host.firstElementChild || host
+        // === node 的语义（v2026-07-29 起锁定）===
+        // node 必须等于 host 本身（ag-echo-anno-token 那层 outer span），
+        // 这样 handler 拿到的就是「echo rune 实体所在的 DOM 节点」：
+        //   - $(node).prev()            → host 在 line / block 里的前一个 sibling
+        //                                （nice / twinbloom / peek 等需要操作 prev 文本节点）
+        //   - $(node).addClass('...')   → 给 host 加 ag-rune-* 类（CSS hook 的触发点）
+        //   - $(node).closest(...)      → 找 block / document 容器（skywalk / growth）
+        //   - $(node).parent()          → 在 parent 里 find 其它 host（mindsteal / calamity）
+        //
+        // 旧实现 `node = host.firstElementChild || host` 是 v2026-07-29 之前的语义——
+        // 那时 render 输出是裸 `ag-rune ag-rune--xxx` span，host 内部 children 就是这一个；
+        // node = firstElementChild 拿到那个裸 span。
+        // v2026-07-29 起 render 输出改为「与 echoAnno 一致的 marker 包裹」嵌套结构
+        // （marker > at-span + name-span），host.firstElementChild 现在是 marker outer，
+        // handler 拿它去 .prev() 永远拿不到 line 里的前一个文本节点，所有
+        // 「操作 prev sibling」的 handler（nice / twinbloom / peek / growth / ...）都失效。
+        // 把 node 改成 host 本身后这些 handler 才能真正跑起来。
+        node = host
         const props = readEchoPropsFromHost(host)
         cleanup = definition.afterRender(node, props) || null
       } catch (error) {
         console.error('[echoRuntime] afterRender hook failed:', echoName, error)
       }
-      if (typeof cleanup === 'function') {
+      if (typeof cleanup === 'function' && node) {
         installed.push({ node, id: `__afterRender_${echoName}_${echoId}`, cleanup })
         node.__agEchoCleanup = cleanup
       }

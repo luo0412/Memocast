@@ -26,6 +26,7 @@
     "verify:rune": "jest --colors=false tests/unit/rune",
     "verify:blog": "jest --colors=false tests/unit/blog",
     "verify:boot": "jest --colors=false tests/unit/boot",
+    "verify:util": "jest --colors=false tests/unit/util",
     "verify:smoke": "jest --colors=false tests/smoke"
   },
   "dependencies": {

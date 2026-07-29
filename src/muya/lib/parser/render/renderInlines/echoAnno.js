@@ -68,8 +68,29 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
 
   const isHideSelf = instProps.isHideSelf === true || instProps.isHideSelf === 'true'
 
+  // className 决定 cursor 状态（AG_GRAY / AG_HIDE）。但 AG_GRAY ↔ AG_HIDE 会让 vnode.sel 不同，
+  // snabbdom patch 时 sameVnode = false，把 outer span 整个 removeVnode + createElm 替换——
+  // 此时 vnode.children 重建的 marker 与 host.innerHTML 已经写入的 baseRender 标记会按 position diff
+  // 拼接，残留 DOM 造成"失焦 / 聚焦切换时 marker 包裹突变"的视觉跳跃。
+  //
+  // v2026-07-29 起：
+  //   - sel 只放静态 class（ag-echo-anno-token + AG_INLINE_RULE），让 snabbdom sameVnode 稳定，
+  //     outer span patchVnode 复用同一个 DOM 节点；
+  //   - cursor 决定的 className 走 snabbdom 的 class module（{ag-gray: bool, ag-hide: bool}），
+  //     让 class module 动态增减 DOM 的 className —— 但不改变 vnode.sel。
+  //   - 同时给 outer span 一个稳定 key（echoNodeId），snabbdom 同 sel vnode patch 时按 key 锁定 outer。
+  const baseSel = `span.ag-echo-anno-token.${CLASS_OR_ID.AG_INLINE_RULE}`
+  const classModuleMap = {
+    // 两个 cursor state class 互斥：cursor 在 token 里 → ag-gray；不在 → ag-hide。
+    [CLASS_OR_ID.AG_GRAY]: className === CLASS_OR_ID.AG_GRAY,
+    [CLASS_OR_ID.AG_HIDE]: className === CLASS_OR_ID.AG_HIDE
+  }
+
   return [
-    h(`span.${className}.ag-echo-anno-token.${CLASS_OR_ID.AG_INLINE_RULE}`, {
+    h(baseSel, {
+      // 用 echoNodeId 作 key，让 snabbdom 跨 patch 锁定同一 outer span DOM（同 sel + 同 key），
+      // 避免 innerHTML 写入的标记结构被 vnode tree patch 错误地按 position diff 拼接残留。
+      key: echoNodeId,
       dataset,
       attrs: Object.assign(
         {
@@ -79,9 +100,12 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
         },
         echoPropsJson ? { 'data-echo-props-json': echoPropsJson } : {}
       ),
+      // 动态 cursor state class 通过 snabbdom class module 管理
+      class: classModuleMap,
       style: hostStyle
     }, isHideSelf ? [] : [
       h('span.ag-echo-placeholder-marker', {
+        key: '__marker__',
         attrs: {
           contenteditable: 'false'
         }

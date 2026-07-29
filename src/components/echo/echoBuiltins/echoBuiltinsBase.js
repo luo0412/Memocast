@@ -17,31 +17,17 @@ import { banner, handlerDoc } from '../echoBuiltinsShared.js'
 // render(props) 工厂：直接产出 echo host HTML 字符串
 //   - 元数据（type / field / title / version）由 createAnnoSource 顶层写死
 //   - render() 只返回 HTML，不再打包 type/icon/color/... 那些运行时再补
+//   - 内置符文保持简洁：兜底完全交给 muya 渲染层（renderEchoPlaceholders 保留 echoAnno 的 @xxx 胶囊）。
+//     需要兜底时直接 render 返回 null，不要在这里写 fallback 逻辑。
+//
+//   v2026-07-29 起：render 输出与 echoAnno 的 marker vnode 结构**逐节点对齐**，
+//   唯一的差别是 name 节点上加 `ag-rune ag-rune--${meta.id} data-echo-chant-id="${meta.id}"`，
+//   这样 snabbdom patch 时 marker 这个 outer span 与 echoAnno 输出的 vnode 同 tag/class，
+//   patch 不会破坏 marker 结构 —— 避免"聚焦/失焦切换时 marker 胶囊时有时无"的突变。
+//   个性化视觉效果交由 afterRender 给 marker 自身 addClass（CSS 实现）。
 // ---------------------------------------------------------------------------
 const baseRender = (meta = {}) => `render (props = {}) {
-    const metaName = '${meta.name}'
-    console.log('[echoBaseRender]', metaName, 'start', { hasProps: !!props, hasRenderFn: !!(props && typeof props.render === 'function'), propsKeys: props ? Object.keys(props) : [] })
-    // 优先级 1: props.render 是函数且返回非空 → 无条件采纳
-    if (props && typeof props.render === 'function') {
-      let out
-      try {
-        out = props.render(props)
-      } catch (e) {
-        console.error('[echoBaseRender]', metaName, 'props.render threw:', e)
-        out = undefined
-      }
-      console.log('[echoBaseRender]', metaName, 'render returned:', JSON.stringify(out), 'type:', typeof out)
-      if (out != null && String(out) !== '') {
-        console.log('[echoBaseRender]', metaName, '-> ADOPTED (priority 1)')
-        return out
-      }
-      console.log('[echoBaseRender]', metaName, '-> render returned empty/null, falling back')
-    }
-    // 优先级 2/3 兜底: props.title > metaName
-    const displayTitle = (props && props.title) || metaName
-    const idTag = (props && (props.id || props.definitionId)) || metaName
-    console.log('[echoBaseRender]', metaName, '-> FALLBACK', { displayTitle, idTag, propTitle: props && props.title, propId: props && props.id, propDefId: props && props.definitionId })
-    return '<span class="ag-echo-placeholder-marker ag-rune ag-rune--' + idTag + '" data-echo-chant-id="' + idTag + '">' + displayTitle + '</span>'
+    return '<span class="ag-echo-placeholder-marker"><span class="ag-echo-anno-at" contenteditable="false">@</span><span class="ag-echo-anno-name ag-rune ag-rune--${meta.id}" contenteditable="false" data-echo-chant-id="${meta.id}">${meta.name}</span></span>'
   }`
 
 // ---------------------------------------------------------------------------

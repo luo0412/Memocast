@@ -87,5 +87,18 @@ describe('echo/renderer 端 16 张内置 anno_source 编译', () => {
         expect(typeof def.afterRender).toBe('function')
       }
     })
+
+    test('render({}) 输出被 ag-echo-placeholder-marker 外壳包裹（v2026-07-29 起锁定）', () => {
+      // 锁定契约：baseRender 输出的 HTML 必须是 <span class="ag-echo-placeholder-marker"> 内外两层结构，
+      // outer marker 与 echoAnno 的 marker vnode 同 tag/class，确保 snabbdom patch 时 marker 不会被
+      // removeVnodes/addVnodes 全替换 —— 这样聚焦/失焦切换下 marker 胶囊不会"时有时无"。
+      const html = def.render({})
+      expect(typeof html).toBe('string')
+      expect(html.startsWith('<span class="ag-echo-placeholder-marker">')).toBe(true)
+      expect(html).toContain('ag-echo-anno-at')
+      expect(html).toContain('ag-echo-anno-name')
+      expect(html).toContain('ag-rune ag-rune--')
+      expect(html).toContain('data-echo-chant-id=')
+    })
   })
 })

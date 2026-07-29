@@ -8,9 +8,22 @@
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-server-panel'>
       <!-- 笔记同步 -->
-        <SettingsSectionContent v-if='subTab === $enums.ServerSubEnum.Sync' :title="$t('cloudSync')" accent-color='green-7'>
+      <SettingsSectionContent v-if='subTab === $enums.ServerSubEnum.Sync' :title="$t('cloudSync')" accent-color='green-7'>
+        <!-- 同步策略选择 -->
+        <div class='cloud-sync-strategy q-mb-md'>
+          <div class='text-body2 text-weight-medium q-mb-xs'>{{ $t('cloudSyncStrategy') }}</div>
+          <div class='text-caption text-grey-6 q-mb-sm'>{{ $t('cloudSyncStrategyHint') }}</div>
+          <q-option-group
+            v-model='cloudSyncStrategy'
+            :options='cloudSyncStrategyOptionsResolved'
+            color='green-7'
+            type='radio' inline
+          />
+        </div>
+        <q-separator class='q-my-sm' />
+
         <!-- 同步方式选择 -->
-        <div class='cloud-sync-provider q-mb-md'>
+        <div class='cloud-sync-provider q-my-md'>
           <div class='text-body2 text-weight-medium q-mb-xs'>{{ $t('cloudSyncProvider') }}</div>
           <div class='text-caption text-grey-6 q-mb-sm'>{{ $t('cloudSyncProviderHint') }}</div>
           <q-option-group
@@ -173,6 +186,12 @@ export default {
       isSyncing: false,
       syncError: null,
       cdnDepsSaving: false,
+      cloudSyncStrategy: 'offlineFirst',
+      cloudSyncStrategyOptions: [
+        { label: 'cloudSyncStrategyPureOnline', value: 'pureOnline' },
+        { label: 'cloudSyncStrategyOnlineFirst', value: 'onlineFirst' },
+        { label: 'cloudSyncStrategyOfflineFirst', value: 'offlineFirst' }
+      ],
       cloudSyncProviderOptions: [
         { label: 'cloudSyncProviderWizNote', labelKey: true, value: 'wiznote' },
         { label: 'cloudSyncProviderCustomFn', labelKey: true, value: 'customFn' }
@@ -190,6 +209,12 @@ export default {
     },
     accountInfo () {
       return this.cloudSyncLoginState.accountInfo || {}
+    },
+    cloudSyncStrategyOptionsResolved () {
+      return this.cloudSyncStrategyOptions.map(opt => ({
+        ...opt,
+        label: this.$t(opt.label)
+      }))
     },
     cloudSyncProviderOptionsResolved () {
       return this.cloudSyncProviderOptions.map(opt => ({
@@ -250,13 +275,10 @@ export default {
   methods: {
     formatSyncTime (timestamp) {
       if (!timestamp) return this.$t('never')
-      const date = new Date(timestamp)
-      const now = new Date()
-      const diff = now - date
-      if (diff < 60000) return this.$t('justNow') || '刚刚'
-      if (diff < 3600000) return `${Math.floor(diff / 60000)}${this.$t('minutesAgo') || '分钟前'}`
-      if (diff < 86400000) return `${Math.floor(diff / 3600000)}${this.$t('hoursAgo') || '小时前'}`
-      return date.toLocaleDateString()
+      // 文案走 i18n：justNow / minutesAgo / hoursAgo / daysAgo
+      // 复用 src/utils/util/dateUtil.js 的 displayDateElegantly，自动注入 {num} / {plural} 占位符
+      // （直接用 this.$t('minutesAgo') 不会替换 {num}，会出现 "5{num} 分钟前"）
+      return this.$utils.dateUtil.displayDateElegantly(timestamp)
     },
     refreshCloudSyncLoginState () {
       this.cloudSyncLoginState = {

@@ -12,11 +12,16 @@ import { Enum } from 'enum-plus'
 // $enums / $utils / $lodash 由 src/boot/globalGlobals.js 接管（require.context 扫描），
 // 本文件只负责把 enum-plus 的 Enum 函数 expose 给 locale 翻译钩子，不再重复 import 各 enum。
 
-const locale = ClientFileStorage.getItemFromStore('language')
+// 兜底：首次启动 `language` 未存过 → ClientFileStorage.getItemFromStore 返回 undefined。
+// vue-i18n v8 在 locale=undefined 时会 fallback 成内部的 'en-US'（**大写** US），
+// 但 messages 字典的 key 是 'en-us'（小写 us），首启所有 i18n.t 都会返回 key 字符串本身。
+// 这里显式兜底成 'en-us'，跟 availableLocales 对齐。
+const DEFAULT_LOCALE = 'en-us'
+const locale = ClientFileStorage.getItemFromStore('language') || DEFAULT_LOCALE
 Vue.use(VueI18n)
 
 const i18n = new VueI18n({
-  locale: locale,
+  locale,
   fallbackLocale: locale,
   messages,
   availableLocales: ['en-us', 'zh-cn']

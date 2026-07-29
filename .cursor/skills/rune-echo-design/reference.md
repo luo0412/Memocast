@@ -165,7 +165,11 @@ _doAfterRender (container, options = {}) {
 }
 ```
 
-`node` 参数 = host 的 `firstElementChild`，**即 `definition.render(props)` 的输出**。所以 `afterRender` 里 `$(node)` 拿到的就是 `render` 写进去的那个 span。
+`node` 参数 = host 本身（ag-echo-anno-token 那层 outer span），不是 host 的 `firstElementChild`。
+
+v2026-07-29 起锁定：`$(node).prev()` 拿到 host 在 line / block 里的前一个 sibling（nice / twinbloom / peek 这类需要操作 prev 文本节点的 handler 才能真正工作）；`$(node).addClass('...')` 是给 host 加 ag-rune-* 类（CSS hook 触发点）。
+
+旧实现（v2026-07-29 之前）`node = host.firstElementChild || host`，那时 `render` 输出裸 `ag-rune ag-rune--xxx` span，host 内部 children 就是这一个；改 baseRender 让 render 输出嵌套 marker 之后，host.firstElementChild 变成 marker outer，handler 拿它 .prev() 永远空——所以同步把 node 改成 host 本身。
 
 ---
 

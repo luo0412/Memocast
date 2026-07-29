@@ -406,13 +406,6 @@ class StateRender {
       host.setAttribute('contenteditable', 'false')
 
       let innerHtml = ''
-      // 注释保留：调试时把下面 block 解开即可
-      // if (typeof window !== 'undefined' && window.__ECHO_TRACE__ !== false) {
-      //   console.log('[Muya.renderEchoPlaceholders] host', {
-      //     echoName, echoId, definitionId, hasEcho,
-      //     hasAnnoSource: Boolean(echo?.anno_source), echoRuntimeReady: Boolean(echoRuntime)
-      //   })
-      // }
       if (hasEcho && echoRuntime && typeof echoRuntime.renderToHtml === 'function') {
         try {
           const simAttrs = { id: echoId, definitionId, value }
@@ -428,25 +421,22 @@ class StateRender {
             payloadRaw: ''
           }
           const matchedEcho = echo || null
-          innerHtml = echoRuntime.renderToHtml(token, matchedEcho)
-          console.log('[Muya.renderEchoPlaceholders] renderToHtml returned', {
-            echoName,
-            echoId,
-            nodeId,
-            innerHtmlPreview: String(innerHtml || '').substring(0, 300),
-            innerHtmlLen: (innerHtml || '').length
-          })
+          innerHtml = echoRuntime.renderToHtml(token, matchedEcho) || ''
         } catch (error) {
           console.warn('[StateRender.renderEchoPlaceholders] echoRuntime.renderToHtml failed:', error)
           innerHtml = ''
         }
       }
 
-      if (!innerHtml) {
-        innerHtml = this.createEchoPlaceholderMarkup(echo, { ...dataset, hasExplicitWidth, hasExplicitHeight, width, height })
+      // 兜底语义（v2026-07-29 起固定）：
+      //   - render() 返回了非空字符串 → 覆盖 host.innerHTML；
+      //   - render() 没写 / 抛错 / 返回空 → 不覆盖 host.innerHTML，
+      //     保留 echoAnno.js 渲染的 @xxx 圆形胶囊（ag-echo-placeholder-marker）。
+      // 这样同一个 token 在常态行 / 当前行之间切换时，视觉表现完全一致：
+      // 要么是 render 自定义内容，要么是 @xxx 胶囊，不会"突变"。
+      if (innerHtml) {
+        host.innerHTML = innerHtml
       }
-
-      host.innerHTML = innerHtml
       // 在 host 自身打 attr（不污染 innerHTML 里的 render 输出），让 afterRender 能找到 host。
       if (echoName) host.setAttribute('data-echo-name', echoName)
       if (echoId) host.setAttribute('data-echo-id', echoId)

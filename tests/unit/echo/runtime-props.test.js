@@ -325,4 +325,141 @@ describe('echo/echoRuntime 运行时语义', () => {
       expect(decoded.props.inheritFromPrevious).toBe(true)
     })
   })
+
+  // ============================================================================
+  // 8) _doAfterRender：afterRender 成功返回 cleanup 时不抛 ReferenceError
+  //    （v2026-07-29 触发回归发现：try 块里的 `const node` 是 block-scoped，
+  //    离开 try 块进入 installed.push({ node, ... }) 时 node 已不可见，
+  //    浏览器渲染时会抛 "ReferenceError: node is not defined"。
+  //    Node 端 reproduce 不出来，因为 Node 端 jQuery 为 null，handler 抛 NPE 被
+  //    catch 捕获、cleanup 保持 null，永远不进 installed.push 分支。
+  //    这里直接给 host / registry 喂真实能跑通的环境，验证 _doAfterRender）
+  // ============================================================================
+  describe('8) _doAfterRender 在 cleanup=function 时能跑通 installed.push({ node })', () => {
+    test('afterRender 返回 () => {} 不报 ReferenceError: node is not defined', () => {
+      // 用最朴素的 afterRender：不调用 $ / 不调用 node（Node 端没有 jQuery wrapped 实例方法），
+      // 关键是要让 definition.afterRender 返回 function，触发 installed.push({ node, ... }) 分支。
+      const echo = {
+        id: 'tk1', name: 'tk1',
+        type: 'echo-chant', category: 'builtin',
+        anno_source: `export default {
+          type: 'echo-chant', field: 'tk1', title: 'tk1', version: 1,
+          props: {},
+          render (props = {}) { return '<span></span>' },
+          afterRender (node, props = {}) { return function cleanup () {} }
+        }`
+      }
+      const rt = new EchoRuntime({
+        registry: {
+          // _doAfterRender 同时查 getByName 和 getById；两个都给到
+          getByName: (name) => name === 'tk1' ? echo : null,
+          getById: (id) => id === '__builtin_tk1__' || id === 'defId-tk1' ? echo : null
+        }
+      })
+      // 真实 DOM（jsdom 已注入 window.document）
+      const host = document.createElement('div')
+      host.setAttribute('data-echo-host', 'true')
+      host.setAttribute('data-echo-name', 'tk1')
+      host.setAttribute('data-echo-id', '__builtin_tk1__')
+      host.setAttribute('data-echo-definition-id', 'defId-tk1')
+      const child = document.createElement('span')
+      host.appendChild(child)
+      document.body.appendChild(host)
+
+      // 静默 compileDefinition 的 console.error（如果 unsafeEval 失败的话）
+      const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      let installed
+      try {
+        expect(() => {
+          // _doAfterRender 第一参数是根容器（一般是 .mu-editor / contentContainer），
+          // 内部走 safeQueryAll(root, '[data-echo-host="true"]') 找 host。
+          installed = rt._doAfterRender(document.body, { cleanupFirst: false })
+        }).not.toThrow()
+      } finally {
+        errSpy.mockRestore()
+      }
+      expect(Array.isArray(installed)).toBe(true)
+      expect(installed.length).toBe(1)
+      expect(installed[0].id).toBe('__afterRender_tk1___builtin_tk1__')
+      expect(typeof installed[0].cleanup).toBe('function')
+
+      // 反向验证：installed 项里的 node 必须引用 host 本身（v2026-07-29 起锁定）
+      // —— handler 拿到的就是 ag-echo-anno-token 那层 outer span，
+      //    不是 host.firstElementChild（marker outer），这样 .prev() 才能拿到 line 里前一个 sibling。
+      expect(installed[0].node).toBe(host)
+
+      // 清理
+      host.parentNode && host.parentNode.removeChild(host)
+    })
+
+    // v2026-07-29 起契约：handler 拿到的 node 必须是 host（ag-echo-anno-token 那层），
+    // 这样 handler 在 line / block 里能 .prev() 拿到 host 之前的文本节点（nice / twinbloom
+    // / peek 等需要这个语义才能正常工作）。
+    test('handler 拿到的 node 必须是 host 本身：host 之前有 sibling 时 handler 能看到', () => {
+      // 构造一个父节点 + prev 兄弟 + host，让 host 之前真的有 sibling
+      const parent = document.createElement('div')
+      const prev = document.createElement('span')
+      prev.className = 'prev-text'
+      prev.textContent = '前面这段文本'
+      const host = document.createElement('span')
+      host.setAttribute('data-echo-host', 'true')
+      host.setAttribute('data-echo-name', 'tk2')
+      host.setAttribute('data-echo-id', '__builtin_tk2__')
+      host.setAttribute('data-echo-definition-id', 'defId-tk2')
+      const marker = document.createElement('span')
+      marker.className = 'ag-echo-placeholder-marker'
+      host.appendChild(marker)
+      parent.appendChild(prev)
+      parent.appendChild(host)
+      document.body.appendChild(parent)
+
+      let receivedNode = null
+      let receivedNodeTag = null
+      // handler 用全局 node / window 拿到调用进来的 node（不依赖 jQuery 实例方法）
+      const echo = {
+        id: 'tk2', name: 'tk2',
+        type: 'echo-chant', category: 'builtin',
+        anno_source: `export default {
+          type: 'echo-chant', field: 'tk2', title: 'tk2', version: 1,
+          props: {},
+          render (props = {}) { return '<span></span>' },
+          afterRender (node, props = {}) {
+            // 让 node 暴露到 closure：测试外层读 receivedNode
+            globalThis.__lastAfterRenderNode = node
+            return function cleanup () {}
+          }
+        }`
+      }
+      const rt = new EchoRuntime({
+        registry: {
+          getByName: (name) => name === 'tk2' ? echo : null,
+          getById: (id) => id === '__builtin_tk2__' || id === 'defId-tk2' ? echo : null
+        }
+      })
+      const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        expect(() => {
+          rt._doAfterRender(document.body, { cleanupFirst: false })
+        }).not.toThrow()
+      } finally {
+        errSpy.mockRestore()
+      }
+
+      receivedNode = globalThis.__lastAfterRenderNode
+      receivedNodeTag = receivedNode && receivedNode.tagName
+      delete globalThis.__lastAfterRenderNode
+
+      // 契约 1：handler 拿到的 node 必须是 host，不是 marker
+      expect(receivedNode).toBe(host)
+      expect(receivedNodeTag).toBe(host.tagName)
+
+      // 契约 2：handler 用这个 node 去访问 prev sibling 应当能拿到前面的文本
+      // （这里用 native previousElementSibling 验证，handler 内部用 jQuery.prev() 行为一致）
+      expect(host.previousElementSibling).toBe(prev)
+      expect(prev.textContent).toBe('前面这段文本')
+
+      // 清理
+      parent.parentNode && parent.parentNode.removeChild(parent)
+    })
+  })
 })
