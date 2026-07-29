@@ -107,6 +107,7 @@
               <!-- 符文 -->
               <q-tab-panel name='rune' class='q-pa-none'>
                 <SettingsRunePanel
+                  ref='runePanel'
                   :rune-cards='localRuneCards'
                   @update-rune-cards='updateRuneCards'
                   @add-rune='openAddRune'
@@ -632,6 +633,9 @@ export default {
         }
         const filtered = this.localEchoCards.filter(e => !deletableIds.includes(e.id))
         this.updateStateAndStore({ echoCards: filtered })
+        if (this.$refs.echoPanel && typeof this.$refs.echoPanel.exitSelectionMode === 'function') {
+          this.$refs.echoPanel.exitSelectionMode()
+        }
         this.$nextTick(() => {
           bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
         })
@@ -786,6 +790,9 @@ export default {
         }
         const filtered = this.localRuneCards.filter(r => !idsToDelete.includes(r.id))
         this.updateStateAndStore({ runeCards: filtered })
+        if (this.$refs.runePanel && typeof this.$refs.runePanel.exitSelectionMode === 'function') {
+          this.$refs.runePanel.exitSelectionMode()
+        }
       })
     },
     async onRuneSubmit (data) {

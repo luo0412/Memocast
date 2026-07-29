@@ -161,6 +161,8 @@ export default {
   runeInheritFromPreviousLabel: 'Inherit previous line on insert',
   runeInheritFromPreviousHint: 'When enabled, inserting this rune from the quick panel auto-fills its value from the previous non-empty line.',
   selectedCount: '{count} selected',
+  batchDelete: 'Batch Delete',
+  cancelBatchDelete: 'Cancel',
   runeDragTip: 'Drag to reorder',
   runeNameRequired: 'Please enter a rune name',
   runeNameExists: 'A rune with this name already exists. Please choose another name',

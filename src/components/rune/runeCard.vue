@@ -10,7 +10,7 @@
       <q-icon name='verified' size='12px' />
       <span>{{ resolvedBuiltinBadgeLabel }}</span>
     </div>
-    <div v-if='selectable' class='rune-card-select-indicator'>
+    <div v-if='selectable && selectionMode' class='rune-card-select-indicator' @click.stop='$emit("toggle-select", rune.id)'>
       <q-icon :name='selected ? "check_circle" : "radio_button_unchecked"' size='14px' :color='selected ? "primary" : "grey-5"' />
     </div>
     <div class='rune-card-header' :style='headerStyle'>
@@ -119,6 +119,10 @@ export default {
       type: Boolean,
       default: false
     },
+    selectionMode: {
+      type: Boolean,
+      default: false
+    },
     selected: {
       type: Boolean,
       default: false
@@ -191,7 +195,7 @@ export default {
   },
   methods: {
     onCardClick (event) {
-      if (this.selectable) {
+      if (this.selectable && this.selectionMode) {
         event.stopPropagation()
         this.$emit('toggle-select', this.rune.id)
       }

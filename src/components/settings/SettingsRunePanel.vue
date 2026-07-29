@@ -9,7 +9,14 @@
     <div class='settings-rune-panel'>
       <SettingsSectionContent :title='currentCategoryLabel' accent-color='purple-7'>
         <template v-slot:actions>
-          <q-btn dense flat no-caps :label="selected.length > 0 ? $t('selectedCount', { count: selected.length }) : $t('runeCardAdd')" :color='selected.length > 0 ? "negative" : "purple-7"' :icon='selected.length > 0 ? "delete_sweep" : "add"' size='sm' @click='selected.length > 0 ? $emit("batch-delete", selected) : $emit("add-rune")' />
+          <div class='settings-section-actions'>
+            <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("runeCardAdd")' icon='add' color='purple-7' size='sm' @click='$emit("add-rune")' />
+            <template v-else>
+              <q-btn dense flat no-caps :label='$t("cancelBatchDelete")' icon='close' color='grey-6' size='sm' @click='exitSelectionMode' />
+              <q-btn dense flat no-caps :label="$t('selectedCount', { count: selected.length })" icon='delete_sweep' color='negative' size='sm' :disable='selected.length === 0' @click='$emit("batch-delete", [...selected])' />
+            </template>
+            <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("batchDelete")' icon='delete_sweep' color='negative' size='sm' @click='enterSelectionMode' />
+          </div>
         </template>
         <div class='text-caption text-grey-6 q-mb-sm'>
           <q-icon name='drag_indicator' size='xs' /> {{ $t('runeDragTip') }}
@@ -29,7 +36,9 @@
               class='rune-card-item'
               :rune='rune'
               :selectable='true'
+              :selection-mode='selectionMode'
               :selected='selected.includes(rune.id)'
+              :disable-drag='selectionMode'
               @edit='$emit("edit-rune", rune)'
               @delete='$emit("delete-rune", rune)'
               @toggle-select='toggleSelect(rune.id)'
@@ -70,6 +79,7 @@ export default {
     return {
       category: RuneCategoryEnum.General,
       selected: [],
+      selectionMode: false,
       dragFromIndex: null
     }
   },
@@ -97,9 +107,17 @@ export default {
   watch: {
     category () {
       this.selected = []
+      this.selectionMode = false
     }
   },
   methods: {
+    enterSelectionMode () {
+      this.selectionMode = true
+    },
+    exitSelectionMode () {
+      this.selectionMode = false
+      this.selected = []
+    },
     toggleSelect (runeId) {
       const idx = this.selected.indexOf(runeId)
       if (idx >= 0) {
@@ -198,6 +216,12 @@ export default {
 
 .settings-dialog-sep {
   flex-shrink: 0;
+}
+
+.settings-section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .rune-grid {

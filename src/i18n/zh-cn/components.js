@@ -160,6 +160,8 @@ export default {
   runeInheritFromPreviousLabel: '插入时自动继承上一行内容',
   runeInheritFromPreviousHint: '开启后，从快捷面板插入该符文时会自动读取上一非空行的文本作为初始 value。',
   selectedCount: '已选 {count} 项',
+  batchDelete: '批量删除',
+  cancelBatchDelete: '取消',
   runeDragTip: '拖拽可调整顺序',
   runeNameRequired: '请填写符文名称',
   runeNameExists: '符文名称已存在，请换一个名称',

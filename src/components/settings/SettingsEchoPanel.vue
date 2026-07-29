@@ -9,7 +9,16 @@
     <div class='settings-echo-panel'>
       <SettingsSectionContent :title='currentCategoryLabel' accent-color='cyan-7'>
         <template v-slot:actions>
-          <q-btn v-if='!isCurrentCategoryBuiltin' dense flat no-caps :label="selected.length > 0 ? $t('selectedCount', { count: selected.length }) : $t('echoCardAdd')" :color='selected.length > 0 ? "negative" : "cyan-7"' :icon='selected.length > 0 ? "delete_sweep" : "add"' size='sm' @click='selected.length > 0 ? $emit("batch-delete", selected) : $emit("add-echo")' />
+          <div class='settings-section-actions'>
+            <template v-if='!isCurrentCategoryBuiltin'>
+              <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("echoCardAdd")' icon='add' color='cyan-7' size='sm' @click='$emit("add-echo")' />
+              <template v-else>
+                <q-btn dense flat no-caps :label='$t("cancelBatchDelete")' icon='close' color='grey-6' size='sm' @click='exitSelectionMode' />
+                <q-btn dense flat no-caps :label="$t('selectedCount', { count: selected.length })" icon='delete_sweep' color='negative' size='sm' :disable='selected.length === 0' @click='$emit("batch-delete", [...selected])' />
+              </template>
+              <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("batchDelete")' icon='delete_sweep' color='negative' size='sm' @click='enterSelectionMode' />
+            </template>
+          </div>
         </template>
         <div v-if='isCurrentCategoryBuiltin && isProd' class='text-caption text-grey-6 q-mb-sm'>
           <q-icon name='info' size='xs' /> {{ $t('echoBuiltinCategoryHint') }}
@@ -33,13 +42,14 @@
               class='rune-card-item'
               :rune='echo'
               :selectable='!echo.isBuiltin'
+              :selection-mode='selectionMode'
               :selected='selected.includes(echo.id)'
               :name-label='$t("echoCardName")'
               :desc-label='$t("echoCardDesc")'
               :edit-label='$t("echoCardEdit")'
               :delete-label='$t("echoCardDelete")'
               :disable-delete='echo.isBuiltin'
-              :disable-drag='echo.isBuiltin'
+              :disable-drag='echo.isBuiltin || selectionMode'
               :is-builtin='echo.isBuiltin'
               :view-only='echo.isBuiltin && isProd'
               :i18n-desc-key='echoI18nDescKey(echo)'
@@ -82,6 +92,7 @@ export default {
     return {
       category: EchoCategoryEnum.Marker,
       selected: [],
+      selectionMode: false,
       dragFromIndex: null
     }
   },
@@ -130,9 +141,17 @@ export default {
   watch: {
     category () {
       this.selected = []
+      this.selectionMode = false
     }
   },
   methods: {
+    enterSelectionMode () {
+      this.selectionMode = true
+    },
+    exitSelectionMode () {
+      this.selectionMode = false
+      this.selected = []
+    },
     toggleSelect (echoId) {
       const idx = this.selected.indexOf(echoId)
       if (idx >= 0) {
@@ -247,6 +266,12 @@ export default {
 
 .settings-dialog-sep {
   flex-shrink: 0;
+}
+
+.settings-section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .rune-grid {
