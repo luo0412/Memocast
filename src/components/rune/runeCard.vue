@@ -69,7 +69,7 @@ const getRuneInitial = rune => {
 }
 
 export default {
-  name: 'RuneCard',
+  name: 'runeCard',
   props: {
     rune: {
       type: Object,

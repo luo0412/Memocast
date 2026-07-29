@@ -55,7 +55,7 @@ import { createBlankTemplate, createInheritDemoTemplate } from './rune-templates
 import runeTemplateService from 'src/services/RuneTemplateService'
 
 export default {
-  name: 'RuneFormEditor',
+  name: 'runeFormEditor',
   components: { CategoryPicker },
   props: {
     template: {

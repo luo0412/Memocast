@@ -22,7 +22,7 @@
         <q-card-section class='rune-form-body'>
           <div class='rune-form-content'>
             <!-- 左侧表单区域 -->
-            <rune-form-fields
+            <runeFormFields
               :form='form'
               :mode='mode'
               @update:form='val => form = val'
@@ -30,7 +30,7 @@
             />
 
             <!-- 右侧编辑器区域 -->
-            <rune-form-editor
+            <runeFormEditor
               ref='runeFormEditor'
               :form-data='form'
               :template='form.template'
@@ -50,7 +50,7 @@
     </q-dialog>
 
     <!-- 远端导入弹框 -->
-    <remote-rune-import-dialog
+    <remoteRuneImportDialog
       v-model='remoteImportDialogVisible'
       :url='remoteImportUrl'
       :category='remoteImportCategory'
@@ -67,9 +67,9 @@ import { RuneCategoryEnum } from 'src/utils/enum'
 import { createBlankTemplate, createInheritDemoTemplate } from './rune-templates.js'
 import runeTemplateService from 'src/services/RuneTemplateService'
 
-import RuneFormFields from './RuneFormFields.vue'
-import RuneFormEditor from './RuneFormEditor.vue'
-import RemoteRuneImportDialog from './RemoteRuneImportDialog.vue'
+import runeFormFields from './runeFormFields.vue'
+import runeFormEditor from './runeFormEditor.vue'
+import remoteRuneImportDialog from './remoteRuneImportDialog.vue'
 
 const createUuid = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -94,15 +94,15 @@ const createRuneForm = (rune = {}, defaultCategory = RuneCategoryEnum.General) =
 })
 
 export default {
-  name: 'RuneFormDialog',
+  name: 'runeFormDialog',
   model: {
     prop: 'value',
     event: 'input'
   },
   components: {
-    RuneFormFields,
-    RuneFormEditor,
-    RemoteRuneImportDialog
+    runeFormFields,
+    runeFormEditor,
+    remoteRuneImportDialog
   },
   props: {
     value: {

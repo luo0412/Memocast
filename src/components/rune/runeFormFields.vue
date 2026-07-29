@@ -139,7 +139,7 @@ const ICON_NAME_MAP = {
 }
 
 export default {
-  name: 'RuneFormFields',
+  name: 'runeFormFields',
   props: {
     form: {
       type: Object,

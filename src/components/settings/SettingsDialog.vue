@@ -129,7 +129,7 @@
       v-model='navigationDialogVisible'
       @go-config='onNavigationGoConfig'
     />
-    <RuneFormDialog
+    <runeFormDialog
       v-if='runeFormVisible'
       :key='runeFormKey'
       v-model='runeFormVisible'
@@ -166,8 +166,8 @@ import { createNamespacedHelpers } from 'vuex'
 import { Loading } from 'quasar'
 import ImageUploadServiceDialog from '../image/ImageUploadServiceDialog.vue'
 import UpdateDialog from 'components/update/UpdateDialog'
-import RuneCard from 'components/rune/RuneCard'
-import RuneFormDialog from 'components/rune/RuneFormDialog'
+import runeCard from 'components/rune/runeCard'
+import runeFormDialog from 'components/rune/runeFormDialog'
 import echoFormDialog from 'components/echo/echoFormDialog'
 import NoteTemplateFormDialog from 'components/noteTemplate/NoteTemplateFormDialog'
 import NavigationDialog from 'components/navigation/NavigationDialog'
@@ -205,8 +205,8 @@ export default {
   components: {
     ImageUploadServiceDialog,
     UpdateDialog,
-    RuneCard,
-    RuneFormDialog,
+    runeCard,
+    runeFormDialog,
     echoFormDialog,
     NoteTemplateFormDialog,
     NavigationDialog,

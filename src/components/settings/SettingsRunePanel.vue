@@ -25,7 +25,7 @@
             @drop='onDrop($event, index)'
             @dragend='onDragEnd($event)'
           >
-            <RuneCard
+            <runeCard
               class='rune-card-item'
               :rune='rune'
               :selectable='true'
@@ -48,7 +48,7 @@
 <script>
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
-import RuneCard from 'components/rune/RuneCard'
+import runeCard from 'components/rune/runeCard'
 import { RuneCategoryEnum } from 'src/utils/enum'
 
 const resolveRuneCategory = (raw) => RuneCategoryEnum.has(raw) ? raw : RuneCategoryEnum.General
@@ -58,7 +58,7 @@ export default {
   components: {
     CategoryTabs,
     SettingsSectionContent,
-    RuneCard
+    runeCard
   },
   props: {
     runeCards: {

@@ -29,7 +29,7 @@
             @drop='onDrop($event, index)'
             @dragend='onDragEnd($event)'
           >
-            <RuneCard
+            <runeCard
               class='rune-card-item'
               :rune='echo'
               :selectable='!echo.isBuiltin'
@@ -61,7 +61,7 @@
 <script>
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
-import RuneCard from 'components/rune/RuneCard'
+import runeCard from 'components/rune/runeCard'
 import { EchoCategoryEnum } from 'src/utils/enum'
 import { normalizeEchoCategory } from 'src/utils/const/runeEchoCategoryLogic'
 
@@ -70,7 +70,7 @@ export default {
   components: {
     CategoryTabs,
     SettingsSectionContent,
-    RuneCard
+    runeCard
   },
   props: {
     echoCards: {

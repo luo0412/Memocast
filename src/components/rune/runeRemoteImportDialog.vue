@@ -178,7 +178,7 @@
 
 <script>
 export default {
-  name: 'RemoteRuneImportDialog',
+  name: 'remoteRuneImportDialog',
   model: {
     prop: 'value',
     event: 'input'
