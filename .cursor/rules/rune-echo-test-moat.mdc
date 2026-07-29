@@ -1,5 +1,5 @@
 ---
-description: 符文 / 回响 / 云函数的 verify 脚本是 AI 时代的契约护城河 —— 必须维护、必须跑、必须扩
+description: 符文 / 回响 / 云函数 的 Jest 测试用例是 AI 时代的契约护城河 —— 必须维护、必须跑、必须扩
 alwaysApply: true
 ---
 
@@ -7,81 +7,90 @@ alwaysApply: true
 
 > **AI 时代，测试用例才是真正的护城河。**
 >
-> 代码会被重构、命名会改、字段会搬——只要 verify 脚本锁住了"事实契约"，下游消费者永远安全。
+> 代码会被重构、命名会改、字段会搬——只要 Jest 锁住了"事实契约"，下游消费者永远安全。
 >
-> 本规则约束 rune / echo / 云函数 三类试验特性的 verify 脚本（位于 `scripts/verify-*.js`）的**维护义务**：什么时候必须加、什么时候必须跑、什么时候必须改。
+> v2026-07-29 起，**所有契约测试用例均迁入 Jest 29**（位于 `tests/unit/` + `tests/smoke/`），旧的 `scripts/verify-*.js` 保留 1 周作为过渡期，过后删除。
+>
+> 本规则约束 rune / echo / 云函数 三类试验特性的 Jest 用例的**维护义务**：什么时候必须加、什么时候必须跑、什么时候必须改。
 
 ---
 
 ## 1. 适用范围
 
-| 特性 | 主战场 | verify 脚本覆盖 |
+| 特性 | 主战场 | Jest 用例覆盖 |
 |---|---|---|
-| **符文（Rune）** | `src/components/rune/`、`src/components/muya/Muya.vue` | `verify-rune-templates.js` |
-| **回响（Echo）** | `src/components/echo/`、`src/muya/lib/parser/render/index.js`、`src-electron/main-process/service/builtin-echoes.js` | `verify-jquery-echo-compile.js`、`verify-jquery-afterrender.js`、`verify-echo-runtime-props.js`、`verify-main-builtin-echoes.js` |
-| **云函数** | `src/utils/cloud-router.js`、`src/services/cloud/`、`src/components/ui/dialog/CloudFnConfigDialog.vue` | （目前**没有**专门的云函数 verify 脚本——见 §5） |
-| **跨三特性公共** | `src/components/echo/echoInherit.js`、`src/components/echo/echoPayloadCodec.js`、`src/components/echo/echoCore.js` | `verify-inherit-from-previous.js` |
+| **符文（Rune）** | `src/components/rune/`、`src/components/muya/Muya.vue` | `tests/unit/rune/templates.test.js` |
+| **回响（Echo）** | `src/components/echo/`、`src/muya/lib/parser/render/index.js`、`src-electron/main-process/service/builtin-echoes.js` | `tests/unit/echo/jquery-echo-compile.test.js`、`tests/unit/echo/jquery-afterrender.test.js`、`tests/unit/echo/runtime-props.test.js`、`tests/unit/echo/main-builtin-echoes.test.js`、`tests/unit/echo/schema-formcreate-align.test.js` |
+| **云函数** | `src/utils/cloud-router.js`、`src/services/cloud/`、`src/components/ui/dialog/CloudFnConfigDialog.vue` | （目前**没有**专门的云函数 jest 用例——见 §5） |
+| **跨三特性公共** | `src/components/echo/echoInherit.js`、`src/components/echo/echoPayloadCodec.js`、`src/components/echo/echoCore.js` | `tests/unit/echo/inherit-from-previous.test.js` |
+| **工具链（Vue 2.7 + Jest 29）** | `tests/fixtures/jquery-setup.js`、`jest.config.js`、`babel.config.test.js` | `tests/smoke/vue-mount.test.js` |
 
 ---
 
 ## 2. 核心原则（一句话）
 
-> **任何对 rune / echo / 云函数的实质性改动，必须同步更新 verify 脚本；任何 verify 脚本的失败，必须当作破坏性 bug 处理，不能静默放行。**
+> **任何对 rune / echo / 云函数的实质性改动，必须同步更新 Jest 用例；任何用例的失败，必须当作破坏性 bug 处理，不能静默放行。**
 
 ---
 
-## 3. 必须维护的 verify 脚本清单
+## 3. 必须维护的护城河清单
 
-### 3.1 当前已有的护城河（v2026-07-28 起）
+### 3.1 当前已有的护城河（v2026-07-29 迁移到 Jest 之后）
 
-| 脚本 | 锁定的契约 | 触发失败的典型改动 |
+| 用例 | 锁定的契约 | 触发失败的典型改动 |
 |---|---|---|
-| `verify-echo-runtime-props.js` | `definition.render(props)` / `definition.afterRender(node, props)` 真的能拿到参数；props 合并顺序；fallback 路径（no anno_source / compile fail / render throws / echo 未注册）；graceful skip（未知 type）；payload round-trip | 改 HANDLER_PRELUDE 让 compile 失败、动 `finalProps` 合并顺序、删 fallback、误把 `$emit('input', ...)` 改成别的通道 |
-| `verify-jquery-echo-compile.js` | 16 张内置 anno_source **顶层结构**（`type` / `field` / `title` / `version` / `props`）；`render` 必须返回 string；`type=echo-chant` 必须有 `afterRender`；**`kind` 字段不能再出现**（已合并到 `type`） | 改 `createAnnoSource` 拼装模板时漏字段、改 `baseRender` 让它返回 object、改 type 三态分类 |
-| `verify-jquery-afterrender.js` | 16 张 handlerBody 用 `$(node)` 直 jQuery 化；无 native fallback（`document.querySelector` / `.classList.add` / `.previousElementSibling` / `.style.x = `）；`echoAnnoSource.js` 导出 `HANDLER_PRELUDE` / `createDefaultEchoAnnoSource`；旧命名 `safeDollarRef` / `createDefaultChantAnnoSource` 不再出现 | 给 handlerBody 偷加原生兜底、改 HANDLER_PRELUDE 不再注入 $、把 `createDefaultEchoAnnoSource` 改名 |
-| `verify-main-builtin-echoes.js` | main 端 CJS 镜像里 16 张卡的 anno_source **类型契约**与 renderer 端一致；`type` 三态合法；`kind` 不再出现 | 改 renderer 端 echoBuiltins.js 但忘了跑 `transform-main-builtin-echoes.js` 同步镜像；或 transform 脚本里的 import/export 正则坏掉 |
-| `verify-rune-templates.js` | 14 个内置 rune SFC 模板的**源文件级转义**（`</script>` 必须写成 `<\/script>`，否则 .vue 文件 import 时会被截断）；运行时**语法可编译**；**`props.value` 必须声明**（`mountRuneVueHosts` 硬约定）；非纯展示型 rune 必须有 `$emit('input', ...)` 回写通道 | 在 rune-templates.js 源文件里直接写 `</script>`；删 props.value；改 `$emit('input')` 为别的通道 |
-| `verify-inherit-from-previous.js` | `isInheritFromPreviousEnabled` 各种 truthy 形式；`echoInheritFromPrevious` 看顶层 + `echo.props`；`extractPrevEchoTokenValue` 按 echoName 过滤；`encodeEchoPayload` / `decodeEchoPayload` round-trip；`createEchoPlaceholderPayload` 注入 `definitionId` / `title` / `inheritFromPrevious` 标记 | 改 inherit helper 真值表；把 `decodeEchoPayload` 输出形态从 `{ version, prompt, props }` 改成 `{ version, prompt, attrs }` |
-| `verify-enum-boot-smoke.js` | `$enums.ServerSubEnum` / `$enums.AiSubEnum` / `$enums.runeEchoCategoriesEnum` / `$enums.noteOrderTypeEnum` 等核心 enum 在 boot 阶段挂载完整 | 改 enum 目录结构、改 enumSetup.js 加载顺序 |
-| `verify-util-boot-smoke.js` | `$utils.emptyUtil.isNullOrEmpty` / `$utils.treeUtil.wizIsPredefinedLocation` / `$utils.dateUtil.displayDateElegantly` 在 boot 阶段挂载完整 | 改 util 文件夹命名 / 改 boot 加载 |
-| `verify-enum-util-regex.js` | 文件命名规范自检：`[a-z]\w*Util.js$` 匹配 / 大驼峰 PascalCase 不匹配 | 改 component-naming.mdc 规范本身 |
+| `tests/unit/echo/runtime-props.test.js` | `definition.render(props)` / `definition.afterRender(node, props)` 真的能拿到参数；props 合并顺序；fallback 路径（no anno_source / compile fail / render throws / echo 未注册）；graceful skip（未知 type）；payload round-trip | 改 HANDLER_PRELUDE 让 compile 失败、动 `finalProps` 合并顺序、删 fallback、误把 `$emit('input', ...)` 改成别的通道 |
+| `tests/unit/echo/jquery-echo-compile.test.js` | 16 张内置 anno_source **顶层结构**（`type` / `field` / `title` / `version` / `props`）；`render` 必须返回 string；`type=echo-chant` 必须有 `afterRender`；**`kind` 字段不能再出现**（已合并到 `type`） | 改 `createAnnoSource` 拼装模板时漏字段、改 `baseRender` 让它返回 object、改 type 三态分类 |
+| `tests/unit/echo/jquery-afterrender.test.js` | 16 张 handlerBody 用 `$(node)` 直 jQuery 化；无 native fallback（`document.querySelector` / `.classList.add` / `.previousElementSibling` / `.style.x = `）；`echoAnnoSource.js` 导出 `HANDLER_PRELUDE` / `createDefaultEchoAnnoSource`；旧命名 `safeDollarRef` / `createDefaultChantAnnoSource` 不再出现 | 给 handlerBody 偷加原生兜底、改 HANDLER_PRELUDE 不再注入 $、把 `createDefaultEchoAnnoSource` 改名 |
+| `tests/unit/echo/main-builtin-echoes.test.js` | main 端 CJS 镜像里 16 张卡的 anno_source **类型契约**与 renderer 端一致；`type` 三态合法；`kind` 不再出现 | 改 renderer 端 echoBuiltins.js 但忘了跑 `transform-main-builtin-echoes.js` 同步镜像；或 transform 脚本里的 import/export 正则坏掉 |
+| `tests/unit/echo/schema-formcreate-align.test.js` | echo propsSchema 贴合 form-create rule：禁止 `placeholder` / `default` 顶层字段、每项 schema 至少含 `type` + `field`、rule 字段必须是 form-create 标准字段、`buildFormCreateRule` 默认值与实例 props 优先级 | 改 schema 项自造 form-create 不认的字段、删 `type` 或 `field`、改 defaultValue 优先级 |
+| `tests/unit/rune/templates.test.js` | 14 个内置 rune SFC 模板的**源文件级转义**（`</script>` 必须写成 `<\/script>`，否则 .vue 文件 import 时会被截断）；运行时**语法可编译**；**`props.value` 必须声明**（`mountRuneVueHosts` 硬约定）；非纯展示型 rune 必须有 `$emit('input', ...)` 回写通道 | 在 rune-templates.js 源文件里直接写 `</script>`；删 props.value；改 `$emit('input')` 为别的通道 |
+| `tests/unit/echo/inherit-from-previous.test.js` | `isInheritFromPreviousEnabled` 各种 truthy 形式；`echoInheritFromPrevious` 看顶层 + `echo.props`；`extractPrevEchoTokenValue` 按 echoName 过滤；`encodeEchoPayload` / `decodeEchoPayload` round-trip；`createEchoPlaceholderPayload` 注入 `definitionId` / `title` / `inheritFromPrevious` 标记 | 改 inherit helper 真值表；把 `decodeEchoPayload` 输出形态从 `{ version, prompt, props }` 改成 `{ version, prompt, attrs }` |
+| `tests/unit/boot/enum-boot-smoke.test.js` | `$enums.ServerSubEnum` / `$enums.AiSubEnum` / `$enums.runeEchoCategoriesEnum` / `$enums.noteOrderTypeEnum` 等核心 enum 在 boot 阶段挂载完整 | 改 enum 目录结构、改 enumSetup.js 加载顺序 |
+| `tests/unit/boot/util-boot-smoke.test.js` | `$utils.emptyUtil.isNullOrEmpty` / `$utils.treeUtil.wizIsPredefinedLocation` / `$utils.dateUtil.displayDateElegantly` 在 boot 阶段挂载完整 | 改 util 文件夹命名 / 改 boot 加载 |
+| `tests/unit/boot/enum-util-regex.test.js` | 文件命名规范自检：`[a-z]\w*Util.js$` 匹配 / 大驼峰 PascalCase 不匹配 | 改 component-naming.mdc 规范本身 |
+| `tests/smoke/vue-mount.test.js` | Jest 29 + @vue/vue2-jest + @vue/test-utils@1.3.6 + jsdom 工具链能在 Vue 2.7 仓库跑通：mount、props、emit、SFC 编译、jQuery 注入 | 升 jest / vue2-jest / @vue/test-utils 时未跑烟雾测试 |
 
 ### 3.2 一键入口
 
 | 命令 | 作用 |
 |---|---|
-| `yarn verify` | 跑全部 verify 脚本（9 个），失败任意一个 exit 1 |
-| `yarn verify:echo` | 只跑 echo 相关（4 个） |
-| `yarn verify:rune` | 只跑 rune 相关（1 个） |
-| `yarn verify:inherit` | 只跑 inherit 相关（1 个） |
-| `yarn verify:main-builtin` | 只跑 main 端镜像（1 个） |
-| `node scripts/verify-runner.js <filter>` | 自定义过滤（脚本名含子串） |
+| `yarn verify` | 跑全部 Jest 用例（11 个 suite / 557+ 个 test），失败任意一个 exit 1 |
+| `yarn verify:echo` | 只跑 echo 相关（6 个 suite） |
+| `yarn verify:rune` | 只跑 rune 相关（1 个 suite） |
+| `yarn verify:boot` | 只跑 boot 扫描相关（3 个 suite） |
+| `yarn verify:smoke` | 只跑工具链烟雾测试（1 个 suite） |
+| `yarn test` / `yarn test:watch` | 走 Jest 默认（色彩开启），开发时 watch |
+| `yarn jest <path>` | 任意子集（`yarn jest tests/unit/echo` / `yarn jest -t "type=echo-chant"`） |
+
+> **过渡期**（v2026-07-29 起 1 周内）：旧的 `node scripts/verify-runner.js` **仍可用**，但跑的是过期脚本，会在 PR 流程里被 `yarn verify` 替代。1 周后删除旧脚本。
 
 ---
 
-## 4. 何时必须更新 verify 脚本
+## 4. 何时必须更新 Jest 用例
 
-### 4.1 触发新增 / 修改 verify 用例
+### 4.1 触发新增 / 修改用例
 
-- **新增 / 删除 / 重命名 anno_source 顶层字段**（如 v2026-07-28 的 `kind` → `type` 合并）→ 必须更新对应 verify 脚本的字段断言
-- **改 `definition.render` / `definition.afterRender` 签名** → `verify-echo-runtime-props.js` 必须跟着改
-- **新增 / 删除内置 rune 模板**（`rune-templates.js` 里加 export）→ 必须更新 `verify-rune-templates.js` 的 `TEMPLATE_NAMES` 列表
-- **改 props 合并优先级 / fallback 策略** → 必须更新 `verify-echo-runtime-props.js` 第 3 节
-- **改 `HANDLER_PRELUDE` 形态**（`$ = window.jQuery` 这种）→ 必须更新 `verify-echo-compile.js` 让 Node 端能跑（fallback）
-- **改 mountRuneVueHosts 对 SFC props 的硬约定**（如要求 `runeId` / `nodeId` 必填）→ 必须更新 `verify-rune-templates.js` 的 props 字段断言
+- **新增 / 删除 / 重命名 anno_source 顶层字段**（如 v2026-07-28 的 `kind` → `type` 合并）→ 必须更新对应 `tests/unit/echo/jquery-echo-compile.test.js` 的字段断言
+- **改 `definition.render` / `definition.afterRender` 签名** → `tests/unit/echo/runtime-props.test.js` 必须跟着改
+- **新增 / 删除内置 rune 模板**（`rune-templates.js` 里加 export）→ 必须更新 `tests/unit/rune/templates.test.js` 的 `TEMPLATE_NAMES` 列表
+- **改 props 合并优先级 / fallback 策略** → 必须更新 `tests/unit/echo/runtime-props.test.js` 第 3 节
+- **改 `HANDLER_PRELUDE` 形态**（`$ = window.jQuery` 这种）→ 必须更新 `tests/unit/echo/jquery-echo-compile.test.js` 让 Node 端能跑（fallback）
+- **改 mountRuneVueHosts 对 SFC props 的硬约定**（如要求 `runeId` / `nodeId` 必填）→ 必须更新 `tests/unit/rune/templates.test.js` 的 props 字段断言
+- **改 Schema 字段标准**（新增 form-create 字段、改禁止的顶层字段）→ 必须更新 `tests/unit/echo/schema-formcreate-align.test.js` 的白名单
 
-### 4.2 触发新增 verify 脚本（新规则）
+### 4.2 触发新增 Jest 用例（新规则）
 
-任何**新出现的契约**（之前没人锁过的），且满足以下条件之一，必须新增脚本：
+任何**新出现的契约**（之前没人锁过的），且满足以下条件之一，必须新增用例：
 
 1. **跨文件、跨模块的语义约定**（如 props 合并顺序、handlerDoc 签名）
 2. **会被未来 agent / 重构改动冲掉的代码模式**（如 `safeDollarRef` 这类容易复活的死代码）
 3. **运行时高风险路径**（compile / render / payload codec）
 4. **AI agent 容易踩坑的边缘 case**（如 fall-through 的 fallback、graceful skip）
 
-### 4.3 触发新增 / 修复 verify 失败
+### 4.3 触发新增 / 修复失败
 
-任何 verify 脚本的 FAIL 输出 = **破坏性 bug 信号**，必须按以下顺序处理：
+任何 Jest 用例的 FAIL 输出 = **破坏性 bug 信号**，必须按以下顺序处理：
 
 1. **先确认是代码 bug 还是测试 bug**：
    - 测试断言过期（被新方案替代）→ 改测试，按 §4.1
@@ -95,32 +104,32 @@ alwaysApply: true
 
 > 这些是**已知**但**还没补**的契约层，列入 backlog：
 
-| 缺口 | 建议 verify 脚本 | 优先级 |
+| 缺口 | 建议 Jest 用例 | 优先级 |
 |---|---|---|
-| 云函数调用链路（`cloud.invoke` / `unwrap` / token 注入） | `verify-cloud-invoke-unwrap.js` | 高（云函数是稳定功能的入口） |
-| Muya parser 里 `echo_anno` 规则正则 | `verify-muya-echo-anno-re.js` | 中 |
-| DB schema 与 `app_state` / `rune` / `echo` 表结构 | `verify-db-schema-rune-echo.js` | 高 |
-| `transform-main-builtin-echoes.js` 的输出与 renderer 端**逐字节一致**（目前只验类型契约，不验字节） | 加 `verify-main-renderer-byte-equal.js` | 中 |
-| `Muya.vue` 的 `createRuneRendererCtor` 输出形态 | `verify-rune-renderer-ctor.js` | 中 |
+| 云函数调用链路（`cloud.invoke` / `unwrap` / token 注入） | `tests/unit/cloud/invoke-unwrap.test.js` | 高（云函数是稳定功能的入口） |
+| Muya parser 里 `echo_anno` 规则正则 | `tests/unit/muya/echo-anno-re.test.js` | 中 |
+| DB schema 与 `app_state` / `rune` / `echo` 表结构 | `tests/unit/db/schema-rune-echo.test.js` | 高 |
+| `transform-main-builtin-echoes.js` 的输出与 renderer 端**逐字节一致**（目前只验类型契约，不验字节） | 加 `tests/unit/echo/main-renderer-byte-equal.test.js` | 中 |
+| `Muya.vue` 的 `createRuneRendererCtor` 输出形态 | `tests/unit/rune/renderer-ctor.test.js` | 中 |
 
-新增 verify 脚本后，必须：
+新增 Jest 用例后，必须：
 1. 更新本规则 §3.1 清单
 2. 在 `package.json` 加对应 `yarn verify:*` 短命令（或合并到现有 filter）
-3. 在 verify-runner.js 的顶部注释里同步登记
+3. 如属 echo / rune / boot 三大类，落到对应 `tests/unit/` 子目录
 
 ---
 
 ## 6. 禁止的反模式
 
 ```javascript
-// ❌ 禁止：为了"通过 verify"而删用例
-// （verify-jquery-echo-compile.js 里看到 16/16 通过，但实际只跑了 8 张卡——这种"凑数"绝对禁止）
+// ❌ 禁止：为了"通过 jest"而删用例
+// （jquery-echo-compile.test.js 里看到 16/16 通过，但实际只跑了 8 张卡——这种"凑数"绝对禁止）
 
-// ❌ 禁止：把 verify 脚本改成"warn 而不 throw"
-process.exit(0) // ← 任何 verify 失败都不允许绕过
+// ❌ 禁止：把用例改成"warn 而不 throw"
+// Jest 中所有 expect 都强制抛错，不需要也不会有"process.exit(0) 绕过"的问题
 
 // ❌ 禁止：把测试断言写成"匹配任意"（如 toMatch(/.*/)）
-check('render 输出 HTML', /.*/.test(html))
+expect(html).toMatch(/.*/)  // ← 永远通过，没意义
 
 // ❌ 禁止：硬编码 16 张卡数量但实际只有 15 张
 // 必须用 BUILTIN_ECHO_CARDS.length 这种动态来源
@@ -132,7 +141,7 @@ check('render 输出 HTML', /.*/.test(html))
 
 1. 我改的是 rune / echo / 云函数相关代码吗？
 2. 这个改动是否会影响 anno_source 顶层结构 / render 签名 / props 合并 / fallback 路径？
-3. 对应的 verify 脚本里是否已经有覆盖？
+3. 对应的 jest 用例里是否已经有覆盖？
 4. 如果没有，按 §4.2 新增一个；如果已有，按 §4.1 更新断言。
 5. 跑 `yarn verify` 整轮确认无回归。
 6. 任何 FAIL 都按 §4.3 处理。
@@ -141,7 +150,7 @@ check('render 输出 HTML', /.*/.test(html))
 
 ## 8. 与其它规则的关系
 
-- **本规则优先于**通用的"测试可有可无"直觉——rune / echo / 云函数的契约**必须有 verify**。
-- **`rune-echo-cloudfn-experimental.mdc`** 仍然适用：本规则负责"测试护城河"，那个规则负责"代码简洁性 / 不背历史包袱"。两者不冲突：可以删兼容分支，但必须删之前用 verify 锁住现状。
-- **`package-manager.mdc`** 仍然适用：依赖用 yarn；新增 verify 脚本不引入新依赖（verify 脚本只用 Node 内置 + 项目已有依赖）。
+- **本规则优先于**通用的"测试可有可无"直觉——rune / echo / 云函数的契约**必须有 jest 用例**。
+- **`rune-echo-cloudfn-experimental.mdc`** 仍然适用：本规则负责"测试护城河"，那个规则负责"代码简洁性 / 不背历史包袱"。两者不冲突：可以删兼容分支，但必须删之前用 jest 锁住现状。
+- **`package-manager.mdc`** 仍然适用：依赖用 yarn；新增 jest 用例不引入新依赖（jest 用例只用 Node 内置 + 项目已有依赖 + jest 29 系列）。
 - **`safe-shell.mdc`** 仍然适用：跑 `yarn verify` 前如有破坏性操作先备份。

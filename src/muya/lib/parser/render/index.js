@@ -378,21 +378,9 @@ class StateRender {
       const lookupKey = echoId ? `id:${echoId}` : echoName
       const echo = echoMap.get(lookupKey) || (echoId ? echoMap.get(echoName) : null) || null
 
-      // 判断是否为 echo-chant 类特效（离析/生生不息等）
-      // anno_source 顶层 type 直接承担分类语义（v2026-07-28 起）
-      const isEchoEffect = (() => {
-        if (!echo) return false
-        const typeFromSource = (() => {
-          try {
-            const src = String(echo.anno_source || echo.template || '')
-            const m = src.match(/type\s*:\s*['"]([^'"]+)['"]/)
-            return m ? m[1] : ''
-          } catch (error) { return '' }
-        })()
-        if (typeFromSource === 'echo-chant' || typeFromSource === 'echo-tbd') return true
-        const dsType = String(dataset.type || '')
-        return dsType === 'echo-chant' || dsType === 'echo-tbd'
-      })()
+      // 只要 echo 在 registry 里找到就走 renderToHtml；目前只有 echo 一种类型，
+      // 旧版的 echo-chant / echo-tbd 分类已合并（v2026-07-29 起）。
+      const hasEcho = !!echo
 
       const cacheKey = JSON.stringify({
         echoName,
@@ -407,8 +395,7 @@ class StateRender {
         hasExplicitWidth,
         hasExplicitHeight,
         width,
-        height,
-        isEchoEffect
+        height
       })
 
       if (this.echoPlaceholderCache.get(host) === cacheKey) {
@@ -422,11 +409,11 @@ class StateRender {
       // 注释保留：调试时把下面 block 解开即可
       // if (typeof window !== 'undefined' && window.__ECHO_TRACE__ !== false) {
       //   console.log('[Muya.renderEchoPlaceholders] host', {
-      //     echoName, echoId, definitionId, isEchoEffect,
+      //     echoName, echoId, definitionId, hasEcho,
       //     hasAnnoSource: Boolean(echo?.anno_source), echoRuntimeReady: Boolean(echoRuntime)
       //   })
       // }
-      if (isEchoEffect && echoRuntime && typeof echoRuntime.renderToHtml === 'function') {
+      if (hasEcho && echoRuntime && typeof echoRuntime.renderToHtml === 'function') {
         try {
           const simAttrs = { id: echoId, definitionId, value }
           const token = {
@@ -442,29 +429,13 @@ class StateRender {
           }
           const matchedEcho = echo || null
           innerHtml = echoRuntime.renderToHtml(token, matchedEcho)
-
-          // 补充 data-echo-chant-props 到第一个 span
-          try {
-            const baselineAttrs = Object.assign({}, simAttrs, {
-              echoName,
-              echoId,
-              definitionId,
-              value: simAttrs.value || value
-            })
-            const attrJson = JSON.stringify(baselineAttrs)
-            if (attrJson) {
-              const escapeOnce = (s) => escapeAttrString(s)
-              const attrStr = `data-echo-chant-props="${escapeOnce(attrJson)}"`
-              innerHtml = innerHtml.replace(
-                /<span\b/,
-                `<span ${attrStr}`,
-                1
-              )
-              if (innerHtml.indexOf('data-echo-chant-props=') === -1) {
-                innerHtml = `<span ${attrStr}>${innerHtml}</span>`
-              }
-            }
-          } catch (error) { /* ignore */ }
+          console.log('[Muya.renderEchoPlaceholders] renderToHtml returned', {
+            echoName,
+            echoId,
+            nodeId,
+            innerHtmlPreview: String(innerHtml || '').substring(0, 300),
+            innerHtmlLen: (innerHtml || '').length
+          })
         } catch (error) {
           console.warn('[StateRender.renderEchoPlaceholders] echoRuntime.renderToHtml failed:', error)
           innerHtml = ''
@@ -476,6 +447,11 @@ class StateRender {
       }
 
       host.innerHTML = innerHtml
+      // 在 host 自身打 attr（不污染 innerHTML 里的 render 输出），让 afterRender 能找到 host。
+      if (echoName) host.setAttribute('data-echo-name', echoName)
+      if (echoId) host.setAttribute('data-echo-id', echoId)
+      if (definitionId) host.setAttribute('data-echo-definition-id', definitionId)
+      host.setAttribute('data-echo-host', 'true')
       host.dataset.echoRenderKey = cacheKey
       this.echoPlaceholderCache.set(host, cacheKey)
     })
@@ -963,6 +939,12 @@ class StateRender {
     const EchoRenderer = this.muya?.options?.echoRendererCtor
     const echoRegistry = this.muya?.options?.echoRegistry
     if (!EchoRenderer || !echoRegistry) return
+    // enableEchoVueRenderer === false 时，renderEchoPlaceholders 已通过 renderToHtml 设置 innerHTML，
+    // 不再走 Vue 组件 mount，避免组件覆盖掉已渲染的 HTML（如 nice222 被 ag-echo-inline-preview 覆盖的问题）。
+    if (!this.muya?.options?.enableEchoVueRenderer) {
+      console.log('[Muya.StateRender.mountEchoVueHosts] skipped — enableEchoVueRenderer is false, renderToHtml handles rendering')
+      return
+    }
 
     const root = document.querySelector(`div#${CLASS_OR_ID.AG_EDITOR_ID}`) || this.container
     if (!root) return

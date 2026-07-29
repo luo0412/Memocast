@@ -10,16 +10,31 @@
 
 ```
 scripts/
-├── transform-main-builtin-echoes.js   # renderer → main 端转译（核心）
-├── verify-main-builtin-echoes.js      # 验证 main 端 builtin-echoes.js 编译正确性
-├── verify-jquery-echo-compile.js      # 验证 renderer 端 builtinEchoes.js 编译正确性
-├── verify-jquery-afterrender.js       # 验证 afterRender 使用 jQuery 而非原生 DOM
-├── verify-inherit-from-previous.js    # 验证「上一节点 value 继承」helper 正确性
-├── verify-enum-util-regex.js          # 直接打 require.context 正则命中情况
-├── verify-enum-boot-smoke.js          # 验证 $enums 扫描正则能命中所有 enum 文件
-├── verify-util-boot-smoke.js          # 验证 $utils 扫描正则能命中所有 util 文件
-└── blog/                              # 博客部署相关脚本
+├── transform-main-builtin-echoes.js          # renderer → main 端转译（核心）
+├── tests/                                    # Jest 29 测试用例（v2026-07-29 起，护城河来源）
+│   ├── smoke/
+│   │   └── vue-mount.test.js                 # Jest + Vue 2.7 + jsdom 工具链烟雾
+│   ├── unit/echo/
+│   │   ├── jquery-echo-compile.test.js       # 16 张内置 anno_source 顶层结构
+│   │   ├── jquery-afterrender.test.js        # handlerBody jQuery 化 + 历史包袱清理
+│   │   ├── runtime-props.test.js             # EchoRuntime props / fallback / graceful skip
+│   │   ├── schema-formcreate-align.test.js   # propsSchema 贴合 form-create rule
+│   │   ├── inherit-from-previous.test.js     # inheritFromPrevious helper 全套语义
+│   │   └── main-builtin-echoes.test.js       # main 端镜像编译 + 与 renderer 一致
+│   ├── unit/rune/
+│   │   └── templates.test.js                 # 14 个 rune SFC 模板契约
+│   └── unit/boot/
+│       ├── enum-boot-smoke.test.js           # $enums 挂载完整性
+│       ├── util-boot-smoke.test.js           # $utils 挂载完整性
+│       └── enum-util-regex.test.js           # 文件命名规范 regex 自检
+├── fixtures/
+│   └── jquery-setup.js                       # jQuery 注入到 globalThis
+├── jest.config.js                            # Jest 29 配置
+├── babel.config.test.js                      # Jest 专用 babel 配置
+└── blog/                                     # 博客部署相关脚本
 ```
+
+> **过渡期（v2026-07-29 起 1 周内）**：旧的 `scripts/verify-*.js` 9 个脚本保留，作为参考。1 周后删除。`yarn verify` 当前已直接走 jest。
 
 ---
 
@@ -102,16 +117,13 @@ const HANDLER_PRELUDE_SOURCE = [
 # 转译 renderer → main
 node scripts/transform-main-builtin-echoes.js
 
-# 验证（Echo）
-node scripts/verify-main-builtin-echoes.js
-node scripts/verify-jquery-echo-compile.js
-node scripts/verify-jquery-afterrender.js
-node scripts/verify-inherit-from-previous.js
-
-# 验证（Boot 扫描正则回归）
-node scripts/verify-enum-util-regex.js
-node scripts/verify-enum-boot-smoke.js
-node scripts/verify-util-boot-smoke.js
+# 验证（已迁移到 Jest 29）
+yarn verify                 # 全部 11 个 suite / 557 个 test
+yarn verify:echo            # 6 个 echo suite
+yarn verify:rune            # 1 个 rune suite
+yarn verify:boot            # 3 个 boot suite
+yarn verify:smoke           # 1 个工具链烟雾 suite
+yarn jest tests/unit/echo   # 任意子集
 ```
 
 ---

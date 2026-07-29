@@ -219,7 +219,7 @@ async function main () {
     anno_source: `export default {
       type: 'echo-chant', field: 'na1', title: 'na1', version: 1,
       props: {},
-      render (props = {}) { return '<span class="ag-rune ag-rune--na1" data-echo-chant-id="na1">na1</span>' }
+      render (props = {}) { return '<span class="ag-echo-placeholder-marker  ag-rune ag-rune--na1" data-echo-chant-id="na1">na1</span>' }
     }`
   }
   const naRendered = runtime.render({ echoName: 'na1' }, noAfterEcho)

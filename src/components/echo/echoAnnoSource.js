@@ -37,7 +37,7 @@ export const createDefaultEchoAnnoSource = (echoName = '回响') => `export defa
   // 卡片外观（icon/color/title/desc）由 EchoRuntime 根据 echo 名片元数据 + props 兜底拼装，
   // render 不再负责卡片元数据拼装，只输出 DOM 片段。
   render (props = {}) {
-    return '<span class="ag-rune ag-rune--default" data-echo-chant-id="回响">${String(echoName || '回响').replace(/'/g, "\\'")}</span>'
+    return '<span class="ag-echo-placeholder-marker ag-rune ag-rune--default" data-echo-chant-id="回响">${String(echoName || '回响').replace(/'/g, "\\'")}</span>'
   },
 
   // === 后渲染钩子：domElement 已插入到 DOM ===

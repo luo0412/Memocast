@@ -1,27 +1,39 @@
 #!/usr/bin/env node
 // ============================================================================
-// verify-runner.js —— 一键跑全部 verify 脚本
+// verify-runner.js —— 【已迁移到 Jest 29 / v2026-07-29】
 //
-//   用法：node scripts/verify-runner.js [filter]
-//     filter 可选：只跑名字含 filter 子串的脚本（不区分大小写）
+//   用法（推荐）：yarn verify      ← 直接走 jest
+//                 yarn verify:echo ← jest tests/unit/echo
+//                 yarn verify:rune ← jest tests/unit/rune
+//                 yarn verify:boot ← jest tests/unit/boot
+//
+//   旧用法（保留 1 周作为过渡期，过后删除）：
+//                 node scripts/verify-runner.js           —— 列出所有 verify 脚本
+//                 node scripts/verify-runner.js echo     —— 跑名字含 echo 的子集
+//                 node scripts/verify-runner.js ruler
 //
 //   设计目标：
 //     - 让 rune / echo / 云函数的 verify 脚本有统一入口
 //     - 按"AI 时代测试即护城河"的定位，每条用例都是契约
 //     - 失败明细全打到 stdout，不静默吞错
 //
-//   当前覆盖（v2026-07-28）：
-//     scripts/verify-echo-runtime-props.js         EchoRuntime props / fallback / graceful skip
-//     scripts/verify-jquery-echo-compile.js        16 张内置 anno_source 顶层结构 + render 返回 string
-//     scripts/verify-jquery-afterrender.js         handlerBody jQuery 直用 + 历史包袱清理
-//     scripts/verify-main-builtin-echoes.js        main 端镜像编译 + 与 renderer 一致
-  //     scripts/verify-echo-schema-formcreate-align.js  echo propsSchema 贴合 form-create rule
-//                                                       （禁止 default/placeholder 顶层字段、规则透传一致性）
-//     scripts/verify-rune-templates.js             14 个 rune SFC 模板：源转义 / script 可编译 / props.value / $emit
-//     scripts/verify-inherit-from-previous.js      inheritFromPrevious helper 全套语义
-//     scripts/verify-enum-boot-smoke.js            $enums 挂载完整性
-//     scripts/verify-util-boot-smoke.js            $utils 挂载完整性
-//     scripts/verify-enum-util-regex.js            文件名命名规范 regex 自检
+//   当前覆盖（v2026-07-29 迁移到 Jest 之后）：
+//     tests/unit/echo/jquery-echo-compile.test.js        16 张内置 anno_source 顶层结构 + render 返回 string
+//     tests/unit/echo/jquery-afterrender.test.js         handlerBody jQuery 直用 + 历史包袱清理
+//     tests/unit/echo/main-builtin-echoes.test.js        main 端镜像编译 + 与 renderer 一致
+//     tests/unit/echo/schema-formcreate-align.test.js    echo propsSchema 贴合 form-create rule
+//     tests/unit/echo/inherit-from-previous.test.js      inheritFromPrevious helper 全套语义
+//     tests/unit/echo/runtime-props.test.js              EchoRuntime props / fallback / graceful skip
+//     tests/unit/rune/templates.test.js                  14 个 rune SFC 模板：源转义 / script 可编译 / props.value / $emit
+//     tests/unit/boot/enum-boot-smoke.test.js            $enums 挂载完整性
+//     tests/unit/boot/util-boot-smoke.test.js            $utils 挂载完整性
+//     tests/unit/boot/enum-util-regex.test.js            文件名命名规范 regex 自检
+//     tests/smoke/vue-mount.test.js                      Jest+Vue 2.7+jsdom 工具链烟雾测试
+//
+//   过渡期安排：
+//     - 9 个旧 verify-*.js 脚本保留在 scripts/ 下，1 周后删除
+//     - 本 runner 仍能用，但跑的就是过时的旧脚本
+//     - 推荐直接用 jest（yarn verify）
 // ============================================================================
 const fs = require('fs')
 const path = require('path')

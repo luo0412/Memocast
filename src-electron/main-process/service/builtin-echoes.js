@@ -24,10 +24,29 @@ const { banner, handlerDoc } = require('./builtin-echo-shared')
 //   - render() 只返回 HTML，不再打包 type/icon/color/... 那些运行时再补
 // ---------------------------------------------------------------------------
 const baseRender = (meta = {}) => `render (props = {}) {
-    const metaId = '${meta.id}'
     const metaName = '${meta.name}'
-    const displayTitle = (props && (props.title || props.name)) || metaName
-    return '<span class="ag-rune ag-rune--' + metaId + '" data-echo-chant-id="' + metaId + '">' + displayTitle + '</span>'
+    console.log('[echoBaseRender]', metaName, 'start', { hasProps: !!props, hasRenderFn: !!(props && typeof props.render === 'function'), propsKeys: props ? Object.keys(props) : [] })
+    // 优先级 1: props.render 是函数且返回非空 → 无条件采纳
+    if (props && typeof props.render === 'function') {
+      let out
+      try {
+        out = props.render(props)
+      } catch (e) {
+        console.error('[echoBaseRender]', metaName, 'props.render threw:', e)
+        out = undefined
+      }
+      console.log('[echoBaseRender]', metaName, 'render returned:', JSON.stringify(out), 'type:', typeof out)
+      if (out != null && String(out) !== '') {
+        console.log('[echoBaseRender]', metaName, '-> ADOPTED (priority 1)')
+        return out
+      }
+      console.log('[echoBaseRender]', metaName, '-> render returned empty/null, falling back')
+    }
+    // 优先级 2/3 兜底: props.title > metaName
+    const displayTitle = (props && props.title) || metaName
+    const idTag = (props && (props.id || props.definitionId)) || metaName
+    console.log('[echoBaseRender]', metaName, '-> FALLBACK', { displayTitle, idTag, propTitle: props && props.title, propId: props && props.id, propDefId: props && props.definitionId })
+    return '<span class="ag-echo-placeholder-marker ag-rune ag-rune--' + idTag + '" data-echo-chant-id="' + idTag + '">' + displayTitle + '</span>'
   }`
 
 // ---------------------------------------------------------------------------

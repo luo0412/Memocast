@@ -202,6 +202,15 @@ export default class EchoRuntime {
     }
 
     const definition = this.compileDefinition(matchedEcho)
+    console.log('[EchoRuntime.render] entered', {
+      echoName: context.name,
+      echoId: resolvedId,
+      hasDefinition: !!definition,
+      hasRenderFn: typeof definition?.render === 'function',
+      definitionRenderPreview: typeof definition?.render === 'function'
+        ? String(definition.render.toString()).substring(0, 200)
+        : '(no render fn)'
+    })
 
     // === 新结构：finalProps = metadata (type/field/title/version/definitionId)
     //                   ∪ definition.props (卡片声明默认)
@@ -232,7 +241,19 @@ export default class EchoRuntime {
     let afterRenderHook = null
     try {
       if (definition && typeof definition.render === 'function') {
+        console.log('[EchoRuntime.render] calling definition.render', {
+          echoName: context.name,
+          finalPropsKeys: Object.keys(finalProps),
+          hasPropsRender: typeof finalProps.render === 'function',
+          value: finalProps.value,
+          id: finalProps.id
+        })
         const renderedHtml = definition.render(finalProps)
+        console.log('[EchoRuntime.render] definition.render returned', {
+          echoName: context.name,
+          type: typeof renderedHtml,
+          preview: String(renderedHtml || '').substring(0, 200)
+        })
         html = (typeof renderedHtml === 'string') ? renderedHtml : ''
       }
       if (definition && typeof definition.afterRender === 'function') {
@@ -264,23 +285,12 @@ export default class EchoRuntime {
     const renderedHtml = String(rendered.html || '').trim()
 
     if (renderedHtml) {
-      const echoName = escapeHtml(token?.echoName || echo?.name || '')
-      const echoId = escapeHtml(token?.echoId || echo?.id || '')
-      const definitionId = escapeHtml(token?.propsParsed?.definitionId || echo?.id || '')
-      const value = escapeHtml(rendered.value || rendered.prompt || '')
-      const injectedAttrs = [
-        `data-echo-inline="true"`,
-        `data-echo-name="${echoName}"`,
-        `data-echo-id="${echoId}"`,
-        `data-echo-definition-id="${definitionId}"`,
-        `data-echo-value="${value}"`
-      ].join(' ')
-      const propsJson = escapeHtml(JSON.stringify(rendered.props || {}))
-      const propsAttr = `data-echo-props="${propsJson}"`
-      return injectAttrsIntoFirstTag(renderedHtml, `${injectedAttrs} ${propsAttr}`, 'ag-echo-inline ag-echo-anno-token')
+      // 完全按 definition.render() 的返回值渲染 —— 不包 span、不注入 attrs、不补 class。
+      // 用户最新方案：echo 目前只有一种类型（一种视觉），所以渲染层不要再包壳子。
+      return renderedHtml
     }
 
-    // 默认占位渲染
+    // 默认占位渲染（render 没返回 html 时才用得着）
     const icon = escapeHtml(rendered.icon || DEFAULT_ECHO_ICON)
     const color = escapeHtml(rendered.color || DEFAULT_ECHO_COLOR)
     const title = escapeHtml(rendered.title || '回响')
@@ -306,10 +316,12 @@ export default class EchoRuntime {
     if (options.cleanupFirst) this.disposeAll(container)
 
     const installed = []
-    safeQueryAll(container, '[data-echo-inline="true"]').forEach(node => {
-      const echoName = node.getAttribute('data-echo-name') || ''
-      const echoId = node.getAttribute('data-echo-id') || ''
-      const definitionId = node.getAttribute('data-echo-definition-id') || ''
+    // 遍历 host（由 renderEchoPlaceholders 打过 data-echo-host="true"），
+    // host 的 innerHTML 是 definition.render() 的原样输出，不注入额外 attr。
+    safeQueryAll(container, '[data-echo-host="true"]').forEach(host => {
+      const echoName = host.getAttribute('data-echo-name') || ''
+      const echoId = host.getAttribute('data-echo-id') || ''
+      const definitionId = host.getAttribute('data-echo-definition-id') || ''
       const matchedEcho = (definitionId && this.registry?.getById?.(definitionId))
         || (echoName && this.registry?.getByName?.(echoName))
         || null
@@ -319,8 +331,9 @@ export default class EchoRuntime {
 
       let cleanup = null
       try {
-        // props 从 DOM 读（_doAfterRender 是延迟回调，render 期的 context.props 已丢失）
-        const props = readEchoPropsFromHost(node)
+        // props 从 dataset（host 上有 echoValue / echoDefinitionId 等）读取
+        const node = host.firstElementChild || host
+        const props = readEchoPropsFromHost(host)
         cleanup = definition.afterRender(node, props) || null
       } catch (error) {
         console.error('[echoRuntime] afterRender hook failed:', echoName, error)
