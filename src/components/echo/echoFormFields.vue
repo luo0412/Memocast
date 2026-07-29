@@ -127,7 +127,7 @@
 import { EchoCategoryEnum } from 'src/utils/enum'
 
 export default {
-  name: 'EchoFormFields',
+  name: 'echoFormFields',
   props: {
     form: {
       type: Object,

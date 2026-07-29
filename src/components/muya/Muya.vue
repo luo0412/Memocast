@@ -42,7 +42,7 @@ import {
   extractPrevEchoTokenValue,
   echoInheritFromPrevious
 } from '../echo/echoCore.js'
-import { CURRENT_ECHO_PLACEHOLDER_RE } from '../echo/builtin-echo-shared.js'
+import { CURRENT_ECHO_PLACEHOLDER_RE } from '../echo/echoBuiltinsShared.js'
 import AiProofreadService from 'src/services/AiProofreadService'
 
 const {

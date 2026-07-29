@@ -106,7 +106,7 @@ import SearchDialog from 'components/search/SearchDialog'
 import microAppDrawer from 'components/microApp/microAppDrawer'
 import DoubaoChatDrawer from 'components/ai/DoubaoChatDrawer'
 import AiDemoDrawer from 'components/ai/AiDemoDrawer'
-import EchoInstanceDialog from 'components/echo/EchoInstanceDialog.vue'
+import echoInstanceDialog from 'components/echo/echoInstanceDialog.vue'
 import HeaderLeftGroup from './HeaderLeftGroup.vue'
 import HeaderRightGroup from './HeaderRightGroup.vue'
 
@@ -133,7 +133,7 @@ export default {
     microAppDrawer,
     DoubaoChatDrawer,
     AiDemoDrawer,
-    EchoInstanceDialog,
+    EchoInstanceDialog: echoInstanceDialog,
     HeaderLeftGroup,
     HeaderRightGroup
   },

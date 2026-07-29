@@ -119,7 +119,7 @@ const inferRuleFromValue = (key, value) => {
 }
 
 export default {
-  name: 'EchoInstanceDialog',
+  name: 'echoInstanceDialog',
   model: {
     prop: 'value',
     event: 'input'

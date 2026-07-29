@@ -12,7 +12,7 @@
 //   7) payload round-trip
 //   8) createEchoPlaceholderPayload 含基础设施字段
 // ============================================================================
-const EchoRuntimeMod = require('../../../src/components/echo/EchoRuntime.js')
+const EchoRuntimeMod = require('../../../src/components/echo/echoRuntime.js')
 const AnnoMod = require('../../../src/components/echo/echoAnnoSource.js')
 const CodecMod = require('../../../src/components/echo/echoPayloadCodec.js')
 
@@ -39,7 +39,7 @@ afterAll(() => {
   errorSpy.mockRestore()
 })
 
-describe('echo/EchoRuntime 运行时语义', () => {
+describe('echo/echoRuntime 运行时语义', () => {
   describe('1) definition.render(props) 真的能拿到 props', () => {
     let def
     beforeAll(() => {

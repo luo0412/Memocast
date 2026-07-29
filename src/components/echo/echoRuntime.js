@@ -39,7 +39,7 @@
 import {
   DEFAULT_ECHO_COLOR,
   DEFAULT_ECHO_ICON
-} from './builtin-echo-shared.js'
+} from './echoBuiltinsShared.js'
 import {
   decodeEchoPayload
 } from './echoPayloadCodec.js'

@@ -12,7 +12,7 @@ const fs = require('fs')
 const path = require('path')
 
 const ROOT_BUILTINS = path.resolve(__dirname, '..', '..', '..', 'src', 'components', 'echo', 'echoBuiltins.js')
-const ROOT_RUNTIME = path.resolve(__dirname, '..', '..', '..', 'src', 'components', 'echo', 'EchoRuntime.js')
+const ROOT_RUNTIME = path.resolve(__dirname, '..', '..', '..', 'src', 'components', 'echo', 'echoRuntime.js')
 const ROOT_ANNOSRC = path.resolve(__dirname, '..', '..', '..', 'src', 'components', 'echo', 'echoAnnoSource.js')
 
 const builtinSrc = fs.readFileSync(ROOT_BUILTINS, 'utf8')
@@ -31,7 +31,7 @@ describe('echo/jQuery 化与历史包袱清理', () => {
       expect(src).not.toMatch(new RegExp(pattern.replace(/[.()]/g, '\\$&')))
     })
 
-    test('EchoRuntime.js 不应再使用 safeDollarRef', () => {
+    test('echoRuntime.js 不应再使用 safeDollarRef', () => {
       expect(runtimeSrc).not.toMatch(/safeDollarRef/)
     })
 

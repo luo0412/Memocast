@@ -56,7 +56,7 @@ description: Memocast Muya 编辑器中 rune（符文）与 echo（回响）的�
 | **作用域隔离** | 每个 rune 用独立 `data-rune-scope-${runeId}` 注入到顶层标签 | 全局样式 `ag-echo-inline` |
 | **数据回写** | `updateRunePlaceholderValue({runeId, nodeId, value})` 改 Markdown 源里的 `data-rune-value` 和 innerText | echo 内容直接编辑 Markdown 源里的 `@xxx{}()` |
 | **典型功能** | 表单输入、图表、复杂交互（el-input、jsxgraph、萤火虫动画） | 改附近元素：动画、布局、克隆、事件响应 |
-| **典型示例** | 用户在 RuneFormDialog 创建的 rune | nice、10 个内置 echo-chant、用户用 EchoFormDialog 创建的 echo |
+| **典型示例** | 用户在 RuneFormDialog 创建的 rune | nice、10 个内置 echo-chant、用户用 echoFormDialog 创建的 echo |
 
 ## Rune 路径详解（Vue SFC + Vue.extend）
 
@@ -139,7 +139,7 @@ updateRunePlaceholderValue ({ runeId, nodeId, value }) {
 
 ## Echo 路径详解（@xxx{}() + handler 改附近元素）
 
-**主文件**: `src/components/ui/editor/echo/EchoRuntime.js`
+**主文件**: `src/components/echo/echoRuntime.js`
 
 ### 1. 占位符格式
 
@@ -306,11 +306,11 @@ handler 影响附近元素的范围（resolveScopeContainer）：
 | 文件 | 职责 |
 |------|------|
 | `src/libs/muya/lib/parser/render/renderInlines/echoAnno.js` | Muya 行内渲染器 |
-| `src/components/ui/editor/echo/EchoRegistry.js` | echo 注册表 |
-| `src/components/ui/editor/echo/EchoRuntime.js` | anno_source 编译 + handler 派发 + `ECHO_CHANT_HANDLERS` |
-| `src/components/ui/editor/echo/builtinEchoes.js` | **11 个内置 echo 定义（含 10 个 kind:'echo-chant' 子分类）** |
-| `src/components/ui/editor/echo/builtin-echo-shared.js` | anno_source 共享工具 |
-| `src/components/ui/dialog/EchoFormDialog.vue` | echo 创建/编辑表单 |
+| `src/components/echo/echoRegistry.js` | echo 注册表 |
+| `src/components/echo/echoRuntime.js` | anno_source 编译 + handler 派发 + `ECHO_CHANT_HANDLERS` |
+| `src/components/echo/echoBuiltins.js` | **11 个内置 echo 定义（含 10 个 kind:'echo-chant' 子分类）** |
+| `src/components/echo/echoBuiltinsShared.js` | anno_source 共享工具 |
+| `src/components/echo/echoFormDialog.vue` | echo 创建/编辑表单 |
 | `src/constants/runeEchoCategories.js` | 分类定义 |
 
 ## 易混淆点（再次强调）

@@ -16,7 +16,7 @@
 // render / afterRender 函数体按 echo 卡片特性分别提供。
 // ============================================================================
 
-import { banner, handlerDoc } from './builtin-echo-shared.js'
+import { banner, handlerDoc } from './echoBuiltinsShared.js'
 
 // ---------------------------------------------------------------------------
 // render(props) 工厂：直接产出 echo host HTML 字符串

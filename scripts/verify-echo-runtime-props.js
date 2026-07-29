@@ -15,7 +15,7 @@
 const path = require('path')
 
 async function main () {
-  const coreUrl = `file:///${path.resolve('src/components/echo/EchoRuntime.js').replace(/\\/g, '/')}`
+  const coreUrl = `file:///${path.resolve('src/components/echo/echoRuntime.js').replace(/\\/g, '/')}`
   const annoSrcUrl = `file:///${path.resolve('src/components/echo/echoAnnoSource.js').replace(/\\/g, '/')}`
   const codecUrl = `file:///${path.resolve('src/components/echo/echoPayloadCodec.js').replace(/\\/g, '/')}`
 

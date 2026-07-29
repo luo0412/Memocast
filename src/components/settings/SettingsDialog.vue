@@ -138,7 +138,7 @@
       @input='onRuneFormVisibleChange'
       @submit='onRuneSubmit'
     />
-    <EchoFormDialog
+    <echoFormDialog
       v-if='echoFormVisible'
       :key='echoFormKey'
       v-model='echoFormVisible'
@@ -168,7 +168,7 @@ import ImageUploadServiceDialog from '../image/ImageUploadServiceDialog.vue'
 import UpdateDialog from 'components/update/UpdateDialog'
 import RuneCard from 'components/rune/RuneCard'
 import RuneFormDialog from 'components/rune/RuneFormDialog'
-import EchoFormDialog from 'components/echo/EchoFormDialog'
+import echoFormDialog from 'components/echo/echoFormDialog'
 import NoteTemplateFormDialog from 'components/noteTemplate/NoteTemplateFormDialog'
 import NavigationDialog from 'components/navigation/NavigationDialog'
 import { BUILTIN_ECHO_CARDS } from 'components/echo/echoCore'
@@ -207,7 +207,7 @@ export default {
     UpdateDialog,
     RuneCard,
     RuneFormDialog,
-    EchoFormDialog,
+    echoFormDialog,
     NoteTemplateFormDialog,
     NavigationDialog,
     SettingsNav,

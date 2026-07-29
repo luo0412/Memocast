@@ -13,7 +13,7 @@
 // 但这是 handler 自带的事，按 §3.5 graceful skip 路径兜住（EchoRuntime 已捕获）。
 // ============================================================================
 
-import { DEFAULT_ECHO_COLOR, DEFAULT_ECHO_ICON } from './builtin-echo-shared.js'
+import { DEFAULT_ECHO_COLOR, DEFAULT_ECHO_ICON } from './echoBuiltinsShared.js'
 
 export const HANDLER_PRELUDE = "const $ = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null\n"
 

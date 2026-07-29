@@ -41,7 +41,7 @@ import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
 import { createDefaultEchoAnnoSource, BUILTIN_ECHO_CARDS } from 'components/echo/echoCore'
 
 export default {
-  name: 'EchoFormEditor',
+  name: 'echoFormEditor',
   props: {
     source: {
       type: String,

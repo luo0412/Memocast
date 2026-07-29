@@ -53,5 +53,5 @@ afterRender (node, props = {}) {
 
 - `src/components/echo/echoBuiltins.js`（所有 builtin echo 的 `handlerBody`）
 - `src/components/echo/echoAnnoSource.js`（模板示例）
-- `src/components/echo/EchoFormEditor.vue`（tooltip 注释说明）
+- `src/components/echo/echoFormEditor.vue`（tooltip 注释说明）
 - 任何用户自定义 echo 定义的 `afterRender` / `render` 函数体

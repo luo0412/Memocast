@@ -183,8 +183,8 @@ yarn jest tests/unit/echo   # 任意子集
 
 | 时机 | 跑的脚本 |
 |-----|---------|
-| 修改 `builtinEchoes.js` 后 | `transform-main-builtin-echoes.js` → `verify-main-builtin-echoes.js` |
-| 修改 `EchoRuntime.js` 后 | `verify-inherit-from-previous.js` |
+| 修改 `echoBuiltins.js` 后 | `transform-main-builtin-echoes.js` → `verify-main-builtin-echoes.js` |
+| 修改 `echoRuntime.js` 后 | `verify-inherit-from-previous.js` |
 | 修改 afterRender 签名后 | `verify-jquery-afterrender.js` |
 | 任何 echo 相关改动的最终验证 | 全部跑一遍 |
 | 修改 `boot/globalGlobals.js` 的 require.context 正则后 | `verify-enum-util-regex.js` / `verify-enum-boot-smoke.js` / `verify-util-boot-smoke.js` |

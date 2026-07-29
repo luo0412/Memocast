@@ -11,7 +11,7 @@ let src = fs.readFileSync(SRC, 'utf8')
 
 // 1. 替换 ES import -> CommonJS require
 src = src.replace(
-  /^import \{ banner, handlerDoc \} from '\.\/builtin-echo-shared\.js'\s*\n/m,
+  /^import \{ banner, handlerDoc \} from '\.\/echoBuiltinsShared\.js'\s*\n/m,
   ''
 )
 

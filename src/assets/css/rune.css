@@ -1,8 +1,8 @@
 /* ============================================================
  * 多回响运行时样式（Echo 体系的 echo-chant 子分类）
- * 配合 EchoRuntime.js 中的 ECHO_CHANT_HANDLERS 使用
+ * 配合 echoRuntime.js 中的 ECHO_CHANT_HANDLERS 使用
  *
- * - 触发点：[data-echo-chant-id]（由 EchoRuntime.renderToHtml 注入）
+ * - 触发点：[data-echo-chant-id]（由 echoRuntime.renderToHtml 注入）
  * - kind 枚举：'echo-chant' / 'echo-tbd'
  * - 副作用样式：ag-rune-<id>-target / -active / -disabled
  * - 容器属性：data-skywalk-theme / data-skywalk-layout / data-disperse-density

@@ -1,13 +1,13 @@
 // Quick smoke: 校验新结构（v2026-07-28 起）echo 体系：
 //   - echoBuiltins.js 里每个 handlerBody 都通过 $(node) 拿到 jQuery 句柄
 //   - 不再出现 native DOM 兜底（domElement.classList / querySelector / previousElementSibling 等）
-//   - EchoRuntime.js 把 $ 注入到 handler 体内（confirm $ is defined）
+//   - echoRuntime.js 把 $ 注入到 handler 体内（confirm $ is defined）
 //   - 不再使用 safeDollarRef / __safeDollarInner / createDefaultChantAnnoSource 这类历史命名
 const fs = require('fs')
 const path = require('path')
 
 const ROOT_BUILTINS = path.resolve(__dirname, '../src/components/echo/echoBuiltins.js')
-const ROOT_RUNTIME = path.resolve(__dirname, '../src/components/echo/EchoRuntime.js')
+const ROOT_RUNTIME = path.resolve(__dirname, '../src/components/echo/echoRuntime.js')
 
 const source = fs.readFileSync(ROOT_BUILTINS, 'utf8')
 const runtimeSrc = fs.readFileSync(ROOT_RUNTIME, 'utf8')

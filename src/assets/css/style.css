@@ -281,7 +281,7 @@ body
   background: transparent !important;
 }
 
-/* 多符文运行时样式（Echo 体系的 echo-chant 子分类，与 EchoRuntime.js ECHO_CHANT_HANDLERS 配套） */
+/* 多符文运行时样式（Echo 体系的 echo-chant 子分类，与 echoRuntime.js ECHO_CHANT_HANDLERS 配套） */
 @import './rune.css';
 
 /* ========== HEYUI IN QUASAR DIALOG Z-INDEX FIX ========== */

@@ -21,7 +21,7 @@
       <q-card-section class='echo-form-body'>
         <div class='echo-form-content'>
           <!-- 左侧表单区域 -->
-          <echo-form-fields
+          <echoFormFields
             :form='form'
             :is-readonly='isReadonly'
             :is-builtin='isBuiltin'
@@ -29,7 +29,7 @@
           />
 
           <!-- 右侧编辑器区域 -->
-          <echo-form-editor
+          <echoFormEditor
             ref='echoFormEditor'
             :source='form.anno_source'
             :echo-name='form.name'
@@ -67,22 +67,22 @@ import {
 import { DEFAULT_ECHO_CATEGORY, EchoCategoryEnum } from 'src/utils/enum'
 import { normalizeEchoCategory } from 'src/utils/const/runeEchoCategoryLogic'
 
-import EchoFormFields from './EchoFormFields.vue'
-import EchoFormEditor from './EchoFormEditor.vue'
+import echoFormFields from './echoFormFields.vue'
+import echoFormEditor from './echoFormEditor.vue'
 
 const DEFAULT_RENDER_TYPE = 'anno'
 
 const createUuid = () => uuidv4()
 
 export default {
-  name: 'EchoFormDialog',
+  name: 'echoFormDialog',
   model: {
     prop: 'value',
     event: 'input'
   },
   components: {
-    EchoFormFields,
-    EchoFormEditor
+    echoFormFields,
+    echoFormEditor
   },
   props: {
     value: {

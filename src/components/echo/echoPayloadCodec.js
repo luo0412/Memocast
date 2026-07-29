@@ -11,7 +11,7 @@
 // ============================================================================
 
 import { parseEchoProps } from './echoPropsParser.js'
-import { DEFAULT_ECHO_COLOR, DEFAULT_ECHO_ICON } from './builtin-echo-shared.js'
+import { DEFAULT_ECHO_COLOR, DEFAULT_ECHO_ICON } from './echoBuiltinsShared.js'
 import { echoInheritFromPrevious } from './echoInherit.js'
 
 const ECHO_PAYLOAD_VERSION = 1

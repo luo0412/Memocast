@@ -32,11 +32,11 @@ src/components/ui/editor/Muya.vue
 ├── 第 481-...行   EchoPreviewRenderer                      ← ECHO 路径
 └── 第 809-827 行  updateRunePlaceholderValue               ← RUNE 路径
 
-src/components/ui/editor/echo/
-├── EchoRegistry.js           ← ECHO 路径
-├── EchoRuntime.js            ← ECHO 路径
-├── builtinEchoes.js          ← ECHO 路径（11 个内置"rune"）
-└── builtin-echo-shared.js    ← ECHO 路径
+src/components/echo/
+├── echoRegistry.js           ← ECHO 路径
+├── echoRuntime.js            ← ECHO 路径
+├── echoBuiltins.js           ← ECHO 路径（11 个内置"rune"）
+└── echoBuiltinsShared.js     ← ECHO 路径
 ```
 
 ## 3. rune 路径详解（Vue SFC）
@@ -162,7 +162,7 @@ echo_anno: /^@([^\s\{\(\)@]+)?(?:\{([\s\S]*?)\})?\(([\s\S]*?)\)$/
 ### 4.2 anno_source 编译（safeEvalFactory）
 
 ```javascript
-// 用户在 EchoFormDialog 写的 anno_source 字符串
+// 用户在 echoFormDialog 写的 anno_source 字符串
 const source = `export default {
   kind: 'echo-chant',
   runeId: 'growth',
@@ -325,7 +325,7 @@ Muya 在生成 DOM 时识别 `<div data-rune-name="...">`，把它替换为 `<Ru
 
 ## 7. 表单对话框对比
 
-| | RuneFormDialog.vue | EchoFormDialog.vue |
+| | RuneFormDialog.vue | echoFormDialog.vue |
 |--|---------------------|---------------------|
 | **编辑字段** | `template`（Vue SFC 字符串） | `anno_source`（JS 对象字面量字符串） |
 | **Monaco language** | `html` | `javascript` |
@@ -336,7 +336,7 @@ Muya 在生成 DOM 时识别 `<div data-rune-name="...">`，把它替换为 `<Ru
 ## 8. 关键常量
 
 ```javascript
-// EchoRuntime.js
+// echoRuntime.js
 const DEFAULT_ECHO_COLOR = '#26A69A'
 const DEFAULT_ECHO_ICON = 'graphic_eq'
 const ECHO_PAYLOAD_VERSION = 1

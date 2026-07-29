@@ -1,7 +1,7 @@
 /**
  * 内置回响共享样板（main 端，CommonJS）
  *
- * ⚠️ 与 renderer 端的 src/components/echo/builtin-echo-shared.js
+ * ⚠️ 与 renderer 端的 src/components/echo/echoBuiltinsShared.js
  *    保持一致；本文件严禁 require 跨目录文件。
  *
  * ⚠️ main 进程不会执行 anno_source（只把它当字符串塞进 SQLite），

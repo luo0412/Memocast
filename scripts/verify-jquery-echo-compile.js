@@ -10,7 +10,7 @@ const path = require('path')
 
 const ROOT = path.resolve(__dirname, '../src/components/echo')
 
-// 注入精简版 helper：仅 banner + handlerDoc（renderer 端 builtin-echo-shared.js 当前只导出这两个）
+// 注入精简版 helper：仅 banner + handlerDoc（renderer 端 echoBuiltinsShared.js 当前只导出这两个）
 const helperInjection = `
 const banner = (lines) => lines.map(line => '//   ' + line).join('\\n  ')
 const handlerDoc = (docLines = []) => {
