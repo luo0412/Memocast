@@ -1,13 +1,14 @@
 # Echo / Boot 测试套件契约规范
 
-v2026-07-29 起，本仓库所有 rune / echo / boot 相关验证**全部**迁入 Jest 29（`tests/` 下）。`scripts/` 只保留打包 / 部署相关脚本（`after-pack.js`、`blog/`），不再有 `verify-*.js`。
+v2026-07-29 起，本仓库所有 rune / echo / blog / boot 相关验证**全部**迁入 Jest 29（`tests/` 下）。`scripts/` 只保留打包 / 部署相关脚本（`after-pack.js`），不再有 `verify-*.js`、`scripts/blog/*`。
 
 测试入口：
 
 ```bash
-yarn verify                  # 全部 11 个 suite / 623 个 test
+yarn verify                  # 全部 13 个 suite / 700+ 个 test
 yarn verify:echo             # 6 个 echo 套件
-yarn verify:rune             # 1 个 rune 套件
+yarn verify:rune             # 2 个 rune 套件
+yarn verify:blog             # 1 个 blog 打包套件
 yarn verify:boot             # 3 个 boot 套件
 yarn verify:smoke            # 1 个工具链烟雾套件
 yarn jest tests/unit/echo    # 任意子集
@@ -33,7 +34,10 @@ tests/
 │   │   ├── inherit-from-previous.test.js         # inheritFromPrevious helper 全套语义 + encodeEchoPayload / decodeEchoPayload round-trip
 │   │   └── main-builtin-echoes.test.js           # renderer → IPC payload 契约（main 端镜像 v2026-07-29 删除）
 │   ├── rune/
-│   │   └── templates.test.js                     # 14 个 rune SFC 模板契约（源转义 / props.value / $emit）
+│   │   ├── templates.test.js                     # 14 个 rune SFC 模板契约（源转义 / props.value / $emit）
+│   │   └── main-builtin-templates.test.js        # renderer → IPC payload 契约（main 端镜像 v2026-07-29 删除）+ BUILTIN_RUNE_TEMPLATE_META 单源
+│   ├── blog/
+│   │   └── blog-config-writer.test.js            # blog 打包（VuePress）—— 主进程版 writer 端到端契约；v2026-07-29 起取代旧 scripts/blog/run-smoke.js
 │   └── boot/
 │       ├── enum-boot-smoke.test.js               # $enums 挂载完整性
 │       ├── util-boot-smoke.test.js               # $utils 挂载完整性
@@ -114,13 +118,67 @@ handler body 统一用 jQuery（`$ = window.jQuery`）。Node 端 `$` 退化为 
 | `applyInheritedEchoValue(attrs, prevValue)` | 应用继承值到当前 attrs |
 | `createEchoPlaceholderPayload(echo, opts)` | 创建开启继承的 echo 占位 payload |
 
-### 2.6 场景 6：rune 模板契约（`templates.test.js`）
+### 2.6 场景 6：rune 模板契约（`templates.test.js` + `main-builtin-templates.test.js`）
+
+#### 2.6.A `templates.test.js`
 
 14 个 rune SFC 模板分散在 `src/components/rune/runeTemplates/` 子目录；测试扫描每个文件，验证**源文件级转义**（`</script>` 必须写成 `<\/script>`，否则 .vue 文件 import 时会被截断）；运行时**语法可编译**；**`props.value` 必须声明**（`mountRuneVueHosts` 硬约定）；非纯展示型 rune 必须有 `$emit('input', ...)` 回写通道。`create*Template → runeTemplates*` 命名映射：测试会去掉 `create` 前缀和 `Template` 后缀，拼出对应的导出名。
 
-### 2.7 场景 7：已删除（v2026-07-28）
+#### 2.6.B `main-builtin-templates.test.js`（v2026-07-29 新增）
 
-主进程不再在启动时自动 sync 内置回响到 DB——用户在「设置 → 重置回响」里点一下走 `db:clearEchoes`。原来的 `seedBuiltinEchoes` 启动钩子已拆，无对应 jest 用例（场景 1 即覆盖）。
+**目的**：把 renderer 端 `src/components/rune/runeTemplates/runeTemplates.js` 的 `BUILTIN_RUNE_TEMPLATE_META`（14 张元数据 + factory 引用）通过 IPC 直接推到 main 进程，落 DB。
+
+**历史**（v2026-07-29 之前）：renderer 端 ESM 源文件经手工同步镜像到 `src-electron/main-process/service/builtin-rune-templates.js`（CJS 镜像，且在 v2026-07-29 之前**已出现真实漂移**——main 端只有 13 张，渲染端 14 张，缺 `InheritDemo`，新装机用户永远看不到 InheritDemo）。代价：每次改 `runeTemplates.js` 都要记得同步镜像。
+
+**现状**（v2026-07-29 起）：main 端**不再维护** `builtin-rune-templates.js` 镜像（已 `git rm`）。DB 落库完全由 renderer 通过 IPC payload 推送：
+
+| IPC handler | payload 来源 | 字段含义 |
+|---|---|---|
+| `db:clearRuneTemplates` | `payload.builtins` = renderer 端 `BUILTIN_RUNE_TEMPLATE_META` 拼装行数组 | 重置 DB 内置 rune 模板行（保留自定义） |
+| `db:saveRuneTemplate` | `row` = 单个模板对象 | 增/改模板行；`saveOne` 是 upsert 语义（已存在则 UPDATE，不存在则 INSERT） |
+| `db:saveRuneTemplates` | `rows` = 模板对象数组 | 批量增/改 |
+
+**renderer 端入口**（`src/services/RuneTemplateService.js`）：
+
+| 方法 | 触发场景 |
+|---|---|
+| `RuneTemplateService.seedBuiltin()` | `ensureLoaded()` 缓存 miss + DB `rune_templates` 为空（或无 builtin 行）→ 一次懒灌种子，并发去重 |
+| `RuneTemplateService.buildBuiltinRows()` | 「设置 → 重置符文模板」按 renderer 端 `BUILTIN_RUNE_TEMPLATE_META` 拼装内置行推给 main |
+| `RuneTemplateService.clearAll({ builtins })` | 调用 `db:clearRuneTemplates(payload)`；payload 为空 → main 端返回 `NO_BUILTIN_RUNE_TEMPLATES` |
+
+**main 端契约**：
+- `db:clearRuneTemplates`：payload 必传且为非空数组（缺省 → `{ success: false, code: 'NO_BUILTIN_RUNE_TEMPLATES' }`）。
+- 启动期"首次 seed"已删除——renderer 端通过 `RuneTemplateService.ensureLoaded` 懒灌种子；用户已在「设置 → 重置符文模板」点过 → 通过 `buildBuiltinRows` 再次 push。
+- 保留用户自定义（`is_builtin = 0` 的行）；只覆盖 / 重置 `is_builtin = 1` 的内置行。
+
+**护城河**：`tests/unit/rune/main-builtin-templates.test.js` 锁住 renderer 端 `BUILTIN_RUNE_TEMPLATE_META` 具备完整 IPC payload 字段（`id` / `category_key` / `name` / `desc` / `color` / `icon` / `factory`），并校验：
+- `id` 形态：`builtin-tpl-*`（main 端 reset 删除 `is_builtin=1` 行的约定）。
+- `category_key` enum：`general` / `resume`。
+- `factory()` 输出非空字符串。
+- `factory()` 输出的 SFC 语法可编译（`new Function(return script)` 不抛错）。
+- `factory` 名称与 `TEMPLATE_NAMES` 双向无漂移（避免 renderer 端再分裂两套名单）。
+
+### 2.7 场景 7：已删除（v2026-07-28 / 2026-07-29）
+
+- 主进程不再在启动时自动 sync 内置回响到 DB——用户在「设置 → 重置回响」里点一下走 `db:clearEchoes`。原来的 `seedBuiltinEchoes` 启动钩子已拆，无对应 jest 用例（场景 1 即覆盖）。
+- 主进程不再在启动时自动 sync 内置 rune 模板到 DB——`RuneTemplateService.ensureLoaded` 懒灌种子（场景 2.6.B 覆盖）。原来的 `BUILTIN_RUNE_TEMPLATES` 镜像 + 启动期 if-count===0 seed 代码段均已删除。
+
+### 2.8 场景 8：blog 打包（VuePress）—— `blog-config-writer.test.js`（v2026-07-29 新增）
+
+**目的**：锁住 blog 打包链路（VuePress）的真相源（主进程版 `src-electron/main-process/service/blog-config-writer.js`）端到端契约。
+
+**历史**（v2026-07-29 之前）：存在 `scripts/blog/blog-config-writer.js`（主进程版的孤儿副本，已漂移；实测 SIDEBAR / NAV / VERIFY 三个模板与主进程版不等）+ `scripts/blog/cyrb53.js`（与 `src/services/BlogDeployService.js` 内嵌 cyrb53 漂移，0 处 require）+ `scripts/blog/run-smoke.js`（独立 smoke 测试入口，不被 yarn 任何 alias 引用）。SKILL.md 旧版 §8 第 1 步还误导用户"改 scripts/blog/blog-config-writer.js 里 SIDEBAR_BUILDER_SRC"，但生产路径只调主进程版——这就是已知的双源陷阱。
+
+**现状**（v2026-07-29 起）：`scripts/blog/` 整目录已删除（`git rm`），主进程版成为唯一真相源。smoke 测试的契约迁到 `tests/unit/blog/blog-config-writer.test.js`：
+
+| 测试用例 | 锁住的契约 |
+|---|---|
+| `writeBlogUtilities` 写出 3 个 builder 文件 | sidebar-builder.js / nav-builder.js / verify-paths.js |
+| `SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` / `VERIFY_PATHS_SRC` 非空字符串模板 | 模板存在且有效（不会被默默清空） |
+| `writeVuepressConfig` 不覆盖已存在的 config.js | 用户已写好的 config.js 不会被默认 writer 覆盖 |
+| `runBuilders` positive：4 篇文章 → `sidebar._posts/` = 4 | 与旧 `run-smoke.js` 第 1 段断言等价 |
+| `runVerifyPaths` negative 抛错 | id-mappings 有 4 条但 _posts/ 没文件 → verify 应抛错 |
+| `ensureBlogConfig` 端到端 positive / negative | positive.ok=true；negative.ok=false 且 sidebar 仍能写出 |
 
 ---
 
@@ -186,9 +244,11 @@ handler body 统一用 jQuery（`$ = window.jQuery`）。Node 端 `$` 退化为 
 | 修改 `echoRuntime.js` 后 | `yarn jest tests/unit/echo/runtime-props.test.js tests/unit/echo/inherit-from-previous.test.js` |
 | 修改 afterRender 签名后 | `yarn jest tests/unit/echo/jquery-afterrender.test.js` |
 | 修改 echo `propsSchema` 后 | `yarn jest tests/unit/echo/schema-formcreate-align.test.js` |
-| 修改 `runeTemplates/` 下任一模板后 | `yarn jest tests/unit/rune/templates.test.js` |
+| 修改 `runeTemplates/runeTemplates.js` 或任一 `runeTemplates*.js` 后 | `yarn verify:rune`（覆盖 `templates.test.js` 源转义 / props.value + `main-builtin-templates.test.js` IPC payload 契约） |
+| 修改 `RuneTemplateService.js` 或 `electron-main.js` 的 `db:clearRuneTemplates` IPC handler 后 | `yarn jest tests/unit/rune/main-builtin-templates.test.js` |
+| 修改 `blog-config-writer.js` 的 `SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` / `VERIFY_PATHS_SRC` 或 `writeVuepressConfig` / `runBuilders` / `runVerifyPaths` / `ensureBlogConfig` 后 | `yarn verify:blog` |
 | 任何 echo 相关改动的最终验证 | `yarn verify:echo` |
 | 修改 `boot/globalGlobals.js` 的 require.context 正则后 | `yarn verify:boot` |
 | `src/utils/enum/` 新增/删除/改名 enum 文件后 | `yarn jest tests/unit/boot/enum-boot-smoke.test.js tests/unit/boot/enum-util-regex.test.js` |
 | `src/utils/util/` 新增/删除/改名 util 文件后 | `yarn jest tests/unit/boot/util-boot-smoke.test.js` |
-| PR 合并前最终门禁 | `yarn verify`（11 个 suite / 623 个 test） |
+| PR 合并前最终门禁 | `yarn verify`（13 个 suite / 700+ 个 test） |

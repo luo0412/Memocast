@@ -21,8 +21,7 @@ Memocast 提供"笔记 → blog 部署"功能：用户在 Memocast 里写笔记�
 |------|------|
 | `src/services/BlogDeployService.js` | 渲染进程 → 主进程前的"前置处理"：写 `_posts/<id>.md`、写 `id-mappings.json` / `seq-manifest.json` / `shortlink-map.json`、写分类下 `README.md`、生成 `buildFrontmatter` |
 | `src-electron/main-process/service/blog-deploy-handler.js` | 主进程入口：`execBlogBuild` —— 串起 Node 检测、依赖补齐、blog-utils 写入、verify-paths、build、SFTP、GitHub Actions |
-| `src-electron/main-process/service/blog-config-writer.js` | 实际写入 `.vuepress/utils/{sidebar-builder,nav-builder,verify-paths}.js` 和 `config.js`，提供 `writeBlogUtilities`、`writeVuepressConfig`、`runBuilders`、`runSmokeTest` |
-| `scripts/blog/blog-config-writer.js` | 渲染端直接 require 的等价实现（与主进程版本同源） |
+| `src-electron/main-process/service/blog-config-writer.js` | 实际写入 `.vuepress/utils/{sidebar-builder,nav-builder,verify-paths}.js` 和 `config.js`，提供 `writeBlogUtilities`、`writeVuepressConfig`、`runBuilders`、`runVerifyPaths`、`ensureBlogConfig`。**这是唯一真相源**（v2026-07-29 起，scripts/blog/ 整目录已删除，与本文件同源的镜像副本 + smoke 测试入口都已迁出） |
 | `src-electron/main-process/service/sftp-service.js` | `uploadDirectory` / `backupRemoteDir` / `testConnection` |
 | `src-electron/main-process/api.js` | IPC 入口：所有 `handleApi('start-blog-deploy' / 'export-blog-ci' / ...)` 都在这里 |
 | `src/components/ui/dialog/BlogDeployDialog.vue` | 部署弹框（Quasar），集合 github + sftp + **theme（default/vdoing/hope/reco）** + custom-build + base |
@@ -214,19 +213,19 @@ sftp.rename(config.remotePath, backupPath)   // 旧目录改名
 
 ## 8. 工作流：修改 sidebar / nav 形态后
 
-无论改哪个 builder,都要做这件事：
+无论改哪个 builder，都做这件事：
 
-1. 改 `scripts/blog/blog-config-writer.js` 里 `SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` 字符串
-2. 跑一次 `node _temp/<smoke>.js` 验证形状
-3. **同步改动 e2e**:
-   - `blog-deploy-handler.js` 里有 **第二份** `SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` 模板字符串!（为了让 `vuepress dev` 时从外部 require 也能拿到最新 builder）
-   - 改一个会**漏一个**,这是已知的双源陷阱。
+1. 改 `src-electron/main-process/service/blog-config-writer.js` 里 `SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` 字符串。
+   - **唯一真相源**就是这一份（v2026-07-29 起，scripts/blog/blog-config-writer.js 这个孤儿副本已删除）。
+2. 跑一次 `yarn jest tests/unit/blog/blog-config-writer.test.js` 验证 sidebar/nav/verify 形状。
+   - 测试覆盖：positive（4 篇文章 → sidebar['_posts/']=4 + verify 全部 resolved）+ negative（id-mappings 有 4 条但 _posts/ 没文件 → verify 抛错）+ ensureBlogConfig 端到端。
+3. ~~**同步改动 e2e**~~：以前 `blog-deploy-handler.js` 里还有第二份模板字符串，需要双写。**当前实现中已统一**：deploy 路径只调 `blog-config-writer.writeBlogUtilities()`，没有第二份模板。如果发现 deploy 路径直接 inline 模板，**改回走 writer**，不要重新引入双源。
 
 ## 9. 自动化测试模式
 
-所有 inline JS 模板字符串(SIDEBAR / NAV / VERIFY)都是 string-template,不能直接 require 测 —— 走 `writer.writeBlogUtilities(blogDir)` 把模板写到 `.vuepress/utils/`,再 `require()` 真实文件,删 `require.cache` 后再 require。这是验证 builder 的标准姿势。
+所有 inline JS 模板字符串（SIDEBAR / NAV / VERIFY）都是 string-template，不能直接 require 测 —— 走 `writer.writeBlogUtilities(blogDir)` 把模板写到 `.vuepress/utils/`，再 `require()` 真实文件，删 `require.cache` 后再 require。这是验证 builder 的标准姿势。
 
-测试用 `os.tmpdir()` 下的 `memocast-<feature>-<Date.now()>` 唯一目录,跑完 `fs.remove`。**绝不在项目根留临时文件**(参考 `_temp/` 沙箱规则)。
+测试用 `os.tmpdir()` 下的 `memocast-blog-test-<label>-<timestamp>-<rand>` 唯一目录，跑完 `fs.remove`。**绝不在项目根留临时文件**。完整契约见 `tests/unit/blog/blog-config-writer.test.js`（v2026-07-29 起取代旧 `scripts/blog/run-smoke.js`）。
 
 ## 10. 与 TODO 文档约定对应
 
@@ -246,8 +245,8 @@ sftp.rename(config.remotePath, backupPath)   // 旧目录改名
 ## 12. 必读源码片段
 
 ```bash
-# 看 builder 形态
-sed -n '17,80p' scripts/blog/blog-config-writer.js
+# 看 builder 形态（v2026-07-29 起唯一真相源：主进程版，scripts/blog/blog-config-writer.js 已删）
+sed -n '30,100p' src-electron/main-process/service/blog-config-writer.js
 # 看 frontmatter 注入
 grep -A 25 "buildFrontmatter" src/services/BlogDeployService.js | head -45
 # 看 deploy 流(主进程)

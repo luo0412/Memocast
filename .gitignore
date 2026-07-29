@@ -49,6 +49,7 @@ public/box-im/
 _docs-export
 _docs/.vuepress/.blog-build-manifest.json
 
-_temp
+_temp/*
+!_temp/.gitkeep
 
 .codegraph

@@ -27,13 +27,58 @@ function invalidate () {
   cache = null
 }
 
+// 并发去重的 lazy seed 锁：避免多个并发调用 list* 时重复触发 seed。
+let seedingPromise = null
+
 async function ensureLoaded (force = false) {
   if (force) invalidate()
   if (isFresh()) {
     console.log(`[RUNE-TPL] ensureLoaded cache-hit list=${cache.list.length}`)
     return cache
   }
-  const list = await DatabaseClient.runeTemplates.getAll()
+  // 注意：先把第一次读到的内容 cache 起来（即使为空数组），便于后续判断。
+  let list
+  try {
+    list = await DatabaseClient.runeTemplates.getAll()
+  } catch (err) {
+    console.error('[RUNE-TPL] ensureLoaded read error:', err)
+    list = []
+  }
+  const safeList = Array.isArray(list) ? list : []
+  // 第一次（DB 为空）→ 触发一次 full-push seed（如果上一次的 push 已存在，则并发复用）。
+  let needsReseed = safeList.length === 0
+  if (safeList.length > 0) {
+    // 即使 DB 里"看起来有内置行"，也得校验是否覆盖了 renderer 端 14 张。
+    // 用户在 dev 模式下手动删空 DB 但保留其他行时，需要重建内置。
+    // 简化策略：DB 为 0 张内置行时强制 reseed。
+    const builtinCount = safeList.filter(r => r && (r.is_builtin === 1 || r.is_builtin === '1')).length
+    if (builtinCount === 0) needsReseed = true
+  }
+  if (needsReseed) {
+    if (!seedingPromise) {
+      seedingPromise = (async () => {
+        try {
+          const result = await seedBuiltin()
+          console.log(`[RUNE-TPL] ensureLoaded lazy-seed result=${result && result.success ? `ok count=${result.count}` : `fail code=${result && result.code}`}`)
+        } catch (err) {
+          console.warn('[RUNE-TPL] ensureLoaded lazy-seed error:', err)
+        } finally {
+          // seed 完毕后清掉锁，下一次再触发懒种（幂等，依赖 saveOne 的 upsert 语义）。
+          seedingPromise = null
+        }
+      })()
+    }
+    try {
+      await seedingPromise
+    } catch (_) { /* noop */ }
+    // seed 完了强制重读一次：saveOne 是 upsert，所以 DB 里现在至少有 renderer 端 14 行。
+    try {
+      list = await DatabaseClient.runeTemplates.getAll()
+    } catch (err) {
+      console.error('[RUNE-TPL] ensureLoaded re-read error:', err)
+      list = []
+    }
+  }
   console.log(`[RUNE-TPL] ensureLoaded ipc-returned list=${Array.isArray(list) ? list.length : 'non-array'}`)
   cache = { list: Array.isArray(list) ? list : [], grouped: null, cachedAt: Date.now() }
   return cache
@@ -113,6 +158,122 @@ async function fetchFromGithub ({ sourceUrl, categoryKey }) {
   return result
 }
 
+/**
+ * 内置 rune 预设模板的 seed 推送入口（v2026-07-29 full-push）。
+ *
+ * 真相源：renderer 端 `src/components/rune/runeTemplates/runeTemplates.js` 的
+ * `BUILTIN_RUNE_TEMPLATE_META` 导出（14 个元数据 + 对应 factory 引用）。
+ *
+ * 调用场景：
+ *   - 应用启动期 renderer 加载完，DB `rune_templates` 为空时调用一次性灌种子。
+ *   - 用户「设置 → 重置符文模板」走 `clearAll({ builtins })` 后，DB 会被清空，
+ *     需要紧接着再次调用本接口（或由 reset 流程自己 push）。
+ *
+ * 不允许从 main 端再次维护内置模板列表，避免和 renderer 端漂移。
+ */
+async function seedBuiltin () {
+  let mod
+  try {
+    mod = await import(/* webpackChunkName: "rune-template-builtins" */ 'src/components/rune/runeTemplates/runeTemplates.js')
+  } catch (e) {
+    console.warn('[RUNE-TPL] seedBuiltin: cannot import builtin templates', e)
+    return { success: false, code: 'NO_BUILTIN_TEMPLATES', message: String(e) }
+  }
+  const meta = (mod && (mod.BUILTIN_RUNE_TEMPLATE_META || mod.BUILTIN_RUNE_TEMPLATE_META_LIST)) || []
+  if (!Array.isArray(meta) || meta.length === 0) {
+    return { success: false, code: 'NO_BUILTIN_TEMPLATES' }
+  }
+  const now = Date.now()
+  const rows = []
+  for (let i = 0; i < meta.length; i++) {
+    const it = meta[i]
+    const factory = (typeof it.factoryName === 'string' && typeof mod[it.factoryName] === 'function') ? mod[it.factoryName] : null
+    if (!factory || !it.id) continue
+    let templateStr
+    try {
+      templateStr = factory()
+    } catch (e) {
+      console.warn(`[RUNE-TPL] seedBuiltin: factory for ${it.id} threw`, e)
+      continue
+    }
+    if (typeof templateStr !== 'string') continue
+    rows.push({
+      id: it.id,
+      category_key: it.category_key || 'general',
+      name: it.name || it.id,
+      desc: it.desc || '',
+      color: it.color || '#9C27B0',
+      icon: it.icon || 'auto_fix_high',
+      template: templateStr,
+      source_url: '',
+      is_builtin: 1,
+      sort_order: Number.isFinite(it.sort_order) ? it.sort_order : i,
+      created_at: now,
+      updated_at: now
+    })
+  }
+  if (!rows.length) {
+    return { success: false, code: 'NO_BUILTIN_TEMPLATES' }
+  }
+  const result = await DatabaseClient.runeTemplates.saveMany(rows)
+  if (result && result.success) invalidate()
+  return result
+}
+
+/**
+ * 把 `BUILTIN_RUNE_TEMPLATE_META` 拼装为 DB row 列表（与 seedBuiltin 同源，但只返回 rows）。
+ * 主要用于「设置 → 重置符文模板」场景：renderer 端算好列表直接 push 给 main。
+ */
+async function buildBuiltinRows () {
+  let mod
+  try {
+    mod = await import(/* webpackChunkName: "rune-template-builtins" */ 'src/components/rune/runeTemplates/runeTemplates.js')
+  } catch (e) {
+    console.warn('[RUNE-TPL] buildBuiltinRows: cannot import builtin templates', e)
+    return []
+  }
+  const meta = (mod && (mod.BUILTIN_RUNE_TEMPLATE_META || mod.BUILTIN_RUNE_TEMPLATE_META_LIST)) || []
+  if (!Array.isArray(meta) || meta.length === 0) return []
+  const now = Date.now()
+  const rows = []
+  for (let i = 0; i < meta.length; i++) {
+    const it = meta[i]
+    const factory = (typeof it.factoryName === 'string' && typeof mod[it.factoryName] === 'function') ? mod[it.factoryName] : null
+    if (!factory || !it.id) continue
+    let templateStr
+    try {
+      templateStr = factory()
+    } catch (e) { continue }
+    if (typeof templateStr !== 'string') continue
+    rows.push({
+      id: it.id,
+      category_key: it.category_key || 'general',
+      name: it.name || it.id,
+      desc: it.desc || '',
+      color: it.color || '#9C27B0',
+      icon: it.icon || 'auto_fix_high',
+      template: templateStr,
+      source_url: '',
+      is_builtin: 1,
+      sort_order: Number.isFinite(it.sort_order) ? it.sort_order : i,
+      created_at: now,
+      updated_at: now
+    })
+  }
+  return rows
+}
+
+/**
+ * 重置所有符文模板（保留用户自定义）。
+ * payload.builtins 是 renderer 端的最新内置模板列表——main 端不再维护镜像。
+ * payload 缺省 / 为空时直接拒绝，避免使用任何已不存在的兜底数据。
+ */
+async function clearAll (payload) {
+  const result = await DatabaseClient.runeTemplates.clearAll(payload || {})
+  if (result && result.success) invalidate()
+  return result
+}
+
 function clearCache () {
   invalidate()
 }
@@ -123,6 +284,9 @@ const runeTemplateService = {
   save,
   remove,
   fetchFromGithub,
+  seedBuiltin,
+  buildBuiltinRows,
+  clearAll,
   clearCache
 }
 

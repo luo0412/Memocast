@@ -504,20 +504,18 @@ echoes:
 
 | 文件 | 为什么不动 |
 |------|-----------|
-| `scripts/blog/blog-config-writer.js` | 渲染端直接 require 的副本；与主进程版本**同步**——这是已知双源陷阱。如果将来改 runes/echo 渲染逻辑，两边要同步 |
+| ~~`scripts/blog/blog-config-writer.js`~~ | **v2026-07-29 已删除**（与主进程版本已漂移；smoke 测试契约迁到 `tests/unit/blog/blog-config-writer.test.js`） |
 | `src/components/ui/editor/Muya.vue` / `src/services/EchoRuntime.js` | 主项目运行时不动；博客端是独立链路 |
 | `RuneFormDialog.vue` / `RuneTemplateService.js` | 输入端不动；导出时只读 |
 | `.github/workflows/*.yml` | 不动；构建命令仍为 `yarn run build` |
 
-### 8.4 双源同步策略（明示风险）
+### 8.4 双源同步策略（v2026-07-29 起已消除）
 
-`SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` / `VERIFY_PATHS_SRC` 现在分布在两处：
+`SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` / `VERIFY_PATHS_SRC` 历史上分布在两处：
 - `src/services/BlogDeployService.js`（运行时字符串）
 - `src-electron/main-process/service/blog-config-writer.js`（主进程字符串）
 
-**博客部署 §3.8 已警告过这个陷阱**。`RUNE_ECHO_RENDERER_SRC` / `RUNE_ECHO_CSS_SRC` 沿用同样模式——**不重蹈覆辙，但要显式在文档里登记"两处必须同步"**。
-
-如果将来想消除这个陷阱，参考路径：**用 `scripts/blog/blog-config-writer.js` 的物理文件作为唯一源**，主进程 / 渲染端都 `require` 它。这是一项独立的重构，本方案**不解决**。
+**博客部署 §3.8 已警告过这个陷阱**。RUNE_ECHO 这条链路**不重蹈覆辙**：v2026-07-29 起 `scripts/blog/blog-config-writer.js` 这个孤儿副本已 `git rm`，主进程版成为唯一真相源（与 echo / rune builtin 镜像处置方式一致）。任何双源维护的子项目都按同样节奏清扫。
 
 ---
 

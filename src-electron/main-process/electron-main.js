@@ -19,9 +19,13 @@ import Portkey from 'portkey-ai'
 const { DEFAULT_ROOT_CATEGORY } = require('./constants')
 const createRuneTemplateService = require('./service/rune-template-service')
 const createNoteTemplateService = require('./service/note-template-service')
-// 内置回响（echo）的真相源：renderer 端 src/components/echo/echoBuiltins/。
-// 主进程不再维护 builtin-echoes.js 镜像，DB 落库完全由 renderer 通过 IPC payload 推送。
-// 若以后 main 端需要在不依赖 renderer 的场景查内置 echo 列表，应改为读取 DB echoes 表里 id LIKE '__builtin_%' 的行。
+// 内置回响（echo）/ 符文（rune）模板的真相源：renderer 端。
+//   - echo 单源：`src/components/echo/echoBuiltins/`
+//   - rune 预设模板单源：`src/components/rune/runeTemplates/runeTemplates.js` 的 `BUILTIN_RUNE_TEMPLATE_META`
+// 主进程不再维护 builtin-echoes.js / builtin-rune-templates.js 镜像，
+//   DB 落库完全由 renderer 通过 IPC payload 推送（`db:clearEchoes` / `db:clearRuneTemplates`）。
+// 若以后 main 端需要在不依赖 renderer 的场景查内置列表，应改为读取 DB echoes / rune_templates 表
+//   里 is_builtin=1 的行。
 
 // rune 预设模板服务（schema + CRUD）。仅在 initSchema 阶段真正调用 createRuneTemplateService，
 // registerDatabaseHandlers 阶段直接复用 module 级 runeTemplateService，避免重复闭包。
@@ -941,42 +945,13 @@ export default {
   // 用 module 级变量保存实例，供后续 registerDatabaseHandlers 复用，避免重复建闭包。
   runeTemplateService = createRuneTemplateService({ db, execToObjects, execOne, saveDatabase, log })
   runeTemplateService.ensureSchema()
-  const runeTplCount = execOne('SELECT COUNT(*) as count FROM rune_templates')
-  console.log(`[RUNE-TPL] seed-check: existing count=${runeTplCount ? runeTplCount.count : 'n/a'}`)
-  if (runeTplCount && runeTplCount.count === 0) {
-    try {
-      const seedModule = require('./service/builtin-rune-templates')
-      const list = (seedModule && seedModule.BUILTIN_RUNE_TEMPLATES) || []
-      console.log(`[RUNE-TPL] seed: builtin-list size=${list.length}`)
-      if (list.length) {
-        const now = Date.now()
-        const rows = list.map((it, idx) => ({
-          id: it.id,
-          category_key: it.category_key,
-          name: it.name,
-          desc: it.desc,
-          color: it.color,
-          icon: it.icon,
-          template: it.template,
-          source_url: '',
-          is_builtin: 1,
-          sort_order: idx,
-          created_at: now,
-          updated_at: now
-        }))
-        const result = runeTemplateService.saveMany(rows)
-        if (result && result.success) {
-          saveDatabase()
-          log.info(`[DB] Seeded ${result.count} built-in rune templates into rune_templates`)
-          console.log(`[RUNE-TPL] seed: saved ${result.count} rows`)
-        } else {
-          console.warn('[RUNE-TPL] seed: saveMany failed', result)
-        }
-      }
-    } catch (seedError) {
-      console.warn('[DB] seedRuneTemplates skipped:', seedError && seedError.message)
-    }
-  }
+  // === 内置符文模板（rune_templates）seed 策略（v2026-07-29 full-push） ===
+  // 真相源：renderer 端 `src/components/rune/runeTemplates/runeTemplates.js` 的
+  //   `BUILTIN_RUNE_TEMPLATE_META` 导出（14 个元数据 + factory 引用）。
+  // 主进程不再维护 builtin-rune-templates.js 镜像，DB 落库完全由 renderer 端
+  //   RuneTemplateService.seedBuiltin() 在 ensureLoaded 缓存 miss 且 DB 为空时触发。
+  // 本节不再做任何 seed 调用；用户在「设置 → 重置符文模板」走 `db:clearRuneTemplates`。
+  log.info('[Main] rune_templates schema initialized; builtins seeded lazily by renderer')
 
   // === 笔记模板 (note_templates) ===
   // 与 rune_templates 结构一致；只承担"笔记新建模板下拉 / 内容填充"职责，不内置 seed。
@@ -3173,44 +3148,70 @@ function registerDatabaseHandlers() {
     }
   })
 
-  // 清空所有符文模板
-  ipcMain.handle('db:clearRuneTemplates', async () => {
+  // 重置符文模板：用 renderer 端推送的最新内置 rune 列表覆盖 DB 内置行，保留自定义 rune。
+  //  - 真相源是 renderer 端 runeTemplates.js 的 BUILTIN_RUNE_TEMPLATE_META（main 端不再维护镜像）。
+  //  - payload 缺省 / 空 → 直接拒绝（避免使用任何已不存在的"主进程镜像"兜底）。
+  //  - 主进程启动时不再自动 sync 内置符文模板；DB 落库完全由本接口承载。
+  ipcMain.handle('db:clearRuneTemplates', async (_event, payload) => {
     try {
-      const seedModule = require('./service/builtin-rune-templates')
-      const list = (seedModule && seedModule.BUILTIN_RUNE_TEMPLATES) || []
-      if (!list.length) {
+      const builtins = payload && Array.isArray(payload.builtins) ? payload.builtins : null
+      if (!builtins || builtins.length === 0) {
         return { success: false, code: 'NO_BUILTIN_RUNE_TEMPLATES' }
       }
-      const now = Date.now()
+      // 读取路径防御：丢弃缺 id/template 的脏行
+      const sanitize = (it) => {
+        if (!it || typeof it !== 'object') return null
+        if (!it.id || typeof it.id !== 'string') return null
+        if (typeof it.template !== 'string') return null
+        return {
+          id: String(it.id),
+          category_key: typeof it.category_key === 'string' && it.category_key ? it.category_key : 'general',
+          name: typeof it.name === 'string' ? it.name : '',
+          desc: typeof it.desc === 'string' ? it.desc : '',
+          color: typeof it.color === 'string' && it.color ? it.color : '#9C27B0',
+          icon: typeof it.icon === 'string' && it.icon ? it.icon : 'auto_fix_high',
+          template: it.template,
+          source_url: typeof it.source_url === 'string' ? it.source_url : '',
+          is_builtin: 1,
+          sort_order: Number.isFinite(Number(it.sort_order)) ? Number(it.sort_order) : 0,
+          created_at: Number.isFinite(Number(it.created_at)) ? Number(it.created_at) : Date.now(),
+          updated_at: Number.isFinite(Number(it.updated_at)) ? Number(it.updated_at) : Date.now()
+        }
+      }
+      const normalized = builtins.map(sanitize).filter(Boolean)
+      if (!normalized.length) {
+        return { success: false, code: 'NO_BUILTIN_RUNE_TEMPLATES' }
+      }
       // 先查出所有非内置的符文模板，保留下来
       const customRunes = execToObjects('SELECT id FROM rune_templates WHERE is_builtin = 0')
       const customIds = (customRunes || []).map(r => r.id)
       // 删掉所有内置符文模板
       await db.run('DELETE FROM rune_templates WHERE is_builtin = 1')
-      // 重新插入内置符文模板
-      const rows = list.map((it, idx) => ({
-        id: it.id,
-        category_key: it.category_key,
-        name: it.name,
-        desc: it.desc,
-        color: it.color,
-        icon: it.icon,
-        template: it.template,
-        source_url: '',
-        is_builtin: 1,
-        sort_order: idx,
-        created_at: now,
-        updated_at: now
-      }))
-      for (const row of rows) {
+      // 重新插入 renderer 端推送的内置符文模板
+      let count = 0
+      for (const row of normalized) {
         await db.run(
           `INSERT INTO rune_templates (id, category_key, name, "desc", color, icon, template, source_url, is_builtin, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [row.id, row.category_key, row.name, row.desc || '', row.color || '#9C27B0', row.icon || 'auto_fix_high', row.template, row.source_url, row.is_builtin, row.sort_order, row.created_at, row.updated_at]
+          [
+            row.id,
+            row.category_key,
+            row.name || '',
+            row.desc || '',
+            row.color || '#9C27B0',
+            row.icon || 'auto_fix_high',
+            row.template,
+            row.source_url || '',
+            row.is_builtin,
+            row.sort_order,
+            row.created_at,
+            row.updated_at
+          ]
         )
+        count += 1
       }
       saveDatabase()
-      log.info(`[DB] Reset rune templates: re-inserted ${rows.length} builtins, kept ${customIds.length} custom`)
-      return { success: true, count: rows.length, customKept: customIds.length }
+      log.info(`[DB] Reset rune templates: re-inserted ${count} builtins, kept ${customIds.length} custom`)
+      return { success: true, count, customKept: customIds.length }
     } catch (error) {
       log.error('[DB] clearRuneTemplates error:', error)
       return { success: false, code: 'CLEAR_RUNE_TEMPLATES_FAILED', message: String(error) }

@@ -168,6 +168,7 @@ import ImageUploadServiceDialog from '../image/ImageUploadServiceDialog.vue'
 import UpdateDialog from 'components/update/UpdateDialog'
 import runeCard from 'components/rune/runeCard'
 import runeFormDialog from 'components/rune/runeFormDialog'
+import runeTemplateService from 'src/services/RuneTemplateService'
 import echoFormDialog from 'components/echo/echoFormDialog'
 import NoteTemplateFormDialog from 'components/noteTemplate/NoteTemplateFormDialog'
 import NavigationDialog from 'components/navigation/NavigationDialog'
@@ -416,7 +417,14 @@ export default {
       }).onOk(async () => {
         try {
           console.log('[RUNE-TPL] resetRunes -> clearAll')
-          const result = await DatabaseClient.runeTemplates.clearAll()
+          // 用 renderer 端 runeTemplates.js 的 BUILTIN_RUNE_TEMPLATE_META 拼装内置行，
+          // 由 main 端 db:clearRuneTemplates 全量替换 DB 内置行。main 端不再维护镜像。
+          const builtins = await runeTemplateService.buildBuiltinRows()
+          if (!Array.isArray(builtins) || builtins.length === 0) {
+            this.$q.notify({ message: this.$t('resetRunesFailed'), type: 'negative', position: 'top' })
+            return
+          }
+          const result = await DatabaseClient.runeTemplates.clearAll({ builtins })
           console.log(`[RUNE-TPL] resetRunes clearAll result=${JSON.stringify(result)}`)
           if (result && result.success) {
             this.$q.notify({ message: this.$t('resetRunesSuccess', { count: result.count || 0, custom: result.customKept || 0 }), type: 'positive', position: 'top' })

@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | **侧边导航自动生成** | `_docs\.vuepress\utils\utils.js` 用目录前缀扫描生成 `nav` + 多 `sidebar`；`utils-shortlink.js` 转短链 | `src-electron/main-process/service/blog-config-writer.js` 在博客目录运行时生成 `sidebar.json` / `nav.json` |
 | **publicPath / base 路径** | `_docs\.vuepress\config.js` 按环境变量切换 | `BlogDeployDialog.vue` 输入 → `replaceBaseInConfig` 注入 `config.js` |
-| **路径 hash / 短链 ID** | `gulpfile.js` 的 `cyrb53 + base36` 生成 ~26 字符 ID | `src/services/BlogDeployService.js` 极简 cyrb53 + `scripts/blog/cyrb53.js` 完整版 |
+| **路径 hash / 短链 ID** | `gulpfile.js` 的 `cyrb53 + base36` 生成 ~26 字符 ID | `src/services/BlogDeployService.js` 极简 cyrb53（与原 vuepress-build 算法同源） |
 
 **强约束（永久）：**
 
@@ -73,7 +73,7 @@ Main Process (blog-deploy-handler.js)
 
 ### 3.1 短链 ID 算法（已完成，与参考项目一致）
 
-实现位置：`src/services/BlogDeployService.js:11-38`、`scripts/blog/cyrb53.js`
+实现位置：`src/services/BlogDeployService.js:11-38`（v2026-07-29 起 scripts/blog/cyrb53.js 已删除，cyrb53 唯一真相源是 BlogDeployService 内嵌版）
 
 ```js
 function cyrb53 (str, seed = 0) { /* 双重 hash，返回 base36 字符串 */ }
@@ -198,10 +198,7 @@ src/store/server/actions.js                    # blogDeploy action
 src/ApiInvoker.js / src/ApiHandler.js          # IPC 封装
 share/channels.js                              # IPC channel 定义
 
-scripts/blog/
-  cyrb53.js                                    # 完整版 cyrb53 + shortlinkId（与 src/services 同源）
-  run-smoke.js                                 # smoke 测试
-  blog-config-writer.js                        # 脚本版本（与 main-process 同步）
+# v2026-07-29 起 scripts/blog/ 整目录已删除（run-smoke.js 迁到 tests/unit/blog/blog-config-writer.test.js；blog-config-writer.js + cyrb53.js 均为孤儿副本）
 
 .github/workflows/
   blog-build.yml / blog-db-upload.yml / blog-preview.yml
@@ -263,11 +260,11 @@ scripts/blog/
 # 本地一键打包（推荐通过 UI 弹框）
 yarn start  # 启动 Memocast → 右键分类 → "部署到博客"
 
-# 单独跑 smoke 测试
-node scripts/blog/run-smoke.js
+# 跑 blog 打包契约测试（v2026-07-29 起取代旧的 scripts/blog/run-smoke.js）
+yarn verify:blog
 
-# 单独验证 cyrb53 算法
-node -e "console.log(require('./scripts/blog/cyrb53').cyrb53('技术/序章'))"
+# 单独验证 cyrb53 算法（v2026-07-29 起 scripts/blog/cyrb53.js 已删，cyrb53 在 BlogDeployService.js 内嵌）
+node -e "console.log(require('./src/services/BlogDeployService'))"
 
 # 远端 CI 触发
 git push origin master          # 自动触发 blog-build.yml

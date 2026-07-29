@@ -802,6 +802,13 @@ export default BUILTIN_ECHO_CARDS
 
 ## 5. 14 个内置 rune 模板详解
 
+> **v2026-07-29 起**：main 端**不再维护** `src-electron/main-process/service/builtin-rune-templates.js` 镜像（已 `git rm`）。**历史上镜像已经出现真实漂移**：renderer 端 14 张（含 `InheritDemo`）vs main 端 13 张（缺 `InheritDemo`），新装机用户永远看不到 InheritDemo。改成跟 echo 同方向"full-push"：真相源在 renderer 端 `runeTemplates.js` 的 `BUILTIN_RUNE_TEMPLATE_META` 导出（14 项元数据 + 14 个 factory 引用），DB 落库由 renderer 推送。
+>
+> main 端 IPC handler 的新契约：
+> - `db:clearRuneTemplates`：`payload.builtins` 必传（renderer 端 `BUILTIN_RUNE_TEMPLATE_META` 拼装行数组），不再有"main 镜像兜底"分支。
+> - `db:saveRuneTemplate` / `db:saveRuneTemplates`：renderer 端 `RuneTemplateService.seedBuiltin()` 在 `ensureLoaded()` 缓存 miss 且 DB 为空（或 0 张内置行）时懒灌种子；并发去重 + `saveOne` 的 upsert 语义保证幂等。
+> - 启动期"首次 seed"代码段已删除——renderer 端懒灌替代。
+
 ### 5.1 工厂入口（`src/components/rune/runeTemplates/runeTemplates.js`）
 
 ```javascript
