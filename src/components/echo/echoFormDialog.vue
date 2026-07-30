@@ -26,6 +26,7 @@
             :is-readonly='isReadonly'
             :is-builtin='isBuiltin'
             @update:form='val => form = val'
+            @request-ai-help='handleRequestAiHelp'
           />
 
           <!-- 右侧编辑器区域 -->
@@ -63,9 +64,12 @@ import {
   createDefaultEchoAnnoSource,
   DEFAULT_ECHO_COLOR,
   DEFAULT_ECHO_ICON
-} from 'components/echo/echoCore'
+} from 'src/components/echo/echoCore'
+import { BUILTIN_ECHO_CARDS } from 'src/components/echo/echoBuiltins/echoBuiltins'
 import { DEFAULT_ECHO_CATEGORY, EchoCategoryEnum } from 'src/utils/enum'
 import { normalizeEchoCategory } from 'src/utils/const/runeEchoCategoryLogic'
+import bus from 'src/components/common/bus'
+import { EVENTS } from 'src/utils/const/eventsConst'
 
 import echoFormFields from './echoFormFields.vue'
 import echoFormEditor from './echoFormEditor.vue'
@@ -176,6 +180,64 @@ export default {
     this.dialog = this.$refs.dialog
   },
   methods: {
+    handleRequestAiHelp () {
+      const desc = String(this.form.desc || '').trim()
+      const builtinTemplates = BUILTIN_ECHO_CARDS.map(card => {
+        return `【${card.name}】
+${card.desc || '无描述'}
+---
+anno_source:
+\`\`\`javascript
+${card.anno_source}
+\`\`\`
+`
+      }).join('\n\n')
+
+      const prompt = `你是一个回响（Echo）编辑器助手。请根据用户的描述和所有内置回响模板，帮助生成一个新的回响 anno_source 代码。
+
+用户描述：
+${desc || '（未提供描述）'}
+
+所有内置回响模板：
+${builtinTemplates}
+
+请生成一个新的回响 anno_source，遵循以下格式：
+\`\`\`javascript
+export default {
+  type: 'echo',        // 'echo' | 'echo-chant' | 'echo-tbd'
+  field: 'xxx',        // 字段名（与 name 相同）
+  title: 'xxx',        // 标题
+  version: 1,
+  props: {},
+  render(node, props = {}) {
+    return '<span>...</span>'  // 返回 HTML 字符串
+  },
+  afterRender(node, props = {}) {
+    const $ = window.jQuery
+    const $node = $(node)
+    // 使用 jQuery 操作 DOM
+  }
+}
+\`\`\`
+
+只输出最终的代码块，不要输出分析过程。`
+
+      bus.$emit(EVENTS.REQUEST_AI_ECHO_HELP, {
+        prompt,
+        echoName: this.form.name || '新回响',
+        onApply: (code) => {
+          // 更新 form 数据
+          this.form.anno_source = code
+          // 直接更新 monaco 编辑器
+          const editorRef = this.$refs.echoFormEditor
+          if (editorRef && editorRef.setSource) {
+            editorRef.setSource(code)
+          }
+          this.$emit('update-source', code)
+        }
+      })
+    },
+
     onPrimaryClick () {
       if (this.isReadonly) {
         if (this.dialog) this.dialog.hide()

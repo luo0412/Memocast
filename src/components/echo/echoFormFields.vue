@@ -16,7 +16,23 @@
 
     <!-- 描述 -->
     <div class='echo-form-field echo-form-field--desc'>
-      <div class='echo-form-label'>{{ $t('echoCardDesc') }}</div>
+      <div class='echo-form-label'>
+        {{ $t('echoCardDesc') }}
+        <q-btn
+          v-if='!isReadonly'
+          flat
+          dense
+          round
+          size='sm'
+          icon='auto_awesome'
+          class='echo-form-ai-btn'
+          @click='$emit("request-ai-help")'
+        >
+          <q-tooltip anchor='top middle' self='bottom middle' :offset='[0, 6]'>
+            AI 辅助生成回响代码
+          </q-tooltip>
+        </q-btn>
+      </div>
       <q-input
         v-model='formData.desc'
         dense
@@ -214,6 +230,20 @@ export default {
   margin-bottom: 4px;
   font-weight: 500;
   line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.echo-form-ai-btn {
+  color: #7c4dff;
+  opacity: 0.8;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.echo-form-ai-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 .echo-form-input {

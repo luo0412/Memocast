@@ -38,7 +38,7 @@
 <script>
 import * as monaco from 'monaco-editor'
 import { setupMonacoClipboard } from 'src/utils/monacoClipboardBridge'
-import { createDefaultEchoAnnoSource, BUILTIN_ECHO_CARDS } from 'components/echo/echoCore'
+import { createDefaultEchoAnnoSource, BUILTIN_ECHO_CARDS } from 'src/components/echo/echoCore'
 
 export default {
   name: 'echoFormEditor',
@@ -310,6 +310,14 @@ export default {
         return this.monacoEditor.getValue()
       }
       return this.source
+    },
+
+    setSource (code) {
+      if (!code) return
+      if (this.monacoEditor && this.monacoReady) {
+        this.monacoEditor.setValue(code)
+      }
+      this.$emit('update-source', code)
     }
   }
 }

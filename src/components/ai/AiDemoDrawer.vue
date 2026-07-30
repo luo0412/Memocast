@@ -8,6 +8,7 @@
     :modal="false"
     append-to-body
     :with-header="true"
+    :z-index="9999"
   >
     <div class="ai-drawer-demo">
       <div class="ai-demo-chat-shell">
@@ -86,6 +87,23 @@
                     <span class="ai-demo-apply-link__label">{{ $t('aiDrawerApplyToNote') }}</span>
                   </button>
                 </div>
+                <!-- 回响编辑模式：气泡下方醒目的「应用到回响编辑框」按钮 -->
+                <div
+                  v-if="message.role === 'assistant' && echoHelpMode && message.status === 'done' && message.content"
+                  class="ai-demo-echo-apply-bar"
+                >
+                  <el-button
+                    type="primary"
+                    size="small"
+                    icon="el-icon-document-copy"
+                    class="ai-demo-echo-apply-btn"
+                    :disabled="applyingMessageId !== null && applyingMessageId !== message.id"
+                    @click="applyCodeToEchoEditor(message)"
+                  >
+                    <span v-if="applyingMessageId === message.id">应用中…</span>
+                    <span v-else>应用到当前回响编辑框</span>
+                  </el-button>
+                </div>
               </div>
             </div>
           </div>
@@ -119,7 +137,7 @@ import { i18n } from 'boot/i18n'
 import { createNamespacedHelpers } from 'vuex'
 import PortkeyService from 'src/services/PortkeyService'
 import MarkdownRenderer from 'src/services/MarkdownRenderer'
-import appBus from 'components/common/bus'
+import appBus from 'src/components/common/bus'
 import { EVENTS as appEvents } from 'src/utils/const/eventsConst'
 
 const { mapGetters: mapServerGetters } = createNamespacedHelpers('server')
@@ -150,7 +168,11 @@ export default {
       applyingMessageId: null,
       messages: [
         createMessage(1, 'assistant', i18n.t('aiDrawerIntroMessage'))
-      ]
+      ],
+      // 回响编辑模式
+      echoHelpMode: false,
+      echoHelpCallback: null,
+      echoHelpName: ''
     }
   },
   computed: {
@@ -182,11 +204,17 @@ export default {
       return PortkeyService.isConfigUsable(this.defaultConfig)
     },
     welcomeTitle () {
+      if (this.echoHelpMode) {
+        return `AI 辅助生成回响代码`
+      }
       return this.isReady
         ? this.$t('aiDrawerWelcomeReadyTitle', { provider: this.providerLabel })
         : this.$t('aiDrawerWelcomeNotReadyTitle')
     },
     welcomeDescription () {
+      if (this.echoHelpMode) {
+        return `正在为「${this.echoHelpName}」生成回响代码。生成完成后，点击「应用到回响编辑框」将代码填入 Monaco 编辑器。`
+      }
       if (!this.defaultConfig) {
         return this.$t('aiDrawerWelcomeNoDefaultDescription')
       }
@@ -204,6 +232,9 @@ export default {
       })
     },
     composerHint () {
+      if (this.echoHelpMode) {
+        return '请根据描述和模板生成回响代码'
+      }
       if (!this.defaultConfig) {
         return this.$t('aiDrawerComposerHintNoDefault')
       }
@@ -237,11 +268,34 @@ export default {
     } catch (err) {
       console.warn('[AiDemoDrawer] Failed to initialize MarkdownRenderer:', err)
     }
+
+    // 监听回响编辑模式的 AI 帮助请求
+    appBus.$on(appEvents.REQUEST_AI_ECHO_HELP, this.handleEchoHelpRequest)
   },
   beforeDestroy () {
     MarkdownRenderer.disposeAll()
+    appBus.$off(appEvents.REQUEST_AI_ECHO_HELP, this.handleEchoHelpRequest)
   },
   methods: {
+    /**
+     * 处理回响编辑模式的 AI 帮助请求
+     */
+    handleEchoHelpRequest ({ prompt, echoName, onApply }) {
+      this.echoHelpMode = true
+      this.echoHelpCallback = onApply
+      this.echoHelpName = echoName
+
+      // 清空消息，切换到回响编辑模式
+      this.messages = []
+      this.pushMessage('system', `回响编辑器：正在为「${echoName}」生成代码...`)
+
+      // 设置预填的 prompt
+      this.draftMessage = prompt
+
+      // 打开抽屉
+      this.show({ redirectToSettings: false })
+    },
+
     async refreshDefaultConfig () {
       this.defaultConfig = await PortkeyService.getDefaultConfig()
     },
@@ -271,6 +325,16 @@ export default {
     hide () {
       this.stopStreaming({ silent: true })
       this.visible = false
+      // 退出回响编辑模式
+      if (this.echoHelpMode) {
+        this.echoHelpMode = false
+        this.echoHelpCallback = null
+        this.echoHelpName = ''
+        // 恢复默认欢迎消息
+        this.messages = [
+          createMessage(1, 'assistant', i18n.t('aiDrawerIntroMessage'))
+        ]
+      }
     },
     async toggle () {
       if (!this.visible) {
@@ -427,6 +491,93 @@ export default {
         })
       } finally {
         // 让 dot 动画播完再清，避免视觉抖动；同时避免重复点击。
+        setTimeout(() => {
+          if (this.applyingMessageId === message.id) {
+            this.applyingMessageId = null
+          }
+        }, 800)
+      }
+    },
+
+    /**
+     * 从 AI 响应中提取代码块并应用到回响编辑器（仅回响编辑模式）
+     */
+    applyCodeToEchoEditor (message) {
+      if (!message || message.role !== 'assistant') return
+      const content = message.content || ''
+      if (!content.trim()) {
+        this.$q.notify({
+          type: 'warning',
+          message: 'AI 响应为空，无法提取代码',
+          position: 'top'
+        })
+        return
+      }
+
+      // 提取代码块（支持 ```javascript ... ``` 或 ``` ... ```）
+      const codeBlockRegex = /```(?:javascript)?\s*([\s\S]*?)```/g
+      let extractedCode = null
+      let match
+      while ((match = codeBlockRegex.exec(content)) !== null) {
+        const code = (match[1] || '').trim()
+        // 跳过 markdown 渲染相关代码
+        if (code && !code.includes('```')) {
+          extractedCode = code
+          break
+        }
+      }
+
+      // 如果没找到代码块，尝试直接使用整个内容（去掉可能的 markdown 格式）
+      if (!extractedCode) {
+        const lines = content.split('\n')
+        const codeLines = []
+        let inCodeBlock = false
+        for (const line of lines) {
+          if (line.trim().startsWith('```')) {
+            inCodeBlock = !inCodeBlock
+            continue
+          }
+          if (inCodeBlock || (!line.startsWith('#') && !line.startsWith('**') && !line.startsWith('-') && !line.startsWith('*'))) {
+            codeLines.push(line)
+          }
+        }
+        if (codeLines.length > 0) {
+          extractedCode = codeLines.join('\n').trim()
+        }
+      }
+
+      if (!extractedCode) {
+        this.$q.notify({
+          type: 'warning',
+          message: '未能从 AI 响应中提取代码',
+          position: 'top'
+        })
+        return
+      }
+
+      this.applyingMessageId = message.id
+      try {
+        if (this.echoHelpCallback && typeof this.echoHelpCallback === 'function') {
+          this.echoHelpCallback(extractedCode)
+          this.$q.notify({
+            type: 'positive',
+            message: '代码已应用到回响编辑框',
+            position: 'top'
+          })
+        } else {
+          this.$q.notify({
+            type: 'warning',
+            message: '应用回调未定义',
+            position: 'top'
+          })
+        }
+      } catch (error) {
+        this.$q.notify({
+          type: 'negative',
+          message: `应用失败: ${error.message || String(error)}`,
+          position: 'top'
+        })
+      } finally {
         setTimeout(() => {
           if (this.applyingMessageId === message.id) {
             this.applyingMessageId = null
@@ -601,6 +752,21 @@ export default {
   align-items: flex-end;
 }
 
+.ai-demo-message-item--system {
+  align-items: flex-start;
+}
+
+.ai-demo-message-item--system .ai-demo-message-bubble {
+  background: rgba(124, 77, 255, 0.1);
+  border-color: rgba(124, 77, 255, 0.3);
+  font-style: italic;
+  color: rgba(124, 77, 255, 0.9);
+}
+
+.ai-demo-message-item--system .ai-demo-message-label {
+  display: none;
+}
+
 .ai-demo-message-label {
   font-size: 12px;
   color: #909399;
@@ -657,6 +823,20 @@ export default {
 .ai-demo-apply-link:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.ai-demo-apply-link--echo {
+  margin-left: 8px;
+  color: #7c4dff;
+}
+
+.ai-demo-apply-link--echo:hover:not(:disabled) {
+  color: #7c4dff;
+  background-color: rgba(124, 77, 255, 0.08);
+}
+
+.ai-demo-apply-link--echo:active:not(:disabled) {
+  background-color: rgba(124, 77, 255, 0.14);
 }
 
 .ai-demo-apply-link__icon {
@@ -854,5 +1034,42 @@ export default {
 .ai-demo-composer__actions {
   display: flex;
   justify-content: flex-end;
+}
+
+/* 回响编辑模式：气泡下方醒目的应用按钮 */
+.ai-demo-echo-apply-bar {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.ai-demo-echo-apply-btn {
+  background: linear-gradient(135deg, #7c4dff 0%, #651fff 100%) !important;
+  border-color: #651fff !important;
+  color: #ffffff !important;
+  font-weight: 500;
+  border-radius: 20px;
+  padding: 6px 18px;
+  transition: all 0.2s ease;
+}
+
+.ai-demo-echo-apply-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #9575ff 0%, #7c4dff 100%) !important;
+  border-color: #7c4dff !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(101, 31, 255, 0.35);
+}
+
+.ai-demo-echo-apply-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(101, 31, 255, 0.25);
+}
+
+.ai-demo-echo-apply-btn.is-disabled,
+.ai-demo-echo-apply-btn:disabled {
+  background: linear-gradient(135deg, #b39ddb 0%, #9575cd 100%) !important;
+  border-color: #9575cd !important;
+  cursor: not-allowed;
+  opacity: 0.8;
 }
 </style>

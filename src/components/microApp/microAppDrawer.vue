@@ -7,6 +7,7 @@
     elevated
     content-class="hide-scrollbar"
     class="im-drawer"
+    z-index="9999"
   >
     <div class="im-drawer-container">
       <!-- 顶部横向切换标签栏 + 关闭按钮 -->

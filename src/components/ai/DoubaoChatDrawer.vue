@@ -7,6 +7,7 @@
     elevated
     content-class="hide-scrollbar"
     class="ai-chat-drawer"
+    z-index="9999"
   >
     <div class="ai-chat-container">
       <!-- Header bar -->
