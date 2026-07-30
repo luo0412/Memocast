@@ -209,7 +209,20 @@ const escapeEchoAttrValue = (value = '') => String(value)
 const createEchoPlaceholderMarkup = (item = {}, prompt = '') => {
   const echoName = item?.meta?.echoName || item?.title?.() || '回响'
   const normalizedPrompt = String(prompt || '')
-  return `@${echoName}{value: '${escapeEchoAttrValue(normalizedPrompt)}'}()`
+  // === v2026-07-30 起：快捷面板插入时自动生成 echoId（uuidv4）===
+  //   - 与 rune 端 `data-rune-id` 角色一致——每个回响实例都有稳定的"实例 id"
+  //   - handler 端通过 `props.echoId` 拿到
+  //   - 字段名固定 `echoId`（与 parser / runtime 优先级链对齐）
+  //   - definitionId 也一并写入（若 item 上有），让 runtime 解析 definition 名片时直接命中
+  //     （不必 fallback 到 name）；quickInsert 当前 echo item 没传 id，先不写也没问题——
+  //     runtime 端 _doAfterRender 会按 data-echo-name 兜底找 echo。
+  const echoId = uuidv4()
+  // item?.meta?.runeId 是 rune item 的 templateId；echo item 这里没有「定义 id」字段
+  // （echoCards 端走 echo.id 作为 definitionId 已是 echoRuntime 的解析路径之一），
+  // 所以 echo 路径这里 definitionId 暂留空，让 runtime 端按 echoName 兜底。
+  const parts = [`echoId: '${escapeEchoAttrValue(echoId)}'`]
+  parts.push(`value: '${escapeEchoAttrValue(normalizedPrompt)}'`)
+  return `@${echoName}{${parts.join(', ')}}()`
 }
 
 class QuickInsert extends BaseScrollFloat {
