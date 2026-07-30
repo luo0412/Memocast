@@ -1,73 +1,73 @@
 ---
-description: 符文 / 回响 / 云函数 的 Jest 测试用例是 AI 时代的契约护城河 —— 必须维护、必须跑、必须扩
+description: 符文 / 回响 / 云函�?�?Jest 测试用例�?AI 时代的契约护城河 —�?必须维护、必须跑、必须扩
 alwaysApply: true
 ---
 
-# 符文 / 回响 / 云函数 —— 测试护城河规则
+# 符文 / 回响 / 云函�?—�?测试护城河规�?
 
-> **AI 时代，测试用例才是真正的护城河。**
+> **AI 时代，测试用例才是真正的护城河�?*
 >
-> 代码会被重构、命名会改、字段会搬——只要 Jest 锁住了"事实契约"，下游消费者永远安全。
+> 代码会被重构、命名会改、字段会搬——只�?Jest 锁住�?事实契约"，下游消费者永远安全�?
 >
-> v2026-07-29 起，**所有契约测试用例均迁入 Jest 29**（位于 `tests/unit/` + `tests/smoke/`），旧的 `scripts/verify-*.js` 保留 1 周作为过渡期，过后删除。
+> v2026-07-29 起，**所有契约测试用例均迁入 Jest 29**（位�?`tests/unit/` + `tests/smoke/`），旧的 `scripts/verify-*.js` 保留 1 周作为过渡期，过后删除�?
 >
-> 本规则约束 rune / echo / 云函数 三类试验特性的 Jest 用例的**维护义务**：什么时候必须加、什么时候必须跑、什么时候必须改。
+> 本规则约�?rune / echo / 云函�?三类试验特性的 Jest 用例�?*维护义务**：什么时候必须加、什么时候必须跑、什么时候必须改�?
 
 ---
 
 ## 1. 适用范围
 
-| 特性 | 主战场 | Jest 用例覆盖 |
+| 特�?| 主战�?| Jest 用例覆盖 |
 |---|---|---|
-| **符文（Rune）** | `src/components/rune/runeTemplates/`（14 张 SFC 分散在子目录 + `BUILTIN_RUNE_TEMPLATE_META` 元数据）、`src/components/muya/Muya.vue` | `tests/unit/rune/templates.test.js`、`tests/unit/rune/main-builtin-templates.test.js` |
-| **回响（Echo）** | `src/components/echo/echoBuiltins/`（17 张卡片分散在子目录）、`src/muya/lib/parser/render/index.js`、`src-electron/main-process/electron-main.js`（db:saveEcho / db:saveEchoes / db:clearEchoes 三个 IPC handler） | `tests/unit/echo/jquery-echo-compile.test.js`、`tests/unit/echo/jquery-afterrender.test.js`、`tests/unit/echo/runtime-props.test.js`、`tests/unit/echo/main-builtin-echoes.test.js`、`tests/unit/echo/schema-formcreate-align.test.js` |
-| **云函数** | `src/utils/cloud-router.js`、`src/services/cloud/`、`src/components/ui/dialog/CloudFnConfigDialog.vue` | （目前**没有**专门的云函数 jest 用例——见 §5） |
-| **跨三特性公共** | `src/components/echo/echoInherit.js`、`src/components/echo/echoPayloadCodec.js`、`src/components/echo/echoCore.js` | `tests/unit/echo/inherit-from-previous.test.js` |
-| **博客打包（VuePress）** | `src-electron/main-process/service/blog-config-writer.js`（唯一真相源；v2026-07-29 起 scripts/blog/blog-config-writer.js 这个孤儿副本已删除） | `tests/unit/blog/blog-config-writer.test.js` |
-| **工具链（Vue 2.7 + Jest 29）** | `tests/fixtures/jquery-setup.js`、`jest.config.js`、`babel.config.test.js` | `tests/smoke/vue-mount.test.js` |
+| **符文（Rune�?* | `src/components/rune/runeTemplates/`�?4 �?SFC 分散在子目录 + `BUILTIN_RUNE_TEMPLATE_META` 元数据）、`src/components/muya/Muya.vue` | `tests/unit/rune/templates.test.js`、`tests/unit/rune/main-builtin-templates.test.js` |
+| **回响（Echo�?* | `src/components/echo/echoBuiltins/`�?7 张卡片分散在子目录）、`@coolma/muya/lib/parser/render/index.js`、`src-electron/main-process/electron-main.js`（db:saveEcho / db:saveEchoes / db:clearEchoes 三个 IPC handler�?| `tests/unit/echo/jquery-echo-compile.test.js`、`tests/unit/echo/jquery-afterrender.test.js`、`tests/unit/echo/runtime-props.test.js`、`tests/unit/echo/main-builtin-echoes.test.js`、`tests/unit/echo/schema-formcreate-align.test.js` |
+| **云函�?* | `src/utils/cloud-router.js`、`src/services/cloud/`、`src/components/ui/dialog/CloudFnConfigDialog.vue` | （目�?*没有**专门的云函数 jest 用例——见 §5�?|
+| **跨三特性公�?* | `src/components/echo/echoInherit.js`、`src/components/echo/echoPayloadCodec.js`、`src/components/echo/echoCore.js` | `tests/unit/echo/inherit-from-previous.test.js` |
+| **博客打包（VuePress�?* | `src-electron/main-process/service/blog-config-writer.js`（唯一真相源；v2026-07-29 �?scripts/blog/blog-config-writer.js 这个孤儿副本已删除） | `tests/unit/blog/blog-config-writer.test.js` |
+| **工具链（Vue 2.7 + Jest 29�?* | `tests/fixtures/jquery-setup.js`、`jest.config.js`、`babel.config.test.js` | `tests/smoke/vue-mount.test.js` |
 
 ---
 
-## 2. 核心原则（一句话）
+## 2. 核心原则（一句话�?
 
-> **任何对 rune / echo / 云函数的实质性改动，必须同步更新 Jest 用例；任何用例的失败，必须当作破坏性 bug 处理，不能静默放行。**
+> **任何�?rune / echo / 云函数的实质性改动，必须同步更新 Jest 用例；任何用例的失败，必须当作破坏�?bug 处理，不能静默放行�?*
 
 ---
 
 ## 3. 必须维护的护城河清单
 
-### 3.1 当前已有的护城河（v2026-07-29 迁移到 Jest 之后）
+### 3.1 当前已有的护城河（v2026-07-29 迁移�?Jest 之后�?
 
-| 用例 | 锁定的契约 | 触发失败的典型改动 |
+| 用例 | 锁定的契�?| 触发失败的典型改�?|
 |---|---|---|
-| `tests/unit/echo/runtime-props.test.js` | `definition.render(props)` / `definition.afterRender(node, props)` 真的能拿到参数；props 合并顺序；fallback 路径（no anno_source / compile fail / render throws / echo 未注册）；graceful skip（未知 type）；payload round-trip | 改 HANDLER_PRELUDE 让 compile 失败、动 `finalProps` 合并顺序、删 fallback、误把 `$emit('input', ...)` 改成别的通道 |
-| `tests/unit/echo/jquery-echo-compile.test.js` | 17 张内置 anno_source **顶层结构**（`type` / `field` / `title` / `version` / `props`）；`render` 必须返回 string；`type=echo-chant` 必须有 `afterRender`；**`kind` 字段不能再出现**（已合并到 `type`）。v2026-07-29 起 17 张卡片从 `./echoBuiltins.js` 单文件拆到 `./echoBuiltins/` 子目录，测试改为 `require('./echoBuiltins/echoBuiltins.js')` 直接拿 `BUILTIN_ECHO_CARDS`；v2026-07-30 起新增 `fold`（折叠：标题下兄弟节点折叠 / 展开，localStorage 持久化偏好）。 | 改 `createAnnoSource` 拼装模板时漏字段、改 `baseRender` 让它返回 object、改 type 三态分类 |
-| `tests/unit/echo/jquery-afterrender.test.js` | 17 张 handlerBody 用 `$(node)` 直 jQuery 化；无 native fallback（`document.querySelector` / `.classList.add` / `.previousElementSibling` / `.style.x = `）；`echoAnnoSource.js` 导出 `HANDLER_PRELUDE` / `createDefaultEchoAnnoSource`；旧命名 `safeDollarRef` / `createDefaultChantAnnoSource` 不再出现。v2026-07-29 起测试改为递归读 `echoBuiltins/` 子目录的所有 `.js`，仍然能定位每个 handlerBody、`safeDollarRef` 等历史包袱必须清空；旧路径 `./echoBuiltins.js` 单文件必须不存在（被覆盖测试看住）；v2026-07-30 起 `fold` handlerBody 加了「marker 已装配则走幂等快路径」分支（避免 Muya 重渲染时反复 wrap / append icon 抖动）。 | 给 handlerBody 偷加原生兜底、改 HANDLER_PRELUDE 不再注入 $、把 `createDefaultEchoAnnoSource` 改名 |
-| `tests/unit/echo/main-builtin-echoes.test.js` | renderer 端 17 张卡的 **IPC payload 契约**——每张卡片含完整字段（`id` / `name` / `desc` / `icon` / `color` / `category` / `anno_source` / `isBuiltin` / `metaId`），可直接 push 给 main 端 `db:clearEchoes` / `db:saveEcho` / `db:saveEchoes`；id 须以 `__builtin_` 开头并以 `__` 结尾（main 端 isBuiltin 判断约定）；category 须为 `showy` / `builtin` 之一；`anno_source` 顶层 `type` 三态合法、`kind` 不再出现、能被 `new Function(prelude + source)` 编译。**真相源在 renderer 端**，main 端不再维护镜像（v2026-07-29 起删除 `src-electron/main-process/service/builtin-echoes.js` + `scripts/transform-main-builtin-echoes.js`）；v2026-07-30 起新增 `__builtin_fold__`（折叠）。 | 改 renderer 端 `echoBuiltins/` 卡片但忘了补 IPC 必传字段；改 `buildEchoCard` 让 `id` 偏离 `__builtin_*__` 约定；改 `category` 改为非法值（如 `marker` 兜底不在 renderer 范围）；改 `createAnnoSource` 拼装模板时漏顶层字段 |
-| `tests/unit/echo/schema-formcreate-align.test.js` | echo propsSchema 贴合 form-create rule：禁止 `placeholder` / `default` 顶层字段、每项 schema 至少含 `type` + `field`、rule 字段必须是 form-create 标准字段、`buildFormCreateRule` 默认值与实例 props 优先级 | 改 schema 项自造 form-create 不认的字段、删 `type` 或 `field`、改 defaultValue 优先级 |
-| `tests/unit/rune/templates.test.js` | 14 个内置 rune SFC 模板分散在 `runeTemplates/` 子目录各自的 `runeTemplates*.js` 文件里；测试扫描每个文件，验证**源文件级转义**（`</script>` 必须写成 `<\/script>`，否则 .vue 文件 import 时会被截断）；运行时**语法可编译**；**`props.value` 必须声明**（`mountRuneVueHosts` 硬约定）；非纯展示型 rune 必须有 `$emit('input', ...)` 回写通道。`create*Template → runeTemplates*` 命名映射：测试会去掉 `create` 前缀和 `Template` 后缀，拼出对应的导出名。 | 在 `runeTemplates*/.js` 源文件里直接写 `</script>`；删 props.value；改 `$emit('input')` 为别的通道；新增 rune 模板没在 `TEMPLATE_NAMES` 列表里登记 |
-| `tests/unit/rune/main-builtin-templates.test.js` | renderer 端 14 张 SFC + 元数据的 **IPC payload 契约**——`BUILTIN_RUNE_TEMPLATE_META` 含完整字段（`id` / `category_key` / `name` / `desc` / `color` / `icon` / `factory`），可直接 push 给 main 端 `db:clearRuneTemplates` / `db:saveRuneTemplate` / `db:saveRuneTemplates`；id 必须以 `builtin-tpl-` 开头（main 端 reset 删 `is_builtin=1` 的约定）；`factory` 名必须与 `TEMPLATE_NAMES` 双向无漂移；`factory()` 输出 SFC 字符串语法可编译（`new Function` 不抛错）。**真相源在 renderer 端**，main 端不再维护镜像（v2026-07-29 起删除 `src-electron/main-process/service/builtin-rune-templates.js`），renderer 端 `BUILTIN_RUNE_TEMPLATE_META` 成为单源；`RuneTemplateService.seedBuiltin()` / `RuneTemplateService.buildBuiltinRows()` 是把它投递给 main 的入口。 | 在 `runeTemplates.js` 里删 `BUILTIN_RUNE_TEMPLATE_META` 某条 / `factory` 改名；改 `category_key` 为非法值；改 SFC 让语法不再 `new Function` 编译通过；新增/删除模板没同步两边列表 |
-| `tests/unit/echo/inherit-from-previous.test.js` | `isInheritFromPreviousEnabled` 各种 truthy 形式；`echoInheritFromPrevious` 看顶层 + `echo.props`；`extractPrevEchoTokenValue` 按 echoName 过滤；`encodeEchoPayload` / `decodeEchoPayload` round-trip；`createEchoPlaceholderPayload` 注入 `definitionId` / `title` / `inheritFromPrevious` 标记 | 改 inherit helper 真值表；把 `decodeEchoPayload` 输出形态从 `{ version, prompt, props }` 改成 `{ version, prompt, attrs }` |
-| `tests/unit/blog/blog-config-writer.test.js` | 唯一真相源（主进程版）的契约：`writeBlogUtilities` 写出 3 个 builder 文件；`writeVuepressConfig` 不覆盖已存在 config；`runBuilders` 跑完生成 sidebar/nav（positive：4 篇 → `sidebar._posts/` = 4 + verify 全部 resolved）；`runVerifyPaths` negative 抛错；`ensureBlogConfig` 端到端（positive.ok=true；negative.ok=false 但 sidebar 仍能写出）；`SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` / `VERIFY_PATHS_SRC` 三段非空模板锁住。v2026-07-29 起取代旧 `scripts/blog/run-smoke.js`，迁移 positive / negative 双断言。 | 在 `blog-config-writer.js` 改 builder 模板但忘了同步 `tests/unit/blog/blog-config-writer.test.js` 的 sidebar 形状断言；让 `writeVuepressConfig` 覆盖已存在 config；删 `runVerifyPaths` 的 negative 抛错分支 |
-| `tests/unit/boot/enum-boot-smoke.test.js` | `$enums.ServerSubEnum` / `$enums.AiSubEnum` / `$enums.runeEchoCategoriesEnum` / `$enums.noteOrderTypeEnum` 等核心 enum 在 boot 阶段挂载完整 | 改 enum 目录结构、改 enumSetup.js 加载顺序 |
-| `tests/unit/boot/util-boot-smoke.test.js` | `$utils.emptyUtil.isNullOrEmpty` / `$utils.treeUtil.wizIsPredefinedLocation` / `$utils.dateUtil.displayDateElegantly` 在 boot 阶段挂载完整 | 改 util 文件夹命名 / 改 boot 加载 |
-| `tests/unit/boot/enum-util-regex.test.js` | 文件命名规范自检：`[a-z]\w*Util.js$` 匹配 / 大驼峰 PascalCase 不匹配 | 改 component-naming.mdc 规范本身 |
-| `tests/smoke/vue-mount.test.js` | Jest 29 + @vue/vue2-jest + @vue/test-utils@1.3.6 + jsdom 工具链能在 Vue 2.7 仓库跑通：mount、props、emit、SFC 编译、jQuery 注入 | 升 jest / vue2-jest / @vue/test-utils 时未跑烟雾测试 |
+| `tests/unit/echo/runtime-props.test.js` | `definition.render(props)` / `definition.afterRender(node, props)` 真的能拿到参数；props 合并顺序；fallback 路径（no anno_source / compile fail / render throws / echo 未注册）；graceful skip（未�?type）；payload round-trip | �?HANDLER_PRELUDE �?compile 失败、动 `finalProps` 合并顺序、删 fallback、误�?`$emit('input', ...)` 改成别的通道 |
+| `tests/unit/echo/jquery-echo-compile.test.js` | 17 张内�?anno_source **顶层结构**（`type` / `field` / `title` / `version` / `props`）；`render` 必须返回 string；`type=echo-chant` 必须�?`afterRender`�?*`kind` 字段不能再出�?*（已合并�?`type`）。v2026-07-29 �?17 张卡片从 `./echoBuiltins.js` 单文件拆�?`./echoBuiltins/` 子目录，测试改为 `require('./echoBuiltins/echoBuiltins.js')` 直接�?`BUILTIN_ECHO_CARDS`；v2026-07-30 起新�?`fold`（折叠：标题下兄弟节点折�?/ 展开，localStorage 持久化偏好）�?| �?`createAnnoSource` 拼装模板时漏字段、改 `baseRender` 让它返回 object、改 type 三态分�?|
+| `tests/unit/echo/jquery-afterrender.test.js` | 17 �?handlerBody �?`$(node)` �?jQuery 化；�?native fallback（`document.querySelector` / `.classList.add` / `.previousElementSibling` / `.style.x = `）；`echoAnnoSource.js` 导出 `HANDLER_PRELUDE` / `createDefaultEchoAnnoSource`；旧命名 `safeDollarRef` / `createDefaultChantAnnoSource` 不再出现。v2026-07-29 起测试改为递归�?`echoBuiltins/` 子目录的所�?`.js`，仍然能定位每个 handlerBody、`safeDollarRef` 等历史包袱必须清空；旧路�?`./echoBuiltins.js` 单文件必须不存在（被覆盖测试看住）；v2026-07-30 �?`fold` handlerBody 加了「marker 已装配则走幂等快路径」分支（避免 Muya 重渲染时反复 wrap / append icon 抖动）�?| �?handlerBody 偷加原生兜底、改 HANDLER_PRELUDE 不再注入 $、把 `createDefaultEchoAnnoSource` 改名 |
+| `tests/unit/echo/main-builtin-echoes.test.js` | renderer �?17 张卡�?**IPC payload 契约**——每张卡片含完整字段（`id` / `name` / `desc` / `icon` / `color` / `category` / `anno_source` / `isBuiltin` / `metaId`），可直�?push �?main �?`db:clearEchoes` / `db:saveEcho` / `db:saveEchoes`；id 须以 `__builtin_` 开头并�?`__` 结尾（main �?isBuiltin 判断约定）；category 须为 `showy` / `builtin` 之一；`anno_source` 顶层 `type` 三态合法、`kind` 不再出现、能�?`new Function(prelude + source)` 编译�?*真相源在 renderer �?*，main 端不再维护镜像（v2026-07-29 起删�?`src-electron/main-process/service/builtin-echoes.js` + `scripts/transform-main-builtin-echoes.js`）；v2026-07-30 起新�?`__builtin_fold__`（折叠）�?| �?renderer �?`echoBuiltins/` 卡片但忘了补 IPC 必传字段；改 `buildEchoCard` �?`id` 偏离 `__builtin_*__` 约定；改 `category` 改为非法值（�?`marker` 兜底不在 renderer 范围）；�?`createAnnoSource` 拼装模板时漏顶层字段 |
+| `tests/unit/echo/schema-formcreate-align.test.js` | echo propsSchema 贴合 form-create rule：禁�?`placeholder` / `default` 顶层字段、每�?schema 至少�?`type` + `field`、rule 字段必须�?form-create 标准字段、`buildFormCreateRule` 默认值与实例 props 优先�?| �?schema 项自�?form-create 不认的字段、删 `type` �?`field`、改 defaultValue 优先�?|
+| `tests/unit/rune/templates.test.js` | 14 个内�?rune SFC 模板分散�?`runeTemplates/` 子目录各自的 `runeTemplates*.js` 文件里；测试扫描每个文件，验�?*源文件级转义**（`</script>` 必须写成 `<\/script>`，否�?.vue 文件 import 时会被截断）；运行时**语法可编�?*�?*`props.value` 必须声明**（`mountRuneVueHosts` 硬约定）；非纯展示型 rune 必须�?`$emit('input', ...)` 回写通道。`create*Template �?runeTemplates*` 命名映射：测试会去掉 `create` 前缀�?`Template` 后缀，拼出对应的导出名�?| �?`runeTemplates*/.js` 源文件里直接�?`</script>`；删 props.value；改 `$emit('input')` 为别的通道；新�?rune 模板没在 `TEMPLATE_NAMES` 列表里登�?|
+| `tests/unit/rune/main-builtin-templates.test.js` | renderer �?14 �?SFC + 元数据的 **IPC payload 契约**——`BUILTIN_RUNE_TEMPLATE_META` 含完整字段（`id` / `category_key` / `name` / `desc` / `color` / `icon` / `factory`），可直�?push �?main �?`db:clearRuneTemplates` / `db:saveRuneTemplate` / `db:saveRuneTemplates`；id 必须�?`builtin-tpl-` 开头（main �?reset �?`is_builtin=1` 的约定）；`factory` 名必须与 `TEMPLATE_NAMES` 双向无漂移；`factory()` 输出 SFC 字符串语法可编译（`new Function` 不抛错）�?*真相源在 renderer �?*，main 端不再维护镜像（v2026-07-29 起删�?`src-electron/main-process/service/builtin-rune-templates.js`），renderer �?`BUILTIN_RUNE_TEMPLATE_META` 成为单源；`RuneTemplateService.seedBuiltin()` / `RuneTemplateService.buildBuiltinRows()` 是把它投递给 main 的入口�?| �?`runeTemplates.js` 里删 `BUILTIN_RUNE_TEMPLATE_META` 某条 / `factory` 改名；改 `category_key` 为非法值；�?SFC 让语法不�?`new Function` 编译通过；新�?删除模板没同步两边列�?|
+| `tests/unit/echo/inherit-from-previous.test.js` | `isInheritFromPreviousEnabled` 各种 truthy 形式；`echoInheritFromPrevious` 看顶�?+ `echo.props`；`extractPrevEchoTokenValue` �?echoName 过滤；`encodeEchoPayload` / `decodeEchoPayload` round-trip；`createEchoPlaceholderPayload` 注入 `definitionId` / `title` / `inheritFromPrevious` 标记 | �?inherit helper 真值表；把 `decodeEchoPayload` 输出形态从 `{ version, prompt, props }` 改成 `{ version, prompt, attrs }` |
+| `tests/unit/blog/blog-config-writer.test.js` | 唯一真相源（主进程版）的契约：`writeBlogUtilities` 写出 3 �?builder 文件；`writeVuepressConfig` 不覆盖已存在 config；`runBuilders` 跑完生成 sidebar/nav（positive�? �?�?`sidebar._posts/` = 4 + verify 全部 resolved）；`runVerifyPaths` negative 抛错；`ensureBlogConfig` 端到端（positive.ok=true；negative.ok=false �?sidebar 仍能写出）；`SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` / `VERIFY_PATHS_SRC` 三段非空模板锁住。v2026-07-29 起取代旧 `scripts/blog/run-smoke.js`，迁�?positive / negative 双断言�?| �?`blog-config-writer.js` �?builder 模板但忘了同�?`tests/unit/blog/blog-config-writer.test.js` �?sidebar 形状断言；让 `writeVuepressConfig` 覆盖已存�?config；删 `runVerifyPaths` �?negative 抛错分支 |
+| `tests/unit/boot/enum-boot-smoke.test.js` | `$enums.ServerSubEnum` / `$enums.AiSubEnum` / `$enums.runeEchoCategoriesEnum` / `$enums.noteOrderTypeEnum` 等核�?enum �?boot 阶段挂载完整 | �?enum 目录结构、改 enumSetup.js 加载顺序 |
+| `tests/unit/boot/util-boot-smoke.test.js` | `$utils.emptyUtil.isNullOrEmpty` / `$utils.treeUtil.wizIsPredefinedLocation` / `$utils.dateUtil.displayDateElegantly` �?boot 阶段挂载完整 | �?util 文件夹命�?/ �?boot 加载 |
+| `tests/unit/boot/enum-util-regex.test.js` | 文件命名规范自检：`[a-z]\w*Util.js$` 匹配 / 大驼�?PascalCase 不匹�?| �?component-naming.mdc 规范本身 |
+| `tests/smoke/vue-mount.test.js` | Jest 29 + @vue/vue2-jest + @vue/test-utils@1.3.6 + jsdom 工具链能�?Vue 2.7 仓库跑通：mount、props、emit、SFC 编译、jQuery 注入 | �?jest / vue2-jest / @vue/test-utils 时未跑烟雾测�?|
 
-### 3.2 一键入口
+### 3.2 一键入�?
 
 | 命令 | 作用 |
 |---|---|
-| `yarn verify` | 跑全部 Jest 用例（13 个 suite / 700+ 个 test），失败任意一个 exit 1 |
-| `yarn verify:echo` | 只跑 echo 相关（6 个 suite） |
-| `yarn verify:rune` | 只跑 rune 相关（2 个 suite） |
-| `yarn verify:blog` | 只跑 blog 打包相关（1 个 suite） |
-| `yarn verify:boot` | 只跑 boot 扫描相关（3 个 suite） |
-| `yarn verify:smoke` | 只跑工具链烟雾测试（1 个 suite） |
-| `yarn test` / `yarn test:watch` | 走 Jest 默认（色彩开启），开发时 watch |
-| `yarn jest <path>` | 任意子集（`yarn jest tests/unit/echo` / `yarn jest -t "type=echo-chant"`） |
+| `yarn verify` | 跑全�?Jest 用例�?3 �?suite / 700+ �?test），失败任意一�?exit 1 |
+| `yarn verify:echo` | 只跑 echo 相关�? �?suite�?|
+| `yarn verify:rune` | 只跑 rune 相关�? �?suite�?|
+| `yarn verify:blog` | 只跑 blog 打包相关�? �?suite�?|
+| `yarn verify:boot` | 只跑 boot 扫描相关�? �?suite�?|
+| `yarn verify:smoke` | 只跑工具链烟雾测试（1 �?suite�?|
+| `yarn test` / `yarn test:watch` | �?Jest 默认（色彩开启），开发时 watch |
+| `yarn jest <path>` | 任意子集（`yarn jest tests/unit/echo` / `yarn jest -t "type=echo-chant"`�?|
 
-> v2026-07-29 起：`scripts/verify-*.js`（10 个旧脚本：9 个 verify-*.js + verify-runner.js）已全部删除，Jest 是唯一测试入口。
+> v2026-07-29 起：`scripts/verify-*.js`�?0 个旧脚本�? �?verify-*.js + verify-runner.js）已全部删除，Jest 是唯一测试入口�?
 
 ---
 
@@ -75,90 +75,90 @@ alwaysApply: true
 
 ### 4.1 触发新增 / 修改用例
 
-- **新增 / 删除 / 重命名 anno_source 顶层字段**（如 v2026-07-28 的 `kind` → `type` 合并）→ 必须更新对应 `tests/unit/echo/jquery-echo-compile.test.js` 的字段断言
-- **改 `definition.render` / `definition.afterRender` 签名** → `tests/unit/echo/runtime-props.test.js` 必须跟着改
-- **新增 / 删除 / 重命名内置 rune 模板**（`runeTemplates/` 目录里加 / 删 / 改名 `runeTemplates*.js` 文件后）→ 必须更新 `tests/unit/rune/templates.test.js` 的 `TEMPLATE_NAMES` 列表（添加 / 删 / 改名都对），并确认 `create*Template → runeTemplates*` 命名映射仍成立；同时 `tests/unit/rune/main-builtin-templates.test.js` 的 `TEMPLATE_NAMES` 和 `BUILTIN_RUNE_TEMPLATE_META` 双向同步
-- **改 props 合并优先级 / fallback 策略** → 必须更新 `tests/unit/echo/runtime-props.test.js` 第 3 节
-- **改 `HANDLER_PRELUDE` 形态**（`$ = window.jQuery` 这种）→ 必须更新 `tests/unit/echo/jquery-echo-compile.test.js` 让 Node 端能跑（fallback）
-- **改 mountRuneVueHosts 对 SFC props 的硬约定**（如要求 `runeId` / `nodeId` 必填）→ 必须更新 `tests/unit/rune/templates.test.js` 的 props 字段断言
-- **改 Schema 字段标准**（新增 form-create 字段、改禁止的顶层字段）→ 必须更新 `tests/unit/echo/schema-formcreate-align.test.js` 的白名单
-- **改 `blog-config-writer.js` 的 `SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` / `VERIFY_PATHS_SRC` 模板** → 必须更新 `tests/unit/blog/blog-config-writer.test.js` 的 sidebar / nav 形状断言 + verify 解析路径
-- **改 `blog-config-writer.js` 的 `writeVuepressConfig` 行为**（如取消"已存在则跳过"策略 / 允许覆盖）→ 必须更新 `tests/unit/blog/blog-config-writer.test.js` 的"config 已存在则跳过"用例
-- **改 `blog-config-writer.js` 的 `ensureBlogConfig` 行为**（如把 verify 失败从 warning 升级为 throw）→ 必须更新 `tests/unit/blog/blog-config-writer.test.js` 的 negative ok=false 断言
-- **新增 / 删除 / 重命名 echo 卡片文件**（`echoBuiltins/echoBuiltins*.js` 里加 / 删 / 改名）→ 必须确认：(a) `echoBuiltins/echoBuiltins.js`（聚合入口）同步增 / 减 import 卡片；(b) `scripts/transform-main-builtin-echoes.js` 仍是按 `cardFiles.sort()` 自动发现，不会漏掉新文件；(c) `tests/unit/echo/jquery-echo-compile.test.js` / `jquery-afterrender.test.js` 默认仍能扫到新增的卡片
+- **新增 / 删除 / 重命�?anno_source 顶层字段**（如 v2026-07-28 �?`kind` �?`type` 合并）→ 必须更新对应 `tests/unit/echo/jquery-echo-compile.test.js` 的字段断言
+- **�?`definition.render` / `definition.afterRender` 签名** �?`tests/unit/echo/runtime-props.test.js` 必须跟着�?
+- **新增 / 删除 / 重命名内�?rune 模板**（`runeTemplates/` 目录里加 / �?/ 改名 `runeTemplates*.js` 文件后）�?必须更新 `tests/unit/rune/templates.test.js` �?`TEMPLATE_NAMES` 列表（添�?/ �?/ 改名都对），并确�?`create*Template �?runeTemplates*` 命名映射仍成立；同时 `tests/unit/rune/main-builtin-templates.test.js` �?`TEMPLATE_NAMES` �?`BUILTIN_RUNE_TEMPLATE_META` 双向同步
+- **�?props 合并优先�?/ fallback 策略** �?必须更新 `tests/unit/echo/runtime-props.test.js` �?3 �?
+- **�?`HANDLER_PRELUDE` 形�?*（`$ = window.jQuery` 这种）→ 必须更新 `tests/unit/echo/jquery-echo-compile.test.js` �?Node 端能跑（fallback�?
+- **�?mountRuneVueHosts �?SFC props 的硬约定**（如要求 `runeId` / `nodeId` 必填）→ 必须更新 `tests/unit/rune/templates.test.js` �?props 字段断言
+- **�?Schema 字段标准**（新�?form-create 字段、改禁止的顶层字段）�?必须更新 `tests/unit/echo/schema-formcreate-align.test.js` 的白名单
+- **�?`blog-config-writer.js` �?`SIDEBAR_BUILDER_SRC` / `NAV_BUILDER_SRC` / `VERIFY_PATHS_SRC` 模板** �?必须更新 `tests/unit/blog/blog-config-writer.test.js` �?sidebar / nav 形状断言 + verify 解析路径
+- **�?`blog-config-writer.js` �?`writeVuepressConfig` 行为**（如取消"已存在则跳过"策略 / 允许覆盖）→ 必须更新 `tests/unit/blog/blog-config-writer.test.js` �?config 已存在则跳过"用例
+- **�?`blog-config-writer.js` �?`ensureBlogConfig` 行为**（如�?verify 失败�?warning 升级�?throw）→ 必须更新 `tests/unit/blog/blog-config-writer.test.js` �?negative ok=false 断言
+- **新增 / 删除 / 重命�?echo 卡片文件**（`echoBuiltins/echoBuiltins*.js` 里加 / �?/ 改名）→ 必须确认�?a) `echoBuiltins/echoBuiltins.js`（聚合入口）同步�?/ �?import 卡片�?b) `scripts/transform-main-builtin-echoes.js` 仍是�?`cardFiles.sort()` 自动发现，不会漏掉新文件�?c) `tests/unit/echo/jquery-echo-compile.test.js` / `jquery-afterrender.test.js` 默认仍能扫到新增的卡�?
 
-### 4.2 触发新增 Jest 用例（新规则）
+### 4.2 触发新增 Jest 用例（新规则�?
 
 任何**新出现的契约**（之前没人锁过的），且满足以下条件之一，必须新增用例：
 
-1. **跨文件、跨模块的语义约定**（如 props 合并顺序、handlerDoc 签名）
-2. **会被未来 agent / 重构改动冲掉的代码模式**（如 `safeDollarRef` 这类容易复活的死代码）
-3. **运行时高风险路径**（compile / render / payload codec）
-4. **AI agent 容易踩坑的边缘 case**（如 fall-through 的 fallback、graceful skip）
+1. **跨文件、跨模块的语义约�?*（如 props 合并顺序、handlerDoc 签名�?
+2. **会被未来 agent / 重构改动冲掉的代码模�?*（如 `safeDollarRef` 这类容易复活的死代码�?
+3. **运行时高风险路径**（compile / render / payload codec�?
+4. **AI agent 容易踩坑的边�?case**（如 fall-through �?fallback、graceful skip�?
 
 ### 4.3 触发新增 / 修复失败
 
-任何 Jest 用例的 FAIL 输出 = **破坏性 bug 信号**，必须按以下顺序处理：
+任何 Jest 用例�?FAIL 输出 = **破坏�?bug 信号**，必须按以下顺序处理�?
 
-1. **先确认是代码 bug 还是测试 bug**：
-   - 测试断言过期（被新方案替代）→ 改测试，按 §4.1
-   - 实际代码不满足契约 → 修代码，**不允许删测试用例来放行**
+1. **先确认是代码 bug 还是测试 bug**�?
+   - 测试断言过期（被新方案替代）�?改测试，�?§4.1
+   - 实际代码不满足契�?�?修代码，**不允许删测试用例来放�?*
 2. **修完后必须重新跑 `yarn verify` 整轮**，确保没引入回归
-3. **失败明细必须写到对话上下文**，让用户能看到（按 §3.1 失败不静默）
+3. **失败明细必须写到对话上下�?*，让用户能看到（�?§3.1 失败不静默）
 
 ---
 
 ## 5. 当前缺口（待补）
 
-> 这些是**已知**但**还没补**的契约层，列入 backlog：
+> 这些�?*已知**�?*还没�?*的契约层，列�?backlog�?
 
-| 缺口 | 建议 Jest 用例 | 优先级 |
+| 缺口 | 建议 Jest 用例 | 优先�?|
 |---|---|---|
-| 云函数调用链路（`cloud.invoke` / `unwrap` / token 注入） | `tests/unit/cloud/invoke-unwrap.test.js` | 高（云函数是稳定功能的入口） |
-| Muya parser 里 `echo_anno` 规则正则 | `tests/unit/muya/echo-anno-re.test.js` | 中 |
-| DB schema 与 `app_state` / `rune` / `echo` 表结构 | `tests/unit/db/schema-rune-echo.test.js` | 高 |
-| ~~`transform-main-builtin-echoes.js` 的输出与 renderer 端**逐字节一致**~~（v2026-07-29 起 main 镜像已删除，无需逐字节比对） | — | — |
-| `Muya.vue` 的 `createRuneRendererCtor` 输出形态 | `tests/unit/rune/renderer-ctor.test.js` | 中 |
+| 云函数调用链路（`cloud.invoke` / `unwrap` / token 注入�?| `tests/unit/cloud/invoke-unwrap.test.js` | 高（云函数是稳定功能的入口） |
+| Muya parser �?`echo_anno` 规则正则 | `tests/unit/muya/echo-anno-re.test.js` | �?|
+| DB schema �?`app_state` / `rune` / `echo` 表结�?| `tests/unit/db/schema-rune-echo.test.js` | �?|
+| ~~`transform-main-builtin-echoes.js` 的输出与 renderer �?*逐字节一�?*~~（v2026-07-29 �?main 镜像已删除，无需逐字节比对） | �?| �?|
+| `Muya.vue` �?`createRuneRendererCtor` 输出形�?| `tests/unit/rune/renderer-ctor.test.js` | �?|
 
-新增 Jest 用例后，必须：
-1. 更新本规则 §3.1 清单
-2. 在 `package.json` 加对应 `yarn verify:*` 短命令（或合并到现有 filter）
-3. 如属 echo / rune / boot 三大类，落到对应 `tests/unit/` 子目录
+新增 Jest 用例后，必须�?
+1. 更新本规�?§3.1 清单
+2. �?`package.json` 加对�?`yarn verify:*` 短命令（或合并到现有 filter�?
+3. 如属 echo / rune / boot 三大类，落到对应 `tests/unit/` 子目�?
 
 ---
 
 ## 6. 禁止的反模式
 
 ```javascript
-// ❌ 禁止：为了"通过 jest"而删用例
-// （jquery-echo-compile.test.js 里看到 16/16 通过，但实际只跑了 8 张卡——这种"凑数"绝对禁止）
+// �?禁止：为�?通过 jest"而删用例
+// （jquery-echo-compile.test.js 里看�?16/16 通过，但实际只跑�?8 张卡——这�?凑数"绝对禁止�?
 
-// ❌ 禁止：把用例改成"warn 而不 throw"
-// Jest 中所有 expect 都强制抛错，不需要也不会有"process.exit(0) 绕过"的问题
+// �?禁止：把用例改成"warn 而不 throw"
+// Jest 中所�?expect 都强制抛错，不需要也不会�?process.exit(0) 绕过"的问�?
 
-// ❌ 禁止：把测试断言写成"匹配任意"（如 toMatch(/.*/)）
-expect(html).toMatch(/.*/)  // ← 永远通过，没意义
+// �?禁止：把测试断言写成"匹配任意"（如 toMatch(/.*/)�?
+expect(html).toMatch(/.*/)  // �?永远通过，没意义
 
-// ❌ 禁止：硬编码 16 张卡数量但实际只有 15 张
-// 必须用 BUILTIN_ECHO_CARDS.length 这种动态来源
+// �?禁止：硬编码 16 张卡数量但实际只�?15 �?
+// 必须�?BUILTIN_ECHO_CARDS.length 这种动态来�?
 ```
 
 ---
 
-## 7. 自检清单（改 rune / echo / 云函数前默念）
+## 7. 自检清单（改 rune / echo / 云函数前默念�?
 
-1. 我改的是 rune / echo / 云函数相关代码吗？
-2. 这个改动是否会影响 anno_source 顶层结构 / render 签名 / props 合并 / fallback 路径？
-3. 对应的 jest 用例里是否已经有覆盖？
-4. 如果没有，按 §4.2 新增一个；如果已有，按 §4.1 更新断言。
-5. 跑 `yarn verify` 整轮确认无回归。
-6. 任何 FAIL 都按 §4.3 处理。
+1. 我改的是 rune / echo / 云函数相关代码吗�?
+2. 这个改动是否会影�?anno_source 顶层结构 / render 签名 / props 合并 / fallback 路径�?
+3. 对应�?jest 用例里是否已经有覆盖�?
+4. 如果没有，按 §4.2 新增一个；如果已有，按 §4.1 更新断言�?
+5. �?`yarn verify` 整轮确认无回归�?
+6. 任何 FAIL 都按 §4.3 处理�?
 
 ---
 
 ## 8. 与其它规则的关系
 
-- **本规则优先于**通用的"测试可有可无"直觉——rune / echo / 云函数的契约**必须有 jest 用例**。
-- **`rune-echo-cloudfn-experimental.mdc`** 仍然适用：本规则负责"测试护城河"，那个规则负责"代码简洁性 / 不背历史包袱"。两者不冲突：可以删兼容分支，但必须删之前用 jest 锁住现状。
-- **`package-manager.mdc`** 仍然适用：依赖用 yarn；新增 jest 用例不引入新依赖（jest 用例只用 Node 内置 + 项目已有依赖 + jest 29 系列）。
-- **`safe-shell.mdc`** 仍然适用：跑 `yarn verify` 前如有破坏性操作先备份。
+- **本规则优先于**通用�?测试可有可无"直觉——rune / echo / 云函数的契约**必须�?jest 用例**�?
+- **`rune-echo-cloudfn-experimental.mdc`** 仍然适用：本规则负责"测试护城�?，那个规则负�?代码简洁�?/ 不背历史包袱"。两者不冲突：可以删兼容分支，但必须删之前用 jest 锁住现状�?
+- **`package-manager.mdc`** 仍然适用：依赖用 yarn；新�?jest 用例不引入新依赖（jest 用例只用 Node 内置 + 项目已有依赖 + jest 29 系列）�?
+- **`safe-shell.mdc`** 仍然适用：跑 `yarn verify` 前如有破坏性操作先备份�?
