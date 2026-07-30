@@ -188,6 +188,14 @@ const tokenizerFac = (src, beginRules, inlineRules, pos = 0, top, labels, option
           })
         } else if (rule === 'echo_anno') {
           const propsParsed = parseEchoProps(to[2] || '')
+          // === echoId 字段名约定（v2026-07-30 起固定） ===
+          // 快捷面板插入路径用 `echoId: 'uuid'` 写到 markdown，handler 端 echoRuntime
+          // 注入到 finalProps.echoId 作为「实例 id」（等价于 rune 的 data-rune-id 角色）。
+          // 旧 `id` 字段名仍向后兼容（手写 markdown / 旧 IPC 落库数据）。
+          // 优先级：propsParsed.echoId > propsParsed.id（向后兼容）
+          const instEchoId = (typeof propsParsed.echoId === 'string' && propsParsed.echoId) ||
+            (typeof propsParsed.id === 'string' && propsParsed.id) ||
+            ''
           tokens.push({
             type: 'echo_anno',
             raw: to[0],
@@ -195,9 +203,13 @@ const tokenizerFac = (src, beginRules, inlineRules, pos = 0, top, labels, option
             marker,
             parent: tokens,
             echoName: to[1] || '',
-            echoId: typeof propsParsed.id === 'string' ? propsParsed.id : '',
+            echoId: instEchoId,
+            // 同步把 echoId 拷一份到 propsParsed.echoId，让 echoRuntime / echoAnno / afterRender
+            // 都能从 instProps.echoId 拿到，不用每次都做 fallback 链。
+            propsParsed: instEchoId && !propsParsed.echoId
+              ? { ...propsParsed, echoId: instEchoId }
+              : propsParsed,
             propsRaw: to[2] || '',
-            propsParsed,
             prompt: to[3]
           })
         } else {

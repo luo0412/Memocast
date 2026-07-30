@@ -20,6 +20,7 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
   )
   const echoId = String(
     token.echoId ||
+    instProps.echoId ||
     instProps.id ||
     (token.echoName ? echoName : '')
   ).trim()

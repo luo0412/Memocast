@@ -189,8 +189,13 @@ const escapeEchoAttrValue = (value = '') => String(value)
 
 const buildEchoAttrSource = ({ value = '', echoId = '', definitionId = '' } = {}) => {
   const parts = []
+  // === 字段名约定（v2026-07-30 起固定） ===
+  // 生成的 markdown 用 `echoId: 'uuid'` 而非 `id: 'uuid'`，
+  // 目的：与 rune 端的 `data-rune-id` / `data-rune-node-id` 命名风格一致；
+  // 语义上也更准确——「echo 实例 id」不是「通用 id」。
+  // 兼容性：parser 端同时识别 `id` 和 `echoId`（旧手写 markdown 不会坏）。
   if (echoId) {
-    parts.push(`id: '${escapeEchoAttrValue(echoId)}'`)
+    parts.push(`echoId: '${escapeEchoAttrValue(echoId)}'`)
   }
   if (definitionId) {
     parts.push(`definitionId: '${escapeEchoAttrValue(definitionId)}'`)
@@ -202,7 +207,9 @@ const buildEchoAttrSource = ({ value = '', echoId = '', definitionId = '' } = {}
 const buildEchoAnnotationText = (echoName = '回响', payload = '', options = {}) => {
   const decoded = decodeEchoPayload(payload)
   const value = decoded.prompt || decoded?.props?.value || ''
-  const echoId = String(options.echoId || decoded?.props?.id || '').trim() || createEchoInstanceId()
+  // === echoId 优先（v2026-07-30 起固定） ===
+  // 字段名：decodeEchoPayload 出来的 payload 里 props.echoId 也优先于 props.id
+  const echoId = String(options.echoId || decoded?.props?.echoId || decoded?.props?.id || '').trim() || createEchoInstanceId()
   const definitionId = String(options.definitionId || decoded?.props?.definitionId || '').trim()
   return `@${echoName}{${buildEchoAttrSource({ value, echoId, definitionId })}}()`
 }

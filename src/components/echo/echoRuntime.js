@@ -108,6 +108,9 @@ const readEchoPropsFromHost = (node) => {
     const hostRaw = ownerHost && ownerHost.getAttribute('data-echo-props-json')
     if (hostRaw) return JSON.parse(hostRaw)
   } catch (error) { /* ignore */ }
+  // === v2026-07-30 起：data-echo-props-json 兜底也拿不到时，从 host ABI 字段同步出
+  // handler 常用的几个字段（echoId / name / definitionId）——让 handler 端
+  // props.echoId / props.id / props.name / props.definitionId 都能拿到。
   const result = {}
   const attrSource = (typeof node.attributes !== 'undefined') ? node : card
   Array.from(attrSource.attributes || []).forEach(attr => {
@@ -116,6 +119,18 @@ const readEchoPropsFromHost = (node) => {
       try { result[key] = JSON.parse(attr.value) } catch (error) { result[key] = attr.value }
     }
   })
+  // ABI 字段兜底注入（仅当 result 里没相应字段时）
+  if (card) {
+    const abiEchoId = card.getAttribute('data-echo-id')
+    const abiEchoName = card.getAttribute('data-echo-name')
+    const abiDefinitionId = card.getAttribute('data-echo-definition-id')
+    if (abiEchoId && !result.echoId && !result.id) {
+      result.id = abiEchoId
+      result.echoId = abiEchoId
+    }
+    if (abiEchoName && !result.name) result.name = abiEchoName
+    if (abiDefinitionId && !result.definitionId) result.definitionId = abiDefinitionId
+  }
   return result
 }
 
@@ -174,7 +189,7 @@ export default class EchoRuntime {
     const mergedValue = typeof mergedProps.value === 'string' ? mergedProps.value : ''
     const resolvedValue = mergedValue || payloadValue || tokenPrompt || payloadPrompt || ''
     const resolvedPrompt = tokenPrompt || payloadPrompt || resolvedValue || ''
-    const resolvedId = String(token.echoId || tokenProps.id || payload?.props?.id || '').trim()
+    const resolvedId = String(token.echoId || tokenProps.echoId || tokenProps.id || payload?.props?.echoId || payload?.props?.id || '').trim()
 
     // definition 没拿到前，临时 props = mergedProps；下面 compileDefinition 后会再覆盖
     const context = {
@@ -212,7 +227,12 @@ export default class EchoRuntime {
         field: definition?.field || matchedEcho.id || '',
         title: definition?.title || matchedEcho.name || context.name || '回响',
         version: typeof definition?.version === 'number' ? definition.version : 1,
-        definitionId: matchedEcho.id || ''
+        definitionId: matchedEcho.id || '',
+        // === echoId 注入（v2026-07-30 起固定） ===
+        // 等价于 rune 端的 data-rune-id：为每个回响实例注入一个稳定 id。
+        // 用途：handler 内 props.echoId 拿到，做 localStorage 键 / 跨重渲染锚点等。
+        // 优先级：resolvedId > mergedProps.echoId > mergedProps.id（向后兼容）。
+        echoId: resolvedId || String(mergedProps.echoId || mergedProps.id || '').trim()
       },
       defaultProps,
       mergedProps,

@@ -142,4 +142,43 @@ describe('muya/echoAnno vnode 契约（v2026-07-29 「失焦不突变」）', ()
     expect(innerChildren.length).toBe(3)
     expect(innerChildren[2].sel).toBe('span.ag-echo-anno-value')
   })
+
+  // === v2026-07-30 起：识别 propsParsed.echoId 字段（rune-style instance id） ===
+  describe('echoId 字段识别（v2026-07-30 起）', () => {
+    test('propsParsed.echoId 优先于 propsParsed.id（向后兼容）', () => {
+      const ctx = makeContext(true)
+      const token = {
+        ...baseToken,
+        echoId: '',
+        propsParsed: { echoId: 'uuid-from-markdown', id: 'legacy-id' }
+      }
+      const result = echoAnno.call(ctx, h, baseCursor, baseBlock, token)
+      const outer = result[0]
+      expect(outer.data.dataset.echoId).toBe('uuid-from-markdown')
+    })
+
+    test('propsParsed.echoId 缺省时回退到 propsParsed.id', () => {
+      const ctx = makeContext(true)
+      const token = {
+        ...baseToken,
+        echoId: '',
+        propsParsed: { id: 'legacy-only' }
+      }
+      const result = echoAnno.call(ctx, h, baseCursor, baseBlock, token)
+      const outer = result[0]
+      expect(outer.data.dataset.echoId).toBe('legacy-only')
+    })
+
+    test('token.echoId 仍优先（parser 端已经把 echoId 拷到 token.echoId）', () => {
+      const ctx = makeContext(true)
+      const token = {
+        ...baseToken,
+        echoId: 'parser-set-echoId',
+        propsParsed: { echoId: 'markdown-echoId', id: 'legacy-id' }
+      }
+      const result = echoAnno.call(ctx, h, baseCursor, baseBlock, token)
+      const outer = result[0]
+      expect(outer.data.dataset.echoId).toBe('parser-set-echoId')
+    })
+  })
 })

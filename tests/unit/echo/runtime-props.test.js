@@ -462,4 +462,111 @@ describe('echo/echoRuntime 运行时语义', () => {
       parent.parentNode && parent.parentNode.removeChild(parent)
     })
   })
+
+  // ============================================================================
+  // 9) v2026-07-30 起：handler 端 props.echoId 注入（rune-style instance id）
+  //
+  // 锁定的契约：
+  //   - host.dataset.echoId 由 parser 层（token.echoId）写入
+  //   - EchoRuntime 在注入 finalProps 时把 resolvedId 同步写到 props.echoId
+  //   - handler 端 `props.echoId` 拿到的就是 host 上的 echoId，不依赖
+  //     `props.id`（虽然两者最终相等，但语义上 props.echoId 是「实例 id」），
+  //     与 rune 端 `data-rune-id` 角色对应。
+  // ============================================================================
+  describe('9) handler 端 props.echoId 注入（v2026-07-30 起）', () => {
+    test('props.echoId 等于 host.dataset.echoId（uuidv4 链路）', () => {
+      // 注：handler 在 echoRuntime 内部通过 `new Function(prelude + source)` 编译，
+      // 隔离作用域捕获不到外层 `let`，所以用 globalThis 收集 props。
+      globalThis.__echoIdTestProps = null
+      const echo = {
+        id: 'tk3', name: 'tk3',
+        type: 'echo-chant', category: 'builtin',
+        anno_source: `export default {
+          type: 'echo-chant', field: 'tk3', title: 'tk3', version: 1,
+          props: {},
+          render (props = {}) { return '<span></span>' },
+          afterRender (node, props = {}) {
+            globalThis.__echoIdTestProps = props
+            return function cleanup () {}
+          }
+        }`
+      }
+      const rt = new EchoRuntime({
+        registry: {
+          getByName: (name) => name === 'tk3' ? echo : null,
+          getById: (id) => id === 'uuid-instance-001' ? echo : null
+        }
+      })
+      const host = document.createElement('div')
+      host.setAttribute('data-echo-host', 'true')
+      host.setAttribute('data-echo-name', 'tk3')
+      host.setAttribute('data-echo-id', 'uuid-instance-001')
+      host.setAttribute('data-echo-definition-id', 'defId-tk3')
+      document.body.appendChild(host)
+
+      const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        rt._doAfterRender(document.body, { cleanupFirst: false })
+      } finally {
+        errSpy.mockRestore()
+      }
+
+      const props = globalThis.__echoIdTestProps
+      // 契约：props.echoId === host.dataset.echoId
+      expect(props).not.toBeNull()
+      expect(props.echoId).toBe('uuid-instance-001')
+      // 兼容性：props.id 也等于同一个 id（已有契约）
+      expect(props.id).toBe('uuid-instance-001')
+
+      globalThis.__echoIdTestProps = null
+      host.parentNode && host.parentNode.removeChild(host)
+    })
+
+    test('props.echoId 缺省时（host 没 data-echo-id，也没 data-echo-props-json）回退到 {}', () => {
+      // 这是最边缘的兜底：既没 inline edit 也没 setAttribute('data-echo-id')
+      // handler 拿到 props.echoId === undefined
+      globalThis.__echoIdTestProps = null
+      const echo = {
+        id: 'tk4', name: 'tk4',
+        type: 'echo-chant', category: 'builtin',
+        anno_source: `export default {
+          type: 'echo-chant', field: 'tk4', title: 'tk4', version: 1,
+          props: {},
+          render (props = {}) { return '<span></span>' },
+          afterRender (node, props = {}) {
+            globalThis.__echoIdTestProps = props
+            return function cleanup () {}
+          }
+        }`
+      }
+      const rt = new EchoRuntime({
+        registry: {
+          getByName: (name) => name === 'tk4' ? echo : null
+        }
+      })
+      const host = document.createElement('div')
+      host.setAttribute('data-echo-host', 'true')
+      host.setAttribute('data-echo-name', 'tk4')
+      // 故意不设 data-echo-id / data-echo-props-json，模拟最旧数据
+      host.setAttribute('data-echo-definition-id', 'defId-tk4')
+      document.body.appendChild(host)
+
+      const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        rt._doAfterRender(document.body, { cleanupFirst: false })
+      } finally {
+        errSpy.mockRestore()
+      }
+
+      const props = globalThis.__echoIdTestProps
+      // 没 data-echo-id 时 props.echoId 应该是 undefined（handler 需要自己处理）
+      expect(props.echoId).toBeUndefined()
+      // 但 props.name / props.definitionId 应该能从 ABI 兜底拿到
+      expect(props.name).toBe('tk4')
+      expect(props.definitionId).toBe('defId-tk4')
+
+      globalThis.__echoIdTestProps = null
+      host.parentNode && host.parentNode.removeChild(host)
+    })
+  })
 })
