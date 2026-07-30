@@ -145,6 +145,10 @@ export const BUILTIN_ECHO_PROPS_SCHEMA = Object.freeze({
   ],
   todo: [
     { field: 'checked', type: 'switch', title: '已完成', defaultValue: false }
+  ],
+  fold: [
+    { field: 'collapsed', type: 'switch', title: '默认折叠', defaultValue: true,
+      info: '实际偏好会被 localStorage 持久化（键：echo-fold-{nodeId|field}）' }
   ]
 })
 

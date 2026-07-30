@@ -87,8 +87,8 @@
     <SearchDialog ref='searchDialog' />
     <TagDialog ref="tagDialog" />
     <microAppDrawer ref="microAppDrawer" />
-    <DoubaoChatDrawer ref="doubaoChatDrawer" />
-    <AiDemoDrawer ref="aiDemoDrawer" @request-ai-provider-config="handleAiProviderConfigRequest" />
+    <AiDoubaoDrawer ref="doubaoChatDrawer" />
+    <AiHelperDrawer ref="aiDemoDrawer" @request-ai-provider-config="handleAiProviderConfigRequest" />
   </q-bar>
 </template>
 
@@ -104,8 +104,8 @@ import LoginDialog from '../login/LoginDialog.vue'
 import SettingsDialog from '../settings/SettingsDialog.vue'
 import SearchDialog from 'components/search/SearchDialog'
 import microAppDrawer from 'components/microApp/microAppDrawer'
-import DoubaoChatDrawer from 'components/ai/DoubaoChatDrawer'
-import AiDemoDrawer from 'components/ai/AiDemoDrawer'
+import AiDoubaoDrawer from 'components/ai/AiDoubaoDrawer'
+import AiHelperDrawer from 'components/ai/AiHelperDrawer'
 import echoInstanceDialog from 'components/echo/echoInstanceDialog.vue'
 import HeaderLeftGroup from './HeaderLeftGroup.vue'
 import HeaderRightGroup from './HeaderRightGroup.vue'
@@ -131,8 +131,8 @@ export default {
     SettingsDialog: () => import('../settings/SettingsDialog.vue'),
     LoginDialog,
     microAppDrawer,
-    DoubaoChatDrawer,
-    AiDemoDrawer,
+    AiDoubaoDrawer,
+    AiHelperDrawer,
     EchoInstanceDialog: echoInstanceDialog,
     HeaderLeftGroup,
     HeaderRightGroup

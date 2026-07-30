@@ -7,7 +7,7 @@
  *   - Vue 2.7 在 `initProps` 阶段会校验每个 prop 名是否是 "reserved attribute"，
  *     命中后输出：`[Vue warn]: "style" is a reserved attribute and cannot be used as component prop.`
  *   - 这是 Vue 框架的硬性约束，与项目代码无关——但每个 WujieVue 实例化时都会刷一行。
- *     抽屉每次打开（microAppDrawer / DoubaoChatDrawer）就会刷一遍，对调试造成干扰。
+ *     抽屉每次打开（microAppDrawer / AiDoubaoDrawer）就会刷一遍，对调试造成干扰。
  *   - WujieVue 的 `style` prop 实际行为 = 合并到 root 的 style 上，而 Vue 2 本身
  *     就会自动把 `:style` 透传到 root，所以删掉这个 prop 也不会破坏功能。
  *     但我们不在这里改第三方源码，只把这条噪音警告吞掉。

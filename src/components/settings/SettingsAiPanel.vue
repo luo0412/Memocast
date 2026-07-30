@@ -57,6 +57,10 @@
                   </div>
                   <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasApiKey'>{{ $t('aiApiKey') }}: {{ item.apiKeyMasked }}</div>
                   <div class='text-caption text-grey-6 q-mt-xs' v-if='item.hasVirtualKey'>{{ $t('aiPortkeyVirtualKey') }}: {{ item.portkeyVirtualKeyMasked }}</div>
+                  <div class='text-caption q-mt-sm' :class='getAiModelKeyStorageHintColor(item)'>
+                    <q-icon :name='getAiModelKeyStorageHintIcon(item)' size='14px' class='q-mr-xs' />
+                    {{ getAiModelKeyStorageHint(item) }}
+                  </div>
                   <div v-if='aiModelTestResults[item.id]' class='text-caption q-mt-xs' :class='aiModelTestResults[item.id].success ? "text-positive" : "text-negative"'>
                     {{ getAiModelTestResultText(item) }}
                   </div>
@@ -283,6 +287,32 @@ export default {
     truncateText (text, maxLen = 120) {
       if (!text) return ''
       return text.length > maxLen ? text.slice(0, maxLen) + '…' : text
+    },
+    getAiModelKeyStorageHint (item) {
+      if (!item || !item.hasApiKey) return ''
+      // api_key_encrypted_version 是后端写入的字段：
+      //   2 = safeStorage（OS 钥匙串，最稳）
+      //   1 = 旧版 CryptoJS AES（机器派生，可能因环境变化失效）
+      //   0 = 未知 / 老库残留
+      if (Number(item.api_key_encrypted_version) === 2) {
+        return this.$t('aiApiKeyStorageOsKeychainHint')
+      }
+      if (Number(item.api_key_encrypted_version) === 1) {
+        return this.$t('aiApiKeyStorageLegacyHint')
+      }
+      return this.$t('aiApiKeyStorageLegacyHint')
+    },
+    getAiModelKeyStorageHintColor (item) {
+      if (Number(item && item.api_key_encrypted_version) === 2) {
+        return 'text-positive'
+      }
+      return 'text-warning'
+    },
+    getAiModelKeyStorageHintIcon (item) {
+      if (Number(item && item.api_key_encrypted_version) === 2) {
+        return 'lock'
+      }
+      return 'lock_open'
     }
   }
 }

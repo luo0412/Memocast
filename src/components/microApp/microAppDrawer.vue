@@ -5,6 +5,9 @@
     side="right"
     overlay
     elevated
+    behavior="desktop"
+    no-swipe-close
+    no-swipe-open
     content-class="hide-scrollbar"
     class="im-drawer"
     z-index="9999"

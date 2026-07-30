@@ -44,7 +44,7 @@ import WujieVue from 'wujie-vue2'
 import { getAppPath } from 'src/ApiInvoker'
 
 export default {
-  name: 'DoubaoChatDrawer',
+  name: 'AiDoubaoDrawer',
   components: {
     WujieVue
   },
@@ -93,13 +93,13 @@ export default {
       const basePath = await getAppPath()
       this.appBasePath = basePath
     } catch (err) {
-      console.warn('[DoubaoChatDrawer] Failed to get app path:', err)
+      console.warn('[AiDoubaoDrawer] Failed to get app path:', err)
     }
   },
   methods: {
     handleMessage (data) {
       // 处理来自子应用的消息
-      console.log('[DoubaoChatDrawer] Received message:', data)
+      console.log('[AiDoubaoDrawer] Received message:', data)
       this.$emit('message', data)
     },
     show () {

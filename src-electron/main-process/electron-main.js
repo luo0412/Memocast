@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme, dialog, shell, protocol, Menu, ipcMain } from 'electron'
+import { app, BrowserWindow, nativeTheme, dialog, shell, protocol, Menu, ipcMain, safeStorage } from 'electron'
 import Api from './api'
 import windowStateKeeper from 'electron-window-state'
 import unhandled from 'electron-unhandled'
@@ -41,7 +41,20 @@ let dbPath = null
 const AI_MODEL_PROVIDER_OPENAI_COMPATIBLE = 'openai-compatible'
 const AI_MODEL_PROVIDER_PORTKEY = 'portkey'
 
-function getAiConfigEncryptionSecret() {
+// AI 模型 Key 加密版本号：
+//   1 = 旧版 CryptoJS AES（密钥由 hostname + userData + 版本号派生，会因环境变化失效）
+//   2 = 新版 Electron safeStorage（OS 钥匙串 / DPAPI，跨重启稳定）
+const AI_KEY_ENCRYPT_VERSION = 2
+
+// CryptoJS.AES.encrypt 输出固定以 'U2FsdGVkX1' 开头，用于兼容老库残留的 v1 密文。
+const AES_CIPHERTEXT_PREFIX = 'U2FsdGVkX1'
+
+function looksLikeCryptoJsCiphertext (value) {
+  return typeof value === 'string' && value.startsWith(AES_CIPHERTEXT_PREFIX)
+}
+
+// 旧版加密：用机器派生密钥的 CryptoJS。保留只为读取老数据，新写入必须走 safeStorage。
+function deriveLegacyAiConfigSecret () {
   const secretSeed = [
     packageJSON.name,
     packageJSON.version,
@@ -54,25 +67,71 @@ function getAiConfigEncryptionSecret() {
   return CryptoJS.SHA256(secretSeed).toString()
 }
 
-function encryptAiConfigApiKey(apiKey) {
-  if (!apiKey) return ''
-  return CryptoJS.AES.encrypt(apiKey, getAiConfigEncryptionSecret()).toString()
-}
-
-// CryptoJS.AES.encrypt 输出固定以 'U2FsdGVkX1' 开头的 Base64 字符串（OpenSSL-compatible 格式）。
-// 用这个特征区分"真正的密文"和"老版本写入的明文 / 损坏数据"。
-const AES_CIPHERTEXT_PREFIX = 'U2FsdGVkX1'
-
-function looksLikeEncryptedValue (value) {
-  return typeof value === 'string' && value.startsWith(AES_CIPHERTEXT_PREFIX)
-}
-
-function decryptAiConfigApiKey(encryptedValue) {
+function decryptLegacyAiConfigApiKey (encryptedValue) {
   if (!encryptedValue) return ''
+  try {
+    const bytes = CryptoJS.AES.decrypt(encryptedValue, deriveLegacyAiConfigSecret())
+    return bytes.toString(CryptoJS.enc.Utf8) || ''
+  } catch (error) {
+    log.warn('[DB] decryptLegacyAiConfigApiKey: decrypt failed', {
+      message: error && error.message
+    })
+    return ''
+  }
+}
 
-  // 老库残留的明文 / 非密文格式：直接当明文返回，不抛错也不记 error。
-  // 这是防御式读取，向后兼容早期未加密版本写入的数据。
-  if (!looksLikeEncryptedValue(encryptedValue)) {
+// safeStorage 在 Linux 上若系统不支持 libsecret，isEncryptionAvailable() 会返回 false，
+// 这种情况直接抛错让用户感知，避免"以为存了但其实裸文"的状态被静默接受。
+function safeStorageEncrypt (plainText) {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('OS keychain unavailable; cannot persist AI API key')
+  }
+  return safeStorage.encryptString(plainText).toString('base64')
+}
+
+function safeStorageDecrypt (base64Cipher) {
+  if (!safeStorage.isEncryptionAvailable()) {
+    log.warn('[DB] safeStorageDecrypt: OS keychain unavailable, returning empty')
+    return ''
+  }
+  try {
+    const buf = Buffer.from(base64Cipher, 'base64')
+    return safeStorage.decryptString(buf)
+  } catch (error) {
+    log.warn('[DB] safeStorageDecrypt: decrypt failed', {
+      message: error && error.message
+    })
+    return ''
+  }
+}
+
+function encryptAiConfigApiKey (apiKey, version = AI_KEY_ENCRYPT_VERSION) {
+  if (!apiKey) return { encrypted: '', version: 0 }
+  if (version === 2) {
+    return { encrypted: safeStorageEncrypt(apiKey), version: 2 }
+  }
+  // 兜底：理论上不该走到，保留只为不静默丢数据
+  return {
+    encrypted: CryptoJS.AES.encrypt(apiKey, deriveLegacyAiConfigSecret()).toString(),
+    version: 1
+  }
+}
+
+function decryptAiConfigApiKey (encryptedValue, version) {
+  if (!encryptedValue) return ''
+  const v = Number(version) || 0
+
+  if (v === 2) {
+    // 新版密文：safeStorage base64
+    return safeStorageDecrypt(encryptedValue)
+  }
+
+  if (v === 1) {
+    return decryptLegacyAiConfigApiKey(encryptedValue)
+  }
+
+  // 未知版本 + 老库残留明文（非密文特征）：当作明文返回，保留向后兼容
+  if (!looksLikeCryptoJsCiphertext(encryptedValue)) {
     log.warn('[DB] decryptAiConfigApiKey: non-ciphertext value treated as plaintext', {
       length: encryptedValue.length,
       preview: encryptedValue.slice(0, 4)
@@ -80,15 +139,9 @@ function decryptAiConfigApiKey(encryptedValue) {
     return encryptedValue
   }
 
-  try {
-    const bytes = CryptoJS.AES.decrypt(encryptedValue, getAiConfigEncryptionSecret())
-    return bytes.toString(CryptoJS.enc.Utf8) || ''
-  } catch (error) {
-    log.warn('[DB] decryptAiConfigApiKey: ciphertext present but decrypt failed', {
-      message: error && error.message
-    })
-    return ''
-  }
+  // 看起来像 v1 密文、但 version 字段缺失（旧版本 DB schema 没记 version）：
+  // 先按 v1 试着解，解不开就当损坏数据返回空串，不抛错。
+  return decryptLegacyAiConfigApiKey(encryptedValue)
 }
 
 function maskAiConfigApiKey(apiKey) {
@@ -100,8 +153,8 @@ function maskAiConfigApiKey(apiKey) {
 function normalizeAiModelConfigRow(row, { includeApiKey = false } = {}) {
   if (!row) return null
 
-  const decryptedApiKey = decryptAiConfigApiKey(row.api_key_encrypted)
-  const decryptedVirtualKey = decryptAiConfigApiKey(row.virtual_key_encrypted || '')
+  const decryptedApiKey = decryptAiConfigApiKey(row.api_key_encrypted, row.api_key_encrypted_version)
+  const decryptedVirtualKey = decryptAiConfigApiKey(row.virtual_key_encrypted || '', row.virtual_key_encrypted_version)
 
   return {
     ...row,
@@ -753,7 +806,9 @@ export default {
       provider_type TEXT NOT NULL DEFAULT 'openai-compatible',
       base_url TEXT NOT NULL DEFAULT '',
       api_key_encrypted TEXT NOT NULL DEFAULT '',
+      api_key_encrypted_version INTEGER NOT NULL DEFAULT 0,
       virtual_key_encrypted TEXT NOT NULL DEFAULT '',
+      virtual_key_encrypted_version INTEGER NOT NULL DEFAULT 0,
       model TEXT NOT NULL DEFAULT '',
       is_default INTEGER DEFAULT 0,
       enabled INTEGER DEFAULT 1,
@@ -788,6 +843,19 @@ export default {
 
     if (!aiModelColumns.includes('enabled')) {
       db.run('ALTER TABLE ai_model_configs ADD COLUMN enabled INTEGER DEFAULT 1')
+      saveDatabase()
+    }
+
+    // 关键修复：新增加密版本号列，标记写入格式。
+    //   0 = 未知 / 老库残留密文 / 历史数据
+    //   1 = CryptoJS AES（机器派生密钥，已不稳定，新写不再用）
+    //   2 = safeStorage（OS 钥匙串，跨重启稳定）
+    if (!aiModelColumns.includes('api_key_encrypted_version')) {
+      db.run('ALTER TABLE ai_model_configs ADD COLUMN api_key_encrypted_version INTEGER DEFAULT 0')
+      saveDatabase()
+    }
+    if (!aiModelColumns.includes('virtual_key_encrypted_version')) {
+      db.run('ALTER TABLE ai_model_configs ADD COLUMN virtual_key_encrypted_version INTEGER DEFAULT 0')
       saveDatabase()
     }
   } catch (error) {
@@ -2041,31 +2109,48 @@ function registerDatabaseHandlers() {
         return { success: false, code: 'AI_MODEL_REQUIRED_FIELDS' }
       }
 
-      const existing = id ? execOne('SELECT * FROM ai_model_configs WHERE id = ?', [id]) : null
-      if (id && !existing) {
+      // 关键修复：必须用 Number(id) 做严格比对，避免 id 类型飘移（string/number/undefined）
+      // 导致 SELECT 查不到 existing，进而把已保存的 key 视为新建行覆盖丢失。
+      const numericId = id !== null && id !== undefined && id !== '' ? Number(id) : null
+      const existing = Number.isFinite(numericId) ? execOne('SELECT * FROM ai_model_configs WHERE id = ?', [numericId]) : null
+      if (numericId !== null && !existing) {
+        log.warn('[DB] saveAiModelConfig: id provided but row not found, refusing implicit-create', { id: numericId })
         return { success: false, code: 'AI_MODEL_NOT_FOUND' }
       }
 
       const duplicateNameRow = execOne(
         'SELECT id FROM ai_model_configs WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND (? IS NULL OR id != ?)',
-        [name, id, id]
+        [name, numericId, numericId]
       )
       if (duplicateNameRow) {
         return { success: false, code: 'AI_MODEL_DUPLICATE_NAME' }
       }
 
+      // 关键修复：写入新格式（safeStorage v2）。原有密文保留语义：
+      //   - 显式 clear_* 清空 → 直接置空
+      //   - 显式传入新 key → 用新版加密并写 version=2
+      //   - 编辑时 key 字段留空（保持原状）→ 保留 existing 的旧密文 + 旧 version
       let encryptedApiKey = existing?.api_key_encrypted || ''
+      let apiKeyVersion = Number(existing?.api_key_encrypted_version) || 0
+      let virtualKeyVersion = Number(existing?.virtual_key_encrypted_version) || 0
+
       if (clearApiKey) {
         encryptedApiKey = ''
+        apiKeyVersion = 0
       } else if (incomingApiKey) {
-        encryptedApiKey = encryptAiConfigApiKey(incomingApiKey)
+        const enc = encryptAiConfigApiKey(incomingApiKey, AI_KEY_ENCRYPT_VERSION)
+        encryptedApiKey = enc.encrypted
+        apiKeyVersion = enc.version
       }
 
       let encryptedVirtualKey = existing?.virtual_key_encrypted || ''
       if (clearVirtualKey) {
         encryptedVirtualKey = ''
+        virtualKeyVersion = 0
       } else if (incomingVirtualKey) {
-        encryptedVirtualKey = encryptAiConfigApiKey(incomingVirtualKey)
+        const enc = encryptAiConfigApiKey(incomingVirtualKey, AI_KEY_ENCRYPT_VERSION)
+        encryptedVirtualKey = enc.encrypted
+        virtualKeyVersion = enc.version
       }
 
       const requiresVirtualKey = providerType === AI_MODEL_PROVIDER_PORTKEY
@@ -2078,8 +2163,8 @@ function registerDatabaseHandlers() {
       }
 
       if (isDefault) {
-        if (id) {
-          await db.run('UPDATE ai_model_configs SET is_default = 0, updated_at = ? WHERE id != ?', [now, id])
+        if (numericId !== null) {
+          await db.run('UPDATE ai_model_configs SET is_default = 0, updated_at = ? WHERE id != ?', [now, numericId])
         } else {
           await db.run('UPDATE ai_model_configs SET is_default = 0, updated_at = ?', [now])
         }
@@ -2088,18 +2173,18 @@ function registerDatabaseHandlers() {
       if (existing) {
         await db.run(
           `UPDATE ai_model_configs
-           SET name = ?, provider_type = ?, base_url = ?, api_key_encrypted = ?, virtual_key_encrypted = ?, model = ?, is_default = ?, enabled = ?, headers_json = ?, extra_config_json = ?, updated_at = ?
+           SET name = ?, provider_type = ?, base_url = ?, api_key_encrypted = ?, api_key_encrypted_version = ?, virtual_key_encrypted = ?, virtual_key_encrypted_version = ?, model = ?, is_default = ?, enabled = ?, headers_json = ?, extra_config_json = ?, updated_at = ?
            WHERE id = ?`,
-          [name, providerType, baseUrl, encryptedApiKey, encryptedVirtualKey, model, isDefault, enabled, headersJson, extraConfigJson, now, id]
+          [name, providerType, baseUrl, encryptedApiKey, apiKeyVersion, encryptedVirtualKey, virtualKeyVersion, model, isDefault, enabled, headersJson, extraConfigJson, now, numericId]
         )
         saveDatabase()
-        return { success: true, data: normalizeAiModelConfigRow(execOne('SELECT * FROM ai_model_configs WHERE id = ?', [id]), { includeApiKey: true }) }
+        return { success: true, data: normalizeAiModelConfigRow(execOne('SELECT * FROM ai_model_configs WHERE id = ?', [numericId]), { includeApiKey: true }) }
       }
 
       await db.run(
-        `INSERT INTO ai_model_configs (name, provider_type, base_url, api_key_encrypted, virtual_key_encrypted, model, is_default, enabled, headers_json, extra_config_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [name, providerType, baseUrl, encryptedApiKey, encryptedVirtualKey, model, isDefault, enabled, headersJson, extraConfigJson, now, now]
+        `INSERT INTO ai_model_configs (name, provider_type, base_url, api_key_encrypted, api_key_encrypted_version, virtual_key_encrypted, virtual_key_encrypted_version, model, is_default, enabled, headers_json, extra_config_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [name, providerType, baseUrl, encryptedApiKey, apiKeyVersion, encryptedVirtualKey, virtualKeyVersion, model, isDefault, enabled, headersJson, extraConfigJson, now, now]
       )
       saveDatabase()
       return { success: true, data: normalizeAiModelConfigRow(execOne('SELECT * FROM ai_model_configs WHERE id = ?', [getLastInsertRowid()]), { includeApiKey: true }) }

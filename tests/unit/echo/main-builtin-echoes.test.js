@@ -56,10 +56,10 @@ const HANDLER_PRELUDE_SOURCE = [
   ""
 ].join('\n')
 
-describe('echo/renderer 端 16 张内置卡片的 IPC payload 契约', () => {
-  test('BUILTIN_ECHO_CARDS 是 16 项数组', () => {
+describe('echo/renderer 端 17 张内置卡片的 IPC payload 契约', () => {
+  test('BUILTIN_ECHO_CARDS 是 17 项数组', () => {
     expect(Array.isArray(BUILTIN_ECHO_CARDS)).toBe(true)
-    expect(BUILTIN_ECHO_CARDS.length).toBe(16)
+    expect(BUILTIN_ECHO_CARDS.length).toBe(17)
   })
 
   test('BUILTIN_ECHO_CARDS 已 Object.freeze（防 renderer 运行时意外修改）', () => {

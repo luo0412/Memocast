@@ -41,9 +41,9 @@ afterAll(() => {
 })
 
 describe('echo/renderer 端 16 张内置 anno_source 编译', () => {
-  test('BUILTIN_ECHO_CARDS 是 16 项数组', () => {
+  test('BUILTIN_ECHO_CARDS 是 17 项数组', () => {
     expect(Array.isArray(BUILTIN_ECHO_CARDS)).toBe(true)
-    expect(BUILTIN_ECHO_CARDS.length).toBe(16)
+    expect(BUILTIN_ECHO_CARDS.length).toBe(17)
   })
 
   describe.each(BUILTIN_ECHO_CARDS.map(ec => [ec.metaId, ec]))('[%s]', (id, ec) => {

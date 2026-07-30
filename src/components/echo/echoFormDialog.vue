@@ -198,6 +198,11 @@ ${card.anno_source}
 用户描述：
 ${desc || '（未提供描述）'}
 
+当前回响内容是：
+${(this.form.anno_source || '').trim() || '（空）'}
+
+基于此进行修改。
+
 所有内置回响模板：
 ${builtinTemplates}
 

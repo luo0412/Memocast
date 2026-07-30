@@ -42,10 +42,11 @@ import ad from './echoBuiltinsAd.js'
 import diff from './echoBuiltinsDiff.js'
 import ref from './echoBuiltinsRef.js'
 import todo from './echoBuiltinsTodo.js'
+import fold from './echoBuiltinsFold.js'
 
 const BUILTIN_ECHO_CARDS = Object.freeze([
   nice, growth, shatter, skywalk, twinbloom, mindsteal, lucky, scapegoat, calamity, disperse,
-  peek, ignore, ad, diff, ref, todo
+  peek, ignore, ad, diff, ref, todo, fold
 ])
 
 const BUILTIN_ECHO_CHANT_IDS = Object.freeze(BUILTIN_ECHO_CARDS.map(card => card.metaId))

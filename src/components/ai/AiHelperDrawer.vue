@@ -8,6 +8,8 @@
     :modal="false"
     append-to-body
     :with-header="true"
+    :wrapper-closable="false"
+    :close-on-press-escape="false"
     :z-index="9999"
   >
     <div class="ai-drawer-demo">
@@ -67,7 +69,7 @@
                   {{ getMessageStatusText(message) }}
                 </div>
                 <div
-                  v-if="message.role === 'assistant' && message.content && hasCurrentNote && message.status === 'done'"
+                  v-if="message.role === 'assistant' && message.content && hasCurrentNote && message.status === 'done' && !echoHelpMode"
                   class="ai-demo-message-actions"
                 >
                   <button
@@ -154,7 +156,7 @@ function createMessage(id, role, content, status = 'done', meta = null) {
 }
 
 export default {
-  name: 'AiDemoDrawer',
+  name: 'AiHelperDrawer',
   data () {
     return {
       visible: false,
@@ -266,7 +268,7 @@ export default {
       await MarkdownRenderer.initMarkdownRenderer()
       this.rendererReady = true
     } catch (err) {
-      console.warn('[AiDemoDrawer] Failed to initialize MarkdownRenderer:', err)
+      console.warn('[AiHelperDrawer] Failed to initialize MarkdownRenderer:', err)
     }
 
     // 监听回响编辑模式的 AI 帮助请求
@@ -884,7 +886,8 @@ export default {
 .ai-demo-message-bubble {
   background: #ffffff;
   border-radius: 12px;
-  padding: 10px 14px;
+  /* padding: 10px 14px; */
+  padding: 5px;
   max-width: 85%;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(0, 0, 0, 0.06);
