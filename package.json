@@ -27,7 +27,13 @@
     "verify:blog": "jest --colors=false tests/unit/blog",
     "verify:boot": "jest --colors=false tests/unit/boot",
     "verify:util": "jest --colors=false tests/unit/util",
-    "verify:smoke": "jest --colors=false tests/smoke"
+    "verify:smoke": "jest --colors=false tests/smoke",
+    "plugin:muya:register": "cd _plugins/@coolma/muya && yarn link",
+    "plugin:muya:install-deps": "cd _plugins/@coolma/muya && yarn install --ignore-engines",
+    "plugin:muya:link": "yarn link @coolma/muya",
+    "plugin:muya:setup": "yarn plugin:muya:install-deps && yarn plugin:muya:register && yarn plugin:muya:link",
+    "plugin:muya:unlink": "yarn unlink @coolma/muya && npm rebuild --no-save @coolma/muya",
+    "plugin:muya:status": "node -e \"const r=require.resolve('@coolma/muya',{paths:[process.cwd()]});const fs=require('fs');const rp=fs.realpathSync(r);console.log('linked:',r,'->',rp)\""
   },
   "dependencies": {
     "@electron/remote": "^2.1.3",

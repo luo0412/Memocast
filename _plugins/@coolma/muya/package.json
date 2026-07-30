@@ -12,7 +12,8 @@
   "scripts": {
     "build": "webpack --mode=production",
     "build:dev": "webpack --mode=development",
-    "test": "echo \"see Memocast tests/unit/echo and tests/unit/rune for runtime contract tests\" && exit 0"
+    "test": "echo \"see Memocast tests/unit/echo and tests/unit/rune for runtime contract tests\" && exit 0",
+    "status": "node -e \"const fs=require('fs');const cp=require('child_process');const p=require('path');try{const links=cp.execSync('yarn link --list',{cwd:__dirname}).toString().trim();console.log('yarn link registry:');console.log(links||'(empty)')}catch(e){console.log('yarn link --list not supported on this version')}console.log('\\nlib/ size:');let n=0;function w(d){for(const f of fs.readdirSync(p.join(d||__dirname,'lib'),{withFileTypes:true})){if(f.isDirectory())w(p.join(d||__dirname,'lib',f.name));else n++}}w();console.log(' ',n,'files')\""
   },
   "keywords": [
     "markdown",
