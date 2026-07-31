@@ -12,7 +12,7 @@ alwaysApply: true
 | 特�?| 相关文件 |
 |------|----------|
 | **符文（Rune�?* | `src/components/muya/Muya.vue` �?`createRuneRendererCtor` / `RunePreviewRenderer`、`src/components/rune/runeFormDialog.vue`、`src/components/rune/runeCard.vue`、`src/components/rune/runeTemplates/`�?4 张内�?rune SFC 模板分散在子目录各自�?`runeTemplates*.js` 文件里，入口聚合�?`./runeTemplates.js`）、`src/boot/rune-deps.js`、`src/constants/runeEchoCategories.js` 等所�?rune 相关代码 |
-| **回响（Echo�?* | `src/components/echo/` 整个目录（`echoRuntime.js`、`echoRegistry.js`、`echoBuiltins/` 子目录里 16 张卡片分散在 `echoBuiltins*.js` 文件 + 聚合入口 `echoBuiltins.js`、`echoBuiltinsShared.js` 等）、`src/components/echo/echoFormDialog.vue`、`src/components/echo/echoInstanceDialog.vue`、`@coolma/muya/lib/parser/render/renderInlines/echoAnno.js`、`@coolma/muya/lib/parser/rules.js` 中的 `echo_anno` 规则等所�?echo 相关代码 |
+| **回响（Echo�?* | `src/components/echo/` 整个目录（`echoRuntime.js`、`echoRegistry.js`、`echoBuiltins/` 子目录里 16 张卡片分散在 `echoBuiltins*.js` 文件 + 聚合入口 `echoBuiltins.js`、`echoBuiltinsShared.js` 等）、`src/components/echo/echoFormDialog.vue`、`src/components/echo/echoInstanceDialog.vue`、`coolma-muya/lib/parser/render/renderInlines/echoAnno.js`、`coolma-muya/lib/parser/rules.js` 中的 `echo_anno` 规则等所�?echo 相关代码 |
 | **云函数（Cloud Function�?* | `src/utils/cloud-router.js`、`src/services/cloud/` 整个目录（`CloudFunctionProvider.js`、`VkFilesService.js`、`BspAppDemoService.js` 等）、`src/components/ui/dialog/CloudFnConfigDialog.vue`、`_todo/TODO-云函数调研存�?*.md` 及所�?`cloud.invoke(...)` 调用�?|
 
 ## 2. 核心原则（一句话�?

@@ -37,8 +37,8 @@ import {
   LinkTools,
   TableBarTools,
   Transformer
-} from '@coolma/muya/lib'
-import '@coolma/muya/themes/default.css'
+} from 'coolma-muya/lib'
+import 'coolma-muya/themes/default.css'
 
 const PLUGINS = [
   'TablePicker',

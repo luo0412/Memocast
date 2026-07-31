@@ -43,7 +43,7 @@ export const inlineRules = {
   //   - echoRequireParens=false         → () 可选，@name{} / @name 也会命中（兼容历史笔记）
   // 工厂 createEchoAnnoRule 在本文件下方；运行时入口 setEchoAnnoRule 在
   // ../parser/index.js，由主项目 Muya.vue 直接 import 后调：
-  //   import { setEchoAnnoRule } from '@coolma/muya/lib'
+  //   import { setEchoAnnoRule } from 'coolma-muya/lib'
   //   setEchoAnnoRule({ requireParens })  // 直接 mutate 本文件导出的 inlineRules.echo_anno
   // 不要再回到 options.echoAnnoRule 那条老路，**唯一**主路径就是 mutate 共享引用。
   // 捕获组顺序与原 echo_anno 完全一致：[name, propsRaw, promptRaw]，下游

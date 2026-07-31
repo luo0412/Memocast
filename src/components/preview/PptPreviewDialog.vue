@@ -50,7 +50,7 @@ import Notes from 'reveal.js/plugin/notes/notes'
 import 'reveal.js/dist/reveal.css'
 import 'reveal.js/dist/theme/white.css'
 import 'reveal.js/plugin/highlight/monokai.css'
-import { escapeHtml } from '@coolma/muya/lib'
+import { escapeHtml } from 'coolma-muya/lib'
 
 const SLIDE_SEPARATOR_RE = /^---\s*$/m
 const VERTICAL_SEPARATOR_RE = /^--\s*$/m

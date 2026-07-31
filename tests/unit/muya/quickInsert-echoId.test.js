@@ -6,7 +6,7 @@
 //   2) echoId 是 uuidv4 格式
 //   3) 每次调用生成新的 echoId（不同实例不共享）
 //
-// 对应真源：@coolma/muya/lib/ui/quickInsert/index.js 行 209 的 createEchoPlaceholderMarkup
+// 对应真源：coolma-muya/lib/ui/quickInsert/index.js 行 209 的 createEchoPlaceholderMarkup
 //
 // 历史背景：
 //   quickInsert 路径下原 createEchoPlaceholderMarkup 只写 `@echoName{value: 'xxx'}()`，
@@ -20,7 +20,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const fs = require('fs')
 const path = require('path')
 const quickInsertSource = fs.readFileSync(
-  path.resolve(__dirname, '../../../node_modules/@coolma/muya/lib/ui/quickInsert/index.js'),
+  path.resolve(__dirname, '../../../node_modules/coolma-muya/lib/ui/quickInsert/index.js'),
   'utf8'
 )
 

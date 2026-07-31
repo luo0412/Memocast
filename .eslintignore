@@ -4,4 +4,4 @@
 /src-cordova
 /.quasar
 /node_modules
-/_plugins/@coolma/muya/lib
+/_plugins/coolma-muya/lib

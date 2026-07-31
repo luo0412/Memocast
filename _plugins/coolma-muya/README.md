@@ -1,8 +1,8 @@
-# @coolma/muya
+# coolma-muya
 
 Memocast 编辑器核心 —— Muya Markdown 编辑器，内置 **rune（符文）** 和 **echo（回响）** 扩展。
 
-> **这是一个独立的 npm 包**，可以单独构建产出 UMD bundle（8.12 MB full / 6.93 MB core），通过 CDN `<script>` 直接 `new Muya()` 嵌入任何页面。
+> **这是一个独立的 npm 包**（未 scoped，避开 npm 私有 scoped 包的付费限制），可以单独构建产出 UMD bundle（8.12 MB full / 6.93 MB core），通过 CDN `<script>` 直接 `new Muya()` 嵌入任何页面。
 >
 > 主项目 [`coolma/Memocast`](https://github.com/...) 通过 `yarn link` 把它以 ESM 方式加载。
 
@@ -28,9 +28,9 @@ Memocast 编辑器核心 —— Muya Markdown 编辑器，内置 **rune（符文
   <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"></script>
 
   <!-- muya full bundle -->
-  <script src="https://your-cdn/@coolma/muya/index.min.js"></script>
+  <script src="https://your-cdn/coolma-muya/index.min.js"></script>
 
-  <link rel="stylesheet" href="https://your-cdn/@coolma/muya/themes/default.css" />
+  <link rel="stylesheet" href="https://your-cdn/coolma-muya/themes/default.css" />
 </head>
 <body>
   <div id="editor" style="height: 100vh;"></div>
@@ -75,8 +75,8 @@ Memocast 编辑器核心 —— Muya Markdown 编辑器，内置 **rune（符文
   <script src="https://cdn.jsdelivr.net/npm/flowchart.js@1.18.0/release/flowchart.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vega-embed@6.21.0/build/vega-embed.min.js"></script>
 
-  <script src="https://your-cdn/@coolma/muya/index.core.min.js"></script>
-  <link rel="stylesheet" href="https://your-cdn/@coolma/muya/themes/default.css" />
+  <script src="https://your-cdn/coolma-muya/index.core.min.js"></script>
+  <link rel="stylesheet" href="https://your-cdn/coolma-muya/themes/default.css" />
 </head>
 <body>
   <div id="editor" style="height: 100vh;"></div>
@@ -93,11 +93,11 @@ Memocast 编辑器核心 —— Muya Markdown 编辑器，内置 **rune（符文
 
 ```js
 // 完整版
-import Muya from '@coolma/muya'
-import '@coolma/muya/themes/default.css'
+import Muya from 'coolma-muya'
+import 'coolma-muya/themes/default.css'
 
 // 或 core 版（需要 declare module 或配 alias）
-import Muya from '@coolma/muya/dist/index.core.min.js'
+import Muya from 'coolma-muya/dist/index.core.min.js'
 
 const muya = new Muya('#editor', options)
 ```
@@ -109,17 +109,17 @@ const muya = new Muya('#editor', options)
 ### 2.1 安装 / 链接
 
 ```bash
-# 在 _plugins/@coolma/muya 下
+# 在 _plugins/coolma-muya 下
 yarn install
 
 # 注册到全局 yarn link
 yarn link
 
 # 在主项目 coolma/ 根目录
-yarn link @coolma/muya
+yarn link coolma-muya
 ```
 
-主项目的 `package.json` 里 `dependencies` 应该已经有 `"@coolma/muya": "file:_plugins/@coolma/muya"` 之类的本地引用，确认 `yarn link @coolma/muya` 不会重复装。
+主项目的 `package.json` 里 `dependencies` 应该已经有 `"coolma-muya": "file:_plugins/coolma-muya"` 之类的本地引用，确认 `yarn link coolma-muya` 不会重复装。
 
 ### 2.2 监听构建
 
@@ -167,7 +167,7 @@ const muya = new Muya(containerOrSelector, options)
 ### 3.2 静态注册插件
 
 ```js
-import { TablePicker, QuickInsert, CodePicker, EmojiPicker } from '@coolma/muya'
+import { TablePicker, QuickInsert, CodePicker, EmojiPicker } from 'coolma-muya'
 
 Muya.use(TablePicker)
 Muya.use(QuickInsert, { /* options */ })

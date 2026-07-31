@@ -1,5 +1,5 @@
 {
-  "name": "@coolma/muya",
+  "name": "coolma-muya",
   "version": "0.1.2",
   "description": "Muya markdown editor — Memocast's editor core with rune / echo extensions",
   "main": "lib/index.js",

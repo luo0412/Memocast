@@ -24,9 +24,9 @@ export default defineConfig({
       // Memocast path stubs for standalone use
       { find: 'boot/i18n', replacement: path.resolve(__dirname, './src/boot/i18n.js') },
       { find: 'src/components/echo/echoCore', replacement: path.resolve(__dirname, './src/components/echo/echoCore.js') },
-      // muya lib (精确匹配，防止 /lib -> /lib/lib)
-      { find: /^@coolma\/muya\/lib$/, replacement: path.resolve(__dirname, '../muya/lib') },
-      { find: /^@coolma\/muya\/themes\/default\.css$/, replacement: path.resolve(__dirname, '../muya/themes/default.css') },
+      // coolma-muya lib (精确匹配，防止 /lib -> /lib/lib)
+      { find: /^coolma-muya\/lib$/, replacement: path.resolve(__dirname, '../coolma-muya/lib') },
+      { find: /^coolma-muya\/themes\/default\.css$/, replacement: path.resolve(__dirname, '../coolma-muya/themes/default.css') },
       // === stub：单文件 + 带子路径 ===
       { find: /^prismjs(\/.*)?$/, replacement: `${stubDir}/prismjs$1` },
       { find: /^unsplash-js(\/.*)?$/, replacement: `${stubDir}/unsplash-js$1` },
@@ -40,10 +40,10 @@ export default defineConfig({
       { find: /^popper\.js(\/.*)?$/, replacement: `${stubDir}/popper.js$1` },
       { find: /^html-tags(\/.*)?$/, replacement: `${stubDir}/html-tags$1` },
       // sequence-diagram-snap.js 引到的 UMD 包 `require('eve')` 会撞 esbuild prebundle
-      { find: /@coolma\/muya\/lib\/assets\/libs\/snap\.svg-min(\.js)?$/, replacement: `${stubDir}/snap-svg.js` }
+      { find: /coolma-muya\/lib\/assets\/libs\/snap\.svg-min(\.js)?$/, replacement: `${stubDir}/snap-svg.js` }
     ]
   },
-  // 确保 esbuild 等预构建工具正确处理 @coolma/muya
+  // 确保 esbuild 等预构建工具正确处理 coolma-muya
   optimizeDeps: {
     // demo 模式：禁依赖发现。Muya lib 内部有大量 UMD 风格的 deps（snap.svg-min.js、
     // katex.css、eve、flowchart.js、mermaid、vega-embed 等），esbuild prebundle 在
@@ -80,7 +80,7 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     // 允许 vite 通过 /@fs/<abs-path> 访问 demo-web 工作目录外的文件
-    // （主要是 _plugins/@coolma/muya/lib/*）。vite 5 默认出于安全 fs 沙箱拒绝。
+    // （主要是 _plugins/coolma-muya/lib/*）。vite 5 默认出于安全 fs 沙箱拒绝。
     fs: {
       allow: [
         path.resolve(__dirname, '..', '..', '..'),

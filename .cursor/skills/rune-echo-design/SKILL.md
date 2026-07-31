@@ -165,7 +165,7 @@ const finalProps = Object.assign(
 | 维度 | rune（符文） | echo（回响） |
 |---|---|---|
 | **用户写法** | quickInsert 插入 `<div data-rune-name="...">` 占位 | `@echoName{props}(prompt)` 行内 |
-| **解析�?* | Muya �?`<div data-rune-*>` �?inline block 节点 | Muya 自定�?`echo_anno` token（`@coolma/muya/lib/parser/rules.js:40`�?|
+| **解析�?* | Muya �?`<div data-rune-*>` �?inline block 节点 | Muya 自定�?`echo_anno` token（`coolma-muya/lib/parser/rules.js:40`�?|
 | **核心技�?* | `vue-template-compiler.parseComponent()` + `compileToFunctions()` + `Vue.extend()` | `safeEvalAnnoSource(source, HANDLER_PRELUDE)` 编译 anno_source |
 | **渲染产物** | `RunePreviewRenderer`（外�?Vue.extend）→ 内层 SFC �?`vm.$el` 插入 host | `definition.render(props)` 直接输出 HTML 字符串，赋给 `host.innerHTML` |
 | **副作用机�?* | Vue 生命周期（mounted / beforeDestroy�? SFC �?`$emit('input')` | `definition.afterRender(node, props)` 返回 cleanup；cleanup 在下次渲染时�?`disposeAll` 统一执行 |
@@ -176,7 +176,7 @@ const finalProps = Object.assign(
 
 ## 8. Muya 集成路径（v2026-07-28 后的最终形态）
 
-### 8.1 Echo 渲染管线（`@coolma/muya/lib/parser/render/index.js`�?
+### 8.1 Echo 渲染管线（`coolma-muya/lib/parser/render/index.js`�?
 
 ```
 tokenizer 解析 @xxx{...}(prompt)
@@ -282,7 +282,7 @@ buildFormCreateRule
 EchoRuntime                 // class
 EchoRegistry                // class
 
-// @coolma/muya/lib/parser/render/index.js
+// coolma-muya/lib/parser/render/index.js
 RUNE_PLACEHOLDER_SELECTOR = '[data-rune-name][data-rune-id][data-rune-node-id]'
 ECHO_PLACEHOLDER_SELECTOR = '[data-echo-node-id]'
 RUNE_HOST_CLASS = 'ag-rune-placeholder-host'
@@ -338,7 +338,7 @@ echoRuntime: EchoRuntime      // 必传，handler 派发入口
 | 文件 | 职责 |
 |---|---|
 | `src/components/muya/Muya.vue` | `createRuneRendererCtor` / `RunePreviewRenderer` / `updateRunePlaceholderValue` |
-| `@coolma/muya/lib/parser/render/index.js` | `renderRunePlaceholderNodes` / `mountRuneVueHosts` / `cleanupDetachedRuneVms` / `createRunePlaceholderMarkup` |
+| `coolma-muya/lib/parser/render/index.js` | `renderRunePlaceholderNodes` / `mountRuneVueHosts` / `cleanupDetachedRuneVms` / `createRunePlaceholderMarkup` |
 | `src/components/rune/runeTemplates/runeTemplates.js` | 14 �?`create*Template()` 入口 |
 | `src/components/rune/runeTemplates/runeTemplates*.js` | 14 个内�?rune SFC 模板（一文件一个） |
 | `src/components/rune/runeFormDialog.vue` | rune 创建 / 编辑表单 |
@@ -352,9 +352,9 @@ echoRuntime: EchoRuntime      // 必传，handler 派发入口
 
 | 文件 | 职责 |
 |---|---|
-| `@coolma/muya/lib/parser/rules.js` | `echo_anno` 规则：`/^@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)$/` |
-| `@coolma/muya/lib/parser/render/renderInlines/echoAnno.js` | Muya 行内渲染器（生成 host + dataset�?|
-| `@coolma/muya/lib/parser/render/index.js` | `renderEchoPlaceholders` / `mountEchoVueHosts` / `cleanupDetachedEchoVms` / `createEchoPlaceholderMarkup` |
+| `coolma-muya/lib/parser/rules.js` | `echo_anno` 规则：`/^@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)$/` |
+| `coolma-muya/lib/parser/render/renderInlines/echoAnno.js` | Muya 行内渲染器（生成 host + dataset�?|
+| `coolma-muya/lib/parser/render/index.js` | `renderEchoPlaceholders` / `mountEchoVueHosts` / `cleanupDetachedEchoVms` / `createEchoPlaceholderMarkup` |
 | `src/components/echo/echoRegistry.js` | echo 名片仓库（id / name 索引 + 渲染派发�?|
 | `src/components/echo/echoRuntime.js` | `EchoRuntime` 类（compile + render + renderToHtml + afterRender�?|
 | `src/components/echo/echoAnnoSource.js` | `HANDLER_PRELUDE` / `safeEvalAnnoSource` / `createDefaultEchoAnnoSource` |

@@ -1,10 +1,10 @@
 # Muya SDK 化迁移计�?
 
-> 目标：将 `@coolma/muya` 迁移�?`_plugins/muya-sdk`，使其成为纯净�?Markdown 编辑�?SDK
+> 目标：将 `coolma-muya` 迁移�?`_plugins/muya-sdk`，使其成为纯净�?Markdown 编辑�?SDK
 
 ## 当前问题
 
-`@coolma/muya` 中混入了 Memocast 业务逻辑，污染了 SDK�?
+`coolma-muya` 中混入了 Memocast 业务逻辑，污染了 SDK�?
 
 | 文件 | 混入的业务逻辑 | 迁移目标 |
 |-----|--------------|---------|
@@ -59,7 +59,7 @@ src/
 ### Phase 1: 创建 muya-sdk 基础结构
 
 1. [ ] 创建 `_plugins/muya-sdk/package.json`
-2. [ ] 复制 `@coolma/muya/` �?`_plugins/muya-sdk/src/`
+2. [ ] 复制 `coolma-muya/` �?`_plugins/muya-sdk/src/`
 3. [ ] 清理 `src/lib/index.js` - 移除 `refreshRuneCards()` 方法
 4. [ ] 清理 `src/lib/parser/rules.js` - 移除 `echo_anno` 规则
 5. [ ] 清理 `src/lib/parser/render/index.js` - 移除 `renderEchoPlaceholders()`
@@ -80,7 +80,7 @@ src/
 
 ### Phase 3: 配置软链接和构建
 
-1. [ ] 创建软链�?`@coolma/muya` -> `_plugins/muya-sdk`
+1. [ ] 创建软链�?`coolma-muya` -> `_plugins/muya-sdk`
 2. [ ] 更新 `quasar.conf.js` alias 配置
 3. [ ] 更新 `src/components/muya/Muya.vue` 使用业务层插�?
 

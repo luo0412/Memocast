@@ -1,6 +1,6 @@
 # Rune �?Echo 架构深度解析（源码级�?
 
-> 本文档是 `SKILL.md` �?*源码级补�?*：聚焦具体代码、具体行号、具体数据流。所有信息以当前 `src/` / `src-electron/` / `@coolma/muya/lib/` 实际状态为准（截至 v2026-07-30）�?
+> 本文档是 `SKILL.md` �?*源码级补�?*：聚焦具体代码、具体行号、具体数据流。所有信息以当前 `src/` / `src-electron/` / `coolma-muya/lib/` 实际状态为准（截至 v2026-07-30）�?
 
 ---
 
@@ -408,7 +408,7 @@ Muya 重渲染整个文�?
 ### 3.1 Muya 解析 `echo_anno` token
 
 ```javascript
-// @coolma/muya/lib/parser/rules.js
+// coolma-muya/lib/parser/rules.js
 echo_anno: /^@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)$/
 ```
 
@@ -425,7 +425,7 @@ echo_anno: /^@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)$/
 
 `propsParsed` �?`echoPropsParser.parseEchoProps()` 解析 `{...}` 段�?
 
-### 3.2 行内渲染器（`@coolma/muya/lib/parser/render/renderInlines/echoAnno.js`�?
+### 3.2 行内渲染器（`coolma-muya/lib/parser/render/renderInlines/echoAnno.js`�?
 
 ```javascript
 export default function echoAnno (h, cursor, block, token, outerClass) {
@@ -470,7 +470,7 @@ export default function echoAnno (h, cursor, block, token, outerClass) {
 }
 ```
 
-### 3.3 StateRender 的渲染流程（`@coolma/muya/lib/parser/render/index.js`�?
+### 3.3 StateRender 的渲染流程（`coolma-muya/lib/parser/render/index.js`�?
 
 #### 3.3.1 `renderRunePlaceholderNodes()`
 

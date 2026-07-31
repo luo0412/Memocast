@@ -628,7 +628,7 @@ export const tokenizer = (src, {
 //   - 已解析过的 block 不会被本函数回滚；Memocast 调用方负责触发整页重渲染。
 //
 // 用法（Memocast Muya.vue）：
-//   import { setEchoAnnoRule } from '@coolma/muya/lib'
+//   import { setEchoAnnoRule } from 'coolma-muya/lib'
 //   import DatabaseClient from 'src/utils/DatabaseClient'
 //   const raw = await DatabaseClient.appState.get('setting/parsing/echoRequireParens')
 //   setEchoAnnoRule({ requireParens: raw !== false })

@@ -64,7 +64,7 @@ module.exports = function (/* ctx */) {
       // Add dependencies for transpiling with Babel (Array of string/regex)
       // (from node_modules, which are by default not transpiled).
       // Applies only if "transpile" is set to true.
-      transpileDependencies: [/vega.*/, /@quasar.*/, /@coolma.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/, 'sql.js', /reveal\.js.*/, /portkey-ai/, /openai/, 'consola', 'enum-plus'],
+      transpileDependencies: [/vega.*/, /@quasar.*/, /coolma-muya.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/, 'sql.js', /reveal\.js.*/, /portkey-ai/, /openai/, 'consola', 'enum-plus'],
 
       // rtl: false, // https://quasar.dev/options/rtl-support
       // preloadChunks: true,
@@ -331,7 +331,7 @@ module.exports = function (/* ctx */) {
           '!public/box-im/**/*',
           // ─── 排除 Muya 编辑器的多余图标资源 ───
           // 每个图标有 3 个尺寸 (1.png, 2.png, 3.png)，只保留 @2x 和 @3x
-          '!_plugins/@coolma/muya/lib/assets/pngicon/**/1.png',
+          '!_plugins/coolma-muya/lib/assets/pngicon/**/1.png',
           // 开发依赖裁剪
           '!node_modules/@babel/**/*',
           '!node_modules/babel*/*',
