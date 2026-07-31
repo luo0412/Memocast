@@ -418,6 +418,12 @@ export default {
         return this.monacoEditor.getValue()
       }
       return this.template
+    },
+
+    setTemplate (code) {
+      if (this.monacoEditor && this.monacoReady) {
+        this.monacoEditor.setValue(code)
+      }
     }
   }
 }

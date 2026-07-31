@@ -11,24 +11,27 @@ import { createNamespacedHelpers } from 'vuex'
 import helper from 'src/utils/helper'
 import Vue from 'vue'
 import * as VueTemplateCompiler from 'vue-template-compiler'
-import Muya from '@coolma/muya/lib'
+import {
+  default as Muya,
+  TablePicker,
+  QuickInsert,
+  CodePicker,
+  EmojiPicker,
+  ImagePathPicker,
+  ImageSelector,
+  FormatPicker,
+  FrontMenu,
+  ImageToolbar,
+  LinkTools,
+  TableBarTools,
+  Transformer
+} from '@coolma/muya/lib'
+import '@coolma/muya/themes/default.css'
 import appBus from '../common/bus.js'
 import _ from 'lodash'
 import { v4 as uuidv4 } from 'uuid'
 import { EVENTS as appEvents } from 'src/utils/const/eventsConst'
 import '@coolma/muya/themes/default.css'
-import TablePicker from '@coolma/muya/lib/ui/tablePicker'
-import QuickInsert from '@coolma/muya/lib/ui/quickInsert'
-import CodePicker from '@coolma/muya/lib/ui/codePicker'
-import EmojiPicker from '@coolma/muya/lib/ui/emojiPicker'
-import ImagePathPicker from '@coolma/muya/lib/ui/imagePicker'
-import ImageSelector from '@coolma/muya/lib/ui/imageSelector'
-import FormatPicker from '@coolma/muya/lib/ui/formatPicker'
-import FrontMenu from '@coolma/muya/lib/ui/frontMenu'
-import ImageToolbar from '@coolma/muya/lib/ui/imageToolbar'
-import LinkTools from '@coolma/muya/lib/ui/linkTools'
-import TableBarTools from '@coolma/muya/lib/ui/tableTools'
-import Transformer from '@coolma/muya/lib/ui/transformer'
 import debugLogger from 'src/utils/debugLogger'
 import { attachThemeColor } from 'src/utils/theme'
 import { showContextMenu as showEditorContextMenu } from 'src/components/contextMenu/muya'

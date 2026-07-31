@@ -14,7 +14,21 @@
 
     <!-- 描述 -->
     <div class='rune-form-field rune-form-field--desc'>
-      <div class='rune-form-label'>{{ descLabel }}</div>
+      <div class='rune-form-label'>{{ descLabel }}
+        <q-btn
+          flat
+          dense
+          round
+          size='sm'
+          icon='auto_awesome'
+          class='rune-form-ai-btn'
+          @click='$emit("request-ai-help")'
+        >
+          <q-tooltip anchor='top middle' self='bottom middle' :offset='[0, 6]'>
+            AI 辅助生成符文代码
+          </q-tooltip>
+        </q-btn>
+      </div>
       <q-input
         v-model='formData.desc'
         dense
@@ -261,12 +275,26 @@ export default {
   margin-bottom: 0;
 }
 
+.rune-form-ai-btn {
+  color: #7c4dff;
+  opacity: 0.8;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.rune-form-ai-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
 .rune-form-label {
   font-size: 11px;
   color: rgba(0, 0, 0, 0.55);
   margin-bottom: 4px;
   font-weight: 500;
   line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .rune-form-input {

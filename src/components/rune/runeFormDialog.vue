@@ -27,6 +27,7 @@
               :mode='mode'
               @update:form='val => form = val'
               @update-inherit='val => form.inherit_from_previous = val'
+              @request-ai-help='handleRequestAiHelp'
             />
 
             <!-- 右侧编辑器区域 -->
@@ -64,12 +65,32 @@
 
 <script>
 import { RuneCategoryEnum } from 'src/utils/enum'
-import { createBlankTemplate, createInheritDemoTemplate } from './runeTemplates/runeTemplates.js'
+import { createBlankTemplate, createInheritDemoTemplate, BUILTIN_RUNE_TEMPLATE_META } from './runeTemplates/runeTemplates.js'
 import runeTemplateService from 'src/services/RuneTemplateService'
+import bus from 'src/components/common/bus'
+import { EVENTS } from 'src/utils/const/eventsConst'
 
 import runeFormFields from './runeFormFields.vue'
 import runeFormEditor from './runeFormEditor.vue'
 import runeRemoteImportDialog from './runeRemoteImportDialog.vue'
+
+// 懒加载模板工厂函数映射
+const _templateFactoryMap = {
+  createBlankTemplate: createBlankTemplate,
+  createInheritDemoTemplate: createInheritDemoTemplate,
+  createInputTemplate: null,
+  createHolyShieldTemplate: null,
+  createFireflyTemplate: null,
+  createJsxGraphTemplate: null,
+  createElInputTemplate: null,
+  createElSelectTemplate: null,
+  createElDatePickerTemplate: null,
+  createResumeBasicInfoTemplate: null,
+  createResumeTitleTemplate: null,
+  createResumeExperienceTemplate: null,
+  createResumeTextTemplate: null,
+  createResumeSkillTemplate: null
+}
 
 const createUuid = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -184,6 +205,117 @@ export default {
     this.dialog = this.$refs.dialog
   },
   methods: {
+    handleRequestAiHelp () {
+      const desc = String(this.form.desc || '').trim()
+      const builtinTemplates = BUILTIN_RUNE_TEMPLATE_META.map(tpl => {
+        const templateSource = this._getTemplateSource(tpl.factoryName)
+        return '【' + tpl.name + '】\n' +
+          (tpl.desc || '无描述') + '\n' +
+          '---\ntemplate:\n```html\n' +
+          templateSource + '\n```'
+      }).join('\n\n')
+
+      const templateExample = [
+        '<template>',
+        '  <div class="rune-card" :style="{ borderColor: color }">',
+        '    <!-- 符文内容 -->',
+        '  </div>',
+        '</template>',
+        '',
+        '<script>',
+        'export default {',
+        '  name: "myRune",',
+        '  props: {',
+        '    value: { type: String, default: "" },',
+        '    color: { type: String, default: "#7E57C2" }',
+        '  },',
+        '  methods: {',
+        '    updateValue (val) {',
+        '      this.$emit("input", val)',
+        '    }',
+        '  }',
+        '}',
+        '<\\/script>',
+        '',
+        '<style scoped>',
+        '.rune-card {',
+        '  border: 2px solid;',
+        '  border-radius: 8px;',
+        '  padding: 12px;',
+        '}',
+        '</style>'
+      ].join('\n')
+
+      const prompt = [
+        '你是一个符文（Rune）编辑器助手。请根据用户的描述和所有内置符文模板，帮助生成一个新的符文 SFC 代码。',
+        '',
+        '用户描述：',
+        desc || '（未提供描述）',
+        '',
+        '当前符文内容是：',
+        (this.form.template || '').trim() || '（空）',
+        '',
+        '基于此进行修改。',
+        '',
+        '所有内置符文模板：',
+        builtinTemplates,
+        '',
+        '请生成一个新的符文 SFC，遵循以下格式：',
+        '```html',
+        templateExample,
+        '```',
+        '',
+        '只输出最终的代码块，不要输出分析过程。'
+      ].join('\n')
+
+      bus.$emit(EVENTS.REQUEST_AI_RUNE_HELP, {
+        prompt,
+        runeName: this.form.name || '新符文',
+        onApply: (code) => {
+          // 提取代码块中的内容
+          const extractedCode = this._extractCodeFromMarkdown(code)
+          // 更新 form 数据
+          this.form.template = extractedCode
+          // 直接更新 monaco 编辑器
+          const editorRef = this.$refs.runeFormEditor
+          if (editorRef && editorRef.setTemplate) {
+            editorRef.setTemplate(extractedCode)
+          }
+          this.$emit('update-template', extractedCode)
+        }
+      })
+    },
+
+    _getTemplateSource (factoryName) {
+      if (!_templateFactoryMap[factoryName]) {
+        // 懒加载模板
+        try {
+          const mod = require('./runeTemplates/runeTemplates.js')
+          if (mod && mod[factoryName]) {
+            _templateFactoryMap[factoryName] = mod[factoryName]
+          }
+        } catch (e) {
+          return '(模板源码不可用)'
+        }
+      }
+      const factory = _templateFactoryMap[factoryName]
+      if (factory) {
+        const source = factory()
+        return (typeof source === 'string' ? source : '').substring(0, 500)
+      }
+      return '(模板源码不可用)'
+    },
+
+    _extractCodeFromMarkdown (markdown) {
+      // 提取 markdown 中的代码块内容
+      const codeBlockMatch = markdown.match(/```(?:html|vue)?\s*([\s\S]*?)```/)
+      if (codeBlockMatch && codeBlockMatch[1]) {
+        return codeBlockMatch[1].trim()
+      }
+      // 如果没有代码块，尝试直接返回（可能是纯 SFC 代码）
+      return markdown.trim()
+    },
+
     openRemoteImportDialog () {
       this.remoteImportError = ''
       this.remoteImportUrl = ''
