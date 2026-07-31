@@ -162,7 +162,7 @@ export default {
       return this.mode === 'echo'
     },
     runeCategoryOptions () {
-      return RuneCategoryEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
+      return RuneCategoryEnum.items.map(c => ({ value: c.value, label: c.label }))
     },
     resolvedAddTitle () {
       return this.isEchoMode ? this.$t('echoCardAdd') : this.$t('runeCardAdd')

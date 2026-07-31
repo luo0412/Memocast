@@ -55,7 +55,7 @@ export default {
     subTabOptions () {
       return this.$enums.CloudFnSubEnum.items.map(c => ({
         value: c.value,
-        label: this.$t(c.label),
+        label: c.label,
         icon: c.icon
       }))
     }

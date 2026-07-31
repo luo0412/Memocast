@@ -15,6 +15,7 @@ let mockSaveMany
 let mockGetAll
 
 jest.mock('src/utils/DatabaseClient', () => ({
+  __esModule: true,
   default: {
     runeTemplates: {
       saveMany: jest.fn(),
@@ -26,7 +27,7 @@ jest.mock('src/utils/DatabaseClient', () => ({
 const DatabaseClient = require('src/utils/DatabaseClient').default
 
 // 必须在 jest.mock 之后 import
-const RuneTemplateService = require('src/services/RuneTemplateService')
+const RuneTemplateService = require('src/services/RuneTemplateService').default
 
 // 辅助函数：从 batchImport 源码里提取 VALID_CATEGORY_KEYS（与被测代码保持一致）
 const VALID_CATEGORY_KEYS = new Set([

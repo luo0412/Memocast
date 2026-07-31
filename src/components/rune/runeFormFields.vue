@@ -210,7 +210,7 @@ export default {
       return this.isEchoMode ? this.$t('echoCardDesc') : this.$t('runeCardDesc')
     },
     categoryOptions () {
-      const opts = RuneCategoryEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
+      const opts = RuneCategoryEnum.items.map(c => ({ value: c.value, label: c.label }))
       if (opts.length) {
         const missing = opts.filter(o => !o.label).map(o => o.value)
         console.log(`[RUNE-TPL] RuneFormFields.categoryOptions size=${opts.length} first.label=${opts[0].label}` + (missing.length ? ` missing-labels=${missing.join(',')}` : ''))

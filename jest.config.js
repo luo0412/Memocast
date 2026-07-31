@@ -30,7 +30,9 @@ module.exports = {
 
   // 让 @/ 别名走 src/，和 Quasar 构建一致
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1'
+    '^@/(.*)$': '<rootDir>/src/$1',
+    // 与 Quasar 构建别名一致：源码里直接 import 'src/utils/...' 或 'src/components/...' 也能解析
+    '^src/(.*)$': '<rootDir>/src/$1'
   },
 
   // 全局注入 jQuery + window 给 jsdom

@@ -415,7 +415,7 @@ export default {
     categoryOptions () {
       return RuneCategoryEnum.items.map(c => ({
         value: c.value,
-        label: this.$t(c.label)
+        label: c.label
       }))
     },
     previewItems () {

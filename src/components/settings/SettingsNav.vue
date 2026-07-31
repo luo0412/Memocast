@@ -6,7 +6,7 @@
         :key='item.value'
         :name='item.value'
         :icon='item.icon'
-        :label='$t(item.label)'
+        :label='item.label'
         :class='item.tabClass'
       />
     </q-tabs>

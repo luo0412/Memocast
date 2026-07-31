@@ -72,7 +72,7 @@ export default {
   },
   computed: {
     calendarDateBasisOptions () {
-      return CalendarDateBasisEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
+      return CalendarDateBasisEnum.items.map(c => ({ value: c.value, label: c.label }))
     },
     thumbStyle () {
       return { display: 'none' }

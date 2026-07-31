@@ -124,12 +124,12 @@ export default {
   },
   computed: {
     noteOrderOptions: function () {
-      return NoteOrderTypeEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
+      return NoteOrderTypeEnum.items.map(c => ({ value: c.value, label: c.label }))
     },
     subTabOptions () {
       return this.$enums.EditorSubEnum.items.map(c => ({
         value: c.value,
-        label: this.$t(c.label),
+        label: c.label,
         icon: c.icon
       }))
     }

@@ -5,7 +5,10 @@
  * 创建之前调用**，否则那些早期创建的实例拿不到这些方法（enum-plus v3 的
  * prototype 查找行为）。
  *
- *   - i18nKey(value)   -> 等价于 enum.label(value)，语义更明显
+ *   - i18nKey(value)   -> 等价于 enum.label(value)；因为 boot/i18n.js 设置了
+ *                          `Enum.localize = i18n.t`，此方法会**自动翻译**，
+ *                          直接返回当前 locale 文案。注意名字虽然叫 i18nKey，
+ *                          但返回的并不是 i18n key 而是翻译后的字符串。
  *   - tagType(value)   -> 拿 enum 项里写的 tagType，没写返回 null
  *   - iconOf(value)    -> 拿 enum 项里写的 icon
  *

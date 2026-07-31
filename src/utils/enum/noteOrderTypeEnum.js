@@ -8,7 +8,7 @@
  *
  * 现改为 enum-plus：
  *   - NoteOrderTypeEnum.TitleAsc 直接拿到 value，等价于 NOTE_ORDER_TYPES[0]
- *   - NoteOrderTypeEnum.label(value) 返回 i18n key，调用方仍然自己 $t()
+ *   - NoteOrderTypeEnum.label(value) 经过 Enum.localize 自动翻译，直接返回当前 locale 文案
  *   - NoteOrderTypeEnum.values / .items / .has() / .key() 替代手工遍历/查找
  *
  * 为了不破坏已有消费方（`SettingsEditorPanel.vue` / `CalendarPanel.vue` /

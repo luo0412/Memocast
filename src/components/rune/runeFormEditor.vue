@@ -90,7 +90,7 @@ export default {
       return { height: `${this.monacoEditorHeight}px` }
     },
     runeCategoryOptions () {
-      return RuneCategoryEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
+      return RuneCategoryEnum.items.map(c => ({ value: c.value, label: c.label }))
     },
     categoryPickerOption () {
       const groups = new Map()

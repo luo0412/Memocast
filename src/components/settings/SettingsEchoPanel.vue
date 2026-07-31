@@ -103,7 +103,7 @@ export default {
     categoryOptions () {
       const opts = EchoCategoryEnum.items.map((c) => ({
         value: c.value,
-        label: this.$t(c.label),
+        label: c.label,
         count: (this.echoCards || []).filter(e => {
           const cat = normalizeEchoCategory(e && e.category, Boolean(e && e.isBuiltin), e && e.category)
           return cat === c.value

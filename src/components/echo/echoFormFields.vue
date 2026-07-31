@@ -180,7 +180,7 @@ export default {
         { value: '#9CCC65' },
         { value: '#FFA726' }
       ],
-      categoryOptions: EchoCategoryEnum.items.map(c => ({ value: c.value, label: this.$t(c.label) }))
+      categoryOptions: EchoCategoryEnum.items.map(c => ({ value: c.value, label: c.label }))
     }
   },
   computed: {

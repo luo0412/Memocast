@@ -96,7 +96,7 @@ export default {
     categoryOptions () {
       const opts = RuneCategoryEnum.items.map((c) => ({
         value: c.value,
-        label: this.$t(c.label),
+        label: c.label,
         count: (this.runeCards || []).filter(r => resolveRuneCategoryFromRune(r) === c.value).length
       }))
       return opts.sort((a, b) => {
