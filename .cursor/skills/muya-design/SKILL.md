@@ -7,7 +7,10 @@ description: Muya Markdown 编辑器架构与实现指南。用于分析、修�
 
 ## 本地开发与调试
 
-Muya 作为独立子项目存放在 `_plugins/@coolma/muya/`，通过 yarn link 与主项目关联。
+Muya 作为独立子项目存放在 `_plugins/@coolma/muya/`，有两种调试路径：
+
+1. **主项目链路**（`yarn link`，适合在 Memocast 上下文中验证）
+2. **独立 demo-web 链路**（`file:` + vite alias，适合纯 muya 开发）
 
 ### 目录结构
 
@@ -26,37 +29,19 @@ _plugins/@coolma/muya/
 └── package.json
 ```
 
-### 常用命令
+### 两种调试路径对比
 
-| 命令 | 作用 |
-|------|------|
-| `yarn` | 安装 @coolma/muya 自身依赖 |
-| `yarn build` | 清理后生产构建（输出到 `dist/`） |
-| `yarn build:dev` | 清理后开发构建 |
-| `yarn watch` / `yarn dev` | 开启 webpack watch（不改源码时用） |
-| `yarn link` | 在 muya 目录注册 link（主项目侧执行 `yarn link @coolma/muya`） |
+| | 主项目链路 | 独立 demo-web 链路 |
+|--|-----------|-------------------|
+| 启动命令 | `yarn run dev`（主项目） | `cd _plugins/@coolma/demo-web; yarn dev` |
+| 端口 | 8080（Quasar） | 5174（Vite） |
+| muya 源码 | `yarn link` 解析到 `_plugins/@coolma/muya/` | `file:../muya` + vite alias |
+| Memocast 上下文 | ✅ 完整（i18n / echoCore / DB） | ⚠️ 需要 stub（见下） |
+| 适用场景 | Echo / Rune / 笔记集成调试 | 纯 muya UI / parser / renderer 调试 |
 
-### 源码引用方式（开发时）
+---
 
-src 中统一从 `@coolma/muya/lib` 具名导入：
-
-```javascript
-// 主编辑器 + 13 个 UI 组件
-import {
-  default as Muya,
-  TablePicker, QuickInsert, CodePicker, EmojiPicker,
-  ImagePathPicker, ImageSelector, FormatPicker, FrontMenu,
-  ImageToolbar, LinkTools, TableBarTools, Transformer
-} from '@coolma/muya/lib'
-
-// 工具函数
-import { escapeHtml, identity } from '@coolma/muya/lib'
-
-// CSS 主题（单独导入）
-import '@coolma/muya/themes/default.css'
-```
-
-### yarn link 链路
+### 路径一：主项目链路（yarn link）
 
 ```
 _plugins/@coolma/muya/
@@ -70,15 +55,17 @@ _plugins/@coolma/muya/
 quasar.conf.js: resolve.alias.@coolma/muya → _plugins/@coolma/muya
 ```
 
-在主项目根目录执行 `yarn link @coolma/muya` 即可让 quasar bundler 解析到 `_plugins/@coolma/muya/lib/`。
+**常用命令**
 
-### webpack 构建产物用途
+| 命令 | 作用 |
+|------|------|
+| `yarn` | 安装 muya 自身依赖 |
+| `yarn build` | 清理后生产构建（输出到 `dist/`） |
+| `yarn build:dev` | 清理后开发构建 |
+| `yarn watch` / `yarn dev` | 开启 webpack watch（不改源码时用） |
+| `yarn link` | 在 muya 目录注册 link（主项目侧执行 `yarn link @coolma/muya`） |
 
-- `dist/index.min.js`：UMD bundle，可独立加载（不推荐，src 直接 link lib 即可）
-- `dist/index.min.css`：MiniCssExtractPlugin 提取的 CSS
-- `lib/`：源码（ESM 格式，quasar 的 babel-loader 会处理）
-
-### 软链接操作步骤
+**软链接操作步骤**：
 
 ```bash
 # 1. 在 muya 子项目注册 link
@@ -98,6 +85,175 @@ yarn build
 
 # 或者 watch 模式（开发调试，保持 watch 不中断）
 yarn watch
+```
+
+在主项目根目录执行 `yarn link @coolma/muya` 即可让 quasar bundler 解析到 `_plugins/@coolma/muya/lib/`。
+
+**注意**：quasar.conf.js 中已有 alias：
+```javascript
+'@coolma/muya': path.resolve(__dirname, '../_plugins/@coolma/muya')
+```
+
+---
+
+### 路径二：独立 demo-web 链路（推荐纯 muya 开发）
+
+#### 目录结构
+
+```
+_plugins/@coolma/demo-web/
+├── src/
+│   ├── main.js                 # Vue 2 入口
+│   ├── App.vue                 # Demo 根组件（集成 Muya）
+│   ├── boot/
+│   │   └── i18n.js            # i18n stub（muya lib 内部依赖）
+│   └── components/echo/
+│       └── echoCore.js        # echoCore stub（muya parser 依赖）
+├── index.html
+├── vite.config.js
+└── package.json
+```
+
+#### 关键文件内容
+
+**`package.json`**：
+
+```json
+{
+  "name": "@coolma/demo-web",
+  "dependencies": {
+    "@coolma/muya": "file:../muya",
+    "vue": "^2.7.16",
+    "vue-i18n": "^8.28.2",
+    "katex": "^0.16.11",
+    "eve": "^0.5.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue2": "^2.3.1",
+    "vite": "^5.4.0"
+  }
+}
+```
+
+**`vite.config.js`**（alias 精确匹配是核心）：
+
+```javascript
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue2'
+import path from 'path'
+
+export default defineConfig({
+  plugins: [vue()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      // Memocast path stubs（必须精确匹配，防止 /lib/lib 重复追加）
+      'boot/i18n': path.resolve(__dirname, './src/boot/i18n.js'),
+      'src/components/echo/echoCore': path.resolve(__dirname, './src/components/echo/echoCore.js'),
+      // muya lib 精确匹配（带上 ^ 前缀）
+      '^@coolma/muya/lib$': path.resolve(__dirname, '../muya/lib'),
+      '^@coolma/muya/themes/default.css$': path.resolve(__dirname, '../muya/themes/default.css')
+    }
+  },
+  optimizeDeps: {
+    include: ['katex', 'eve', 'vue', 'vue-i18n']
+  },
+  server: {
+    port: 5174,
+    strictPort: true
+  }
+})
+```
+
+**`src/boot/i18n.js`**（stub）：
+
+```javascript
+// Stub for Memocast's boot/i18n.js
+// Muya uses this to translate UI labels via i18n.t()
+import Vue from 'vue'
+import VueI18n from 'vue-i18n'
+
+Vue.use(VueI18n)
+
+const i18n = new VueI18n({
+  locale: 'en-us',
+  fallbackLocale: 'en-us',
+  messages: { 'en-us': {}, 'zh-cn': {} }
+})
+
+export { i18n }
+export default ({ app }) => { app.i18n = i18n }
+```
+
+**`src/components/echo/echoCore.js`**（stub，只暴露 parser 侧需要的部分）：
+
+```javascript
+// Stub for Memocast's src/components/echo/echoCore.js
+// Only parseEchoProps is needed by the parser; full EchoRegistry/EchoRuntime
+// require Memocast-specific services (DB, sync, etc.)
+
+export function parseEchoProps (content) {
+  if (!content || typeof content !== 'string') return {}
+  const match = content.match(/^([a-zA-Z_]\w*)\{(.*)\}$/s)
+  if (!match) return { echoName: content }
+  const [, name, propsStr] = match
+  const props = {}
+  propsStr.replace(/(\w+)=("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/g, (_, k, v) => {
+    props[k] = v.replace(/^["']|["']$/g, '')
+  })
+  return { echoName: name, ...props }
+}
+
+// Stub all other exports to avoid runtime errors
+export function decodeEchoPayload () {}
+export function encodeEchoPayload () {}
+export function createEchoPlaceholderPayload () {}
+export function extractPrevEchoTokenValue () {}
+export function echoInheritFromPrevious () {}
+export class EchoRegistry { constructor() {} refresh() {} get() { return [] } all() { return [] } }
+export class EchoRuntime { constructor() {} }
+```
+
+#### 启动步骤
+
+```bash
+# 1. 安装依赖
+cd _plugins/@coolma/demo-web
+yarn install
+
+# 2. 启动 dev server（端口 5174）
+yarn dev
+
+# 3. 访问 http://localhost:5174
+```
+
+#### ⚠️ 注意事项
+
+1. **alias 必须精确匹配**：muya lib 内部 import 路径是 `@coolma/muya/lib` 和 `@coolma/muya/themes/default.css`，不能用普通前缀 alias（会变成 `/lib/lib`）。必须用 `^` 前缀精确匹配。
+2. **Memocast 专有依赖**：`boot/i18n`（i18n 翻译）、`src/components/echo/echoCore`（echo 解析）、`katex`（数学公式）、`eve`（SVG snap 库）必须通过 stub 或 npm 包提供。
+3. **muya 源码修改后无需重新构建**：demo-web 直接引用 `../muya/lib`，Vite 会追踪源文件，保存即热更新。
+4. **echo/rune 功能在独立 demo 中不可用**：因为 echoCore stub 没有真实的 EchoRegistry，但纯 parser/renderer 调试不受影响。
+
+---
+
+### 源码引用方式
+
+src 中统一从 `@coolma/muya/lib` 具名导入：
+
+```javascript
+// 主编辑器 + 13 个 UI 组件
+import {
+  default as Muya,
+  TablePicker, QuickInsert, CodePicker, EmojiPicker,
+  ImagePathPicker, ImageSelector, FormatPicker, FrontMenu,
+  ImageToolbar, LinkTools, TableBarTools, Transformer
+} from '@coolma/muya/lib'
+
+// 工具函数
+import { escapeHtml, identity } from '@coolma/muya/lib'
+
+// CSS 主题（单独导入）
+import '@coolma/muya/themes/default.css'
 ```
 
 ### 导出 API（lib/index.js）

@@ -28,10 +28,10 @@
         <div v-if='selectedCount > 0' class='rune-export-preview'>
           <div class='rune-export-preview-title'>预览：</div>
           <div class='rune-export-preview-list'>
-            <div v-for='rune in previewRunes' :key='rune.id' class='rune-export-preview-item'>
+            <div v-for='rune in previewRunesWithCategory' :key='rune.id' class='rune-export-preview-item'>
               <span class='rune-export-preview-icon' :style='{ color: rune.color }'>●</span>
               <span class='rune-export-preview-name'>{{ rune.name }}</span>
-              <span class='rune-export-preview-category'>({{ rune.category }})</span>
+              <span class='rune-export-preview-category'>({{ rune.resolvedCategory }})</span>
             </div>
             <div v-if='selectedCount > previewLimit' class='rune-export-preview-more'>
               ... 还有 {{ selectedCount - previewLimit }} 个
@@ -223,6 +223,13 @@ export default {
     previewRunes () {
       const list = this.selectedRunes || []
       return list.slice(0, this.previewLimit)
+    },
+    // 兼容 category 和 category_key 两种字段名
+    previewRunesWithCategory () {
+      return this.previewRunes.map(r => ({
+        ...r,
+        resolvedCategory: r.category || r.category_key || 'general'
+      }))
     }
   },
   methods: {

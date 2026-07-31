@@ -277,7 +277,7 @@ async function clearAll (payload) {
 /**
  * 批量导入符文（从 JSON 文件）。
  * @param {Array} items - 要导入的符文数组，格式与导出格式一致：{ name, desc, category, color, icon, template }
- * @param {string} targetCategory - 目标分类（强制使用此分类）
+ * @param {string} targetCategory - 目标分类（仅用于新建符文，保留现有符文的分类）
  * @param {Object} options - 可选配置
  * @param {string} options.conflictMode - 冲突处理模式: 'normal'(默认新建) | 'replace'(覆盖) | 'skip'(跳过)
  * @param {Array} options.existingRunes - 现有符文列表，用于查找同名符文的 ID
@@ -305,12 +305,12 @@ async function batchImport (items, targetCategory = '', options = {}) {
   const validTargetCategory = VALID_CATEGORY_KEYS.has(String(targetCategory || '').trim())
     ? String(targetCategory).trim()
     : 'general'
-  // 构建现有符文 name -> id 的映射（不区分大小写）
+  // 构建现有符文 name -> { id, category_key } 的映射（不区分大小写）
   const existingNameMap = new Map()
   for (const rune of existingRunes) {
     if (rune && rune.name) {
       const key = String(rune.name).trim().toLowerCase()
-      existingNameMap.set(key, rune.id)
+      existingNameMap.set(key, { id: rune.id, category_key: rune.category_key || 'general' })
     }
   }
   for (let i = 0; i < items.length; i++) {
@@ -322,14 +322,18 @@ async function batchImport (items, targetCategory = '', options = {}) {
       skipped.push(itemName)
       continue
     }
-    // 强制使用目标分类
-    const category = validTargetCategory
-    // 覆盖模式下，尝试找到现有符文的 ID
+    // 覆盖模式下，保留现有符文的分类；新建符文使用目标分类
     let id
+    let category
     if (conflictMode === 'replace' && existingNameMap.has(itemNameKey)) {
-      id = existingNameMap.get(itemNameKey)
+      // 覆盖模式：保留现有符文的分类
+      const existing = existingNameMap.get(itemNameKey)
+      id = existing.id
+      category = existing.category_key
     } else {
+      // 新建模式：使用目标分类
       id = 'import-' + Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6)
+      category = validTargetCategory
     }
     rows.push({
       id,

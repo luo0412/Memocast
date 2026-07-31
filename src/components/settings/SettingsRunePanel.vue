@@ -65,6 +65,12 @@ import { RuneCategoryEnum } from 'src/utils/enum'
 
 const resolveRuneCategory = (raw) => RuneCategoryEnum.has(raw) ? raw : RuneCategoryEnum.General
 
+// 兼容两种字段名：category（导出格式）和 category_key（数据库字段）
+const resolveRuneCategoryFromRune = (rune) => {
+  if (!rune) return RuneCategoryEnum.General
+  return resolveRuneCategory(rune.category || rune.category_key)
+}
+
 export default {
   name: 'SettingsRunePanel',
   components: {
@@ -91,7 +97,7 @@ export default {
       const opts = RuneCategoryEnum.items.map((c) => ({
         value: c.value,
         label: this.$t(c.label),
-        count: (this.runeCards || []).filter(r => resolveRuneCategory(r && r.category) === c.value).length
+        count: (this.runeCards || []).filter(r => resolveRuneCategoryFromRune(r) === c.value).length
       }))
       return opts.sort((a, b) => {
         if (a.value === RuneCategoryEnum.General) return -1
@@ -101,7 +107,7 @@ export default {
     },
     localRunesInCategory () {
       const target = this.category
-      return (this.runeCards || []).filter(r => resolveRuneCategory(r && r.category) === target)
+      return (this.runeCards || []).filter(r => resolveRuneCategoryFromRune(r) === target)
     },
     currentCategoryLabel () {
       return this.$t(RuneCategoryEnum.label(this.category))
