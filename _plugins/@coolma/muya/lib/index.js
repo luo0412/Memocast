@@ -519,4 +519,42 @@ function getContainer (originContainer, options) {
   return container
 }
 
+// UI plugins (13 components)
+import TablePicker from './ui/tablePicker'
+import QuickInsert from './ui/quickInsert'
+import CodePicker from './ui/codePicker'
+import EmojiPicker from './ui/emojiPicker'
+import ImagePathPicker from './ui/imagePicker'
+import ImageSelector from './ui/imageSelector'
+import FormatPicker from './ui/formatPicker'
+import FrontMenu from './ui/frontMenu'
+import ImageToolbar from './ui/imageToolbar'
+import LinkTools from './ui/linkTools'
+import TableBarTools from './ui/tableTools'
+import Transformer from './ui/transformer'
+// Utils
+import * as utils from './utils'
+
 export default Muya
+
+// UI 组件（供 Muya.use(...) 使用）
+export {
+  TablePicker,
+  QuickInsert,
+  CodePicker,
+  EmojiPicker,
+  ImagePathPicker,
+  ImageSelector,
+  FormatPicker,
+  FrontMenu,
+  ImageToolbar,
+  LinkTools,
+  TableBarTools,
+  Transformer
+}
+
+// 工具函数命名空间
+export { utils }
+
+// 配置常量
+export { CLASS_OR_ID, MUYA_DEFAULT_OPTION }

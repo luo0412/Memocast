@@ -10,8 +10,12 @@
     "README.md"
   ],
   "scripts": {
-    "build": "webpack --mode=production",
-    "build:dev": "webpack --mode=development",
+    "clean": "node -e \"const fs=require('fs');const p=require('path');const d=__dirname+'/dist';if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true});console.log('cleaned dist/')}else{console.log('dist/ already clean')}\"",
+    "build": "node -e \"const fs=require('fs');const p=require('path');const d=__dirname+'/dist';if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true})}require('child_process').execSync('webpack --mode=production',{cwd:__dirname,stdio:'inherit'})\"",
+    "build:dev": "node -e \"const fs=require('fs');const p=require('path');const d=__dirname+'/dist';if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true})}require('child_process').execSync('webpack --mode=development',{cwd:__dirname,stdio:'inherit'})\"",
+    "watch": "webpack --mode=development --watch",
+    "dev": "webpack --mode=development --watch",
+    "link": "node -e \"try{require('child_process').execSync('yarn link',{cwd:__dirname,stdio:'inherit'})}catch(e){console.log('yarn link failed:',e.message)}\"",
     "test": "echo \"see Memocast tests/unit/echo and tests/unit/rune for runtime contract tests\" && exit 0",
     "status": "node -e \"const fs=require('fs');const cp=require('child_process');const p=require('path');try{const links=cp.execSync('yarn link --list',{cwd:__dirname}).toString().trim();console.log('yarn link registry:');console.log(links||'(empty)')}catch(e){console.log('yarn link --list not supported on this version')}console.log('\\nlib/ size:');let n=0;function w(d){for(const f of fs.readdirSync(p.join(d||__dirname,'lib'),{withFileTypes:true})){if(f.isDirectory())w(p.join(d||__dirname,'lib',f.name));else n++}}w();console.log(' ',n,'files')\""
   },
