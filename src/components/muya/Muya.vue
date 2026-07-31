@@ -27,9 +27,9 @@ import {
   Transformer,
   // v2026-07-31 起：Memocast Settings → 编辑器 → 「语法解析」开关让 Muya parser
   // 的 inlineRules.echo_anno 可以按 echoRequireParens=true/false 实时切换。
-  //  - createEchoAnnoRule：构造 echo_anno RegExp（true=() 必填；false=() 可选）
-  //  - setEchoAnnoRule    ：运行时 mutate parser 共享的 inlineRules.echo_anno
-  createEchoAnnoRule,
+  // 唯一入口 setEchoAnnoRule：直接 mutate _plugins/@coolma/muya/lib/parser/rules.js
+  // 导出的 inlineRules.echo_anno 引用（@coolma/muya 是本地软链接，详见插件契约
+  // plugin-vue-version.mdc + rune-echo-cloudfn-experimental.mdc 的「改本地源码实时生效」）。
   setEchoAnnoRule
 } from '@coolma/muya/lib'
 import '@coolma/muya/themes/default.css'
@@ -960,10 +960,17 @@ export default {
       Muya.use(Transformer)
       Muya.use(TableBarTools)
 
-      // v2026-07-31：启动时从 SQLite 拉取「语法解析」开关到 vuex。
-      // 由于 dispatch 是异步，下面的 created() 同步分支会先用
-      // this.echoRequireParens（vuex 初始值 / 上次缓存）；
-      // 真值回到 vuex 后 watcher 会自动触发 inlineRules.echo_anno 切换。
+      // v2026-07-31：启动时从 SQLite 真源拉取「语法解析」开关到 vuex。
+      // 注意：Muya 不再读 options.echoAnnoRule，规则切换由 setEchoAnnoRule 这一
+      // 个口子 mutate inlineRules.echo_anno 实现（@coolma/muya 是本地软链接，
+      // 直接改 parser 源码，详见 _plugins/@coolma/muya/lib/parser/index.js 的
+      // setEchoAnnoRule 注释）。
+      // 流程：
+      //   1) 同步分支：上方的 setEchoAnnoRule({ requireParens: this.echoRequireParens })
+      //      用 vuex 初始值（默认 true）覆盖一次 inlineRules.echo_anno；
+      //   2) 异步分支：dispatch loadParsingSettings 拉 SQLite 真值并 commit vuex；
+      //      commit 后 echoRequireParens watcher 会再次 setEchoAnnoRule 并触发
+      //      contentState.render(false, true) 全量重 render——首屏 retry 即生效。
       this.loadParsingSettings().catch(err => {
         console.warn('[Muya] loadParsingSettings dispatch failed:', err)
       })
@@ -979,23 +986,32 @@ export default {
       }
 
       // === v2026-07-31 新增：「语法解析 / echoRequireParens」开关同步到 Muya parser ===
-      // 真源 SQLite app_state('setting/parsing/echoRequireParens') 已经由 SettingsDialog
-      // 在 open-dialog 时 loadLazyData → loadParsingSettings 写入 vuex；此处 created() 也兜底
-      // 调一次，确保 Muya 第一次 mount 时就能拿到正确的 RE，避免 race condition。
-      const echoRequireParens = this.echoRequireParens !== undefined
-        ? this.echoRequireParens
-        : true
-      // 1) 创建时的初始 RE：传给 new Muya() options.echoAnnoRule（parser/index.js 优先采用）
-      // 2) 同时 mutate 全局 inlineRules.echo_anno，让所有走 inlineRules 的代码路径
-      //    （tokenizer() 没接到 options.echoAnnoRule 的兜底分支）也立即生效。
-      const initialEchoAnnoRule = createEchoAnnoRule({ requireParens: !!echoRequireParens })
-      setEchoAnnoRule({ requireParens: !!echoRequireParens })
+      // 唯一入口：setEchoAnnoRule({ requireParens })，直接 mutate
+      // _plugins/@coolma/muya/lib/parser/rules.js 导出的 inlineRules.echo_anno 引用。
+      // 与 plugin-vue-version.mdc + rune-echo-cloudfn-experimental.mdc 的
+      // 「@coolma/muya 是本地软链接，直接改源码让规则实时生效」口径一致。
+      //
+      // 数据流：
+      //   SQLite 真源('setting/parsing/echoRequireParens')
+      //     → vuex state.echoRequireParens (响应式 cache)
+      //     → setEchoAnnoRule(...) 替换 inlineRules.echo_anno
+      //     → 后续所有 token 化路径（backspaceCtrl / deleteCtrl / inputCtrl / formatCtrl /
+      //        enterCtrl / renderLeafBlock / importMarkdown / hasEchoInlineToken / ...）
+      //        都会自动拿到新 RE（都闭包引用 inlineRules.echo_anno）
+      //     → 调用方再触发一次 contentState.render(false, true) 把已解析的 block 也重切
+      //
+      // created() 阶段做两件事：
+      //   1) 同步先按 vuex mapState 的 echoRequireParens（初始默认 true）setEchoAnnoRule
+      //      一次，确保 inlineRules.echo_anno 在 new Muya() 之前就已是正确形态；
+      //   2) dispatch loadParsingSettings 异步拉真值 → 回填 vuex → watcher 触发自动刷新
+      //      （窗口内的 race 用 1+2 双层解决：开门先开灶，发现值变了再补开）。
+      const requireParensAtBoot = this.echoRequireParens !== undefined ? this.echoRequireParens : true
+      setEchoAnnoRule({ requireParens: !!requireParensAtBoot })
 
       // 把 Vue 实例注入 Muya options，让 Muya 内部的 StateRender 能回调到我们的回写方法
       const muyaSelf = this
       const { container } = this.contentEditor = new Muya(this.$refs.muya, {
         memoMuya: muyaSelf,
-        echoAnnoRule: initialEchoAnnoRule,
         echoRuntime: this._echoRuntime,
         quickInsertProvider: () => {
           const runeItems = (this.runeCards || [])
