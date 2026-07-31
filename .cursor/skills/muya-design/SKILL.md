@@ -5,6 +5,121 @@ description: Muya Markdown 编辑器架构与实现指南。用于分析、修�
 
 # Muya 编辑器设计
 
+## 本地开发与调试
+
+Muya 作为独立子项目存放在 `_plugins/@coolma/muya/`，通过 yarn link 与主项目关联。
+
+### 目录结构
+
+```
+_plugins/@coolma/muya/
+├── lib/               # 源代码（ESM，供 yarn link 使用）
+│   ├── index.js       # 主入口，导出 Muya 类 + UI 组件 + utils
+│   ├── ui/            # 13 个 UI 插件组件
+│   ├── utils/         # 工具函数
+│   ├── config/        # 常量配置
+│   └── ...
+├── dist/              # webpack 打包产物（UMD bundle）
+├── themes/            # CSS 主题文件
+├── webpack.config.js  # 构建配置
+├── babel.config.js    # Babel 转译配置
+└── package.json
+```
+
+### 常用命令
+
+| 命令 | 作用 |
+|------|------|
+| `yarn` | 安装 @coolma/muya 自身依赖 |
+| `yarn build` | 清理后生产构建（输出到 `dist/`） |
+| `yarn build:dev` | 清理后开发构建 |
+| `yarn watch` / `yarn dev` | 开启 webpack watch（不改源码时用） |
+| `yarn link` | 在 muya 目录注册 link（主项目侧执行 `yarn link @coolma/muya`） |
+
+### 源码引用方式（开发时）
+
+src 中统一从 `@coolma/muya/lib` 具名导入：
+
+```javascript
+// 主编辑器 + 13 个 UI 组件
+import {
+  default as Muya,
+  TablePicker, QuickInsert, CodePicker, EmojiPicker,
+  ImagePathPicker, ImageSelector, FormatPicker, FrontMenu,
+  ImageToolbar, LinkTools, TableBarTools, Transformer
+} from '@coolma/muya/lib'
+
+// 工具函数
+import { escapeHtml, identity } from '@coolma/muya/lib'
+
+// CSS 主题（单独导入）
+import '@coolma/muya/themes/default.css'
+```
+
+### yarn link 链路
+
+```
+_plugins/@coolma/muya/
+        │
+        ├── package.json#main: "lib/index.js"
+        │
+        └── yarn link → 注册到 ~/.config/yarn/link/@coolma/muya
+                              │
+主项目根目录: yarn link @coolma/muya → symlink → _plugins/@coolma/muya/
+                                               │
+quasar.conf.js: resolve.alias.@coolma/muya → _plugins/@coolma/muya
+```
+
+在主项目根目录执行 `yarn link @coolma/muya` 即可让 quasar bundler 解析到 `_plugins/@coolma/muya/lib/`。
+
+### webpack 构建产物用途
+
+- `dist/index.min.js`：UMD bundle，可独立加载（不推荐，src 直接 link lib 即可）
+- `dist/index.min.css`：MiniCssExtractPlugin 提取的 CSS
+- `lib/`：源码（ESM 格式，quasar 的 babel-loader 会处理）
+
+### 软链接操作步骤
+
+```bash
+# 1. 在 muya 子项目注册 link
+cd _plugins/@coolma/muya
+yarn link
+
+# 2. 在主项目根目录激活 link（一次性）
+cd d:/work-coolma/coolma/coolma
+yarn link @coolma/muya
+
+# 3. 启动主项目开发服务器
+yarn run dev
+
+# 4. 如果改了 muya 源码需要重构建（生产）
+cd _plugins/@coolma/muya
+yarn build
+
+# 或者 watch 模式（开发调试，保持 watch 不中断）
+yarn watch
+```
+
+### 导出 API（lib/index.js）
+
+```javascript
+// 默认导出：Muya 主类
+export default Muya
+
+// UI 组件（13 个，对应 Muya.use()）
+export { TablePicker, QuickInsert, CodePicker, EmojiPicker,
+         ImagePathPicker, ImageSelector, FormatPicker, FrontMenu,
+         ImageToolbar, LinkTools, TableBarTools, Transformer }
+
+// 工具函数（命名空间）
+export { utils }  // escapeHtml, identity, throttle, debounce, deepCopy, getImageInfo 等
+
+// 配置常量
+export { CLASS_OR_ID, MUYA_DEFAULT_OPTION }
+```
+
+---
+
 ## 架构概览
 
 Muya 是基于 snabbdom 的虚拟 DOM Markdown 编辑器，版本 0.1.2。
@@ -13,16 +128,16 @@ Muya 是基于 snabbdom 的虚拟 DOM Markdown 编辑器，版本 0.1.2。
 
 | 模块 | 路径 | 职责 |
 |------|------|------|
-| EventCenter | `src/libs/muya/lib/eventHandler/event.js` | 事件发布/订阅 |
-| ContentState | `src/libs/muya/lib/contentState/index.js` | 状态管理、Block 树操作 |
-| StateRender | `src/libs/muya/lib/parser/render/index.js` | 虚拟 DOM 渲染 |
-| Parser | `src/libs/muya/lib/parser/index.js` | Markdown 行内解析 (tokenizer) |
-| Lexer | `src/libs/muya/lib/parser/marked/lexer.js` | Markdown 块级解析 (Lexer) |
+| EventCenter | `_plugins/@coolma/muya/lib/eventHandler/event.js` | 事件发布/订阅 |
+| ContentState | `_plugins/@coolma/muya/lib/contentState/index.js` | 状态管理、Block 树操作 |
+| StateRender | `_plugins/@coolma/muya/lib/parser/render/index.js` | 虚拟 DOM 渲染 |
+| Parser | `_plugins/@coolma/muya/lib/parser/index.js` | Markdown 行内解析 (tokenizer) |
+| Lexer | `_plugins/@coolma/muya/lib/parser/marked/lexer.js` | Markdown 块级解析 (Lexer) |
 
 ### 初始化
 
 ```javascript
-import Muya from 'src/libs/muya/lib'
+import Muya from '_plugins/@coolma/muya/lib'
 
 const editor = new Muya(containerElement, {
   markdown: '# Hello',
@@ -84,7 +199,7 @@ Muya 的解析分为**两层**：
 
 ### 第一层：块级解析（Lexer → Block 树）
 
-由 `src/libs/muya/lib/utils/importMarkdown.js` 中的 `importMarkdown` 函数驱动，调用 `Lexer.lex(src)` 将 Markdown 文本转换为 Block 树：
+由 `_plugins/@coolma/muya/lib/utils/importMarkdown.js` 中的 `importMarkdown` 函数驱动，调用 `Lexer.lex(src)` 将 Markdown 文本转换为 Block 树：
 
 ```
 Markdown Text → Lexer.lex() → Block Tree
@@ -660,24 +775,24 @@ class MyPlugin {
 
 | 文件 | 用途 |
 |------|------|
-| `src/libs/muya/lib/index.js` | 主入口，Muya 类 |
-| `src/libs/muya/lib/contentState/index.js` | 状态管理，render/renderRange/history |
-| `src/libs/muya/lib/parser/index.js` | 行内 tokenizer |
-| `src/libs/muya/lib/parser/rules.js` | 行内规则定义 |
-| `src/libs/muya/lib/parser/marked/blockRules.js` | 块级规则定义 |
-| `src/libs/muya/lib/parser/marked/lexer.js` | 块级 lexer |
-| `src/libs/muya/lib/parser/render/index.js` | StateRender，render/partialRender/singleRender |
-| `src/libs/muya/lib/parser/render/snabbdom.js` | snabbdom 封装 |
-| `src/libs/muya/lib/parser/render/renderBlock/index.js` | 块级渲染分发 |
-| `src/libs/muya/lib/parser/render/renderBlock/renderLeafBlock.js` | 叶子块渲染（含 Mermaid/Diagram） |
-| `src/libs/muya/lib/parser/render/renderBlock/renderContainerBlock.js` | 容器块渲染 |
-| `src/libs/muya/lib/parser/render/renderInlines/index.js` | 行内渲染函数导出 |
-| `src/libs/muya/lib/parser/render/renderInlines/echoAnno.js` | Echo 占位符渲染（Memocast 扩展） |
-| `src/libs/muya/lib/eventHandler/event.js` | EventCenter |
-| `src/libs/muya/lib/utils/importMarkdown.js` | Markdown → Block 树 |
-| `src/libs/muya/lib/utils/exportMarkdown.js` | Block 树 → Markdown |
-| `src/libs/muya/lib/config/index.js` | CLASS_OR_ID 常量、配置默认值 |
-| `src/components/ui/editor/Muya.vue` | Vue 封装组件 |
+| `_plugins/@coolma/muya/lib/index.js` | 主入口，Muya 类 |
+| `_plugins/@coolma/muya/lib/contentState/index.js` | 状态管理，render/renderRange/history |
+| `_plugins/@coolma/muya/lib/parser/index.js` | 行内 tokenizer |
+| `_plugins/@coolma/muya/lib/parser/rules.js` | 行内规则定义 |
+| `_plugins/@coolma/muya/lib/parser/marked/blockRules.js` | 块级规则定义 |
+| `_plugins/@coolma/muya/lib/parser/marked/lexer.js` | 块级 lexer |
+| `_plugins/@coolma/muya/lib/parser/render/index.js` | StateRender，render/partialRender/singleRender |
+| `_plugins/@coolma/muya/lib/parser/render/snabbdom.js` | snabbdom 封装 |
+| `_plugins/@coolma/muya/lib/parser/render/renderBlock/index.js` | 块级渲染分发 |
+| `_plugins/@coolma/muya/lib/parser/render/renderBlock/renderLeafBlock.js` | 叶子块渲染（含 Mermaid/Diagram） |
+| `_plugins/@coolma/muya/lib/parser/render/renderBlock/renderContainerBlock.js` | 容器块渲染 |
+| `_plugins/@coolma/muya/lib/parser/render/renderInlines/index.js` | 行内渲染函数导出 |
+| `_plugins/@coolma/muya/lib/parser/render/renderInlines/echoAnno.js` | Echo 占位符渲染（Memocast 扩展） |
+| `_plugins/@coolma/muya/lib/eventHandler/event.js` | EventCenter |
+| `_plugins/@coolma/muya/lib/utils/importMarkdown.js` | Markdown → Block 树 |
+| `_plugins/@coolma/muya/lib/utils/exportMarkdown.js` | Block 树 → Markdown |
+| `_plugins/@coolma/muya/lib/config/index.js` | CLASS_OR_ID 常量、配置默认值 |
+| `src/components/muya/Muya.vue` | Vue 封装组件（主编辑器集成点） |
 
 ## 扩展阅读
 

@@ -6,6 +6,7 @@ export const EVENTS = Object.freeze({
   INSERT_TEXT: 'insert.text',
   INSERT_AI_TEXT: 'insert.ai.text',
   REQUEST_AI_ECHO_HELP: 'request.ai.echo.help',
+  REQUEST_AI_RUNE_HELP: 'request.ai.rune.help',
   SCROLL_TO_HEADER: 'scroll.to.header',
   SCROLL_DOWN: 'scroll.down',
   GENERATE_MINDMAP: 'generate.mindmap',

@@ -284,7 +284,7 @@ for (const light of highlights) {
   → EventCenter.dispatch('stateChange')
   → Muya.dispatchChange()
   → EventCenter.dispatch('change')
-  → `src/components/ui/editor/Muya.vue` 监听 change / selectionChange / contextmenu
+  → `src/components/muya/Muya.vue` 监听 change / selectionChange / contextmenu
   → 更新目录、字数、保存状态与右键菜单
 ```
 
@@ -462,7 +462,7 @@ console.log('Cursor:', cursor)
 ### 查看 Token 解析结果
 
 ```javascript
-import { tokenizer } from 'src/libs/muya/lib/parser'
+import { tokenizer } from '_plugins/@coolma/muya/lib/parser'
 const tokens = tokenizer('# Hello **world**', {
   highlights: [],
   hasBeginRules: true,
