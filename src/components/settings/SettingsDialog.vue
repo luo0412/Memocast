@@ -873,6 +873,8 @@ export default {
           conflictMode,
           existingRunes: this.localRuneCards
         })
+        console.log('[Settings] onRuneBatchImport result:', result)
+        console.log('[Settings] localRuneCards count before refresh:', this.localRuneCards.length)
         if (result && result.success) {
           // 构建成功消息
           let message = this.$t('runeBatchImportSuccess', { count: result.count || items.length })
@@ -888,7 +890,10 @@ export default {
           })
           // 从 rune_templates 表重新加载并刷新 store
           const freshRunes = await runeTemplateService.listFlat(true)
+          console.log('[Settings] freshRunes from DB count:', freshRunes.length)
+          console.log('[Settings] freshRunes sample (first 3):', freshRunes.slice(0, 3).map(r => ({ id: r.id, name: r.name, category: r.category_key })))
           this.updateStateAndStore({ runeCards: freshRunes })
+          console.log('[Settings] localRuneCards count after refresh:', this.localRuneCards.length)
           this.runeBatchImportDialogVisible = false
         } else {
           this.$q.notify({

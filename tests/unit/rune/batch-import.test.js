@@ -4,9 +4,10 @@
 // 锁定 RuneTemplateService.batchImport 的契约：
 //   1) 新建符文使用目标分类（targetCategory）
 //   2) 覆盖模式（replace）下保留现有符文的分类，不受 targetCategory 影响
-//   3) 跳过模式（skip）下同名符文被跳过
+//   3) 跳过模式（skip）下同名符文（包括导入列表内部重复）被去重跳过
 //   4) 正常模式（normal）下新建同名符文（不同 id）
 //   5) 批量写入后调用 invalidate()
+//   6) 名称去重不区分大小写
 // ============================================================================
 
 // 必须在 import 之前定义 mock
@@ -265,6 +266,65 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
       expect(DatabaseClient.runeTemplates.saveMany).toHaveBeenCalledWith([])
       expect(result.success).toBe(true)
       expect(result.count).toBe(0)
+    })
+
+    test('跳过模式：导入列表内部重复也被去重（第一个被导入）', async () => {
+      const items = [
+        { name: '重复符文' },
+        { name: '重复符文' },
+        { name: '重复符文' }
+      ]
+
+      const result = await RuneTemplateService.batchImport(items, 'gaming', {
+        conflictMode: 'skip',
+        existingRunes: []
+      })
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows.length).toBe(1)
+      expect(rows[0].name).toBe('重复符文')
+      expect(result.skipped).toBe(2)
+    })
+
+    test('跳过模式：已有符文 + 导入列表内部重复都被去重', async () => {
+      const existingRunes = [
+        { id: 'existing-001', name: '已有重复' }
+      ]
+      const items = [
+        { name: '已有重复' },   // 已有，同名跳过
+        { name: '内部重复' },   // 内部重复，跳过
+        { name: '内部重复' },   // 内部重复，跳过
+        { name: '新符文' }      // 新建
+      ]
+
+      const result = await RuneTemplateService.batchImport(items, 'music', {
+        conflictMode: 'skip',
+        existingRunes
+      })
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows.length).toBe(2)
+      expect(rows.find(r => r.name === '已有重复')).toBeUndefined()
+      expect(rows.find(r => r.name === '内部重复')).toBeUndefined()
+      expect(rows.find(r => r.name === '新符文')).toBeDefined()
+      expect(result.skipped).toBe(3)
+    })
+
+    test('跳过模式：不区分大小写去重', async () => {
+      const items = [
+        { name: 'Test Rune' },
+        { name: 'test rune' },
+        { name: 'TEST RUNE' }
+      ]
+
+      const result = await RuneTemplateService.batchImport(items, 'general', {
+        conflictMode: 'skip',
+        existingRunes: []
+      })
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows.length).toBe(1)
+      expect(result.skipped).toBe(2)
     })
   })
 

@@ -72,42 +72,6 @@
           </div>
         </div>
 
-        <!-- 同名检测结果 -->
-        <div v-if='conflictInfo && conflictInfo.hasConflict' class='rune-batch-import-conflict'>
-          <div class='rune-batch-import-conflict-title'>
-            <q-icon name='warning' size='1em' class='q-mr-xs' />
-            检测到 {{ conflictInfo.conflictNames.length }} 个同名符文（将在分类 {{ resolvedCategoryLabel }} 中处理）
-          </div>
-          <div class='rune-batch-import-conflict-names'>
-            <q-chip
-              v-for='name in conflictInfo.conflictNames'
-              :key='name'
-              dense
-              outline
-              color='warning'
-              text-color='dark'
-              size='sm'
-            >
-              {{ name }}
-            </q-chip>
-          </div>
-          <div class='rune-batch-import-conflict-options'>
-            <q-btn-toggle
-              v-model='conflictMode'
-              spread
-              no-caps
-              rounded
-              toggle-color='purple-7'
-              :options='[
-                { label: "全部覆盖", value: "replace" },
-                { label: "全部跳过", value: "skip" },
-                { label: "正常处理", value: "normal" }
-              ]'
-              class='rune-batch-import-conflict-toggle'
-            />
-          </div>
-        </div>
-
         <!-- 预览区域 -->
         <div v-if='parsedData && parsedData.length > 0' class='rune-batch-import-preview'>
           <div class='rune-batch-import-preview-title'>
@@ -444,7 +408,6 @@ export default {
       errorMessage: '',
       importResult: null,
       previewLimit: 10,
-      conflictMode: 'normal', // 默认正常处理
       conflictInfo: null
     }
   },
@@ -494,7 +457,6 @@ export default {
       this.errorMessage = ''
       this.importResult = null
       this.conflictInfo = null
-      this.conflictMode = 'normal'
       if (this.$refs.fileInput) {
         this.$refs.fileInput.value = ''
       }
@@ -570,27 +532,66 @@ export default {
       this.errorMessage = ''
       this.importResult = null
       try {
-        // 根据冲突模式处理数据
-        let itemsToImport = this.parsedData
-        if (this.conflictInfo && this.conflictInfo.hasConflict) {
-          const conflictNameSet = new Set(
-            this.conflictInfo.conflictNames.map(n => String(n || '').trim().toLowerCase())
-          )
-          if (this.conflictMode === 'skip') {
-            // 跳过同名
-            itemsToImport = this.parsedData.filter(item => {
-              const name = String(item && item.name || '').trim().toLowerCase()
-              return !conflictNameSet.has(name)
-            })
-          }
-          // replace 和 normal 模式都保持原样处理
+        const conflictInfo = this.checkConflicts(this.parsedData)
+
+        // 检测到同名符文，弹出对话框让用户选择处理方式
+        if (conflictInfo.hasConflict) {
+          this.showConflictDialog(conflictInfo)
+          this.importing = false
+          return
         }
-        // 发送导入事件给父组件
+
+        // 无冲突，直接导入
+        this.executeImport(this.parsedData, 'normal', [])
+      } catch (e) {
+        this.errorMessage = '导入失败: ' + (e && e.message ? e.message : String(e))
+      } finally {
+        this.importing = false
+      }
+    },
+    showConflictDialog (conflictInfo) {
+      const conflictNames = conflictInfo.conflictNames
+      const count = conflictNames.length
+      this.$q.dialog({
+        title: '检测到同名符文',
+        message: `有 ${count} 个符文名称已存在：\n${conflictNames.slice(0, 5).join('、')}${count > 5 ? '...' : ''}\n\n请选择处理方式：`,
+        options: {
+          type: 'radio',
+          model: 'skip',
+          items: [
+            { label: '跳过同名（保留现有）', value: 'skip' },
+            { label: '覆盖同名（用导入的替换）', value: 'replace' },
+            { label: '同时保留（创建重复）', value: 'normal' }
+          ]
+        },
+        cancel: true,
+        persistent: true,
+        ok: {
+          label: '确认'
+        }
+      }).onOk((selectedMode) => {
+        // 根据选择处理同名符文
+        let itemsToImport = this.parsedData
+        if (selectedMode === 'skip') {
+          const conflictNameSet = new Set(
+            conflictNames.map(n => String(n || '').trim().toLowerCase())
+          )
+          itemsToImport = this.parsedData.filter(item => {
+            const name = String(item && item.name || '').trim().toLowerCase()
+            return !conflictNameSet.has(name)
+          })
+        }
+        this.executeImport(itemsToImport, selectedMode, conflictNames)
+      })
+    },
+    async executeImport (itemsToImport, conflictMode, conflictNames) {
+      this.importing = true
+      try {
         this.$emit('import', {
           items: itemsToImport,
           category: this.localCategory || RuneCategoryEnum.General,
-          conflictMode: this.conflictMode,
-          conflictNames: this.conflictInfo && this.conflictInfo.conflictNames
+          conflictMode,
+          conflictNames
         })
       } catch (e) {
         this.errorMessage = '导入失败: ' + (e && e.message ? e.message : String(e))

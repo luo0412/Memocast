@@ -40,11 +40,13 @@ async function ensureLoaded (force = false) {
   let list
   try {
     list = await DatabaseClient.runeTemplates.getAll()
+    console.log(`[RUNE-TPL] ensureLoaded DB returned list.length=${Array.isArray(list) ? list.length : 'non-array'}`)
   } catch (err) {
     console.error('[RUNE-TPL] ensureLoaded read error:', err)
     list = []
   }
   const safeList = Array.isArray(list) ? list : []
+  console.log(`[RUNE-TPL] ensureLoaded safeList.length=${safeList.length}`)
   // 第一次（DB 为空）→ 触发一次 full-push seed（如果上一次的 push 已存在，则并发复用）。
   let needsReseed = safeList.length === 0
   if (safeList.length > 0) {
@@ -305,6 +307,7 @@ async function batchImport (items, targetCategory = '', options = {}) {
   const validTargetCategory = VALID_CATEGORY_KEYS.has(String(targetCategory || '').trim())
     ? String(targetCategory).trim()
     : 'general'
+
   // 构建现有符文 name -> { id, category_key } 的映射（不区分大小写）
   const existingNameMap = new Map()
   for (const rune of existingRunes) {
@@ -313,20 +316,32 @@ async function batchImport (items, targetCategory = '', options = {}) {
       existingNameMap.set(key, { id: rune.id, category_key: rune.category_key || 'general' })
     }
   }
+
+  // 合并 existing + import list 的名称集合（用于 skip 模式去重）
+  // skip 模式：同名符文只导入第一个，后续同名（包括 import list 内部重复）都跳过
+  const seenNames = new Set()
+  // 先把现有符文名称加入（跳过模式对这些也要去重）
+  for (const [key] of existingNameMap) {
+    seenNames.add(key)
+  }
+
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
     const itemName = String(item && item.name || '').trim()
     const itemNameKey = itemName.toLowerCase()
-    // 跳过模式下，如果存在同名则跳过
-    if (conflictMode === 'skip' && existingNameMap.has(itemNameKey)) {
-      skipped.push(itemName)
-      continue
+    // 跳过模式下，如果存在同名（现有符文或之前已处理的导入项）则跳过
+    if (conflictMode === 'skip') {
+      if (seenNames.has(itemNameKey)) {
+        skipped.push(itemName)
+        continue
+      }
+      seenNames.add(itemNameKey)
     }
     // 覆盖模式下，保留现有符文的分类；新建符文使用目标分类
     let id
     let category
     if (conflictMode === 'replace' && existingNameMap.has(itemNameKey)) {
-      // 覆盖模式：保留现有符文的分类
+      // 覆盖模式：保留现有符文的分类（只在第一次出现时覆盖）
       const existing = existingNameMap.get(itemNameKey)
       id = existing.id
       category = existing.category_key
