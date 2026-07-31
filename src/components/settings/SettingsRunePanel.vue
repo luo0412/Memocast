@@ -110,7 +110,7 @@ export default {
       return (this.runeCards || []).filter(r => resolveRuneCategoryFromRune(r) === target)
     },
     currentCategoryLabel () {
-      return this.$t(RuneCategoryEnum.label(this.category))
+      return RuneCategoryEnum.label(this.category)
     }
   },
   watch: {

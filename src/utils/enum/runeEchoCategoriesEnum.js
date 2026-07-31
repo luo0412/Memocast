@@ -3,7 +3,9 @@
  *
  * 数据源；业务方直接 import RuneCategoryEnum / EchoCategoryEnum 使用。
  *
- *   - label 字段 = i18n key，组件渲染时 $t(RuneCategoryEnum.label(value)) 即可
+ *   - label 字段 = i18n key
+ *   - RuneCategoryEnum.label(value) 会经过 Enum.localize（= i18n.t）自动翻译，
+ *     直接返回当前 locale 文案，调用方不要再套一层 $t()
  *   - DEFAULT_RUNE_CATEGORY = RuneCategoryEnum.General
  *   - DEFAULT_ECHO_CATEGORY  = EchoCategoryEnum.Marker
  *

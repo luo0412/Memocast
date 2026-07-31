@@ -132,7 +132,7 @@ export default {
       return this.localEchoesInCategory
     },
     currentCategoryLabel () {
-      return this.$t(EchoCategoryEnum.label(this.category))
+      return EchoCategoryEnum.label(this.category)
     },
     isCurrentCategoryBuiltin () {
       return this.category === EchoCategoryEnum.Builtin
