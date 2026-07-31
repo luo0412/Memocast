@@ -67,6 +67,7 @@
 import { RuneCategoryEnum } from 'src/utils/enum'
 import { createBlankTemplate, createInheritDemoTemplate, BUILTIN_RUNE_TEMPLATE_META } from './runeTemplates/runeTemplates.js'
 import runeTemplateService from 'src/services/RuneTemplateService'
+import { hasRuneTemplateDiv } from 'src/utils/parsing/parsingRules'
 import bus from 'src/components/common/bus'
 import { EVENTS } from 'src/utils/const/eventsConst'
 
@@ -141,6 +142,10 @@ export default {
     defaultCategory: {
       type: String,
       default: ''
+    },
+    runeRequireTemplateDiv: {
+      type: Boolean,
+      default: false
     }
   },
   data () {
@@ -360,6 +365,12 @@ export default {
       }
       if (editorRef && editorRef.getTemplate) {
         this.form.template = editorRef.getTemplate()
+      }
+      // 语法解析开关：符文 template 下 div 必填（详见 SettingsDialog/SettingsParsingPanel）
+      // 默认关闭。开启后要求 <template>...</template> 块内至少出现一个 <div 标签起始。
+      if (this.runeRequireTemplateDiv && !hasRuneTemplateDiv(this.form.template)) {
+        this.$q.notify({ message: this.$t('editorParsingRuneTemplateDivMissing'), type: 'warning', position: 'top' })
+        return
       }
       console.log('\n[RuneFormDialog.submit] Emitting rune payload:', {
         id: this.form.id,

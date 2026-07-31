@@ -27,6 +27,7 @@
     "verify:blog": "jest --colors=false tests/unit/blog",
     "verify:boot": "jest --colors=false tests/unit/boot",
     "verify:util": "jest --colors=false tests/unit/util",
+    "verify:parsing": "jest --colors=false tests/unit/parsing",
     "verify:smoke": "jest --colors=false tests/smoke",
     "plugin:muya:register": "cd _plugins/@coolma/muya && yarn link",
     "plugin:muya:install-deps": "cd _plugins/@coolma/muya && yarn install --ignore-engines",

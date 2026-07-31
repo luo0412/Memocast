@@ -464,7 +464,42 @@ describe('echo/echoRuntime 运行时语义', () => {
   })
 
   // ============================================================================
-  // 9) v2026-07-30 起：handler 端 props.echoId 注入（rune-style instance id）
+  // 9) 异步 handler 也必须 graceful skip
+  //
+  // 旧数据库里的 anno_source 可能在 setTimeout 回调中操作已经不存在的
+  // sibling（例如 `next.style.visibility = ...`）。同步 try/catch 捕获不到
+  // 这种异常；HANDLER_PRELUDE 需要把异步回调纳入同一条降级路径。
+  // ============================================================================
+  describe('9) 异步 afterRender 异常不会冒泡为 uncaught error', () => {
+    test('setTimeout 回调访问空 sibling 时被 graceful skip', () => {
+      jest.useFakeTimers()
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const def = safeEvalAnnoSource(`export default {
+          type: 'echo-chant', field: 'async-error', title: 'async-error', version: 1,
+          props: {},
+          render (props = {}) { return '<span></span>' },
+          afterRender (node, props = {}) {
+            const next = $(node).next().get(0)
+            setTimeout(() => { next.style.visibility = 'hidden' }, 0)
+          }
+        }`, HANDLER_PRELUDE)()
+        const node = document.createElement('span')
+        expect(() => def.afterRender(node, {})).not.toThrow()
+        expect(() => jest.runOnlyPendingTimers()).not.toThrow()
+        expect(errorSpy).toHaveBeenCalledWith(
+          '[echoAnnoSource] async handler failed:',
+          expect.any(TypeError)
+        )
+      } finally {
+        errorSpy.mockRestore()
+        jest.useRealTimers()
+      }
+    })
+  })
+
+  // ============================================================================
+  // 10) v2026-07-30 起：handler 端 props.echoId 注入（rune-style instance id）
   //
   // 锁定的契约：
   //   - host.dataset.echoId 由 parser 层（token.echoId）写入

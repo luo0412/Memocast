@@ -241,5 +241,68 @@ export default {
   async refreshSyncStatus ({ commit }) {
     const stats = await DatabaseClient.sync.getStats()
     commit(types.UPDATE_SYNC_STATUS, { ...stats })
+  },
+  /**
+   * 从 SQLite app_state 读取「语法解析」开关到 vuex 内存缓存。
+   * 真源是 DatabaseClient.appState（即 app_state 表 setting/parsing/* 键），
+   * vuex 的 echoRequireParens / runeRequireTemplateDiv 字段仅作运行时响应式 cache，
+   * 持久化永远走 SQLite（依据 sqlite-settings-storage.mdc 规范）。
+   *
+   * 读取路径防御：appState.get 在键不存在时返回 null/undefined，JSON.parse 失败也要容错，
+   * 否则 vuex 会被一个坏数据直接毁成 NaN / undefined 触发下游 SettingsParsingPanel 抛错。
+   *
+   * @returns {Promise<{echoRequireParens:boolean, runeRequireTemplateDiv:boolean}>}
+   */
+  async loadParsingSettings ({ commit, state }) {
+    const safeBool = (raw, fallback) => {
+      if (raw === null || raw === undefined) return fallback
+      if (typeof raw === 'boolean') return raw
+      const text = String(raw).trim().toLowerCase()
+      if (text === 'true' || text === '1') return true
+      if (text === 'false' || text === '0') return false
+      return fallback
+    }
+    const result = { echoRequireParens: true, runeRequireTemplateDiv: false }
+    try {
+      const rawEcho = await DatabaseClient.appState.get('setting/parsing/echoRequireParens')
+      const rawRune = await DatabaseClient.appState.get('setting/parsing/runeRequireTemplateDiv')
+      result.echoRequireParens = safeBool(rawEcho, state.echoRequireParens !== undefined ? state.echoRequireParens : true)
+      result.runeRequireTemplateDiv = safeBool(rawRune, state.runeRequireTemplateDiv !== undefined ? state.runeRequireTemplateDiv : false)
+    } catch (err) {
+      console.warn('[parsing] loadParsingSettings fallback to defaults:', err)
+    }
+    const patch = {}
+    if (state.echoRequireParens !== result.echoRequireParens) patch.echoRequireParens = result.echoRequireParens
+    if (state.runeRequireTemplateDiv !== result.runeRequireTemplateDiv) patch.runeRequireTemplateDiv = result.runeRequireTemplateDiv
+    if (Object.keys(patch).length > 0) {
+      // 注意：不调 SAVE_ITEMS_TO_LOCAL_STORE_SYNC——这是 SQLite 真源，
+      // 不应该再回写到 electron-store。
+      commit(types.UPDATE_STATES, patch)
+    }
+    return result
+  },
+  /**
+   * 仅更新 vuex state（不回写 electron-store）。专供 SettingsDialog 切换
+   * 「语法解析 / echoRequireParens / runeRequireTemplateDiv」使用：
+   *   - 真源是 SQLite app_state('setting/parsing/*')
+   *   - 同步已经由 SettingsDialog.saveParsingSetting 做了 IPC
+   *   - 这里只是把新值推给 vuex 让 Muya.vue 的 watch 触发实时切换
+   *     inlineRules.echo_anno（不再走 electron-store 双写）。
+   * 不传 STORE_SYNC 的好处：在 SettingsDialog 启动项目早期不会有冗余 IO，
+   * 也避免「electron-store 里也有一份 echoRequireParens 但被 sqlite 覆盖」
+   * 导致的二义性。
+   */
+  updateParsingStates ({ commit }, payload = {}) {
+    const patch = {}
+    if (Object.prototype.hasOwnProperty.call(payload, 'echoRequireParens')) {
+      patch.echoRequireParens = Boolean(payload.echoRequireParens)
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'runeRequireTemplateDiv')) {
+      patch.runeRequireTemplateDiv = Boolean(payload.runeRequireTemplateDiv)
+    }
+    if (Object.keys(patch).length > 0) {
+      commit(types.UPDATE_STATES, patch)
+    }
+    return patch
   }
 }

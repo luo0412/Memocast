@@ -68,6 +68,7 @@ import {
 import { BUILTIN_ECHO_CARDS } from 'src/components/echo/echoBuiltins/echoBuiltins'
 import { DEFAULT_ECHO_CATEGORY, EchoCategoryEnum } from 'src/utils/enum'
 import { normalizeEchoCategory } from 'src/utils/const/runeEchoCategoryLogic'
+import { hasEchoParens } from 'src/utils/parsing/parsingRules'
 import bus from 'src/components/common/bus'
 import { EVENTS } from 'src/utils/const/eventsConst'
 
@@ -100,6 +101,10 @@ export default {
     defaultCategory: {
       type: String,
       default: ''
+    },
+    echoRequireParens: {
+      type: Boolean,
+      default: true
     }
   },
   data () {
@@ -266,6 +271,13 @@ export default {
         ? editorRef.getSource()
         : (this.form.anno_source || '')
       if (!annoSource.trim()) return
+      // 语法解析开关：回响 () 必填（详见 SettingsDialog/SettingsParsingPanel）
+      // 默认开启。开启后要求 anno_source 中至少出现一处 @<name>(...) 或 @<name>{...}(...) 的示例，
+      // 保证 echo 的占位符形态符合 CURRENT_ECHO_PLACEHOLDER_RE 的 () 成对约定。
+      if (this.echoRequireParens && !hasEchoParens(annoSource, name)) {
+        this.$q.notify({ message: this.$t('editorParsingEchoParensMissing'), type: 'warning', position: 'top' })
+        return
+      }
       const category = this.form.isBuiltin
         ? (this.form.category || EchoCategoryEnum.Builtin)
         : normalizeEchoCategory(this.form.category)

@@ -15,7 +15,21 @@
 
 import { DEFAULT_ECHO_COLOR, DEFAULT_ECHO_ICON } from './echoBuiltinsShared.js'
 
-export const HANDLER_PRELUDE = "const $ = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null\n"
+export const HANDLER_PRELUDE = `const $ = (typeof window !== 'undefined' && (window.jQuery || window.$)) || null
+const __echoSetTimeout = typeof globalThis !== 'undefined' && typeof globalThis.setTimeout === 'function'
+  ? globalThis.setTimeout.bind(globalThis)
+  : null
+const setTimeout = (callback, delay, ...args) => {
+  if (!__echoSetTimeout) return null
+  return __echoSetTimeout(() => {
+    try {
+      if (typeof callback === 'function') return callback(...args)
+    } catch (error) {
+      console.error('[echoAnnoSource] async handler failed:', error)
+    }
+  }, delay)
+};
+`
 
 export const safeEvalAnnoSource = (source = '', prelude = '') => {
   const normalized = String(source || '').replace(/export\s+default/, 'return ')

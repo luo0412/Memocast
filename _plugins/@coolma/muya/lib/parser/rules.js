@@ -35,9 +35,39 @@ export const inlineRules = {
 
   // Markdown extensions (not belongs to GFM and Commonmark)
   inline_math: /^(\$)([^\$]*?[^\$\\])(\\*)\1(?!\1)/,
-  // 捕获组：[name, propsRaw, promptRaw]；propsRaw 可缺省，因此 @name() 也匹配得上。
-  // 与 CURRENT_ECHO_PLACEHOLDER_RE（echoBuiltinsShared.js）保持完全同源。
+  // 捕获组：[name, propsRaw, promptRaw]；默认 () 必填（与 v2026-07-31 之前的 ABI 完全一致）。
+  // v2026-07-31 起为了响应 Memocast Settings → 编辑器 → 「语法解析 / 回响」开关
+  // （持久化在 SQLite app_state 的 setting/parsing/echoRequireParens），
+  // 这里把 inlineRules.echo_anno 改为**可运行时替换**：
+  //   - echoRequireParens=true（默认） → () 必填，@name{} / @name 不命中 echo_anno
+  //   - echoRequireParens=false         → () 可选，@name{} / @name 也会命中（兼容历史笔记）
+  // 工厂 createEchoAnnoRule 由 src/components/echo/parsingRulesRuntime.js 暴露给 Muya.vue：
+  //   - 初始化  → 把生成的 RegExp 写到 options.echoAnnoRule，parser/index.js 优先采用
+  //   - 运行时  → 通过 inlineRules.echo_anno = createEchoAnnoRule({...}) 替换
+  // 捕获组顺序与原 echo_anno 完全一致：[name, propsRaw, promptRaw]，下游
+  // parser/index.js 依赖 to[1]/to[2]/to[3] 取值，**不能改顺序**。
   echo_anno: /^@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)$/
+}
+
+// v2026-07-31 新增：根据 echoRequireParens 构造 echo_anno 正则。
+//   - requireParens=true（默认） → () 必填，匹配 @name(prompt) 或 @name{...}(prompt)
+//   - requireParens=false         → () 可选，匹配 @name / @name() / @name{} / @name{...}(...)
+// 捕获组顺序与原 echo_anno 完全一致：[name, propsRaw, promptRaw]，
+// 下游 parser/index.js 依赖 to[1]/to[2]/to[3] 取值，**不能改顺序**。
+// 单行 prompt ([^)]*) 以避免误吞下游 markdown；name 必须 1+ 字符。
+export const createEchoAnnoRule = ({ requireParens = true } = {}) => {
+  if (requireParens) {
+    // () 必填（与 v2026-07-31 之前的 ABI 完全一致）：
+    //   - 形态 A：@name(prompt)               → to[1]=name to[2]=undefined to[3]=prompt
+    //   - 形态 D：@name{...}(prompt)          → to[1]=name to[2]=propsRaw to[3]=prompt
+    return /^@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)$/
+  }
+  // () 可选（仅在 echoRequireParens=false 切换时启用，给历史笔记保留空间）：
+  //   - 形态 B：@name                       → to[1]=name to[2]=undefined to[3]=undefined
+  //   - 形态 C：@name{}                     → to[1]=name to[2]=''       to[3]=undefined
+  // 为了不破坏 downstream 已经存在的 to[1]/to[2]/to[3] 取值，prompt 段
+  // 完全可选（非捕获组），不存在时 to[3] 为 undefined。
+  return /^@([^\s{}()@]+)(?:\{([\s\S]*?)\})?(?:\(([^)]*)\))?$/
 }
 
 // Markdown extensions (not belongs to GFM and Commonmark)

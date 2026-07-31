@@ -59,6 +59,13 @@ export default function () {
     },
     // CDN 依赖配置：用于笔记软件静态资源 + 可选注入到博客 index.html
     // 每项结构: { id, name, url, enabled, applyToBlog }
-    cdnDeps: []
+    cdnDeps: [],
+    // ===== 「语法解析」开关的内存缓存（v2026-07-31 起固定） =====
+    // 真源是 SQLite app_state 表的 setting/parsing/* 键，由 SettingsDialog 写入。
+    // vuex 仅作为响应式缓存，便于 Muya.vue 在 SettingsDialog 关闭后仍能 watch
+    // 变化并实时切换 inlineRules.echo_anno 规则（不需要重建编辑器）。
+    // 默认值与 SettingsParsingPanel 的 data 默认值保持一致。
+    echoRequireParens: true,
+    runeRequireTemplateDiv: false
   }
 }

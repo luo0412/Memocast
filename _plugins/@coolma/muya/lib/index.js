@@ -555,5 +555,16 @@ export { utils }
 // 工具函数直接导出（供 Memocast 直接引用）
 export * from './utils'
 
+// v2026-07-31 新增：暴露 echo / rune 相关的运行时 hook，
+// 供 Memocast 主项目（src/components/muya/Muya.vue）按需使用：
+//   - createEchoAnnoRule    根据 echoRequireParens 构造 inlineRules.echo_anno RegExp
+//   - inlineRules           parser 共享的 inlineRules 引用，可运行时 mutate echo_anno
+//   - setEchoAnnoRule       运行时改写 inlineRules.echo_anno 的便捷 helper
+export {
+  createEchoAnnoRule,
+  inlineRules,
+  setEchoAnnoRule
+} from './parser'
+
 // 配置常量
 export { CLASS_OR_ID, MUYA_DEFAULT_OPTION }

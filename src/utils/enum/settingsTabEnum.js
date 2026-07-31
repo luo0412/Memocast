@@ -26,10 +26,14 @@ const GeneralSubEnum = Enum({
 })
 
 // ---------- 编辑器 ----------
+// v2026-07-31 起新增 Parsing（语法解析）：控制 echo / rune 提交时的语法严格性开关。
+//   - echoRequireParens     回响占位符 (@xxx{...}(prompt)) 的 () 是否必填（默认 true）
+//   - runeRequireTemplateDiv 符文 SFC <template> 下是否必须有 <div> 节点（默认 false）
 const EditorSubEnum = Enum({
   Note:     { value: 'note',     label: 'editorNote',     icon: 'article' },
   Panel:    { value: 'panel',    label: 'editorPanel',    icon: 'dashboard' },
-  Template: { value: 'template', label: 'editorTemplate', icon: 'description' }
+  Template: { value: 'template', label: 'editorTemplate', icon: 'description' },
+  Parsing:  { value: 'parsing',  label: 'editorParsing',  icon: 'code' }
 })
 
 // ---------- AI ----------

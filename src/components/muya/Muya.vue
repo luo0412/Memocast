@@ -24,7 +24,13 @@ import {
   ImageToolbar,
   LinkTools,
   TableBarTools,
-  Transformer
+  Transformer,
+  // v2026-07-31 起：Memocast Settings → 编辑器 → 「语法解析」开关让 Muya parser
+  // 的 inlineRules.echo_anno 可以按 echoRequireParens=true/false 实时切换。
+  //  - createEchoAnnoRule：构造 echo_anno RegExp（true=() 必填；false=() 可选）
+  //  - setEchoAnnoRule    ：运行时 mutate parser 共享的 inlineRules.echo_anno
+  createEchoAnnoRule,
+  setEchoAnnoRule
 } from '@coolma/muya/lib'
 import '@coolma/muya/themes/default.css'
 import appBus from '../common/bus.js'
@@ -572,7 +578,17 @@ export default {
     },
     ...mapServerState(['isCurrentNoteLoading', 'contentsList', 'noteState']),
     ...mapServerGetters(['currentNote', 'uploadImageUrl', 'currentNoteResources', 'currentNoteResourceUrl']),
-    ...mapClientState(['darkMode', 'enablePreviewEditor', 'theme', 'runeCards', 'echoCards'])
+    ...mapClientState([
+      'darkMode',
+      'enablePreviewEditor',
+      'theme',
+      'runeCards',
+      'echoCards',
+      // v2026-07-31：监听 vuex 内 echoRequireParens / runeRequireTemplateDiv 变化，
+      // 触发 inlineRules.echo_anno 实时切换（无需重启 Muya）。
+      'echoRequireParens',
+      'runeRequireTemplateDiv'
+    ])
   },
   methods: {
     updateEchoPlaceholderPayload ({ echoId = '', nodeId = '', echoName = '', payload = '', mode = '', value = '' } = {}) {
@@ -918,7 +934,12 @@ export default {
       })
     },
     ...mapServerActions(['updateNote', 'updateNoteWithInfo', 'updateNoteState', 'updateContentsList', 'uploadImage']),
-    ...mapClientActions(['importImageFromLocal'])
+    ...mapClientActions([
+      'importImageFromLocal',
+      // v2026-07-31：created() 内会 dispatch loadParsingSettings，
+      // 从 SQLite 真源拉一次 echoRequireParens / runeRequireTemplateDiv 到 vuex。
+      'loadParsingSettings'
+    ])
   },
   created () {
     this.$nextTick(() => {
@@ -939,6 +960,14 @@ export default {
       Muya.use(Transformer)
       Muya.use(TableBarTools)
 
+      // v2026-07-31：启动时从 SQLite 拉取「语法解析」开关到 vuex。
+      // 由于 dispatch 是异步，下面的 created() 同步分支会先用
+      // this.echoRequireParens（vuex 初始值 / 上次缓存）；
+      // 真值回到 vuex 后 watcher 会自动触发 inlineRules.echo_anno 切换。
+      this.loadParsingSettings().catch(err => {
+        console.warn('[Muya] loadParsingSettings dispatch failed:', err)
+      })
+
       this.echoRegistry.refresh(this.echoCards || [])
       this._echoRuntime = new EchoRuntime({ registry: this.echoRegistry })
 
@@ -949,10 +978,24 @@ export default {
         })
       }
 
+      // === v2026-07-31 新增：「语法解析 / echoRequireParens」开关同步到 Muya parser ===
+      // 真源 SQLite app_state('setting/parsing/echoRequireParens') 已经由 SettingsDialog
+      // 在 open-dialog 时 loadLazyData → loadParsingSettings 写入 vuex；此处 created() 也兜底
+      // 调一次，确保 Muya 第一次 mount 时就能拿到正确的 RE，避免 race condition。
+      const echoRequireParens = this.echoRequireParens !== undefined
+        ? this.echoRequireParens
+        : true
+      // 1) 创建时的初始 RE：传给 new Muya() options.echoAnnoRule（parser/index.js 优先采用）
+      // 2) 同时 mutate 全局 inlineRules.echo_anno，让所有走 inlineRules 的代码路径
+      //    （tokenizer() 没接到 options.echoAnnoRule 的兜底分支）也立即生效。
+      const initialEchoAnnoRule = createEchoAnnoRule({ requireParens: !!echoRequireParens })
+      setEchoAnnoRule({ requireParens: !!echoRequireParens })
+
       // 把 Vue 实例注入 Muya options，让 Muya 内部的 StateRender 能回调到我们的回写方法
       const muyaSelf = this
       const { container } = this.contentEditor = new Muya(this.$refs.muya, {
         memoMuya: muyaSelf,
+        echoAnnoRule: initialEchoAnnoRule,
         echoRuntime: this._echoRuntime,
         quickInsertProvider: () => {
           const runeItems = (this.runeCards || [])
@@ -1196,6 +1239,34 @@ this._echoDelegate = { container: document, handler: echoCaptureHandler }
     }
   },
   watch: {
+    // v2026-07-31 新增：SettingsDialog 切换 echoRequireParens 后，无需重启编辑器即可让
+    // Muya parser 把回响占位符解析规则切到新的形态：
+    //   - true（默认）→ () 必填，@name{} / @name 不命中 echo_anno
+    //   - false         → () 可选，@name{} / @name 也命中 echo_anno（兼容历史笔记）
+    // 实现：
+    //   - setEchoAnnoRule() mutate 全局 inlineRules.echo_anno，让后续 tokenizer() 走新 RE
+    //     （parser/index.js 的默认合成路径会优先用 options.echoAnnoRule，但有很多
+    //     contentState 子模块直接闭包引用 inlineRules，所以也要 mutate 引用）。
+    //   - contentState.render(false, true) 强制重 render 所有 block，把已解析的 token
+    //     全部按新规则重切。
+    // 守卫：contentEditor 未就绪时跳过（created() 阶段已经处理过初始值）。
+    echoRequireParens (requireParens) {
+      if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') {
+        console.log('[Muya watcher] echoRequireParens changed before contentEditor ready, deferring')
+        return
+      }
+      const next = !!requireParens
+      const replaced = setEchoAnnoRule({ requireParens: next })
+      console.log(`[Muya watcher] ⚡ echoRequireParens → ${next}, inlineRules.echo_anno replaced:`, String(replaced))
+      // 同步生效到已渲染 block
+      try {
+        if (this.contentEditor.contentState && typeof this.contentEditor.contentState.render === 'function') {
+          this.contentEditor.contentState.render(false, true)
+        }
+      } catch (error) {
+        console.warn('[Muya watcher] render after echoRequireParens toggle failed:', error)
+      }
+    },
     currentNote: function (currentData) {
       if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') {
         console.warn('[Muya watcher] ⚠️ contentEditor not ready, skipping')

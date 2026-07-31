@@ -43,8 +43,10 @@
                   :note-order-type='noteOrderType'
                   :quick-insert-columns='quickInsertColumns'
                   :note-templates='noteTemplates'
+                  :echo-require-parens='echoRequireParens'
+                  :rune-require-template-div='runeRequireTemplateDiv'
                   @toggle-change='handleToggleChange'
-                  @update-state='handleUpdateState'
+                  @update-state='handleEditorUpdateState'
                   @add-template='openAddTemplate'
                   @edit-template='openEditTemplate'
                   @delete-template='confirmDeleteTemplate'
@@ -139,6 +141,7 @@
       v-model='runeFormVisible'
       :rune='editingRune'
       :default-category='runeCategory'
+      :rune-require-template-div='runeRequireTemplateDiv'
       @input='onRuneFormVisibleChange'
       @submit='onRuneSubmit'
     />
@@ -158,6 +161,7 @@
       v-model='echoFormVisible'
       :echo='editingEcho'
       :default-category='echoCategory'
+      :echo-require-parens='echoRequireParens'
       @input='onEchoFormVisibleChange'
       @submit='onEchoSubmit'
     />
@@ -268,6 +272,9 @@ export default {
       aiSkillConfigs: [],
       // CDN 依赖
       cdnDeps: [],
+      // 语法解析开关（持久化在 SQLite app_state 表，键 setting/parsing/*）
+      echoRequireParens: true,
+      runeRequireTemplateDiv: false,
       // 懒加载标志
       _dataLoaded: false
     }
@@ -345,7 +352,73 @@ export default {
       this.loadNoteTemplates()
       this.loadAiModelConfigs()
       this.loadAiSkillConfigs()
+      await this.loadParsingSettings()
+      await this.loadParsingSettingsToVuex()
       await this.initCdnDeps()
+    },
+    async loadParsingSettingsToVuex () {
+      // v2026-07-31 起：从 SQLite 真源读取「语法解析」开关并同步到 vuex。
+      // 这样 Muya.vue 的 echoRequireParens mapState 在首次 created() 时就能拿到正确值。
+      // SettingsDialog 已有的 loadParsingSettings 仅写入组件 data (this.echoRequireParens)；
+      // 这里额外 dispatch action 让 vuex state 也立刻一致，避免双源不一致。
+      try {
+        await this.loadParsingSettings()
+      } catch (err) {
+        console.warn('[SettingsDialog] loadParsingSettingsToVuex failed:', err)
+      }
+    },
+    async loadParsingSettings () {
+      try {
+        // 从 SQLite app_state 读取两个语法解析开关（详见 rules/sqlite-settings-storage.mdc）
+        // 默认值：echo () 必填 = true；rune template 下 div 必填 = false。
+        const echoVal = await DatabaseClient.appState.get('setting/parsing/echoRequireParens')
+        if (echoVal !== null && echoVal !== undefined) {
+          this.echoRequireParens = echoVal === true || echoVal === 'true'
+        } else {
+          this.echoRequireParens = true
+        }
+        const runeVal = await DatabaseClient.appState.get('setting/parsing/runeRequireTemplateDiv')
+        if (runeVal !== null && runeVal !== undefined) {
+          this.runeRequireTemplateDiv = runeVal === true || runeVal === 'true'
+        } else {
+          this.runeRequireTemplateDiv = false
+        }
+      } catch (err) {
+        console.warn('[SettingsDialog] loadParsingSettings failed:', err)
+      }
+    },
+    async saveParsingSetting (key, value) {
+      try {
+        await DatabaseClient.appState.set(key, JSON.stringify(Boolean(value)))
+      } catch (err) {
+        console.warn('[SettingsDialog] saveParsingSetting failed:', err)
+      }
+    },
+    async handleEditorUpdateState (state) {
+      // 分流：解析类开关走 SQLite app_state；同时把新值同步到 vuex state 让 Muya.vue
+      // 能立即 watch 变化并实时切换 inlineRules.echo_anno（详见 Muya.vue echoRequireParens watcher）。
+      // 注意：vuex 同步不写 electron-store，因为 SQLite 才是真源（vuex 仅为响应式 cache）。
+      if (Object.prototype.hasOwnProperty.call(state, 'echoRequireParens')) {
+        this.echoRequireParens = Boolean(state.echoRequireParens)
+        await this.saveParsingSetting('setting/parsing/echoRequireParens', this.echoRequireParens)
+        try {
+          this.updateParsingStates({ echoRequireParens: this.echoRequireParens })
+        } catch (error) {
+          console.warn('[SettingsDialog] vuex sync echoRequireParens failed:', error)
+        }
+        return
+      }
+      if (Object.prototype.hasOwnProperty.call(state, 'runeRequireTemplateDiv')) {
+        this.runeRequireTemplateDiv = Boolean(state.runeRequireTemplateDiv)
+        await this.saveParsingSetting('setting/parsing/runeRequireTemplateDiv', this.runeRequireTemplateDiv)
+        try {
+          this.updateParsingStates({ runeRequireTemplateDiv: this.runeRequireTemplateDiv })
+        } catch (error) {
+          console.warn('[SettingsDialog] vuex sync runeRequireTemplateDiv failed:', error)
+        }
+        return
+      }
+      this.updateStateAndStore(state)
     },
     async applyOpenOptions (options = {}) {
       const { tab = '', echoId = '', echoName = '', openEchoEdit = false, openAiAdd = false } = options
@@ -1094,7 +1167,11 @@ export default {
       'deleteNoteTemplate',
       'saveRunes',
       'saveEchoes',
-      'saveNoteTemplates'
+      'saveNoteTemplates',
+      // v2026-07-31：让「语法解析」开关仅更新 vuex cache（不写 electron-store），
+      // 真源永远是 SQLite app_state('setting/parsing/*')。
+      'loadParsingSettings',
+      'updateParsingStates'
     ]),
     ...mapClientMutations({ UPDATE_SYNC_STATUS: 'update_sync_status' }),
     async initCdnDeps () {

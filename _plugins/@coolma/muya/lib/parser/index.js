@@ -1,8 +1,13 @@
-import { beginRules, inlineRules, inlineExtensionRules } from './rules'
+import { beginRules, inlineRules, inlineExtensionRules, createEchoAnnoRule } from './rules'
 import { isLengthEven, union } from '../utils'
 import { findClosingBracket } from './marked/utils'
 import { getAttributes, parseSrcAndTitle, validateEmphasize, lowerPriority } from './utils'
 import { parseEchoProps } from 'src/components/echo/echoCore'
+
+// 重新导出原本仅在 `./rules` 内 export 的符号，供 `lib/index.js` 透过
+//   `export { ... } from './parser'` 暴露给上层（Memocast Muya.vue、demo-web 等）。
+// 不能改为 `export { ... } from './rules'`，否则会与 parser 内自用的 import 重复。
+export { beginRules, inlineRules, inlineExtensionRules, createEchoAnnoRule }
 
 // const CAN_NEST_RULES = ['strong', 'em', 'link', 'del', 'a_link', 'reference_link', 'html_tag']
 // disallowed html tags in https://github.github.com/gfm/#raw-html
@@ -579,7 +584,19 @@ export const tokenizer = (src, {
   labels = new Map(),
   options = {}
 } = {}) => {
-  const rules = Object.assign({}, inlineRules, inlineExtensionRules)
+  // v2026-07-31 起：「语法解析 / echoRequireParens」开关通过 options.echoAnnoRule 注入。
+  //   - echoAnnoRule 是 createEchoAnnoRule({ requireParens }) 工厂的产物 RegExp，
+  //     捕获组 [name, propsRaw, promptRaw] 与 inlineRules.echo_anno 完全一致；
+  //     下游 parser/index.js 依赖 to[1]/to[2]/to[3] 取值，**不能改顺序**。
+  //   - 未传 echoAnnoRule 时 fallback 到 inlineRules.echo_anno（向后兼容）；
+  //     后续 Muya.vue 也支持运行时 mutate inlineRules.echo_anno 实时刷新，无需重启 editor。
+  //   - baseRules 仍以 inlineRules 为底，避免污染 baseline；
+  //     shallow-merge 后再覆写 echo_anno，避免 Object.assign 引入 prototype 干扰。
+  const baseRules = Object.assign({}, inlineRules, inlineExtensionRules)
+  if (options && options.echoAnnoRule instanceof RegExp) {
+    baseRules.echo_anno = options.echoAnnoRule
+  }
+  const rules = baseRules
   const tokens = tokenizerFac(src, hasBeginRules ? beginRules : null, rules, 0, true, labels, options)
 
   const postTokenizer = tokens => {
@@ -606,7 +623,18 @@ export const tokenizer = (src, {
   return tokens
 }
 
-// transform `tokens` to text ignore the range of token
+// v2026-07-31 新增：运行时改写 inlineRules.echo_anno，便于 Memocast Settings 切换
+// 「语法解析 / echoRequireParens」后，**不用重建 Muya** 即可让后续 parse 走新规则。
+// 调用方负责后续触发渲染（如 muya.contentEditor.updateContents()）。
+//   requireParens=true（默认）→ () 必填；false → () 可选。
+// 注意：所有已解析的 block 不会被本函数影响回滚；后续 input/format/backspace
+// 等模块下次进入 tokenizer() 才会按新规则重新切 token。
+export const setEchoAnnoRule = ({ requireParens = true } = {}) => {
+  inlineRules.echo_anno = createEchoAnnoRule({ requireParens })
+  return inlineRules.echo_anno
+}
+
+// transform `tokens` to text ignore the range of the token
 // the opposite of tokenizer
 export const generator = tokens => {
   let result = ''

@@ -78,6 +78,14 @@
         @delete-template='$emit("delete-template", $event)'
         @batch-delete='$emit("batch-delete-templates", $event)'
       />
+
+      <!-- 语法解析 -->
+      <SettingsParsingPanel
+        v-if='subTab === $enums.EditorSubEnum.Parsing'
+        :echo-require-parens='echoRequireParens'
+        :rune-require-template-div='runeRequireTemplateDiv'
+        @update-state='$emit("update-state", $event)'
+      />
     </div>
   </div>
 </template>
@@ -86,6 +94,7 @@
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
 import SettingsNoteTemplatePanel from 'components/settings/SettingsNoteTemplatePanel'
+import SettingsParsingPanel from 'components/settings/SettingsParsingPanel'
 import { NoteOrderTypeEnum } from 'src/utils/enum'
 
 export default {
@@ -93,7 +102,8 @@ export default {
   components: {
     CategoryTabs,
     SettingsSectionContent,
-    SettingsNoteTemplatePanel
+    SettingsNoteTemplatePanel,
+    SettingsParsingPanel
   },
   props: {
     markdownOnly: {
@@ -115,6 +125,14 @@ export default {
     noteTemplates: {
       type: Array,
       default: () => []
+    },
+    echoRequireParens: {
+      type: Boolean,
+      required: true
+    },
+    runeRequireTemplateDiv: {
+      type: Boolean,
+      required: true
     }
   },
   data () {
