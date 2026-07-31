@@ -274,6 +274,86 @@ async function clearAll (payload) {
   return result
 }
 
+/**
+ * 批量导入符文（从 JSON 文件）。
+ * @param {Array} items - 要导入的符文数组，格式与导出格式一致：{ name, desc, category, color, icon, template }
+ * @param {string} targetCategory - 目标分类（强制使用此分类）
+ * @param {Object} options - 可选配置
+ * @param {string} options.conflictMode - 冲突处理模式: 'normal'(默认新建) | 'replace'(覆盖) | 'skip'(跳过)
+ * @param {Array} options.existingRunes - 现有符文列表，用于查找同名符文的 ID
+ * @returns {Promise<{ success: boolean, count: number, skipped?: number, message?: string }>}
+ */
+async function batchImport (items, targetCategory = '', options = {}) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { success: true, count: 0 }
+  }
+  const now = Date.now()
+  const rows = []
+  const skipped = []
+  const VALID_CATEGORY_KEYS = new Set([
+    'general', 'education', 'outfit', 'fitness', 'music', 'novel',
+    'movie', 'food', 'travel', 'research', 'legal', 'government',
+    'entertainment', 'gaming', 'consulting', 'community', 'social',
+    'medical', 'finance', 'insurance', 'manufacturing', 'construction',
+    'realEstate', 'lodging', 'catering', 'business', 'transportation',
+    'warehousing', 'sales', 'trading', 'agriculture', 'energy',
+    'environment', 'resume'
+  ])
+  const conflictMode = options.conflictMode || 'normal'
+  const existingRunes = options.existingRunes || []
+  // 验证目标分类是否有效
+  const validTargetCategory = VALID_CATEGORY_KEYS.has(String(targetCategory || '').trim())
+    ? String(targetCategory).trim()
+    : 'general'
+  // 构建现有符文 name -> id 的映射（不区分大小写）
+  const existingNameMap = new Map()
+  for (const rune of existingRunes) {
+    if (rune && rune.name) {
+      const key = String(rune.name).trim().toLowerCase()
+      existingNameMap.set(key, rune.id)
+    }
+  }
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    const itemName = String(item && item.name || '').trim()
+    const itemNameKey = itemName.toLowerCase()
+    // 跳过模式下，如果存在同名则跳过
+    if (conflictMode === 'skip' && existingNameMap.has(itemNameKey)) {
+      skipped.push(itemName)
+      continue
+    }
+    // 强制使用目标分类
+    const category = validTargetCategory
+    // 覆盖模式下，尝试找到现有符文的 ID
+    let id
+    if (conflictMode === 'replace' && existingNameMap.has(itemNameKey)) {
+      id = existingNameMap.get(itemNameKey)
+    } else {
+      id = 'import-' + Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6)
+    }
+    rows.push({
+      id,
+      category_key: category,
+      name: item.name || '未命名符文',
+      desc: item.desc || '',
+      color: item.color || '#7E57C2',
+      icon: item.icon || 'star',
+      template: item.template || '',
+      source_url: '',
+      is_builtin: 0,
+      sort_order: 9999,
+      created_at: now,
+      updated_at: now
+    })
+  }
+  if (rows.length === 0) {
+    return { success: true, count: 0, skipped: skipped.length }
+  }
+  const result = await DatabaseClient.runeTemplates.saveMany(rows)
+  if (result && result.success) invalidate()
+  return { ...result, skipped: skipped.length }
+}
+
 function clearCache () {
   invalidate()
 }
@@ -287,6 +367,7 @@ const runeTemplateService = {
   seedBuiltin,
   buildBuiltinRows,
   clearAll,
+  batchImport,
   clearCache
 }
 

@@ -1,0 +1,19 @@
+{
+  "name": "@coolma/demo-web",
+  "version": "0.1.0",
+  "description": "Standalone web demo of @coolma/muya editor",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@coolma/muya": "workspace:*",
+    "vue": "2.7.16"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue2": "^2.3.1",
+    "vite": "^5.4.0"
+  }
+}

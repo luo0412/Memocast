@@ -114,6 +114,9 @@
                   @edit-rune='openEditRune'
                   @delete-rune='confirmDeleteRune'
                   @batch-delete='confirmBatchDeleteRune'
+                  @export-selected='openExportSelected'
+                  @export-current-category='openExportCurrentCategory'
+                  @batch-import='openBatchImport'
                 />
               </q-tab-panel>
 
@@ -138,6 +141,16 @@
       :default-category='runeCategory'
       @input='onRuneFormVisibleChange'
       @submit='onRuneSubmit'
+    />
+    <runeExportDialog
+      v-model='runeExportDialogVisible'
+      :selected-runes='runeExportSelectedRunes'
+    />
+    <runeBatchImportDialog
+      v-model='runeBatchImportDialogVisible'
+      :default-category='runeImportCategory'
+      :existing-runes='localRuneCards'
+      @import='onRuneBatchImport'
     />
     <echoFormDialog
       v-if='echoFormVisible'
@@ -169,6 +182,8 @@ import ImageUploadServiceDialog from '../image/ImageUploadServiceDialog.vue'
 import UpdateDialog from 'components/update/UpdateDialog'
 import runeCard from 'components/rune/runeCard'
 import runeFormDialog from 'components/rune/runeFormDialog'
+import runeExportDialog from 'components/rune/runeExportDialog'
+import runeBatchImportDialog from 'components/rune/runeBatchImportDialog'
 import runeTemplateService from 'src/services/RuneTemplateService'
 import echoFormDialog from 'components/echo/echoFormDialog'
 import NoteTemplateFormDialog from 'components/noteTemplate/NoteTemplateFormDialog'
@@ -209,6 +224,8 @@ export default {
     UpdateDialog,
     runeCard,
     runeFormDialog,
+    runeExportDialog,
+    runeBatchImportDialog,
     echoFormDialog,
     NoteTemplateFormDialog,
     NavigationDialog,
@@ -230,6 +247,10 @@ export default {
       runeFormKey: 0,
       editingRune: null,
       runeCategory: DEFAULT_RUNE_CATEGORY,
+      runeImportCategory: DEFAULT_RUNE_CATEGORY,
+      runeExportDialogVisible: false,
+      runeExportSelectedRunes: [],
+      runeBatchImportDialogVisible: false,
       echoFormVisible: false,
       echoFormKey: 0,
       editingEcho: null,
@@ -831,6 +852,59 @@ export default {
       this.$nextTick(() => {
         this.editingRune = null
       })
+    },
+
+    // ==================== Rune 导出/批量导入 ====================
+    openExportSelected (selectedRunes) {
+      this.runeExportSelectedRunes = selectedRunes || []
+      this.runeExportDialogVisible = true
+    },
+    openExportCurrentCategory (runesInCategory) {
+      this.runeExportSelectedRunes = runesInCategory || []
+      this.runeExportDialogVisible = true
+    },
+    openBatchImport (category) {
+      this.runeImportCategory = category || DEFAULT_RUNE_CATEGORY
+      this.runeBatchImportDialogVisible = true
+    },
+    async onRuneBatchImport ({ items, category, conflictMode, conflictNames }) {
+      try {
+        const result = await runeTemplateService.batchImport(items, category, {
+          conflictMode,
+          existingRunes: this.localRuneCards
+        })
+        if (result && result.success) {
+          // 构建成功消息
+          let message = this.$t('runeBatchImportSuccess', { count: result.count || items.length })
+          if (conflictMode === 'skip' && result.skipped > 0) {
+            message += `（跳过 ${result.skipped} 个同名）`
+          } else if (conflictMode === 'replace' && conflictNames && conflictNames.length > 0) {
+            message += `（覆盖 ${conflictNames.length} 个同名）`
+          }
+          this.$q.notify({
+            message,
+            type: 'positive',
+            position: 'top'
+          })
+          // 从 rune_templates 表重新加载并刷新 store
+          const freshRunes = await runeTemplateService.listFlat(true)
+          this.updateStateAndStore({ runeCards: freshRunes })
+          this.runeBatchImportDialogVisible = false
+        } else {
+          this.$q.notify({
+            message: this.$t('runeBatchImportFailed', { message: (result && result.message) || '' }),
+            type: 'negative',
+            position: 'top'
+          })
+        }
+      } catch (err) {
+        console.error('[Settings] onRuneBatchImport error:', err)
+        this.$q.notify({
+          message: this.$t('runeBatchImportFailed', { message: '' }),
+          type: 'negative',
+          position: 'top'
+        })
+      }
     },
 
     // ==================== Note Template 面板事件 ====================
