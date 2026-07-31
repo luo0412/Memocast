@@ -953,3 +953,10 @@ class MyPlugin {
 ## 扩展阅读
 
 详细设计文档见 [reference.md](reference.md)
+
+## 相关规则（编辑 lib 前必读）
+
+- [`.cursor/rules/coolma-muya-sdk-guidelines.mdc`](../../rules/coolma-muya-sdk-guidelines.mdc) — coolma-muya 是 v0.x 阶段的「准 SDK」，编辑 `_plugins/coolma-muya/lib/` 前必须先按 8 问自检；禁止把 Memocast 业务（`src/...` / `boot/i18n` / vuex）泄漏到 lib/ 内部。
+- [`.cursor/rules/plugin-vue-version.mdc`](../../rules/plugin-vue-version.mdc) — `_plugins/coolma-muya/` 是 Vue 2.7.x 子项目，沿用主项目写法（`new Vue`、`Vue.extend`、Options API）。
+- [`.cursor/rules/rune-echo-cloudfn-experimental.mdc`](../../rules/rune-echo-cloudfn-experimental.mdc) — echo / rune / 云函数业务逻辑在主项目；lib/ 内部的 echo_anno / mountRuneVueHosts 是 SDK 准公共契约，按 sdk-guidelines 推进解耦。
+- [`.cursor/rules/rune-echo-test-moat.mdc`](../../rules/rune-echo-test-moat.mdc) — lib 改动必须跑 `yarn verify:echo` / `yarn verify:rune` 确认运行时契约没破坏。

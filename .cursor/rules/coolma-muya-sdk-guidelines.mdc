@@ -1,0 +1,308 @@
+---
+description: coolma-muya 是 v0.x 阶段的「准 SDK」— 编辑 _plugins/coolma-muya/lib/ 前必须先按 8 问自检，禁止把 Memocast 业务泄漏到 lib/ 内部。
+alwaysApply: true
+---
+
+# coolma-muya SDK 化纪律（`coolma-muya` 是独立 SDK 之前的过渡规则）
+
+> **coolma-muya 终态是作为独立 npm SDK 发出去**（`coolma-muya` 主包 + `coolma-muya-echo` / `coolma-muya-rune` plugin 包）。
+>
+> 当前 0.1.x 阶段**已经把核心 API 锁定为「准 SDK」**：不允许再向 lib/ 内部新增业务耦合，已经存在的耦合要按「主项目就近实现」的方针逐步迁出。
+>
+> **任何**对 `_plugins/coolma-muya/lib/` 的改动都必须先读完本文件 + 通过 8 问自检。
+
+---
+
+## 1. 适用范围
+
+| 路径 | 是否在范围内 | 说明 |
+|---|---|---|
+| `_plugins/coolma-muya/lib/**` | ✅ 必须遵守 | 编辑前必须跑 8 问自检 |
+| `_plugins/coolma-muya/lib/parser/**` | ✅ 必须遵守 | parser 是最容易泄漏业务的地方 |
+| `_plugins/coolma-muya/lib/ui/**` | ✅ 必须遵守 | UI 组件不能假设 Quasar / vue-i18n / 任何宿主框架 |
+| `_plugins/coolma-muya/themes/**` | ⚠️ 谨慎 | 视觉与 SDK 中性无关，但 CSS 里不能写宿主框架 selector（如 `.q-btn`） |
+| `_plugins/coolma-muya/scripts/**` | ✅ 必须遵守 | 构建脚本是 SDK 公共契约 |
+| `_plugins/coolma-muya/package.json` | ✅ 必须遵守 | keywords / description / peerDependencies 是 SDK 公共契约 |
+| `_plugins/coolma-muya/README.md` | ✅ 必须遵守 | 用户看到的对外文档 |
+| `_plugins/muya-demo-web/**` | ⚠️ 谨慎 | demo 是 SDK 的验收用例，lib/ 改动后必须保证 demo 能跑（必要时补 stub） |
+| `_plugins/coolma-muya/tests/**` | ⚠️ 谨慎 | lib 自带测试可以保留，但**优先复用 Memocast 主仓库的 Jest 测试套**（避免双维护） |
+
+---
+
+## 2. 核心原则（一句话）
+
+> **coolma-muya 是通用 markdown 编辑器 SDK；echo / rune / 笔记业务 100% 留在主项目。**
+> **lib/ 内部出现 Memocast 业务路径（`src/...`、`boot/i18n`、vuex store）就是污染。**
+
+---
+
+## 3. 改 lib/ 之前的 8 问自检
+
+**每次**对 `_plugins/coolma-muya/lib/` 下任意文件做改动前，按顺序回答：
+
+1. **SDK 在 Memocast 外能跑吗？**
+   - 「否」= 立刻停下来，找出隐性宿主依赖。
+2. **有没有 `boot/i18n` / `src/...` / `vuex` / `vue-router` / Quasar 全局的 import？**
+   - 有 = 污染。SDK 不能假设宿主框架，要走 `Muya.use(I18nBridge, { t })` 或 props 注入。
+3. **有没有跨工程的绝对路径 / 相对路径跳到主项目？**
+   - 有 = 立刻删。
+4. **demo-web 还能跑吗？**
+   - demo-web 已经有 `boot/i18n.js` / `src/components/echo/echoCore.js` 的 stub。如果 lib 新增 import，demo-web 也得相应补 stub 或删 import。
+5. **强耦合 Vue 了吗？**
+   - coolma-muya 内部已经用 Vue 2 兼容写法（`Vue.extend`、`render(h)`、`vnode`），短期内不强制改。但**新代码能不耦合 Vue 就不耦合**，预留未来切到 Vue-agnostic 渲染管线的可能性。
+6. **新 API 是不是只在「echo / rune」场景下才有意义？**
+   - 业务 API 应该走 `Muya.use(SomeBusinessPlugin)` 的模式，不要裸露在主类方法表上。
+7. **README / package.json keywords 还能对外宣称「通用 markdown 编辑器」吗？**
+   - 如果不能 = 污染。
+8. **这次改动是「解耦」，还是「把业务逻辑搬到 lib/ 里省事」？**
+   - 解耦才动，搬业务不动。
+
+**8 问任意一个「否」→ 停下来问用户，不要自作主张。**
+
+---
+
+## 4. 红线（绝对禁止出现在 lib/）
+
+### 4.1 import 层面
+
+```javascript
+// ❌ 禁止：从主项目 import 业务模块
+import { parseEchoProps } from 'src/components/echo/echoCore'
+import { i18n } from 'boot/i18n'
+import store from 'src/store'
+import { mapState } from 'vuex'
+import { Notify } from 'quasar'
+
+// ❌ 禁止：跨工程绝对路径
+import x from '/path/to/coolma/src/utils/x'
+
+// ❌ 禁止：宿主框架专属 API
+this.$q.notify(...)
+this.$store.state...
+this.$t(...)
+```
+
+### 4.2 API 层面
+
+```javascript
+// ❌ 禁止：往 Muya 主类加业务方法
+class Muya {
+  insertEcho (echo) { ... }      // 业务，应走 Muya.use(EchoPlugin)
+  insertRune (rune) { ... }      // 业务
+  refreshRuneCards (cards) { ... } // v2026-07-31 已存在，要拆出去（见 §6 P1）
+  registerEchoChant (id, fn) { ... } // 业务
+}
+
+// ❌ 禁止：暴露 mutate 全局 parser 的口子
+export { inlineRules, setEchoAnnoRule, createEchoAnnoRule }
+//   ↑ 这三个是给 Memocast 业务 mutate echo_anno RE 用的「后门」
+//     SDK 化的最终形态是没有这三个导出
+//     当前 0.1.x 阶段保留，但**不要新增同类口子**
+```
+
+### 4.3 数据 / 持久化层面
+
+```javascript
+// ❌ 禁止：lib/ 里读 SQLite / localStorage / electron-store
+const settings = await DatabaseClient.appState.get('setting/...')
+localStorage.setItem('muya-...', ...)
+
+// ❌ 禁止：lib/ 里 hardcode Memocast 专有 markdown 语法（@echo / @rune）
+//   这类业务语法应该由主项目的 echo / rune plugin 包提供，
+//   lib/ 只提供通用的 inline annotation 机制
+```
+
+### 4.4 文档 / 命名层面
+
+```jsonc
+// ❌ 禁止：package.json keywords / description 里塞业务词
+{
+  "keywords": ["memocast", "rune", "echo"], // memocast + rune/echo 都是业务污染
+  "description": "Memocast 的 markdown 编辑器核心" // 应改为通用描述
+}
+```
+
+```markdown
+<!-- ❌ 禁止：README / 注释里说「Memocast」「笔记」「符文」「回响」 -->
+<!-- 该编辑器是 Memocast 的笔记编辑器核心，支持符文 / 回响 -->
+```
+
+---
+
+## 5. 「业务实现」落在主项目（不要 push 回 lib）
+
+下面 5 类代码**必须**留在主项目侧，**禁止**下沉到 coolma-muya：
+
+| 类别 | 落位 |
+|---|---|
+| echo 解析（`@name{props}(prompt)` 这种语法约定） | `src/components/echo/echoCore.js` |
+| echo 占位符渲染、payload 编解码 | `src/components/echo/` + `src/components/muya/Muya.vue` 内的 `EchoPreviewRenderer` |
+| rune 卡片 Vue SFC 编译、运行时挂载 | `src/components/muya/Muya.vue` 的 `createRuneRendererCtor` |
+| rune / echo 快捷面板 provider | `src/components/muya/Muya.vue` 的 `quickInsertProvider` 选项（不要往 lib/ 加同名 API） |
+| 笔记业务场景（笔记保存、回写、noteState 切换、AB 测试…） | 留主项目，禁止下沉 |
+
+---
+
+## 6. 已识别的耦合点（必须按计划迁出）
+
+按优先级 P0 / P1 / P2 列出当前 lib/ 里**已存在**的业务污染，**不要再加剧**，按节奏迁出。
+
+### 6.1 P0（必做）：i18n 解耦
+
+**6 个文件一行 import 污染**：
+
+```
+coolma-muya/lib/ui/imageToolbar/config.js:8
+coolma-muya/lib/ui/formatPicker/config.js:12
+coolma-muya/lib/ui/tableTools/config.js:1
+coolma-muya/lib/ui/quickInsert/config.js:24
+coolma-muya/lib/ui/frontMenu/config.js:7
+coolma-muya/lib/ui/imageSelector/index.js:7
+```
+
+全部是 `import { i18n } from 'boot/i18n'`。解耦方案：
+
+```javascript
+// 1. lib/ 内部把 i18n 改成 setter + 默认 fallback
+// coolma-muya/lib/i18n-bridge.js
+let _t = (key) => key // 默认 fallback：直接返回 key
+export const setI18n = (t) => { _t = typeof t === 'function' ? t : _t }
+export const t = (...args) => _t(...args)
+
+// 2. Muya 主类暴露 use() 入口
+class Muya {
+  static plugins = []
+  static use (plugin, options = {}) { ... }
+  static useI18n (t) { setI18n(t) }
+}
+
+// 3. 主项目在 created() 注入
+Muya.useI18n(this.$t)
+
+// 4. lib/ 内部所有 import { i18n } from 'boot/i18n' 改成 import { t } from '../i18n-bridge'
+```
+
+### 6.2 P0（必做）：删 parser/index.js 的 `src/components/echo/echoCore` import
+
+```
+coolma-muya/lib/parser/index.js:5
+  import { parseEchoProps } from 'src/components/echo/echoCore'
+```
+
+这是**最严重的耦合**——lib 的 parser 直接跨工程读主项目的 echo 业务模块。解耦方案：
+
+- 把 `parseEchoProps` 的核心逻辑下沉到 lib/ 内部（纯字符串解析，没有业务依赖）
+- 或者把 echo_anno 的 prop 解析改成 inline 闭包（不依赖外部函数）
+- **不要再新增**任何 `import from 'src/...'` 的 import
+
+### 6.3 P1（应该做）：业务 options 收口
+
+当前 `new Muya(opts)` 散落的业务字段（`echoRuntime` / `runeRendererCtor` / `echoRendererCtor` / `quickInsertProvider` / `onEchoPlaceholderCommit` / `runeCards` / `echoCards` 等），目标形态是：
+
+```javascript
+// 未来 Muya.vue 的样子
+Muya.use(EchoPlugin, {
+  runtime: this._echoRuntime,
+  rendererCtor: EchoPlaceholderHost,
+  onCommit: this.updateEchoPlaceholderPayload
+})
+Muya.use(RunePlugin, {
+  cards: this.runeCards,
+  rendererCtor: RunePreviewRenderer
+})
+Muya.use(QuickInsertProvider, {
+  provider: () => ({ sectionName, items })
+})
+```
+
+插件实现留在主项目（`src/components/muya/plugins/*.js`），lib 只留 `Muya.use()` 这一个扩展点。
+
+**0.1.x 阶段**：保持 `new Muya(opts)` 现状，但**不要再往 options 加新的业务字段**。
+
+### 6.4 P2（未来）：把 echo runtime 拆出独立包
+
+```
+coolma-muya              # 通用 markdown 编辑器（SDK 真身）
+coolma-muya-echo-plugin  # echo 占位符 + 运行时的 Muya plugin
+```
+
+不是 0.1.x 的事。0.1.x 阶段所有 plugin 实现都在主项目里。
+
+### 6.5 已暴露的「本不该有」的 SDK API（要列黑名单）
+
+`coolma-muya/lib/index.js` 里这几个 export 是给主项目 mutate parser 的「后门」：
+
+```javascript
+export {
+  createEchoAnnoRule,  // 业务语法工厂，不该在 SDK 里
+  inlineRules,         // 全局引用，给业务 mutate 用
+  setEchoAnnoRule      // 同上，运行时切换
+} from './parser'
+```
+
+**SDK 化的最终形态是没有这三个导出。**
+
+`echo_anno` 规则要么完全删掉（Muya 只做通用 markdown），要么独立发 `coolma-muya-echo-plugin`。
+
+0.1.x 阶段：保留这三个 export，但**不要新增**同类 mutate 全局 parser 的 API。
+
+---
+
+## 7. 本周剩下的「能做」与「不能做」
+
+### 7.1 ✅ 可以做（不引入新耦合）
+
+- 修 `_plugins/coolma-muya/lib/` 里的 render bug、snabbdom bug、tokenizer 边界问题
+- 跑 `yarn build:dev` / `yarn build` 修 lib 内部构建脚本
+- 改通用 markdown 解析规则（与 echo / rune 完全无关的部分）
+- 删 lib/ 里的死代码（按 rune-echo-cloudfn-experimental.mdc 的「不背历史包袱」原则）
+
+### 7.2 ❌ 停下来跟用户确认（涉及耦合问题）
+
+- **删 `import { i18n } from 'boot/i18n'`**：要先定 i18n 注入方案（§6.1）
+- **删 echo_anno 默认规则**：会让 echo 系统整体重写
+- **拆 lib 为 core + echo-plugin + rune-plugin**：跨周末的工作量
+
+### 7.3 ❌ 千万别做
+
+- 在 lib/ 里 import `src/...` / `boot/i18n` / vuex / vue-router / Quasar 全局
+- 给 `Muya` 主类加业务方法（如 `muya.insertEcho()`、`muya.insertRune()`）
+- 在 lib/ 里依赖只在主项目装的包（`@vue/test-utils` / `lodash` / `@quasar/extras` 等）
+- 在 lib/ 里 hardcode「Memocast」字样（description、keywords、注释里）
+
+---
+
+## 8. 与其它规则的关系
+
+| 规则 | 关系 |
+|---|---|
+| `plugin-vue-version.mdc` | 上游：先识别 `_plugins/coolma-muya/package.json` 的 Vue 版本（Vue 2.7.x），再按本规则做 SDK 化自检 |
+| `rune-echo-cloudfn-experimental.mdc` | 平行：本规则管「lib/ 边界」，rune-echo-cloudfn 管「echo / rune / 云函数业务逻辑」（两者作用域不重叠） |
+| `component-naming.mdc` | 平行：coolma-muya lib/ 内部文件的命名规范仍按 component-naming.mdc（小驼峰 + 语义后缀） |
+| `rune-echo-test-moat.mdc` | 平行：lib/ 的运行时契约测试由 Memocast 的 Jest 套覆盖（`tests/unit/echo` / `tests/unit/rune`），不要在 coolma-muya 里维护双份测试 |
+| `package-manager.mdc` | 上游：所有依赖安装用 `yarn`（`_plugins/coolma-muya/` 是独立 npm 项目，在子目录内 `yarn add`） |
+| `safe-shell.mdc` | 上游：涉及目录移动 / 删除时先备份 |
+
+---
+
+## 9. 改动流程 SOP
+
+每次改 coolma-muya lib/ 时：
+
+```
+1. Read 该文件 + 本规则（确认当前属于 §6 哪一类耦合点）
+2. 跑 §3 的 8 问自检，任意一个「否」→ 停下来问用户
+3. 写代码（按 §4 红线 + §5「业务留在主项目」原则）
+4. 跑 yarn build:dev / yarn watch 看 lib 内部构建是否过
+5. 跑 demo-web 的 yarn dev 看 demo 还能跑
+6. 跑主项目 yarn verify 确认没破坏 echo / rune 测试
+7. 在 commit message 里注明「coolma-muya lib 改动，按 sdk-guidelines 自检 8 问」
+```
+
+---
+
+## 10. 一句话总结
+
+> **8 问任意一个「否」→ 停下来问用户。**
+> **红线任意一条触碰 → 立刻改回去，重写。**
+> **业务实现留在主项目，lib/ 只做通用 markdown 编辑器 SDK。**

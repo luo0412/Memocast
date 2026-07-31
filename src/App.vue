@@ -4,7 +4,7 @@
       <router-view />
     </a-config-provider>
     <!-- 离线笔记同步提示对话框 -->
-    <OfflineSyncPromptDialog ref="offlineSyncDialog" @sync="handleOfflineSync" @skip="handleOfflineSkipSync" />
+    <syncOfflinePromptDialog ref="offlineSyncDialog" @sync="handleOfflineSync" @skip="handleOfflineSkipSync" />
     <!-- 全屏火焰效果 -->
     <FireEffect ref="fireEffect" />
     <HeartEffect ref="heartEffect" />
@@ -20,7 +20,7 @@ import { createNamespacedHelpers } from 'vuex'
 import bus from './components/common/bus'
 import { EVENTS as events } from 'src/utils/const/eventsConst'
 import { checkUpdate } from './ApiInvoker'
-import OfflineSyncPromptDialog from './components/sync/OfflineSyncPromptDialog.vue'
+import syncOfflinePromptDialog from './components/sync/syncOfflinePromptDialog.vue'
 import FireEffect from './components/common/FireEffect.vue'
 import HeartEffect from './components/common/HeartEffect.vue'
 import ButterflyEffect from './components/common/ButterflyEffect.vue'
@@ -36,7 +36,7 @@ const {
 } = createNamespacedHelpers('server')
 export default {
   name: 'App',
-  components: { OfflineSyncPromptDialog, FireEffect, HeartEffect, ButterflyEffect },
+  components: { syncOfflinePromptDialog, FireEffect, HeartEffect, ButterflyEffect },
   data () {
     return {
       autoSaveInterval: null,

@@ -84,7 +84,7 @@
 import { invokeDemo } from 'src/services/cloud/BspAppDemoService'
 
 export default {
-  name: 'BspAppDemoDialog',
+  name: 'cloudBspAppDemoDialog',
   props: {
     value: { type: Boolean, default: false }
   },

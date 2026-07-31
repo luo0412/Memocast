@@ -14,7 +14,7 @@
             <q-tooltip>{{ $t('cloudFunctionDoc') }}</q-tooltip>
           </q-btn>
         </template>
-        <cloud-fn-config-dialog />
+        <cloudFunctionConfigDialog />
       </SettingsSectionContent>
 
       <!-- 导航中心 -->
@@ -36,14 +36,14 @@
 <script>
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
-import CloudFnConfigDialog from 'components/cloud/CloudFnConfigDialog'
+import cloudFunctionConfigDialog from 'components/cloud/cloudFunctionConfigDialog'
 
 export default {
   name: 'SettingsCloudFnPanel',
   components: {
     CategoryTabs,
     SettingsSectionContent,
-    CloudFnConfigDialog
+    cloudFunctionConfigDialog
   },
   props: {},
   data () {

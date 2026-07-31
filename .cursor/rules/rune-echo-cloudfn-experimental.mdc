@@ -124,6 +124,25 @@ function renderEcho (echo) {
 5. 读取路径对未�?shape 是否 graceful 降级？→ 没做的话补上�?
 6. 这个改动会不会牵连稳定功能？�?会的�?*停下来问用户**�?
 
+## 5. �?`coolma-muya-sdk-guidelines.mdc` 的边�?
+
+> **本规则管业务逻辑（echo / rune / 云函数），新规则 `coolma-muya-sdk-guidelines.mdc` �?SDK 边界（`_plugins/coolma-muya/lib/`）。两者作用域不重叠�?*
+
+涉及 `_plugins/coolma-muya/lib/` 的改动：
+
+- **业务�?*：仍按本规则（echo / rune / 云函数）的「不背历史包�?+ 读路径防御」原则；
+- **SDK �?*：必�?*额外**�?`.cursor/rules/coolma-muya-sdk-guidelines.mdc` �?8 问自检�?
+- **冲突�?SDK 侧优�?*：coolma-muya 终态是独立 npm SDK，不允许为了业务方便�?Memocast 业务路径（`src/...` / `boot/i18n` / vuex）泄漏到 lib/�?
+
+当前已经�?lib/ 里识别出的业务耦合点（�?sdk-guidelines §6 推进迁出）：
+
+1. **P0（必做）**：`coolma-muya/lib/parser/index.js:5` �?`import { parseEchoProps } from 'src/components/echo/echoCore'` �?删掉，把 prop 解析逻辑下沉�?lib/ 内部或改�?inline 闭包�?
+2. **P0（必做）**：`coolma-muya/lib/{ui/imageToolbar,ui/formatPicker,ui/tableTools,ui/quickInsert,ui/frontMenu,ui/imageSelector}/**` �?6 �?`import { i18n } from 'boot/i18n'` �?改成 `Muya.useI18n(t)` setter 注入�?
+3. **P1（应该做�?*：把 `new Muya(opts)` 散落的业务字段（`echoRuntime` / `runeRendererCtor` / `echoRendererCtor` / `quickInsertProvider` / `onEchoPlaceholderCommit` / `runeCards` / `echoCards`）收口成 `Muya.use(EchoPlugin)` / `Muya.use(RunePlugin)`�?
+4. **P2（未来）**：拆 `coolma-muya-echo-plugin` / `coolma-muya-rune-plugin` 独立 npm 包；lib/ 只留通用 markdown 编辑器�?
+
+**8 问任意一个「否」→ 停下来问用户**（详�?sdk-guidelines §3）�?
+
 ## 6. 命名空间隔离（rune vs echo�?
 
 > rune 系统（用户自定义�?Vue SFC 卡片）和 echo 系统（`@xxx{}(prompt)` 占位符）�?*两条完全独立的管�?*。命�?/ 字段 / DOM 属性不要混用�?

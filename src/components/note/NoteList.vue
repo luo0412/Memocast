@@ -40,14 +40,14 @@
     </q-card>
     <CategoryDialog ref='categoryDialog' :note-info='rightClickNoteItem' :label='categoryDialogLabel'
                     :handler='categoryDialogHandler' />
-    <TierRankingDialog ref="tierRankingDialog" />
+    <rankingTierDialog ref="tierRankingDialog" />
   </div>
 </template>
 
 <script>
 import NoteItem from './NoteItem.vue'
 import CategoryDialog from '../category/CategoryDialog.vue'
-import TierRankingDialog from '../ranking/TierRankingDialog.vue'
+import rankingTierDialog from '../ranking/rankingTierDialog.vue'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import { createNamespacedHelpers } from 'vuex'
 import { Loading, QSpinnerGears } from 'quasar'
@@ -60,7 +60,7 @@ const { mapGetters: mapServerGetters, mapState: mapServerState, mapActions: mapS
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 export default {
   name: 'NoteList',
-  components: { Loading, NoteItem, CategoryDialog, TierRankingDialog, Loading: LoadingComponent },
+  components: { Loading, NoteItem, CategoryDialog, rankingTierDialog, Loading: LoadingComponent },
   data () {
     return {
       categoryDialogLabel: '',

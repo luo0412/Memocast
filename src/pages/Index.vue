@@ -111,7 +111,7 @@
         <NoteOutlineDrawer ref='outlineDrawer' :change='outlineDrawerChangeHandler' />
         <Loading :visible='isCurrentNoteLoading' />
         <MarkMapDialog ref="markMapDialog" />
-        <PptPreviewDialog ref='pptPreviewDialog' />
+        <previewPptDialog ref='pptPreviewDialog' />
       </template>
     </q-splitter>
   </q-page>
@@ -131,7 +131,7 @@ import Loading from 'components/common/Loading.vue'
 import Monaco from 'components/monaco/Monaco.vue'
 import Muya from 'components/muya/Muya.vue'
 import MarkMapDialog from '../components/markmap/MarkMapDialog.vue'
-import PptPreviewDialog from '../components/preview/PptPreviewDialog.vue'
+import previewPptDialog from '../components/preview/previewPptDialog.vue'
 import Illustration from 'components/common/Illustration.vue'
 import ImportDialog from 'components/import/ImportDialog.vue'
 import BlogDeployDialog from 'components/blog/BlogDeployDialog.vue'
@@ -150,7 +150,7 @@ export default {
   mixins: [initLoadingPageMixins],
   components: {
     MarkMapDialog,
-    PptPreviewDialog,
+    previewPptDialog,
     Muya,
     Monaco,
     Loading,

@@ -138,18 +138,18 @@
       </q-banner>
     </div>
 
-    <bsp-app-demo-dialog v-model='demoDialogOpen' />
+    <cloudBspAppDemoDialog v-model='demoDialogOpen' />
   </div>
 </template>
 
 <script>
 import cloud from 'src/services/cloud/CloudFunctionProvider'
-import BspAppDemoDialog from 'components/cloud/BspAppDemoDialog'
+import cloudBspAppDemoDialog from 'components/cloud/cloudBspAppDemoDialog'
 
 export default {
-  name: 'CloudFnConfigDialog',
+  name: 'cloudFunctionConfigDialog',
   components: {
-    BspAppDemoDialog
+    cloudBspAppDemoDialog
   },
   data () {
     return {

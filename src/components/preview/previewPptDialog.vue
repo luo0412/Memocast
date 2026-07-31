@@ -57,7 +57,7 @@ const VERTICAL_SEPARATOR_RE = /^--\s*$/m
 const HEADING_RE = /^(#{1,2})\s+(.+)$/
 
 export default {
-  name: 'PptPreviewDialog',
+  name: 'previewPptDialog',
   data () {
     return {
       markdown: '',
@@ -206,7 +206,7 @@ ${this.$t('pptEmptyHint')}
         if (typeof deck.destroy === 'function') {
           deck.destroy()
         }
-        console.error('[PptPreviewDialog] Failed to initialize reveal.js', error)
+        console.error('[previewPptDialog] Failed to initialize reveal.js', error)
       }
     },
     destroyReveal () {

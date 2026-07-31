@@ -215,7 +215,7 @@ const STORAGE_KEY_PREFIX = 'tierRanking/'
 let imageCounter = 0
 
 export default {
-  name: 'TierRankingDialog',
+  name: 'rankingTierDialog',
   data () {
     return {
       mode: 'category', // 'category' | 'note'
@@ -318,7 +318,7 @@ export default {
           }
         }
       } catch (e) {
-        console.error('[TierRankingDialog] Load state failed:', e)
+        console.error('[rankingTierDialog] Load state failed:', e)
         this.resetToDefault()
         if (this.mode === 'note' && noteContent) {
           const extractedImages = this.extractImageUrls(noteContent)
@@ -340,7 +340,7 @@ export default {
       try {
         await DatabaseClient.appState.set(storageKey, JSON.stringify(state))
       } catch (e) {
-        console.error('[TierRankingDialog] Save state failed:', e)
+        console.error('[rankingTierDialog] Save state failed:', e)
       }
     },
 

@@ -50,14 +50,14 @@
       class="tag-treemap-container"
       @contextmenu="tagTreemapContextMenuHandler"
     />
-    <TierRankingDialog ref="tierRankingDialog" />
+    <rankingTierDialog ref="tierRankingDialog" />
   </div>
 </template>
 
 <script>
 import { createNamespacedHelpers } from 'vuex'
 import { showContextMenu as showSideDrawerContextMenu } from 'src/components/contextMenu/sideDrawer'
-import TierRankingDialog from 'components/ranking/TierRankingDialog'
+import rankingTierDialog from 'components/ranking/rankingTierDialog'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import bus from '../common/bus.js'
 import { EVENTS as events } from 'src/utils/const/eventsConst'
@@ -118,7 +118,7 @@ function calculateTagTreeMapData (tags = [], tagNotesCount = {}) {
 
 export default {
   name: 'CategoryTreePanel',
-  components: { TierRankingDialog },
+  components: { rankingTierDialog },
   data () {
     return {
       thumbStyle: {
