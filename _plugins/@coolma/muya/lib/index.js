@@ -7,10 +7,22 @@ import DragDrop from './eventHandler/dragDrop'
 import Resize from './eventHandler/resize'
 import ClickEvent from './eventHandler/clickEvent'
 import { CLASS_OR_ID, MUYA_DEFAULT_OPTION } from './config'
-import { wordCount } from './utils'
 import ExportMarkdown from './utils/exportMarkdown'
 import ExportHtml from './utils/exportHtml'
 import ToolTip from './ui/tooltip'
+import * as utils from './utils'
+import TablePicker from './ui/tablePicker'
+import QuickInsert from './ui/quickInsert'
+import CodePicker from './ui/codePicker'
+import EmojiPicker from './ui/emojiPicker'
+import ImagePathPicker from './ui/imagePicker'
+import ImageSelector from './ui/imageSelector'
+import FormatPicker from './ui/formatPicker'
+import FrontMenu from './ui/frontMenu'
+import ImageToolbar from './ui/imageToolbar'
+import LinkTools from './ui/linkTools'
+import TableBarTools from './ui/tableTools'
+import Transformer from './ui/transformer'
 import './assets/styles/index.css'
 
 class Muya {
@@ -519,22 +531,6 @@ function getContainer (originContainer, options) {
   return container
 }
 
-// UI plugins (13 components)
-import TablePicker from './ui/tablePicker'
-import QuickInsert from './ui/quickInsert'
-import CodePicker from './ui/codePicker'
-import EmojiPicker from './ui/emojiPicker'
-import ImagePathPicker from './ui/imagePicker'
-import ImageSelector from './ui/imageSelector'
-import FormatPicker from './ui/formatPicker'
-import FrontMenu from './ui/frontMenu'
-import ImageToolbar from './ui/imageToolbar'
-import LinkTools from './ui/linkTools'
-import TableBarTools from './ui/tableTools'
-import Transformer from './ui/transformer'
-// Utils
-import * as utils from './utils'
-
 export default Muya
 
 // UI 组件（供 Muya.use(...) 使用）
@@ -553,8 +549,11 @@ export {
   Transformer
 }
 
-// 工具函数命名空间
+// 工具函数命名空间（向后兼容）
 export { utils }
+
+// 工具函数直接导出（供 Memocast 直接引用）
+export * from './utils'
 
 // 配置常量
 export { CLASS_OR_ID, MUYA_DEFAULT_OPTION }
