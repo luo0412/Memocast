@@ -584,19 +584,11 @@ export const tokenizer = (src, {
   labels = new Map(),
   options = {}
 } = {}) => {
-  // v2026-07-31 起：「语法解析 / echoRequireParens」开关通过 options.echoAnnoRule 注入。
-  //   - echoAnnoRule 是 createEchoAnnoRule({ requireParens }) 工厂的产物 RegExp，
-  //     捕获组 [name, propsRaw, promptRaw] 与 inlineRules.echo_anno 完全一致；
-  //     下游 parser/index.js 依赖 to[1]/to[2]/to[3] 取值，**不能改顺序**。
-  //   - 未传 echoAnnoRule 时 fallback 到 inlineRules.echo_anno（向后兼容）；
-  //     后续 Muya.vue 也支持运行时 mutate inlineRules.echo_anno 实时刷新，无需重启 editor。
-  //   - baseRules 仍以 inlineRules 为底，避免污染 baseline；
-  //     shallow-merge 后再覆写 echo_anno，避免 Object.assign 引入 prototype 干扰。
-  const baseRules = Object.assign({}, inlineRules, inlineExtensionRules)
-  if (options && options.echoAnnoRule instanceof RegExp) {
-    baseRules.echo_anno = options.echoAnnoRule
-  }
-  const rules = baseRules
+  // v2026-07-31 起：echo_anno 规则由 inlineRules.echo_anno 全局共享引用决定（已被
+  // setEchoAnnoRule / 初始化注入）——调用方不再传 options.echoAnnoRule，避免和
+  // inlineRules 的 mutate 路径出现两套真相。tokenizerFac 闭包引用 inlineRules.echo_anno，
+  // mutate 之后下一次进 tokenizer 就能拿到新 RE。
+  const rules = Object.assign({}, inlineRules, inlineExtensionRules)
   const tokens = tokenizerFac(src, hasBeginRules ? beginRules : null, rules, 0, true, labels, options)
 
   const postTokenizer = tokens => {
@@ -625,10 +617,24 @@ export const tokenizer = (src, {
 
 // v2026-07-31 新增：运行时改写 inlineRules.echo_anno，便于 Memocast Settings 切换
 // 「语法解析 / echoRequireParens」后，**不用重建 Muya** 即可让后续 parse 走新规则。
-// 调用方负责后续触发渲染（如 muya.contentEditor.updateContents()）。
+//
+// 这是**唯一**推荐的运行时切换入口（与本仓库 plugin-vue-version.mdc + rune-echo-cloudfn-experimental.mdc
+// 的「不动外部契约、直接改本地源码」口径一致）：
+//   - 入口处 mutate 全局共享的 inlineRules.echo_anno 引用；
+//   - 下一次 contentState.backspaceCtrl / deleteCtrl / inputCtrl / formatCtrl / enterCtrl 等
+//     模块调 tokenizer()（以及 renderLeafBlock.js / importMarkdown.js 的 parseEchoInlineToken /
+//     StateRender.hasEchoInlineToken / getLinkInfo / getImageInfo 等）都闭包引用 inlineRules.echo_anno，
+//     自然拿到新 RE，**无需**在 options 上传 echoAnnoRule，也不会出现两套真相。
+//   - 已解析过的 block 不会被本函数回滚；Memocast 调用方负责触发整页重渲染。
+//
+// 用法（Memocast Muya.vue）：
+//   import { setEchoAnnoRule } from '@coolma/muya/lib'
+//   import DatabaseClient from 'src/utils/DatabaseClient'
+//   const raw = await DatabaseClient.appState.get('setting/parsing/echoRequireParens')
+//   setEchoAnnoRule({ requireParens: raw !== false })
+//   // 切换时再调一次 + contentState.render(false, true) 触发全量重 render。
+//
 //   requireParens=true（默认）→ () 必填；false → () 可选。
-// 注意：所有已解析的 block 不会被本函数影响回滚；后续 input/format/backspace
-// 等模块下次进入 tokenizer() 才会按新规则重新切 token。
 export const setEchoAnnoRule = ({ requireParens = true } = {}) => {
   inlineRules.echo_anno = createEchoAnnoRule({ requireParens })
   return inlineRules.echo_anno

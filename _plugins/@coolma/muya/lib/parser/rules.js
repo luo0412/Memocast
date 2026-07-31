@@ -41,9 +41,11 @@ export const inlineRules = {
   // 这里把 inlineRules.echo_anno 改为**可运行时替换**：
   //   - echoRequireParens=true（默认） → () 必填，@name{} / @name 不命中 echo_anno
   //   - echoRequireParens=false         → () 可选，@name{} / @name 也会命中（兼容历史笔记）
-  // 工厂 createEchoAnnoRule 由 src/components/echo/parsingRulesRuntime.js 暴露给 Muya.vue：
-  //   - 初始化  → 把生成的 RegExp 写到 options.echoAnnoRule，parser/index.js 优先采用
-  //   - 运行时  → 通过 inlineRules.echo_anno = createEchoAnnoRule({...}) 替换
+  // 工厂 createEchoAnnoRule 在本文件下方；运行时入口 setEchoAnnoRule 在
+  // ../parser/index.js，由主项目 Muya.vue 直接 import 后调：
+  //   import { setEchoAnnoRule } from '@coolma/muya/lib'
+  //   setEchoAnnoRule({ requireParens })  // 直接 mutate 本文件导出的 inlineRules.echo_anno
+  // 不要再回到 options.echoAnnoRule 那条老路，**唯一**主路径就是 mutate 共享引用。
   // 捕获组顺序与原 echo_anno 完全一致：[name, propsRaw, promptRaw]，下游
   // parser/index.js 依赖 to[1]/to[2]/to[3] 取值，**不能改顺序**。
   echo_anno: /^@([^\s{}()@]+)(?:\{([\s\S]*?)\})?\(([^)]*)\)$/

@@ -2,25 +2,97 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue2'
 import path from 'path'
 
+// === 缺失依赖 stub：让 demo 最小可用 ===
+// 详细说明见 stubs/<package>/*.js。
+//   - 单文件包（prismjs / unsplash-js / ...）直接 alias 到 stubs/<pkg>.js
+//   - 带子路径的包（prismjs/themes/prism.css、html-tags/void、popper.js/dist/esm/popper）
+//     走 stubs/<pkg>/ 子目录 stub（package.json + index.js 等），vite 沿用
+//     node_modules 风格解析即可命中 sub-import。
+//
+// alias 的 $1 保留 sub-path：例如
+//   import 'github-markdown-css/github-markdown.css'
+// 命中  find: /^github-markdown-css(\/.*)?$/
+// 替换为 `${stubDir}/github-markdown-css$1`（即 .../github-markdown-css/github-markdown.css）
+// 后续由 vite/Node 解析到 stubs/github-markdown-css/github-markdown.css.js（vite 自动加 .js）。
+const stubDir = path.resolve(__dirname, './stubs')
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+    alias: [
+      { find: '@', replacement: path.resolve(__dirname, './src') },
       // Memocast path stubs for standalone use
-      'boot/i18n': path.resolve(__dirname, './src/boot/i18n.js'),
-      'src/components/echo/echoCore': path.resolve(__dirname, './src/components/echo/echoCore.js'),
+      { find: 'boot/i18n', replacement: path.resolve(__dirname, './src/boot/i18n.js') },
+      { find: 'src/components/echo/echoCore', replacement: path.resolve(__dirname, './src/components/echo/echoCore.js') },
       // muya lib (精确匹配，防止 /lib -> /lib/lib)
-      '^@coolma/muya/lib$': path.resolve(__dirname, '../muya/lib'),
-      '^@coolma/muya/themes/default.css$': path.resolve(__dirname, '../muya/themes/default.css')
-    }
+      { find: /^@coolma\/muya\/lib$/, replacement: path.resolve(__dirname, '../muya/lib') },
+      { find: /^@coolma\/muya\/themes\/default\.css$/, replacement: path.resolve(__dirname, '../muya/themes/default.css') },
+      // === stub：单文件 + 带子路径 ===
+      { find: /^prismjs(\/.*)?$/, replacement: `${stubDir}/prismjs$1` },
+      { find: /^unsplash-js(\/.*)?$/, replacement: `${stubDir}/unsplash-js$1` },
+      { find: /^github-markdown-css(\/.*)?$/, replacement: `${stubDir}/github-markdown-css$1` },
+      { find: /^turndown(\/.*)?$/, replacement: `${stubDir}/turndown$1` },
+      { find: /^webfontloader(\/.*)?$/, replacement: `${stubDir}/webfontloader$1` },
+      { find: /^execall(\/.*)?$/, replacement: `${stubDir}/execall$1` },
+      { find: /^file-icons-js(\/.*)?$/, replacement: `${stubDir}/file-icons-js$1` },
+      { find: /^dompurify(\/.*)?$/, replacement: `${stubDir}/dompurify$1` },
+      { find: /^element-resize-detector(\/.*)?$/, replacement: `${stubDir}/element-resize-detector$1` },
+      { find: /^popper\.js(\/.*)?$/, replacement: `${stubDir}/popper.js$1` },
+      { find: /^html-tags(\/.*)?$/, replacement: `${stubDir}/html-tags$1` },
+      // sequence-diagram-snap.js 引到的 UMD 包 `require('eve')` 会撞 esbuild prebundle
+      { find: /@coolma\/muya\/lib\/assets\/libs\/snap\.svg-min(\.js)?$/, replacement: `${stubDir}/snap-svg.js` }
+    ]
   },
   // 确保 esbuild 等预构建工具正确处理 @coolma/muya
   optimizeDeps: {
-    include: ['katex', 'eve', 'vue', 'vue-i18n']
+    // demo 模式：禁依赖发现。Muya lib 内部有大量 UMD 风格的 deps（snap.svg-min.js、
+    // katex.css、eve、flowchart.js、mermaid、vega-embed 等），esbuild prebundle 在
+    // 静态扫描阶段会强行解析它们的 require('eve')/import 字符串并撞到未装的依赖，
+    // 导致 dev server 启动失败。
+    // 设置 noDiscovery:true 后：
+    //   - dev 模式下 vite 只对 optimizeDeps.include 列出的 entry 做 prebundle；
+    //   - 其它依赖按需 transform/serve，由 alias 把缺失依赖 stub 替换为空导出，
+    //     运行时不调用即可；
+    //   - 生产 build 的 prebundle 由 Rollup 自行处理（不影响 dev）。
+    noDiscovery: true,
+    include: ['katex', 'vue', 'vue-i18n'],
+    // 不让 vite 把上面这些 stub 包误识别为预构建对象
+    exclude: [
+      'prismjs',
+      'unsplash-js',
+      'github-markdown-css',
+      'turndown',
+      'webfontloader',
+      'execall',
+      'file-icons-js',
+      'dompurify',
+      'element-resize-detector',
+      'popper.js',
+      'html-tags',
+      'eve',
+      'flowchart.js',
+      'mermaid',
+      'vega-embed',
+      'katex/dist/katex.css'
+    ]
   },
   server: {
     port: 5174,
-    strictPort: true
+    strictPort: true,
+    // 允许 vite 通过 /@fs/<abs-path> 访问 demo-web 工作目录外的文件
+    // （主要是 _plugins/@coolma/muya/lib/*）。vite 5 默认出于安全 fs 沙箱拒绝。
+    fs: {
+      allow: [
+        path.resolve(__dirname, '..', '..', '..'),
+        path.resolve(__dirname, '.')
+      ]
+    },
+    // 关闭预 transform：Muya lib 内部静态 import 了一批 demo 没装的依赖
+    // (snap.svg-min / prismjs CSS / popper.js sub-path / katex css 等)，
+    // vite pre-transform 阶段 esbuild 直接读文件做 scan，绕开 vite 的
+    // resolve.alias（alias 只在浏览器侧 import-analysis 生效）。
+    // 关闭预 transform 后，dev 模式按需 transform/serve，请求进来时
+    // 才会走 vite:resolve alias 命中 stub。
+    preTransformRequests: false
   }
 })
