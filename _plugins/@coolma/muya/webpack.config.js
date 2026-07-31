@@ -24,14 +24,16 @@ module.exports = {
         test: /\.css$/,
         use: [
           'style-loader',
-          { loader: 'css-loader', options: { importLoader: 1 } },
+          { loader: 'css-loader', options: { importLoaders: 1 } },
           {
             loader: 'postcss-loader',
             options: {
-              ident: 'postcss',
-              plugins: () => [
-                require('postcss-preset-env')({ stage: 0 })
-              ]
+              postcssOptions: {
+                ident: 'postcss',
+                plugins: () => [
+                  require('postcss-preset-env')({ stage: 0 })
+                ]
+              }
             }
           }
         ]
@@ -75,11 +77,18 @@ module.exports = {
       // Memocast 源码别名 —— muya 内部引用了这些路径
       'boot/i18n': path.join(MEMOCAST_ROOT, 'src/boot/i18n.js'),
       'src/components/echo/echoCore': path.join(MEMOCAST_ROOT, 'src/components/echo/echoCore.js'),
-      'src/utils': path.join(MEMOCAST_ROOT, 'src/utils')
+      'src/utils': path.join(MEMOCAST_ROOT, 'src/utils'),
+      // src/boot/i18n.js 内部使用 'src/i18n' 作为根别名
+      'src/i18n$': path.join(MEMOCAST_ROOT, 'src/i18n/index.js'),
+      // src/utils/helper.js 内部使用 'components/common/bus'
+      'components/common/bus': path.join(MEMOCAST_ROOT, 'src/components/common/bus.js')
     },
     fallback: {
+      // Memocast 主进程相关 Node 核心模块 —— muya 浏览器构建里不需要，给空实现兜底
       path: false,
-      fs: false
+      fs: false,
+      crypto: false,
+      os: false
     }
   },
   externals: {

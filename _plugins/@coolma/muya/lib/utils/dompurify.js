@@ -1,3 +1,5 @@
-import { sanitize } from 'dompurify'
+import DOMPurify from 'dompurify'
+
+const { sanitize } = DOMPurify
 
 export default sanitize
