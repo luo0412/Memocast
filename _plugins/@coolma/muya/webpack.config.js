@@ -4,8 +4,35 @@ process.env.BABEL_ENV = 'renderer'
 
 const path = require('path')
 
-// Memocast 源码根目录（向上 3 级到达 coolma/）
+// Memocast 源码根目录（向上 3 级到达 coolma/
 const MEMOCAST_ROOT = path.resolve(__dirname, '../../..')
+
+/**
+ * 把所有动态 import() 产生的 async chunks 合并到主入口 chunk，输出单个 CDN-friendly UMD 文件。
+ *
+ * 实际生成 `import('./xx.js')` 时，webpack 5 会创建独立 async chunk 文件，
+ * 这里在 optimizeChunks 阶段把所有非主入口 chunk 的模块搬进主入口，并删除那些空 chunk。
+ */
+class MergeAsyncChunksIntoMainPlugin {
+  apply (compiler) {
+    compiler.hooks.thisCompilation.tap('MergeAsyncChunksIntoMainPlugin', (compilation) => {
+      compilation.hooks.optimizeChunks.tap('MergeAsyncChunksIntoMainPlugin', () => {
+        const mainChunk = Array.from(compilation.chunks).find((c) => c.canBeInitial())
+        if (!mainChunk) return
+
+        const chunkGraph = compilation.chunkGraph
+
+        for (const chunk of Array.from(compilation.chunks)) {
+          if (chunk === mainChunk) continue
+          for (const module of chunkGraph.getChunkModules(chunk)) {
+            chunkGraph.connectChunkAndModule(mainChunk, module)
+          }
+          compilation.chunks.delete(chunk)
+        }
+      })
+    })
+  }
+}
 
 module.exports = {
   mode: process.env.NODE_ENV || 'development',
@@ -44,24 +71,15 @@ module.exports = {
       },
       {
         test: /\.(png|jpe?g|gif|svg|webp)(\?.*)?$/,
-        type: 'asset/resource',
-        generator: {
-          filename: 'imgs/[name]--[folder].[ext]'
-        }
+        type: 'asset/inline'
       },
       {
         test: /\.(mp4|webm|ogg|mp3|wav|flac|aac)(\?.*)?$/,
-        type: 'asset/resource',
-        generator: {
-          filename: 'media/[name]--[folder].[ext]'
-        }
+        type: 'asset/inline'
       },
       {
         test: /\.(woff2?|eot|ttf|otf)(\?.*)?$/,
-        type: 'asset/resource',
-        generator: {
-          filename: 'fonts/[name]--[folder].[ext]'
-        }
+        type: 'asset/inline'
       }
     ]
   },
@@ -91,6 +109,22 @@ module.exports = {
       os: false
     }
   },
+  optimization: {
+    // 不产生 runtime chunk（避免多出一个 runtime 文件）
+    runtimeChunk: false,
+    // 关闭默认的 splitChunks —— 所有代码都进主入口
+    splitChunks: false,
+    // 模块合并（启用 ModuleConcatenationPlugin）—— 减小体积
+    concatenateModules: true,
+    // 用更激进的 minimize
+    minimize: true,
+    usedExports: true,
+    sideEffects: false
+  },
+  plugins: [
+    // 把动态 import() 产生的 async chunks 合并进主入口
+    new MergeAsyncChunksIntoMainPlugin()
+  ],
   externals: {
     jquery: 'jQuery',
     vue: 'Vue'

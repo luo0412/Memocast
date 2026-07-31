@@ -210,7 +210,7 @@ class Muya {
   }
 
   getWordCount (markdown) {
-    return wordCount(markdown)
+    return utils.wordCount(markdown)
   }
 
   getCursor () {
