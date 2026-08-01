@@ -149,6 +149,7 @@
       :selected-runes='runeExportSelectedRunes'
     />
     <runeBatchImportDialog
+      v-if='runeBatchImportDialogVisible'
       ref='runeBatchImportDialog'
       v-model='runeBatchImportDialogVisible'
       :default-category='runeImportCategory'

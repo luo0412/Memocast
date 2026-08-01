@@ -118,28 +118,29 @@
                 没有未重名的符文
               </div>
               <div v-else class='rune-batch-import-grid'>
-                <label
+                <el-tooltip
                   v-for='item in newItems'
                   :key='item.key'
-                  class='rune-batch-import-tile'
-                  :class='{ "is-selected": item.selected }'
+                  placement='top-start'
+                  :open-delay='250'
+                  :disabled='!item.desc'
+                  popper-class='rune-batch-import-tooltip'
                 >
-                  <el-checkbox
-                    v-model='item.selected'
-                    class='rune-batch-import-tile-checkbox'
+                  <label
+                    class='rune-batch-import-tile'
+                    :class='{ "is-selected": item.selected }'
                   >
-                    <span class='rune-batch-import-tile-name'>{{ item.name }}</span>
-                    <q-tooltip
-                      v-if='item.desc'
-                      anchor='top start'
-                      self='bottom start'
-                      :offset='[0, 6]'
-                      content-class='rune-batch-import-tooltip'
+                    <el-checkbox
+                      v-model='item.selected'
+                      class='rune-batch-import-tile-checkbox'
                     >
-                      {{ item.desc }}
-                    </q-tooltip>
-                  </el-checkbox>
-                </label>
+                      <span class='rune-batch-import-tile-name'>{{ item.name }}</span>
+                    </el-checkbox>
+                  </label>
+                  <template #content>
+                    <div class='rune-batch-import-tooltip-content'>{{ item.desc }}</div>
+                  </template>
+                </el-tooltip>
               </div>
             </div>
 
@@ -172,28 +173,29 @@
                 没有与现有符文重名的项
               </div>
               <div v-else class='rune-batch-import-grid'>
-                <label
+                <el-tooltip
                   v-for='item in conflictItems'
                   :key='item.key'
-                  class='rune-batch-import-tile rune-batch-import-tile--conflict'
-                  :class='{ "is-selected": item.selected }'
+                  placement='top-start'
+                  :open-delay='250'
+                  :disabled='!item.desc'
+                  popper-class='rune-batch-import-tooltip'
                 >
-                  <el-checkbox
-                    v-model='item.selected'
-                    class='rune-batch-import-tile-checkbox'
+                  <label
+                    class='rune-batch-import-tile rune-batch-import-tile--conflict'
+                    :class='{ "is-selected": item.selected }'
                   >
-                    <span class='rune-batch-import-tile-name'>{{ item.name }}</span>
-                    <q-tooltip
-                      v-if='item.desc'
-                      anchor='top start'
-                      self='bottom start'
-                      :offset='[0, 6]'
-                      content-class='rune-batch-import-tooltip'
+                    <el-checkbox
+                      v-model='item.selected'
+                      class='rune-batch-import-tile-checkbox'
                     >
-                      {{ item.desc }}
-                    </q-tooltip>
-                  </el-checkbox>
-                </label>
+                      <span class='rune-batch-import-tile-name'>{{ item.name }}</span>
+                    </el-checkbox>
+                  </label>
+                  <template #content>
+                    <div class='rune-batch-import-tooltip-content'>{{ item.desc }}</div>
+                  </template>
+                </el-tooltip>
               </div>
             </div>
           </div>
@@ -527,18 +529,29 @@
   border-top-color: rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
 }
-</style>
 
-<style>
-/* q-tooltip 内容样式：非 scoped 以便 content-class 生效 */
+/* el-tooltip 内层：避免行高/字号被全局样式覆盖 */
+.rune-batch-import-tooltip-content {
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 320px;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* el-tooltip popper：与 q-tooltip 视觉对齐 */
 .rune-batch-import-tooltip {
   background: rgba(40, 40, 40, 0.92) !important;
   color: #fff !important;
-  font-size: 12px !important;
-  line-height: 1.5 !important;
   padding: 6px 10px !important;
   max-width: 320px !important;
-  word-break: break-word !important;
+
+  &[x-placement^='top'] .popper__arrow {
+    border-top-color: rgba(40, 40, 40, 0.92) !important;
+  }
+  &[x-placement^='bottom'] .popper__arrow {
+    border-bottom-color: rgba(40, 40, 40, 0.92) !important;
+  }
 }
 </style>
 
