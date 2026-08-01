@@ -10,7 +10,7 @@
       <SettingsSectionContent :title='currentCategoryLabel' accent-color='purple-7'>
         <template v-slot:actions>
           <div class='settings-section-actions'>
-            <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("runeCardAdd")' icon='add' color='purple-7' size='sm' @click='$emit("add-rune")' />
+            <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("runeCardAdd")' icon='add' color='purple-7' size='sm' @click='$emit("add-rune", category)' />
             <template v-else>
               <q-btn dense flat no-caps :label='$t("cancelBatchDelete")' icon='close' color='grey-6' size='sm' @click='exitSelectionMode' />
               <q-btn dense flat no-caps :label="$t('selectedCount', { count: selected.length })" icon='delete_sweep' color='negative' size='sm' :disable='selected.length === 0' @click='$emit("batch-delete", getSelectedRunes())' />

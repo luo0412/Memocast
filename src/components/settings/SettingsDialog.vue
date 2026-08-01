@@ -850,13 +850,22 @@ export default {
         bus.$emit(events.RENDER_EVENTS.codeStyleUpdate)
       })
     },
-    openAddRune () {
+    openAddRune (category) {
       this.editingRune = null
-      console.log('[RUNE-TPL] openAddRune -> openRuneFormDialog')
+      // v2026-08-01：把子组件当前 tab 的 category 同步到 runeCategory，
+      //   让表单打开时 class 下拉默认就是该分类（而不是死值 DEFAULT_RUNE_CATEGORY）。
+      if (category) {
+        this.runeCategory = category
+      }
+      console.log('[RUNE-TPL] openAddRune -> openRuneFormDialog, category=', this.runeCategory)
       this.openRuneFormDialog()
     },
     openEditRune (rune) {
       this.editingRune = { ...rune }
+      // 编辑时把该 rune 的原 category 同步给表单（保持打开时下拉值与编辑对象一致）。
+      if (rune && rune.category) {
+        this.runeCategory = rune.category
+      }
       console.log(`[RUNE-TPL] openEditRune id=${rune && rune.id} -> openRuneFormDialog`)
       this.openRuneFormDialog()
     },

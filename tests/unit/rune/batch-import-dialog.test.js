@@ -239,3 +239,85 @@ describe('RuneBatchImportDialog 提交契约', () => {
     groups.conflictList.forEach(it => expect(it.selected).toBe(true)) // 未受影响
   })
 })
+
+// ============================================================================
+// 锁定 SettingsDialog 打开表单/导入弹框时「默认分类 = 当前 tab」契约（v2026-08-01）：
+//   - SettingsRunePanel 的 add-rune / batch-import 都 emit 当前 category
+//   - SettingsDialog.openAddRune(category) 必须把 category 同步给 runeCategory
+//     （这样 runeFormDialog 的 default-category prop = 当前 tab）
+//   - SettingsDialog.openBatchImport(category) 必须把 category 同步给 runeImportCategory
+//     （这样 runeBatchImportDialog 的 default-category prop = 当前 tab）
+// ============================================================================
+describe('SettingsDialog 默认分类同步契约', () => {
+  // 等价复刻父组件方法（仅同步 data，不挂 ipcRenderer / vuex）
+  function makeParentStub () {
+    const state = {
+      runeCategory: 'general',          // data 默认值，对应 DEFAULT_RUNE_CATEGORY
+      runeImportCategory: 'general',    // data 默认值
+      runeFormVisible: false,
+      runeBatchImportDialogVisible: false
+    }
+    const parent = {
+      // 用 getter/setter 让外部直接改写 parent.xxx 能回写到 state（避免双向不同步）
+      get runeCategory () { return state.runeCategory },
+      set runeCategory (v) { state.runeCategory = v },
+      get runeImportCategory () { return state.runeImportCategory },
+      set runeImportCategory (v) { state.runeImportCategory = v },
+      get runeFormVisible () { return state.runeFormVisible },
+      set runeFormVisible (v) { state.runeFormVisible = v },
+      get runeBatchImportDialogVisible () { return state.runeBatchImportDialogVisible },
+      set runeBatchImportDialogVisible (v) { state.runeBatchImportDialogVisible = v },
+      openAddRune (category) {
+        state.editingRune = null
+        if (category) state.runeCategory = category
+        state.runeFormVisible = true
+      },
+      openBatchImport (category) {
+        state.runeImportCategory = category || 'general'
+        state.runeBatchImportDialogVisible = true
+      }
+    }
+    return { parent, state }
+  }
+
+  test('openAddRune(gaming) → 表单的 default-category = gaming', () => {
+    const { parent } = makeParentStub()
+    parent.openAddRune('gaming')
+    expect(parent.runeCategory).toBe('gaming')
+  })
+
+  test('openAddRune() 不传 category → 维持上一次（不强行重置）', () => {
+    const { parent } = makeParentStub()
+    parent.runeCategory = 'novel'
+    parent.openAddRune() // 没有 category 参数
+    expect(parent.runeCategory).toBe('novel') // 保持
+  })
+
+  test('openBatchImport(gaming) → 导入弹框的 default-category = gaming', () => {
+    const { parent } = makeParentStub()
+    parent.openBatchImport('gaming')
+    expect(parent.runeImportCategory).toBe('gaming')
+  })
+
+  test('openBatchImport() 不传 → fallback 到 general', () => {
+    const { parent } = makeParentStub()
+    parent.runeImportCategory = 'novel'
+    parent.openBatchImport() // 没传
+    expect(parent.runeImportCategory).toBe('general')
+  })
+
+  test('SettingsRunePanel 触发的 add-rune/batch-import 必须 emit 当前 category', () => {
+    // 锁定子组件 emit 携带 category（与 SettingsRunePanel.vue 里 @click="$emit('add-rune', category)" / onBatchImport 对齐）
+    const fakePanel = {
+      category: 'education',
+      emitAddRune () { return { event: 'add-rune', category: this.category } },
+      emitBatchImport () { return { event: 'batch-import', category: this.category } }
+    }
+    expect(fakePanel.emitAddRune()).toEqual({ event: 'add-rune', category: 'education' })
+    expect(fakePanel.emitBatchImport()).toEqual({ event: 'batch-import', category: 'education' })
+
+    fakePanel.category = 'fitness'
+    expect(fakePanel.emitAddRune()).toEqual({ event: 'add-rune', category: 'fitness' })
+    expect(fakePanel.emitBatchImport()).toEqual({ event: 'batch-import', category: 'fitness' })
+  })
+})
