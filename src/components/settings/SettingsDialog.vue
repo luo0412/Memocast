@@ -96,6 +96,8 @@
                   @edit-echo='openEditEcho'
                   @delete-echo='confirmDeleteEcho'
                   @batch-delete='confirmBatchDeleteEcho'
+                  @export-current-category='openEchoExportCurrentCategory'
+                  @batch-import='openEchoBatchImport'
                 />
               </q-tab-panel>
 
@@ -169,6 +171,17 @@
       @input='onEchoFormVisibleChange'
       @submit='onEchoSubmit'
     />
+    <echoBatchImportDialog
+      v-if='echoBatchImportDialogVisible'
+      ref='echoBatchImportDialog'
+      v-model='echoBatchImportDialogVisible'
+      :default-category='echoImportCategory'
+      @imported='onEchoBatchImported'
+    />
+    <echoExportDialog
+      v-model='echoExportDialogVisible'
+      :selected-echoes='echoExportSelectedEchoes'
+    />
     <NoteTemplateFormDialog
       v-if='noteTemplateFormVisible'
       :key='noteTemplateFormKey'
@@ -194,6 +207,8 @@ import runeExportDialog from 'components/rune/runeExportDialog'
 import runeBatchImportDialog from 'components/rune/runeBatchImportDialog'
 import runeTemplateService from 'src/services/RuneTemplateService'
 import echoFormDialog from 'components/echo/echoFormDialog'
+import echoBatchImportDialog from 'components/echo/echoBatchImportDialog'
+import echoExportDialog from 'components/echo/echoExportDialog'
 import NoteTemplateFormDialog from 'components/noteTemplate/NoteTemplateFormDialog'
 import NavigationDialog from 'components/navigation/NavigationDialog'
 import { BUILTIN_ECHO_CARDS } from 'components/echo/echoCore'
@@ -235,6 +250,8 @@ export default {
     runeExportDialog,
     runeBatchImportDialog,
     echoFormDialog,
+    echoBatchImportDialog,
+    echoExportDialog,
     NoteTemplateFormDialog,
     NavigationDialog,
     SettingsNav,
@@ -267,6 +284,11 @@ export default {
       echoFormKey: 0,
       editingEcho: null,
       echoCategory: DEFAULT_ECHO_CATEGORY,
+      // v2026-08-01：回响批量导入 / 导出弹框
+      echoImportCategory: DEFAULT_ECHO_CATEGORY,
+      echoBatchImportDialogVisible: false,
+      echoExportDialogVisible: false,
+      echoExportSelectedEchoes: [],
       noteTemplateFormVisible: false,
       noteTemplateFormKey: 0,
       editingTemplate: null,
@@ -1021,6 +1043,35 @@ export default {
       const ref = this.$refs.runeBatchImportDialog
       if (ref && typeof ref.onImportError === 'function') {
         ref.onImportError(message)
+      }
+    },
+
+    // ==================== 回响批量导入 / 导出（v2026-08-01）====================
+    openEchoExportCurrentCategory (echoesInCategory) {
+      this.echoExportSelectedEchoes = echoesInCategory || []
+      this.echoExportDialogVisible = true
+    },
+    async openEchoBatchImport (category) {
+      this.echoImportCategory = category || DEFAULT_ECHO_CATEGORY
+      this.echoBatchImportDialogVisible = true
+    },
+    async onEchoBatchImported (result) {
+      // 1. 重新拉 echoes 喂给 vuex，让卡片清单立即显示新行
+      try {
+        await this.loadEchoes()
+      } catch (err) {
+        console.warn('[Settings] onEchoBatchImported loadEchoes failed', err)
+      }
+      const created = (result && result.created) || 0
+      const replaced = (result && result.replaced) || 0
+      this.$q.notify({
+        message: this.$t('echoBatchImportSuccess', { created, replaced }),
+        type: 'positive',
+        position: 'top'
+      })
+      const ref = this.$refs.echoBatchImportDialog
+      if (ref && typeof ref.onImportSuccess === 'function') {
+        ref.onImportSuccess({ created, replaced })
       }
     },
 

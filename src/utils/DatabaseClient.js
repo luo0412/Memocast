@@ -424,6 +424,32 @@ const echoes = {
   },
 
   /**
+   * 回响批量导入 —— 预演（v2026-08-01）
+   * @param {Object} payload
+   * @param {Array}  payload.echoes              解析后的 Echo Pack echoes 数组
+   * @param {string} payload.targetCategory      弹框中选中的导入目标分类
+   * @param {Array}  [payload.builtinNamesHint] renderer 端内置回响名称集合（用于运行期保护）
+   * @returns {Promise<{success, previewAt, newItems, conflictItems, builtinBlocked, invalidItems, fileDuplicates, ...}>}
+   */
+  async previewImport(payload) {
+    return await invoke('db:previewEchoImport', payload || {})
+  },
+
+  /**
+   * 回响批量导入 —— 提交（v2026-08-01）
+   * @param {Object} payload
+   * @param {Array}  payload.createNames         新增项的规范化名称列表
+   * @param {Array}  payload.replaceNames        覆盖项的规范化名称列表（必须命中现存自定义回响）
+   * @param {number} payload.previewAt           预览返回的预览时间戳，用于 stale 比对
+   * @param {string} payload.targetCategory      导入目标分类
+   * @param {Object} payload.sourceByName        { [name]: {...待写入完整字段} } 提交时的字段来源
+   * @param {Array}  [payload.builtinNamesHint]  内置回响名称集合
+   */
+  async importMany(payload) {
+    return await invoke('db:importEchoes', payload || {})
+  },
+
+  /**
    * 重置回响：删掉所有内置回响，再用传入的最新列表重新插入；自定义回响保留。
    * @param {Object} [options]
    * @param {Array} [options.builtins] 由 renderer 端推过来的最新内置 echo 列表（含最新 anno_source）；

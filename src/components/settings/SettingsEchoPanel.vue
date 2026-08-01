@@ -16,6 +16,8 @@
                 <q-btn dense flat no-caps :label='$t("cancelBatchDelete")' icon='close' color='grey-6' size='sm' @click='exitSelectionMode' />
                 <q-btn dense flat no-caps :label="$t('selectedCount', { count: selected.length })" icon='delete_sweep' color='negative' size='sm' :disable='selected.length === 0' @click='$emit("batch-delete", [...selected])' />
               </template>
+              <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("echoBatchImport")' icon='file_upload' color='cyan-7' size='sm' @click='onBatchImport' />
+              <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("echoBatchExport")' icon='file_download' color='cyan-7' size='sm' :disable='localEchoesInCategory.length === 0' @click='onExportCurrentCategory' />
               <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("batchDelete")' icon='delete_sweep' color='negative' size='sm' @click='enterSelectionMode' />
             </template>
           </div>
@@ -145,6 +147,12 @@ export default {
     }
   },
   methods: {
+    onBatchImport () {
+      this.$emit('batch-import', this.category)
+    },
+    onExportCurrentCategory () {
+      this.$emit('export-current-category', this.localEchoesInCategory)
+    },
     enterSelectionMode () {
       this.selectionMode = true
     },

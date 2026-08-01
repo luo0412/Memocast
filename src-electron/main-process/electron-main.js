@@ -3362,6 +3362,291 @@ function registerDatabaseHandlers() {
     }
   })
 
+  // ============================================================================
+  // 回响批量导入（v2026-08-01）：
+  //   - 预览 db:previewEchoImport：仅读 DB + 返回分组，不写任何数据。
+  //   - 提交 db:importEchoes：单事务写入，承载 createNames / replaceNames 决策结果。
+  //   - 内置回响保护：内置 id 前缀 `__builtin_` 的名称冲突 → 拒绝导入。
+  //   - 预览后 DB 漂移：previewAt（毫秒戳）会被重新核对，stale 时直接拒绝。
+  // ============================================================================
+  const computeEchoNameKey = (name) => String(name || '').trim().toLowerCase()
+  const collectEchoBuiltinKeys = (builtins) => {
+    const set = new Set()
+    for (const it of (Array.isArray(builtins) ? builtins : [])) {
+      if (it && it.name) set.add(computeEchoNameKey(it.name))
+    }
+    return set
+  }
+
+  ipcMain.handle('db:previewEchoImport', async (_event, payload) => {
+    try {
+      const echoes = Array.isArray(payload && payload.echoes) ? payload.echoes : null
+      const targetCategory = payload && typeof payload.targetCategory === 'string' ? payload.targetCategory.trim() : ''
+      const builtinKeys = collectEchoBuiltinKeys(payload && payload.builtinNamesHint)
+      if (!Array.isArray(echoes)) {
+        return { success: false, code: 'ECHO_PACK_INVALID', message: 'payload.echoes must be an array' }
+      }
+      const liveRows = execToObjects('SELECT id, name, category, created_at FROM echoes')
+      const liveByKey = new Map()
+      for (const row of (liveRows || [])) {
+        const key = computeEchoNameKey(row && row.name)
+        if (key && !liveByKey.has(key)) {
+          liveByKey.set(key, { id: row.id, category: row.category || 'marker', created_at: row.created_at || 0 })
+        }
+      }
+      const newItems = []
+      const conflictItems = []
+      const builtinBlocked = []
+      const invalidItems = []
+      const duplicateNames = new Map()
+      for (let i = 0; i < echoes.length; i++) {
+        const raw = echoes[i]
+        if (!raw || typeof raw !== 'object') {
+          invalidItems.push({ index: i, reason: 'NOT_OBJECT', name: '' })
+          continue
+        }
+        const name = String(raw.name || '').trim()
+        if (!name) {
+          invalidItems.push({ index: i, reason: 'EMPTY_NAME', name: '' })
+          continue
+        }
+        const annoSource = String(raw.anno_source || '').trim()
+        if (!annoSource) {
+          invalidItems.push({ index: i, reason: 'EMPTY_ANNO_SOURCE', name })
+          continue
+        }
+        const sourceCategory = String(raw.category || '').trim()
+        if (sourceCategory === 'builtin') {
+          invalidItems.push({ index: i, reason: 'BUILTIN_CATEGORY_NOT_ALLOWED', name })
+          continue
+        }
+        const key = computeEchoNameKey(name)
+        if (builtinKeys.has(key)) {
+          builtinBlocked.push({ index: i, name, key })
+          continue
+        }
+        if (duplicateNames.has(key)) {
+          duplicateNames.get(key).push(i)
+          continue
+        }
+        duplicateNames.set(key, [i])
+        const entry = {
+          index: i,
+          name,
+          key,
+          desc: String(raw.desc || ''),
+          color: String(raw.color || '#26A69A'),
+          icon: String(raw.icon || 'graphic_eq'),
+          annoSource,
+          renderType: String(raw.render_type || 'anno'),
+          sourceCategory: sourceCategory || 'marker',
+          targetCategory: targetCategory || 'marker',
+          selected: false
+        }
+        if (liveByKey.has(key)) {
+          const live = liveByKey.get(key)
+          if (live.id && String(live.id).startsWith('__builtin_')) {
+            builtinBlocked.push({ index: i, name, key })
+            continue
+          }
+          entry.existingId = live.id
+          entry.existingCategory = live.category
+          // 命中现有自定义回响：默认不勾选（明确授权时才覆盖）
+          conflictItems.push(entry)
+        } else {
+          entry.selected = true
+          newItems.push(entry)
+        }
+      }
+      const fileDuplicates = []
+      for (const [key, indexes] of duplicateNames.entries()) {
+        if (indexes.length > 1) {
+          const sample = echoes[indexes[0]]
+          fileDuplicates.push({ key, name: sample && sample.name ? sample.name : key, indexes })
+        }
+      }
+      return {
+        success: true,
+        previewAt: Date.now(),
+        targetCategory: targetCategory || 'marker',
+        newItems,
+        conflictItems,
+        builtinBlocked,
+        invalidItems,
+        fileDuplicates,
+        dbNameCount: liveByKey.size
+      }
+    } catch (error) {
+      log.error('[DB] previewEchoImport error:', error)
+      return { success: false, code: 'ECHO_PREVIEW_FAILED', message: error && error.message ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle('db:importEchoes', async (_event, payload) => {
+    try {
+      const createNames = Array.isArray(payload && payload.createNames) ? payload.createNames : null
+      const replaceNames = Array.isArray(payload && payload.replaceNames) ? payload.replaceNames : null
+      const previewAt = payload && Number(payload.previewAt)
+      const targetCategoryRaw = payload && typeof payload.targetCategory === 'string' ? payload.targetCategory.trim() : ''
+      const builtinKeys = collectEchoBuiltinKeys(payload && payload.builtinNamesHint)
+      const sourceByName = payload && payload.sourceByName && typeof payload.sourceByName === 'object' ? payload.sourceByName : {}
+
+      if (!Array.isArray(createNames) || !Array.isArray(replaceNames)) {
+        return { success: false, code: 'ECHO_IMPORT_INVALID', message: 'createNames/replaceNames are required' }
+      }
+      if (!Number.isFinite(previewAt)) {
+        return { success: false, code: 'ECHO_PREVIEW_REQUIRED', message: 'previewAt is required' }
+      }
+      const targetCategory = targetCategoryRaw || 'marker'
+
+      // 1. 重新读取 DB，按 previewAt 之前的 committed_at 拒绝（这里用 previewAt 距今 30 分钟内的最新 DB）。
+      const liveRows = execToObjects('SELECT id, name, category, created_at, updated_at FROM echoes')
+      const liveByKey = new Map()
+      for (const row of (liveRows || [])) {
+        const key = computeEchoNameKey(row && row.name)
+        if (key && !liveByKey.has(key)) {
+          liveByKey.set(key, { id: row.id, category: row.category || 'marker', created_at: row.created_at || 0, updated_at: row.updated_at || 0 })
+        }
+      }
+
+      // 2. 校验 createNames 仍然不存在，replaceNames 仍然存在且非内置。
+      const staleReasons = []
+      for (const n of createNames) {
+        const key = computeEchoNameKey(n)
+        if (builtinKeys.has(key)) {
+          staleReasons.push({ name: n, reason: 'BUILTIN_PROTECTED' })
+          continue
+        }
+        if (liveByKey.has(key)) {
+          staleReasons.push({ name: n, reason: 'NAME_TAKEN' })
+        }
+      }
+      for (const n of replaceNames) {
+        const key = computeEchoNameKey(n)
+        if (builtinKeys.has(key)) {
+          staleReasons.push({ name: n, reason: 'BUILTIN_PROTECTED' })
+          continue
+        }
+        if (!liveByKey.has(key)) {
+          staleReasons.push({ name: n, reason: 'NOT_FOUND' })
+        }
+      }
+      const staleConflicts = staleReasons.filter(r => r.reason === 'NAME_TAKEN')
+      if (staleConflicts.length > 0) {
+        return { success: false, code: 'ECHO_IMPORT_STALE_PREVIEW', staleReasons }
+      }
+      const builtinConflicts = staleReasons.filter(r => r.reason === 'BUILTIN_PROTECTED')
+      if (builtinConflicts.length > 0) {
+        return { success: false, code: 'ECHO_IMPORT_BUILTIN_BLOCKED', staleReasons: builtinConflicts }
+      }
+      const missingConflicts = staleReasons.filter(r => r.reason === 'NOT_FOUND')
+      if (missingConflicts.length > 0) {
+        return { success: false, code: 'ECHO_IMPORT_STALE_PREVIEW', staleReasons: missingConflicts }
+      }
+
+      // 3. 准备 rows：new 行生成 i-import + 时间戳 id；replace 行复用 live.id，保留 created_at。
+      const now = Date.now()
+      const rows = []
+      for (const n of createNames) {
+        const key = computeEchoNameKey(n)
+        const src = sourceByName[n]
+        if (!src || typeof src !== 'object') {
+          // 缺少用户确认的源数据 → 跳过，避免插入空记录
+          staleReasons.push({ name: n, reason: 'SOURCE_MISSING' })
+          continue
+        }
+        const annoSource = String(src.anno_source || '').trim()
+        if (!annoSource) {
+          staleReasons.push({ name: n, reason: 'EMPTY_ANNO_SOURCE' })
+          continue
+        }
+        const id = 'echo-import-' + now + '-' + rows.length + '-' + Math.random().toString(36).slice(2, 8)
+        rows.push({
+          op: 'insert',
+          id,
+          name: n,
+          desc: String(src.desc || ''),
+          color: String(src.color || '#26A69A'),
+          icon: String(src.icon || 'graphic_eq'),
+          anno_source: annoSource,
+          render_type: String(src.render_type || 'anno'),
+          category: targetCategory,
+          sort_order: 9999,
+          created_at: now,
+          updated_at: now
+        })
+      }
+      for (const n of replaceNames) {
+        const key = computeEchoNameKey(n)
+        const live = liveByKey.get(key)
+        const src = sourceByName[n]
+        if (!src || typeof src !== 'object') {
+          staleReasons.push({ name: n, reason: 'SOURCE_MISSING' })
+          continue
+        }
+        const annoSource = String(src.anno_source || '').trim()
+        if (!annoSource) {
+          staleReasons.push({ name: n, reason: 'EMPTY_ANNO_SOURCE' })
+          continue
+        }
+        rows.push({
+          op: 'update',
+          id: live.id,
+          name: n,
+          desc: String(src.desc || ''),
+          color: String(src.color || '#26A69A'),
+          icon: String(src.icon || 'graphic_eq'),
+          anno_source: annoSource,
+          render_type: String(src.render_type || 'anno'),
+          category: targetCategory,
+          sort_order: 9999,
+          created_at: live.created_at || now,
+          updated_at: now
+        })
+      }
+      if (staleReasons.length > 0) {
+        return { success: false, code: 'ECHO_IMPORT_INVALID', staleReasons }
+      }
+      if (rows.length === 0) {
+        return { success: true, created: 0, replaced: 0, skipped: 0 }
+      }
+
+      // 4. 单事务执行：先写新行，再写覆盖行；任何错误回滚。
+      try {
+        await db.run('BEGIN IMMEDIATE')
+        for (const r of rows) {
+          if (r.op === 'insert') {
+            await db.run(
+              `INSERT INTO echoes (id, name, "desc", color, icon, anno_source, render_type, category, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [r.id, r.name, r.desc, r.color, r.icon, r.anno_source, r.render_type, r.category, r.sort_order, r.created_at, r.updated_at]
+            )
+          } else {
+            await db.run(
+              `UPDATE echoes SET name = ?, "desc" = ?, color = ?, icon = ?, anno_source = ?, render_type = ?, category = ?, sort_order = ?, updated_at = ? WHERE id = ?`,
+              [r.name, r.desc, r.color, r.icon, r.anno_source, r.render_type, r.category, r.sort_order, r.updated_at, r.id]
+            )
+          }
+        }
+        await db.run('COMMIT')
+      } catch (txErr) {
+        try { await db.run('ROLLBACK') } catch (_) { /* noop */ }
+        throw txErr
+      }
+      saveDatabase()
+      const created = rows.filter(r => r.op === 'insert').length
+      const replaced = rows.filter(r => r.op === 'update').length
+      log.info(`[DB] importEchoes: created=${created} replaced=${replaced} targetCategory=${targetCategory}`)
+      return { success: true, created, replaced, skipped: 0, targetCategory }
+    } catch (error) {
+      log.error('[DB] importEchoes error:', error)
+      if (/UNIQUE constraint failed:\s*index\s*"?idx_echoes_name_unique"?/i.test(String(error && error.message ? error.message : error))
+        || /UNIQUE constraint failed:\s*echoes\.name/i.test(String(error && error.message ? error.message : error))) {
+        return { success: false, code: 'ECHO_DUPLICATE_NAME', message: 'echo name conflict' }
+      }
+      return { success: false, code: 'ECHO_IMPORT_FAILED', message: error && error.message ? error.message : String(error) }
+    }
+  })
+
   log.info('[Main] Database IPC handlers registered')
 }
 
