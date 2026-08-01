@@ -177,7 +177,6 @@ export default {
   runeNameExists: 'A rune with this name already exists. Please choose another name',
   runeSaveFailed: 'Failed to save rune',
   runeExport: 'Export',
-  runeExportSelected: 'Export Selected ({count})',
   runeBatchExport: 'Batch Export',
   runeBatchImport: 'Batch Import',
   runeBatchImportSuccess: 'Successfully imported {count} runes',

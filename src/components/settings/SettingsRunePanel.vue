@@ -12,7 +12,6 @@
           <div class='settings-section-actions'>
             <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("runeCardAdd")' icon='add' color='purple-7' size='sm' @click='$emit("add-rune")' />
             <template v-else>
-              <q-btn dense flat no-caps :label="$t('runeExportSelected', { count: selected.length })" icon='file_download' color='purple-7' size='sm' :disable='selected.length === 0' @click='onExportSelected' />
               <q-btn dense flat no-caps :label='$t("cancelBatchDelete")' icon='close' color='grey-6' size='sm' @click='exitSelectionMode' />
               <q-btn dense flat no-caps :label="$t('selectedCount', { count: selected.length })" icon='delete_sweep' color='negative' size='sm' :disable='selected.length === 0' @click='$emit("batch-delete", getSelectedRunes())' />
             </template>
@@ -123,12 +122,6 @@ export default {
     getSelectedRunes () {
       const cards = this.runeCards || []
       return this.selected.map(id => cards.find(r => r && r.id === id)).filter(Boolean)
-    },
-    onExportSelected () {
-      const selectedRunes = this.getSelectedRunes()
-      if (selectedRunes.length > 0) {
-        this.$emit('export-selected', selectedRunes)
-      }
     },
     onExportCurrentCategory () {
       this.$emit('export-current-category', this.localRunesInCategory)

@@ -116,7 +116,6 @@
                   @edit-rune='openEditRune'
                   @delete-rune='confirmDeleteRune'
                   @batch-delete='confirmBatchDeleteRune'
-                  @export-selected='openExportSelected'
                   @export-current-category='openExportCurrentCategory'
                   @batch-import='openBatchImport'
                 />
@@ -928,10 +927,6 @@ export default {
     },
 
     // ==================== Rune 导出/批量导入 ====================
-    openExportSelected (selectedRunes) {
-      this.runeExportSelectedRunes = selectedRunes || []
-      this.runeExportDialogVisible = true
-    },
     openExportCurrentCategory (runesInCategory) {
       this.runeExportSelectedRunes = runesInCategory || []
       this.runeExportDialogVisible = true
