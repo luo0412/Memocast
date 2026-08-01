@@ -31,7 +31,7 @@ const VALID_CATEGORY_KEYS = new Set([
   'environment', 'resume'
 ])
 
-function generateTemplateId (sourceUrl) {
+function inferTemplateMeta (body, fallbackName) {
   const lines = String(body || '').split(/\r?\n/).slice(0, 20)
   let name = ''
   let desc = ''

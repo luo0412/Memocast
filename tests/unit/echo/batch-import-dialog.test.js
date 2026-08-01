@@ -541,3 +541,62 @@ describe('EchoBatchImportDialog 在线 URL 抓取契约', () => {
     expect(state.fetchingRemote).toBe(false)
   })
 })
+
+// ============================================================================
+// hasSelectedItem 禁用契约（与 rune 弹框对齐，v2026-08-01）：
+// 1) 全部 conflictItems（默认不勾选）→ 禁用，强提示文案展示
+// 2) 至少有 newItem selected=true → 启用
+// ============================================================================
+
+function computeEchoHasSelectedItem (newItems, conflictItems) {
+  return newItems.some(it => it.selected) || conflictItems.some(it => it.selected)
+}
+
+describe('EchoBatchImportDialog hasSelectedItem 条件契约', () => {
+  test('空 → 禁用', () => {
+    expect(computeEchoHasSelectedItem([], [])).toBe(false)
+  })
+
+  test('newItems 默认 selected=true → 启用', () => {
+    expect(computeEchoHasSelectedItem([{ name: 'A', selected: true }], [])).toBe(true)
+  })
+
+  test('全部回响都因为重名落入 conflictItems → 禁用（用户必须手动勾选）', () => {
+    const conflictItems = [
+      { name: '回响1', selected: false },
+      { name: '回响2', selected: false },
+      { name: '回响3', selected: false }
+    ]
+    expect(computeEchoHasSelectedItem([], conflictItems)).toBe(false)
+    conflictItems.forEach(it => { it.selected = true })
+    expect(computeEchoHasSelectedItem([], conflictItems)).toBe(true)
+  })
+
+  test('部分重名（3 new + 2 conflict）→ 启用', () => {
+    const newItems = [{ name: 'r1', selected: true }, { name: 'r2', selected: true }, { name: 'r3', selected: true }]
+    const conflictItems = [{ name: 'c1', selected: false }, { name: 'c2', selected: false }]
+    expect(computeEchoHasSelectedItem(newItems, conflictItems)).toBe(true)
+  })
+})
+
+describe('EchoBatchImportDialog "全部 conflict" 强提示文案契约', () => {
+  function getAllConflictBannerText (newItems, conflictItems) {
+    if (!(newItems.length === 0 && conflictItems.length > 0)) return null
+    return `全部 ${conflictItems.length} 项与现有回响重名，默认不勾选不会导入。如需覆盖，请点击「重名」栏的「全选」按钮。`
+  }
+
+  test('全部 conflict → 返回强提示文案', () => {
+    const text = getAllConflictBannerText([], [{ name: 'c1', selected: false }, { name: 'c2', selected: false }])
+    expect(text).toMatch(/全部 2 项与现有回响重名/)
+    expect(text).toMatch(/如需覆盖/)
+    expect(text).toMatch(/全选/)
+  })
+
+  test('newItems 不为空 → 不应出现该提示', () => {
+    expect(getAllConflictBannerText([{ name: 'A', selected: true }], [{ name: 'B', selected: false }])).toBeNull()
+  })
+
+  test('conflictItems 为空 → 不应出现该提示', () => {
+    expect(getAllConflictBannerText([], [])).toBeNull()
+  })
+})

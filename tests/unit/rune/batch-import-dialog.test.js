@@ -769,3 +769,106 @@ describe('RuneBatchImportDialog 在线 URL 抓取契约', () => {
     expect(state.fetchingRemote).toBe(false)
   })
 })
+
+// ============================================================================
+// hasSelectedItem 禁用契约（v2026-08-01）：
+// 用户场景的核心解释：弹框里"导入所选"按钮在哪些情况会处于禁用状态？
+//   1) 还没选任何符文 → 禁用
+//   2) 全部条目因为重名落到 conflictItems（默认不勾选）→ 禁用（用户必须手动勾选）
+//   3) 全部条目因为 builtinNames 过滤掉 → 禁用（user 看不到任何条目）
+//   4) 至少有一个 newItem（新名字，默认 selected=true）→ 启用
+//
+// 把 hasSelectedItem 的计算规则独立出来，让 .vue 复刻一份。等价复刻 src/components/rune/runeBatchImportDialog.vue
+//   computed.hasSelectedItem:
+//     return newItems.some(it => it.selected) || conflictItems.some(it => it.selected)
+// 并加上"全部 conflict"时的 UI 提示文案契约（v2026-08-01 新增）。
+// ============================================================================
+
+function computeHasSelectedItem (newItems, conflictItems) {
+  return newItems.some(it => it.selected) || conflictItems.some(it => it.selected)
+}
+
+describe('RuneBatchImportDialog hasSelectedItem 条件契约', () => {
+  test('空 → 禁用', () => {
+    expect(computeHasSelectedItem([], [])).toBe(false)
+  })
+
+  test('newItems 默认 selected=true → 启用', () => {
+    const newItems = [{ name: 'A', selected: true }, { name: 'B', selected: true }]
+    expect(computeHasSelectedItem(newItems, [])).toBe(true)
+  })
+
+  test('newItems 默认 selected=false + 空 conflictItems → 禁用', () => {
+    const newItems = [{ name: 'A', selected: false }]
+    expect(computeHasSelectedItem(newItems, [])).toBe(false)
+  })
+
+  test('全部 7 项都因为重名落入 conflictItems（默认不勾选）→ 禁用（场景 A：用户已导入过）', () => {
+    // 与 test-rune-flow.test.js 的 scenario A 等价
+    const conflictItems = [
+      { name: 'el-input', selected: false },
+      { name: '输入框', selected: false },
+      { name: 'Hel', selected: false },
+      { name: 'JSXGraph1', selected: false },
+      { name: '日期', selected: false },
+      { name: '演示符文', selected: false },
+      { name: 'texstc', selected: false }
+    ]
+    expect(computeHasSelectedItem([], conflictItems)).toBe(false)
+    // 用户手动点「全选」后 → 启用
+    conflictItems.forEach(it => { it.selected = true })
+    expect(computeHasSelectedItem([], conflictItems)).toBe(true)
+  })
+
+  test('7 项全部被 builtinNames 过滤掉 → 0 / 0 → 禁用（场景 B）', () => {
+    expect(computeHasSelectedItem([], [])).toBe(false)
+  })
+
+  test('部分重名（5 new + 2 conflict）→ 启用（newItems 默认 selected=true）', () => {
+    const newItems = [
+      { name: 'el-input', selected: true },
+      { name: '输入框', selected: true },
+      { name: 'Hel', selected: true },
+      { name: 'JSXGraph1', selected: true },
+      { name: 'texstc', selected: true }
+    ]
+    const conflictItems = [
+      { name: '演示符文', selected: false },
+      { name: '日期', selected: false }
+    ]
+    expect(computeHasSelectedItem(newItems, conflictItems)).toBe(true)
+  })
+})
+
+// ============================================================================
+// "全部 conflict" 强提示契约（v2026-08-01 新增 UI 提示）：
+// 当 newItems.length === 0 && conflictItems.length > 0 时，
+//   弹框预览区顶部要显示一条橙色提示：
+//     "全部 N 项与现有符文重名，默认不勾选不会导入。如需覆盖，请点击「重名」栏的「全选」按钮。"
+// 锁定文案结构，避免 UI 改版时悄悄漏掉这条关键提示。
+// ============================================================================
+
+describe('RuneBatchImportDialog "全部 conflict" 强提示文案契约', () => {
+  function getAllConflictBannerText (newItems, conflictItems) {
+    if (!(newItems.length === 0 && conflictItems.length > 0)) return null
+    return `全部 ${conflictItems.length} 项与现有符文重名，默认不勾选不会导入。如需覆盖，请点击「重名」栏的「全选」按钮。`
+  }
+
+  test('全部 7 项 conflict → 返回强提示文案', () => {
+    const conflictItems = Array.from({ length: 7 }, (_, i) => ({ name: 'r' + i, selected: false }))
+    const text = getAllConflictBannerText([], conflictItems)
+    expect(text).toMatch(/全部 7 项与现有符文重名/)
+    expect(text).toMatch(/如需覆盖/)
+    expect(text).toMatch(/全选/)
+  })
+
+  test('newItems 不为空 → 不应出现该提示', () => {
+    const text = getAllConflictBannerText([{ name: 'A', selected: true }], [{ name: 'B', selected: false }])
+    expect(text).toBeNull()
+  })
+
+  test('conflictItems 为空 → 不应出现该提示', () => {
+    const text = getAllConflictBannerText([], [])
+    expect(text).toBeNull()
+  })
+})

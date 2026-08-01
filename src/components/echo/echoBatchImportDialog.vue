@@ -146,6 +146,16 @@
             </span>
           </div>
 
+          <!-- v2026-08-01：当所有条目都因为重名落入 conflictItems 时，给出强提示，避免用户误以为按钮 bug -->
+          <div
+            v-if='newItems.length === 0 && conflictItems.length > 0'
+            class='echo-batch-import-all-conflict'
+          >
+            <q-icon name='info' size='1.1em' class='q-mr-xs' />
+            全部 {{ conflictItems.length }} 项与现有回响重名，默认不勾选不会导入。
+            <span class='text-weight-medium q-ml-xs'>如需覆盖，请点击「重名」栏的「全选」按钮。</span>
+          </div>
+
           <div class='echo-batch-import-sides'>
             <div class='echo-batch-import-side'>
               <div class='echo-batch-import-side-title'>
@@ -428,6 +438,22 @@
   font-size: 13px;
   color: rgba(0, 0, 0, 0.7);
   font-weight: 500;
+}
+
+.echo-batch-import-all-conflict {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 152, 0, 0.1);
+  color: #e65100;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.body--dark .echo-batch-import-all-conflict {
+  background: rgba(255, 152, 0, 0.18);
+  color: #ffb74d;
 }
 
 .echo-batch-import-sides {

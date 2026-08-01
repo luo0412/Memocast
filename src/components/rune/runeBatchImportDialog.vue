@@ -149,6 +149,16 @@
             </span>
           </div>
 
+          <!-- v2026-08-01：当所有条目都因为重名落入 conflictItems 时，给出强提示，避免用户误以为按钮 bug -->
+          <div
+            v-if='newItems.length === 0 && conflictItems.length > 0'
+            class='rune-batch-import-all-conflict'
+          >
+            <q-icon name='info' size='1.1em' class='q-mr-xs' />
+            全部 {{ conflictItems.length }} 项与现有符文重名，默认不勾选不会导入。
+            <span class='text-weight-medium q-ml-xs'>如需覆盖，请点击「重名」栏的「全选」按钮。</span>
+          </div>
+
           <div class='rune-batch-import-sides'>
             <div class='rune-batch-import-side'>
               <div class='rune-batch-import-side-title'>
@@ -396,6 +406,23 @@
   font-size: 12px;
   color: rgba(0, 0, 0, 0.5);
   margin-bottom: 8px;
+}
+
+.rune-batch-import-all-conflict {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 152, 0, 0.1);
+  color: #e65100;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.body--dark .rune-batch-import-all-conflict {
+  background: rgba(255, 152, 0, 0.18);
+  color: #ffb74d;
 }
 
 .rune-batch-import-sides {
@@ -806,7 +833,11 @@ export default {
           const result = await runeTemplateService.dryRunImport(
             validEntries.map(e => e.normalized),
             this.localCategory || this.defaultCategory || RuneCategoryEnum.General,
-            { builtinNames: this.builtinNames || [] }
+            {
+              builtinNames: this.builtinNames || [],
+              // 把 existingRunes Snapshot 也作为 hint 传给 service（service 内部以 DB 现读为准，hint 仅用于早期切分 + 离线兜底）
+              existingRunes: this.existingRunes || []
+            }
           )
           this.builtinFilteredCount = result.builtinFiltered
           this.newItems = result.newItems

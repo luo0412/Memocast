@@ -27,6 +27,15 @@ module.exports = {
   transformIgnorePatterns: [
     'node_modules/(?!(echarts|jquery)/)'
   ],
+  // vue-jest 的 babel transformer 指向 babel.config.test.js
+  // vue2-jest 的 resolvePath 只识别 ../ / ./ / / 开头的相对路径，不识别 <rootDir> 占位符
+  globals: {
+    'vue-jest': {
+      transform: {
+        js: './tests/fixtures/vw-jest-babel-transformer.js'
+      }
+    }
+  },
 
   // 让 @/ 别名走 src/，和 Quasar 构建一致
   moduleNameMapper: {
