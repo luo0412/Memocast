@@ -1,8 +1,8 @@
 <template>
-  <SettingsSectionContent :title='$t("cloudProfile")' accent-color='green-7'>
-    <q-banner rounded dense class='bg-green-1 text-green-10 q-mb-md'>
+  <SettingsSectionContent :title='$t("cloudProfile")' accent-color='red-7'>
+    <q-banner rounded dense class='bg-red-1 text-red-10 q-mb-md'>
       <template v-slot:avatar>
-        <q-icon name='info_outline' color='green-7' />
+        <q-icon name='info_outline' color='red-7' />
       </template>
       {{ $t('cloudProfileHint') }}
     </q-banner>
@@ -24,7 +24,7 @@
         {{ $t('cloudProfileCityCurrent') }}
       </div>
       <div v-if='hasCity' class='text-body1 profile-current__value'>
-        <q-icon name='place' size='1em' color='green-7' class='q-mr-xs' />
+        <q-icon name='place' size='1em' color='red-7' class='q-mr-xs' />
         <span>{{ city.province }}</span>
         <span v-if='city.city'> / {{ city.city }}</span>
         <span v-if='city.district'> / {{ city.district }}</span>
@@ -34,7 +34,7 @@
         {{ $t('cloudProfileCityEmpty') }}
       </div>
       <div v-if='lastSavedAt' class='text-caption text-grey-6 q-mt-xs profile-current__saved'>
-        <q-icon name='check_circle' size='0.9em' color='green-7' class='q-mr-xs' />
+        <q-icon name='check_circle' size='0.9em' color='red-7' class='q-mr-xs' />
         {{ $t('cloudProfileSavedAt', { time: lastSavedAt }) }}
       </div>
       <div v-else-if='saving' class='text-caption text-grey-6 q-mt-xs profile-current__saving'>

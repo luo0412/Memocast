@@ -1,17 +1,17 @@
 <template>
   <div class="settings-micro-apps-panel">
-    <SettingsSectionContent :title="$t('microApps')" accent-color="green-7">
-      <q-banner rounded dense class="bg-green-1 text-green-10 q-mb-md">
+    <SettingsSectionContent :title="$t('microApps')" accent-color="red-7">
+      <q-banner rounded dense class="bg-red-1 text-red-10 q-mb-md">
         <template v-slot:avatar>
-          <q-icon name="info_outline" color="green-7" />
+          <q-icon name="info_outline" color="red-7" />
         </template>
         {{ $t('microAppsHint') }}
       </q-banner>
 
       <div class="q-mb-md row q-gutter-sm items-center">
-        <q-btn outline color="green-7" icon="add" :label="$t('microAppsAdd')" @click="openAdd" />
+        <q-btn outline color="red-7" icon="add" :label="$t('microAppsAdd')" @click="openAdd" />
         <q-space />
-        <q-btn unelevated color="green-7" icon="refresh" :label="$t('microAppsReload')" :loading="reloading" @click="reloadApps" />
+        <q-btn unelevated color="red-7" icon="refresh" :label="$t('microAppsReload')" :loading="reloading" @click="reloadApps" />
       </div>
 
       <div v-if="apps.length === 0" class="text-center q-pa-md text-grey-6">
@@ -34,7 +34,7 @@
 
             <div class="micro-app-row__name">
               <span :class="{ 'text-grey-5': !app.enabled }">{{ app.name || app.id }}</span>
-              <q-badge v-if="app.isDefault" color="green-7" :label="$t('microAppsDefault')" class="q-ml-sm" />
+              <q-badge v-if="app.isDefault" color="red-7" :label="$t('microAppsDefault')" class="q-ml-sm" />
               <q-icon
                 v-if="!app.enabled"
                 name="block"
@@ -62,7 +62,7 @@
               dense
               round
               icon="edit"
-              color="green-7"
+              color="red-7"
               size="sm"
               @click="openEdit(app)"
             >

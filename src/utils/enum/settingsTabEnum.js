@@ -22,14 +22,15 @@ import { Enum } from 'enum-plus'
 // - 微应用：聊天抽屉内 wujie 子应用列表，是宿主层面的扩展管理。
 // - 个人信息（地区偏好）：和当前账号无关，是终端用户偏好。
 const GeneralSubEnum = Enum({
-  Language: { value: 'language', label: 'generalLanguage',  icon: 'language' },
-  Theme:    { value: 'theme',    label: 'generalTheme',     icon: 'palette' },
-  Log:      { value: 'log',      label: 'generalLog',       icon: 'description' },
-  Database: { value: 'database', label: 'generalDatabase',  icon: 'storage' },
-  Version:  { value: 'version',  label: 'generalVersion',   icon: 'info' },
-  Cdn:       { value: 'cdn',       label: 'cloudCdnInject',   icon: 'link' },
-  MicroApps: { value: 'microApps', label: 'microApps',        icon: 'apps' },
-  Profile:   { value: 'profile',   label: 'cloudProfile',     icon: 'person' }
+  Language:  { value: 'language',  label: 'generalLanguage', icon: 'language' },
+  Theme:     { value: 'theme',     label: 'generalTheme',    icon: 'palette' },
+  Cdn:       { value: 'cdn',       label: 'cloudCdnInject',  icon: 'link' },
+  MicroApps: { value: 'microApps', label: 'microApps',       icon: 'apps' },
+  Profile:   { value: 'profile',   label: 'cloudProfile',    icon: 'person' },
+  // 「日志 / 数据库 / 版本」三个运维诊断项永远位于最后三位
+  Log:      { value: 'log',      label: 'generalLog',      icon: 'description' },
+  Database: { value: 'database', label: 'generalDatabase', icon: 'storage' },
+  Version:  { value: 'version',  label: 'generalVersion',  icon: 'info' }
 })
 
 // ---------- 编辑器 ----------
