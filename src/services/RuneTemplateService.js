@@ -16,6 +16,22 @@ import DatabaseClient from 'src/utils/DatabaseClient'
 
 const CACHE_TTL_MS = 60 * 1000
 
+// 符文分类白名单。批量导入 / 干跑都按此集合校验 category，非法值 fallback 到 'general'。
+// 与 src/utils/enum/runeEchoCategoriesEnum.js → RuneCategoryEnum.items 的 value 字段保持同步。
+const VALID_CATEGORY_KEYS = new Set([
+  'general', 'education', 'outfit', 'fitness', 'music', 'novel',
+  'movie', 'food', 'travel', 'research', 'legal', 'government',
+  'entertainment', 'gaming', 'consulting', 'community', 'social',
+  'medical', 'finance', 'insurance', 'manufacturing', 'construction',
+  'realEstate', 'lodging', 'catering', 'business', 'transportation',
+  'warehousing', 'sales', 'trading', 'agriculture', 'energy',
+  'environment', 'resume'
+])
+
+function isValidCategory (raw) {
+  return typeof raw === 'string' && VALID_CATEGORY_KEYS.has(String(raw).trim())
+}
+
 let cache = null
 // cache: { list: [...], grouped: [...], cachedAt: number }
 
@@ -277,9 +293,156 @@ async function clearAll (payload) {
 }
 
 /**
+ * 干跑 / 预演导入。
+ * v2026-08-01：把"切 split（newItems / conflictItems）"从 UI 弹框搬到 service，让 split 真相源完全脱离 ui store hint、依赖主进程 DB 现读。
+ *
+ * 与 batchImport 的关系：
+ *   - 二者都用 **用户的 runes 表**（v2026-08-01 重新校准：批量导入语义是"用户保存符文"，
+ *     不是"导预设模板到内置源 rune_templates"，否则 Settings 弹框导入完成后看不到导入项）。
+ *   - dryRunImport 用 `DatabaseClient.runes.getAll()` 现切；
+ *   - batchImport 的 replace 模式也用 `DatabaseClient.runes.getAll()` 找真 id。
+ *   - UI 不再传 existingRunes / builtinNames 的 hint 作为 split 真相源。
+ *
+ * v2026-08-01 "选中分类批量灌入" 语义：
+ *   - entry.existingCategory / entry.category 都基于 validTargetCategory（= 弹框 localCategory）。
+ *   - batchImport 的 replace 路径也走 validTargetCategory（命中项挪过去，不保留原分类）。
+ *   - 在 gaming tab 下导入 → 勾上重名项 = 把该项从原分类挪到 gaming。
+ *
+ * @param {Array} items - 来自 JSON 文件的符文条目数组
+ * @param {string} targetCategory - 用户在弹框中选的导入分类（同时决定 new/conflict 项的目标分类）
+ * @param {Object} options
+ * @param {Function} options.builtinNameSet - 可选：内置符文名集合，用于剔除内置项
+ * @param {Array} options.builtinNames - 同上的备选（数组直接传）
+ * @returns {Promise<{ newItems, conflictItems, builtinFiltered, totalInvalid }>}
+ */
+async function dryRunImport (items, targetCategory = '', options = {}) {
+  const list = Array.isArray(items) ? items : []
+  let totalInvalid = 0
+  const validItems = []
+  for (let i = 0; i < list.length; i++) {
+    const raw = list[i]
+    if (!raw || typeof raw !== 'object') {
+      totalInvalid += 1
+      continue
+    }
+    const name = String((raw && raw.name) || '').trim()
+    if (!name) {
+      totalInvalid += 1
+      continue
+    }
+    validItems.push({ index: i, raw, name })
+  }
+
+  // 1) 内置剔除
+  let builtinFiltered = 0
+  let builtinNameSet = null
+  if (typeof options.builtinNameSet === 'function') {
+    try {
+      const arr = options.builtinNameSet()
+      if (Array.isArray(arr)) {
+        builtinNameSet = new Set(
+          arr.filter(Boolean).map(n => String(n).trim().toLowerCase())
+        )
+      }
+    } catch (_) { /* noop */ }
+  } else if (Array.isArray(options.builtinNames)) {
+    builtinNameSet = new Set(
+      options.builtinNames.filter(Boolean).map(n => String(n).trim().toLowerCase())
+    )
+  }
+
+  const afterBuiltin = []
+  if (builtinNameSet) {
+    for (const it of validItems) {
+      if (builtinNameSet.has(it.name.toLowerCase())) {
+        builtinFiltered += 1
+      } else {
+        afterBuiltin.push(it)
+      }
+    }
+  } else {
+    afterBuiltin.push(...validItems)
+  }
+
+  // 2) 现读 DB（用户符文表 runes），按 name 比对分两栏
+  // v2026-08-01（重新校准）：批量导入的用户动作语义是「写入用户的 runes 表」，与"添加符文"单条按钮对齐。
+  //   之前错写到 rune_templates 表（= 内置预设源），导致 Settings 弹框导入完成后看不到导入项，
+  //   也让两个表互不互通、"多重名"现象无法从源头消除。这里与 `batchImport` 的写入表保持完全一致。
+  let dbRows = []
+  try {
+    dbRows = await DatabaseClient.runes.getAll()
+    if (!Array.isArray(dbRows)) dbRows = []
+  } catch (_) {
+    dbRows = []
+  }
+  const dbNameMap = new Map()
+  for (const r of dbRows) {
+    if (r && r.name) {
+      const key = String(r.name).trim().toLowerCase()
+      if (!dbNameMap.has(key)) {
+        // runes 表的字段名是 `category`，不是 `category_key`。
+        dbNameMap.set(key, { id: r.id, category: r.category || 'general' })
+      }
+    }
+  }
+
+  const newItems = []
+  const conflictItems = []
+  // v2026-08-01（重新校准）：写入表是 runes，字段是 `category`。
+  // "validTargetCategory" 同时作为 entry.existingCategory / entry.category 的回退值：
+  //   - newItem / conflictItem 都最终落入 targetCategory（"选中分类批量灌入"语义）
+  //   - existingCategory 表示"导入后落入的目标分类"，便于 UI 展示分类去向
+  const validTargetCategory = isValidCategory(targetCategory)
+    ? String(targetCategory).trim()
+    : 'general'
+  for (const it of afterBuiltin) {
+    const nameKey = it.name.toLowerCase()
+    const entry = {
+      key: `${it.index}-${nameKey}`,
+      name: it.name,
+      desc: String((it.raw && it.raw.desc) || ''),
+      // v2026-08-01：entry.category 是 UI 展示字段；service.batchImport 仅以 validTargetCategory 为权威
+      // 落 DB（避开 entry.category 这条不确定支路），所以这里对 raw.category 做白名单校验仅做 UI 友好度。
+      category: isValidCategory(it.raw && it.raw.category)
+        ? String(it.raw.category).trim()
+        : validTargetCategory,
+      color: (it.raw && it.raw.color) || '#7E57C2',
+      icon: (it.raw && it.raw.icon) || 'star',
+      template: (it.raw && it.raw.template) || '',
+      selected: false,
+      // existingId 是 runes 表中同名活行的真实 id，供 batchImport 的 replace 路径用。
+      existingId: dbNameMap.get(nameKey)?.id || null,
+      // existingCategory 表示"导入后落入的分类"；new 项 targetCategory，conflict 项也用 validTargetCategory（命中后挪过去）。
+      existingCategory: validTargetCategory
+    }
+    if (dbNameMap.has(nameKey)) {
+      conflictItems.push(entry)
+    } else {
+      entry.selected = true
+      newItems.push(entry)
+    }
+  }
+
+  return {
+    newItems,
+    conflictItems,
+    builtinFiltered,
+    totalInvalid,
+    hasBuiltInSource: !!builtinNameSet,
+    dbReadAt: Date.now()
+  }
+}
+
+/**
  * 批量导入符文（从 JSON 文件）。
+ *
+ * v2026-08-01（重新校准语义）：
+ *   - 写入表：用户的 runes 表（与单条"添加符文"按钮一致的真相源）。不再写到 rune_templates（= 内置预设源）。
+ *   - 目标分类：targetCategory 对新建/覆盖命中都生效；用户选中 gaming tab 导入时，勾上的"重名"项被挪到 gaming。
+ *   - replace 模式：以 DB 现读的真实 id 为权威，绝不复活 hint 里的残留 id（避免 INSERT 与现存同名活行并存）。
+ *
  * @param {Array} items - 要导入的符文数组，格式与导出格式一致：{ name, desc, category, color, icon, template }
- * @param {string} targetCategory - 目标分类（仅用于新建符文，保留现有符文的分类）
+ * @param {string} targetCategory - 目标分类。valid（白名单内）直接用，非法 fallback 'general'。新建项用此值；replace 命中项也用此值（"挪到目标分类"）。
  * @param {Object} options - 可选配置
  * @param {string} options.conflictMode - 冲突处理模式: 'normal'(默认新建) | 'replace'(覆盖) | 'skip'(跳过)
  * @param {Array} options.existingRunes - 现有符文列表（hint，与 UI split 同步；replace 模式下不作为 id 真相源）
@@ -292,43 +455,35 @@ async function batchImport (items, targetCategory = '', options = {}) {
   const now = Date.now()
   const rows = []
   const skipped = []
-  const VALID_CATEGORY_KEYS = new Set([
-    'general', 'education', 'outfit', 'fitness', 'music', 'novel',
-    'movie', 'food', 'travel', 'research', 'legal', 'government',
-    'entertainment', 'gaming', 'consulting', 'community', 'social',
-    'medical', 'finance', 'insurance', 'manufacturing', 'construction',
-    'realEstate', 'lodging', 'catering', 'business', 'transportation',
-    'warehousing', 'sales', 'trading', 'agriculture', 'energy',
-    'environment', 'resume'
-  ])
   const conflictMode = options.conflictMode || 'normal'
   const existingRunes = options.existingRunes || []
-  // 验证目标分类是否有效
-  const validTargetCategory = VALID_CATEGORY_KEYS.has(String(targetCategory || '').trim())
+  // 验证目标分类是否有效（模块顶部 VALID_CATEGORY_KEYS 白名单）
+  const validTargetCategory = isValidCategory(targetCategory)
     ? String(targetCategory).trim()
     : 'general'
 
-  // 构建现有符文 name -> { id, category_key } 的映射（不区分大小写）
+  // 构建现有符文 hint（仅 skip 模式用作"已有"集合，replace 模式不用 hint.id 作为权威）。
+  // runes 表字段是 `category`，不是 `category_key`。
   const existingNameMap = new Map()
   for (const rune of existingRunes) {
     if (rune && rune.name) {
       const key = String(rune.name).trim().toLowerCase()
-      existingNameMap.set(key, { id: rune.id, category_key: rune.category_key || 'general' })
+      existingNameMap.set(key, { id: rune.id, category: rune.category || 'general' })
     }
   }
 
-  // v2026-08-01 replace 模式以真实 DB 为准：
-  //   选项 existingRunes 是 UI 弹框用于 split 视图的 hint，可能与 DB 漂移；
-  //   replace 必须用 DatabaseClient.runeTemplates.getAll() 返回的最新 id 才能保证
-  //   「覆盖」语义忠实——否则若 hint.id 指向已被删除的行，会触发 saveOne INSERT，
+  // v2026-08-01：replace 模式以真实 runes DB 为准——
+  //   选项 existingRunes 可能与 DB 漂移（hint 由 UI 弹框在 openBatchImport 时刻从 DB 现读，
+  //   到 doImport 之间可能有其他写入或删除）。replace 必须用 DatabaseClient.runes.getAll() 返回的
+  //   最新 id 来真正"覆盖"那条活行，否则若 hint.id 指向已删的行，会触发 INSERT 造出新行，
   //   与现存同名活行并存，造成「多条重名」。
   let dbNameMap = null
   if (conflictMode === 'replace') {
     let liveList
     try {
-      liveList = await DatabaseClient.runeTemplates.getAll()
+      liveList = await DatabaseClient.runes.getAll()
     } catch (err) {
-      console.warn('[RUNE-TPL] batchImport: getAll failed, fallback to hint', err)
+      console.warn('[RUNE-TPL] batchImport: runes.getAll failed, fallback to hint', err)
       liveList = []
     }
     dbNameMap = new Map()
@@ -336,7 +491,7 @@ async function batchImport (items, targetCategory = '', options = {}) {
       if (r && r.name) {
         const key = String(r.name).trim().toLowerCase()
         if (!dbNameMap.has(key)) {
-          dbNameMap.set(key, { id: r.id, category_key: r.category_key || 'general' })
+          dbNameMap.set(key, { id: r.id, category: r.category || 'general' })
         }
       }
     }
@@ -362,31 +517,34 @@ async function batchImport (items, targetCategory = '', options = {}) {
       }
       seenNames.add(itemNameKey)
     }
-    // 覆盖模式下，优先用真实 DB 的 id / category（v2026-08-01 修复 Bug 3）。
-    //   - DB 命中 → 用 DB 的 id + category，覆盖保留原分类（不受 targetCategory 影响）。
-    //   - DB 未命中（hint 残留或该行已被删）→ 走新建路径，绝不复活 hint.id。
+    // v2026-08-01：replace 模式语义是「挪到目标分类 + 用 DB 真 id」。
+    //   - DB 命中 → 用 DB 现读的 id（保证 INSERT OR REPLACE 命中现有行），category 走 validTargetCategory
+    //     （命中项从原分类挪到目标分类）。
+    //   - DB 未命中（hint 残留或该行已被删）→ 走新建路径，绝不复活 hint.id，避免 INSERT 造新行造成多条重名。
+    //   - normal 模式：始终新建，category 用 validTargetCategory。
+    //   - skip 模式：已在上面 continue 掉同名项；剩下的当新建处理。
     let id
-    let category
+    let category = validTargetCategory
     if (conflictMode === 'replace' && dbNameMap && dbNameMap.has(itemNameKey)) {
       const existing = dbNameMap.get(itemNameKey)
       id = existing.id
-      category = existing.category_key
+      // category 保持 validTargetCategory（命中项挪到目标分类）
     } else {
-      // 新建模式：使用目标分类
+      // 新建模式：使用目标分类 + 生成全新 id
       id = 'import-' + Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6)
-      category = validTargetCategory
     }
+    // 写入 runes 表（schema 字段：id / name / desc / color / icon / template / category / sort_order / inherit_from_previous / created_at / updated_at）。
+    // runes 表没有 source_url / is_builtin 字段（与 rune_templates 不同），所以这两列不带。
     rows.push({
       id,
-      category_key: category,
+      category,
       name: item.name || '未命名符文',
       desc: item.desc || '',
       color: item.color || '#7E57C2',
-      icon: item.icon || 'star',
+      icon: item.icon || 'auto_awesome',  // 与 db:saveRunes 默认 icon 一致（注意 rune_templates 旧默认是 'star'）
       template: item.template || '',
-      source_url: '',
-      is_builtin: 0,
       sort_order: 9999,
+      inherit_from_previous: 0,
       created_at: now,
       updated_at: now
     })
@@ -395,7 +553,7 @@ async function batchImport (items, targetCategory = '', options = {}) {
     // skip 模式全部命中、或 normal/replace 没有可写入项时，直接返回成功并保留 skipped 计数
     return { success: true, count: 0, skipped: skipped.length }
   }
-  const result = await DatabaseClient.runeTemplates.saveMany(rows)
+  const result = await DatabaseClient.runes.saveMany(rows)
   if (result && result.success) invalidate()
   return { ...result, skipped: skipped.length }
 }
@@ -414,6 +572,7 @@ const runeTemplateService = {
   buildBuiltinRows,
   clearAll,
   batchImport,
+  dryRunImport,
   clearCache
 }
 

@@ -949,16 +949,16 @@ export default {
     },
     async openBatchImport (category) {
       this.runeImportCategory = category || DEFAULT_RUNE_CATEGORY
-      // v2026-08-01：弹框打开瞬间重新从 DB 拉一份名单（force=true 绕过缓存），
-      // 作为 split 视图的"现快照"——这一步是修复"多条重名"的关键防线。
-      // service.batchImport 内部 replace 也会再校一次 DB，但 UI 这里要先把 split 切对。
+      // v2026-08-01（重新校准）：批量导入语义是"用户保存符文到 runes 表"，split hint 必须来自 runes 表，
+      // 之前的 `runeTemplateService.listFlat(true)` 拉到的是 rune_templates（= 内置预设源），与真实写入表
+      // 不一致，会让 split 把用户已有的符文误判为"未重名"，从而 INSERT 与现存同名活行并存造成多重名。
+      // 这里直接从 runes 表现读一份作为 split hint；service.batchImport 内部 replace 也会再校一次 DB 真 id。
       try {
-        runeTemplateService.clearCache()
-        const fresh = await runeTemplateService.listFlat(true)
+        const fresh = await DatabaseClient.runes.getAll()
         this.runeImportExistingSnapshot = Array.isArray(fresh) ? fresh : []
       } catch (err) {
         // 极端兜底：拉取失败不阻塞弹框打开，沿用 vuex 缓存作为 split hint
-        console.warn('[Settings] openBatchImport listFlat failed, fallback to localRuneCards', err)
+        console.warn('[Settings] openBatchImport runes.getAll failed, fallback to localRuneCards', err)
         this.runeImportExistingSnapshot = Array.isArray(this.localRuneCards) ? this.localRuneCards : []
       }
       this.runeBatchImportDialogVisible = true
@@ -972,24 +972,32 @@ export default {
         console.log('[Settings] onRuneBatchImport result:', result)
         console.log('[Settings] localRuneCards count before refresh:', this.localRuneCards.length)
         if (result && result.success) {
-          // 从 rune_templates 表重新加载并刷新 store
-          const freshRunes = await runeTemplateService.listFlat(true)
-          console.log('[Settings] freshRunes from DB count:', freshRunes.length)
-          console.log('[Settings] freshRunes sample (first 3):', freshRunes.slice(0, 3).map(r => ({ id: r.id, name: r.name, category: r.category_key })))
-          this.updateStateAndStore({ runeCards: freshRunes })
+          // v2026-08-01（重新校准）：批量导入实际写入 **runes 表**（用户实例表，与单条"添加符文"按钮一致）。
+          // 所以这里调 loadRunes() 重拉 runes 表喂给 store；导入完成后 Settings 弹框列表会立即显示导入项。
+          // （rune_templates 表是内置预设源，不参与批量导入。）
+          await this.loadRunes()
           console.log('[Settings] localRuneCards count after refresh:', this.localRuneCards.length)
           this.$q.notify({
             message: this.$t('runeBatchImportSuccess', { count: result.count || items.length }),
             type: 'positive',
             position: 'top'
           })
+          // v2026-08-01：BAD 之前的写法是 self.$emit('imported', ...)，但 Vue 2 中父组件$emit 无法触发
+          //   自己的 @imported 监听器（@imported 只对子组件 emit 的事件生效），导致弹框 importing 永远
+          //   停在 true，「导入所选」按钮一直转圈，而顶部 notify 已弹出。
+          //   正确做法：直接拿弹框 ref 同步调 onImportSuccess，让 importing 立刻翻 false。
+          //   @imported 仍然保留在模板上以兼容可能从外部手动 emit 的场景（兜底）。
           this.$emit('imported', result.count || items.length)
+          // 直接同步通知弹框：导入成功、停止转圈、1.5 秒后自动关闭
+          this.onRuneBatchImported(result.count || items.length)
         } else {
           this.$emit('import-failed', (result && result.message) || '')
+          this.onRuneBatchImportFailed((result && result.message) || '')
         }
       } catch (err) {
         console.error('[Settings] onRuneBatchImport error:', err)
         this.$emit('import-failed', (err && err.message) || '')
+        this.onRuneBatchImportFailed((err && err.message) || '')
       }
     },
     onRuneBatchImported (count) {

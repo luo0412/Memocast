@@ -557,6 +557,7 @@
 
 <script>
 import { RuneCategoryEnum } from 'src/utils/enum'
+import runeTemplateService from 'src/services/RuneTemplateService'
 
 export default {
   name: 'runeBatchImportDialog',
@@ -672,8 +673,11 @@ export default {
           this.conflictItems = []
           return
         }
-        const invalidCount = parsed.filter(it => !it || typeof it !== 'object').length
-        if (invalidCount === parsed.length) {
+        // v2026-08-01：split 真相源从 hint（existingRunes prop）改成 service.dryRunImport（= 主进程 DB）。
+        // 弹框仍保留 splitParsedIntoGroups 方法作为 fallback，理论上不可达；
+        // 这里 service 抛错时才走 fallback，避免渲染完全失败。
+        const validItems = parsed.filter(it => it && typeof it === 'object' && String(it.name || '').trim())
+        if (validItems.length === 0) {
           this.errorMessage = 'JSON 解析失败：未找到任何有效的符文条目'
           this.parsedData = null
           this.newItems = []
@@ -681,8 +685,28 @@ export default {
           return
         }
         this.parsedData = parsed
-        this.totalInvalidCount = invalidCount
-        this.splitParsedIntoGroups(parsed)
+        try {
+          // service.dryRunImport 内部会拉 DB 现读、按 DB 同名项切两栏
+          const result = await runeTemplateService.dryRunImport(
+            parsed,
+            this.localCategory || this.defaultCategory || RuneCategoryEnum.General,
+            {
+              builtinNames: this.builtinNames || []
+            }
+          )
+          this.totalInvalidCount = result.totalInvalid
+          this.builtinFilteredCount = result.builtinFiltered
+          this.newItems = result.newItems
+          this.conflictItems = result.conflictItems
+        } catch (e) {
+          // service 端异常（IPC 挂、DB 不可达等）才走本地 fallback；
+          // 并明确提示用户真相源降级了，避免静默用陈旧 hint。
+          console.warn('[rune-batch-import-dialog] dryRunImport failed, fallback to local split', e)
+          const invalidCount = parsed.filter(it => !it || typeof it !== 'object').length
+          this.totalInvalidCount = invalidCount
+          this.splitParsedIntoGroups(parsed)
+          this.errorMessage = '注意：与服务端同步异常，已用本地缓存切分，结果可能与实际数据不符'
+        }
       } catch (e) {
         this.errorMessage = 'JSON 解析失败: ' + (e && e.message ? e.message : String(e))
         this.parsedData = null

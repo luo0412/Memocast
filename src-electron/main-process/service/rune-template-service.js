@@ -253,25 +253,14 @@ function createRuneTemplateService ({ db, execToObjects, execOne, saveDatabase, 
     if (!row || !row.id) return { success: false, code: 'INVALID', message: 'id required' }
     try {
       const now = Date.now()
-      const existing = execOne('SELECT id FROM rune_templates WHERE id = ?', [row.id])
-      if (existing) {
-        db.run(`UPDATE rune_templates SET category_key = ?, name = ?, desc = ?, color = ?, icon = ?, template = ?, source_url = ?, is_builtin = ?, sort_order = ?, updated_at = ? WHERE id = ?`, [
-          row.category_key || 'general',
-          row.name || '',
-          row.desc || '',
-          row.color || '',
-          row.icon || '',
-          row.template || '',
-          row.source_url || '',
-          row.is_builtin ? 1 : 0,
-          Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : 0,
-          now,
-          row.id
-        ])
-        if (typeof saveDatabase === 'function') saveDatabase()
-        return { success: true, data: execOne('SELECT * FROM rune_templates WHERE id = ?', [row.id]) }
-      }
-      db.run(`INSERT INTO rune_templates (id, category_key, name, desc, color, icon, template, source_url, is_builtin, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      // v2026-08-01：原实现是 SELECT-then-INSERT/UPDATE，不是原子的；
+      // 多个并发调用 / renderer 端缓存漂移时，可能造成：
+      //   1) SELECT 没找到同名 id → INSERT，但 renderer 端刚才用 stale id 复活了已删除行 → 重复行
+      //   2) UPDATE WHERE id=? 漏命中 → 静默跳过（与期望不符）
+      // 这里改用 INSERT OR REPLACE，由主键幂等保证不会插出"两条同名 id"的多余行。
+      // 注意：replace 的真相源是 renderer 端 service.batchImport 已经查过 DB 拿到的真实 id，
+      // 主进程这里只负责原子落地，不再二次"猜测"该 UPDATE 还是 INSERT。
+      db.run(`INSERT OR REPLACE INTO rune_templates (id, category_key, name, desc, color, icon, template, source_url, is_builtin, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         row.id,
         row.category_key || 'general',
         row.name || '',
@@ -282,7 +271,7 @@ function createRuneTemplateService ({ db, execToObjects, execOne, saveDatabase, 
         row.source_url || '',
         row.is_builtin ? 1 : 0,
         Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : 0,
-        row.created_at || now,
+        Number.isFinite(Number(row.created_at)) ? Number(row.created_at) : now,
         now
       ])
       if (typeof saveDatabase === 'function') saveDatabase()
@@ -293,15 +282,51 @@ function createRuneTemplateService ({ db, execToObjects, execOne, saveDatabase, 
     }
   }
 
+  /**
+   * 批量保存，包到 sql.js 事务里。
+   * v2026-08-01：原实现是循环调 saveOne、单条失败不回滚且每次都 saveDatabase 落盘。
+   * 现在：内联同一条 INSERT OR REPLACE，事务里跑整批，最后才落盘一次；失败整体 ROLLBACK。
+   * 不复用 saveOne 是因为 saveOne 内部 try/catch 会吞掉异常、破坏事务的失败传播。
+   */
   function saveMany (rows) {
     const list = Array.isArray(rows) ? rows : []
     if (list.length === 0) return { success: true, count: 0 }
+    const now = Date.now()
     let count = 0
-    for (const row of list) {
-      const r = saveOne(row)
-      if (r && r.success) count++
+    try {
+      db.run('BEGIN')
+      for (const row of list) {
+        if (!row || !row.id) {
+          // 跳过无效行，不计入 count；事务继续
+          continue
+        }
+        db.run(
+          `INSERT OR REPLACE INTO rune_templates (id, category_key, name, desc, color, icon, template, source_url, is_builtin, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            row.id,
+            row.category_key || 'general',
+            row.name || '',
+            row.desc || '',
+            row.color || '',
+            row.icon || '',
+            row.template || '',
+            row.source_url || '',
+            row.is_builtin ? 1 : 0,
+            Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : 0,
+            Number.isFinite(Number(row.created_at)) ? Number(row.created_at) : now,
+            now
+          ]
+        )
+        count++
+      }
+      db.run('COMMIT')
+      if (typeof saveDatabase === 'function') saveDatabase()
+      return { success: true, count }
+    } catch (error) {
+      try { db.run('ROLLBACK') } catch (_) { /* noop */ }
+      logger.error && logger.error('[rune-template-service] saveMany rolled back:', error)
+      return { success: false, code: 'SAVE_FAILED', message: error && error.message ? error.message : String(error) }
     }
-    return { success: true, count }
   }
 
   function remove (id) {
