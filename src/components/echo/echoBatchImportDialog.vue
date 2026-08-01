@@ -6,6 +6,12 @@
     2. 内置回响名冲突：直接走 builtinBlocked 列表（拒绝导入），不进入预览。
     3. 文件内重复：单独标记为 fileDuplicates（不静默合并）。
     4. 默认分类：来自 SettingsEchoPanel 入参，传到主进程 IPC。
+
+  v2026-08-01 在线 URL 支持：
+    弹框顶部加 Tab：选择文件 / 在线 URL。
+    - 文件：FileReader 读 text → parseEchoPack → 预览（与历史完全一致）
+    - URL：填 GitHub URL → 主进程 IPC echo-pack:fetchRemote 抓 text → parseEchoPack → 预览
+    两条路径解析失败时复用同一套错误码与 UI 文案（service 端透传 message）。
 -->
 <template>
   <q-dialog
@@ -24,24 +30,75 @@
       </q-toolbar>
 
       <q-card-section class='echo-batch-import-body'>
-        <div class='echo-batch-import-field'>
-          <div class='echo-batch-import-label'>选择 Echo Pack v1 文件</div>
-          <div class='echo-batch-import-file-area' @click='triggerFileInput'>
-            <input
-              ref='fileInput'
-              type='file'
-              accept='.json'
-              style='display: none'
-              @change='onFileSelected'
-            />
-            <div v-if='!selectedFile' class='echo-batch-import-file-placeholder'>
-              <q-icon name='upload_file' size='2.5em' color='grey-5' />
-              <div class='q-mt-sm text-grey-6'>点击选择 JSON 文件</div>
+        <!-- v2026-08-01：导入源 Tab（文件 / 在线 URL），切换不重置已选分类/解析结果 -->
+        <div class='echo-batch-import-source-tabs'>
+          <q-tabs
+            v-model='sourceTab'
+            dense
+            align='left'
+            no-caps
+            active-color='teal'
+            indicator-color='teal'
+            class='echo-batch-import-tabs'
+          >
+            <q-tab name='file' icon='description' label='选择文件' />
+            <q-tab name='url' icon='cloud_download' label='在线 URL' />
+          </q-tabs>
+        </div>
+
+        <div v-show='sourceTab === "file"' class='echo-batch-import-source-pane'>
+          <div class='echo-batch-import-field'>
+            <div class='echo-batch-import-label'>选择 Echo Pack v1 文件</div>
+            <div class='echo-batch-import-file-area' @click='triggerFileInput'>
+              <input
+                ref='fileInput'
+                type='file'
+                accept='.json'
+                style='display: none'
+                @change='onFileSelected'
+              />
+              <div v-if='!selectedFile' class='echo-batch-import-file-placeholder'>
+                <q-icon name='upload_file' size='2.5em' color='grey-5' />
+                <div class='q-mt-sm text-grey-6'>点击选择 JSON 文件</div>
+              </div>
+              <div v-else class='echo-batch-import-file-selected'>
+                <q-icon name='description' size='1.5em' color='teal-7' />
+                <span class='q-ml-sm'>{{ selectedFile.name }}</span>
+                <q-btn flat round dense icon='close' size='xs' @click.stop='clearFile' />
+              </div>
             </div>
-            <div v-else class='echo-batch-import-file-selected'>
-              <q-icon name='description' size='1.5em' color='teal-7' />
-              <span class='q-ml-sm'>{{ selectedFile.name }}</span>
-              <q-btn flat round dense icon='close' size='xs' @click.stop='clearFile' />
+          </div>
+        </div>
+
+        <div v-show='sourceTab === "url"' class='echo-batch-import-source-pane'>
+          <div class='echo-batch-import-field'>
+            <div class='echo-batch-import-label'>Echo Pack URL</div>
+            <el-input
+              v-model='remoteUrl'
+              placeholder='https://github.com/<u>/<r>/blob/<b>/<p>.json 或 raw 形式'
+              clearable
+              size='small'
+              :disable='fetchingRemote'
+              class='echo-batch-import-url-input'
+              @keyup.enter.native='onRemoteUrlSubmit'
+            />
+            <div class='echo-batch-import-hint'>
+              支持 <code>github.com/.../blob/...</code>、<code>github.com/.../raw/...</code>、
+              <code>raw.githubusercontent.com</code>、<code>gist.githubusercontent.com</code>。
+              URL 抓取在主进程完成，错误信息与文件路径完全一致。
+            </div>
+            <div class='echo-batch-import-url-actions'>
+              <q-btn
+                flat
+                dense
+                no-caps
+                color='teal'
+                icon='cloud_download'
+                :label='fetchingRemote ? "抓取中..." : "抓取并解析"'
+                :disable='!remoteUrl || fetchingRemote'
+                :loading='fetchingRemote'
+                @click='onRemoteUrlSubmit'
+              />
             </div>
           </div>
         </div>
@@ -288,6 +345,29 @@
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+}
+
+.echo-batch-import-source-tabs {
+  margin-bottom: -4px;
+}
+
+.echo-batch-import-tabs {
+  border-bottom: 1px solid rgba(38, 166, 154, 0.2);
+}
+
+.echo-batch-import-source-pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.echo-batch-import-url-input {
+  width: 100%;
+}
+
+.echo-batch-import-url-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .echo-batch-import-field {
@@ -543,6 +623,10 @@
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
+.body--dark .echo-batch-import-tabs {
+  border-bottom-color: rgba(38, 166, 154, 0.32);
+}
+
 .body--dark .echo-batch-import-label {
   color: rgba(255, 255, 255, 0.65);
 }
@@ -602,6 +686,7 @@ import {
   commitImport,
   computeFileDuplicates
 } from 'src/services/EchoImportService'
+import DatabaseClient from 'src/utils/DatabaseClient'
 
 const ECHO_CATEGORY_OPTIONS = [
   { value: 'marker', label: '标记' },
@@ -627,6 +712,10 @@ export default {
   },
   data () {
     return {
+      // v2026-08-01：导入源 Tab（file = 本地 JSON 文件；url = 在线 URL）
+      sourceTab: 'file',
+      remoteUrl: '',
+      fetchingRemote: false,
       selectedFile: null,
       parsedEntries: [],
       newItems: [],
@@ -689,6 +778,9 @@ export default {
     },
     clearState () {
       this.selectedFile = null
+      this.sourceTab = 'file'
+      this.remoteUrl = ''
+      this.fetchingRemote = false
       this.parsedEntries = []
       this.newItems = []
       this.conflictItems = []
@@ -713,14 +805,12 @@ export default {
         reader.readAsText(file)
       })
     },
-    async onFileSelected (event) {
-      const file = event.target.files && event.target.files[0]
-      if (!file) return
-      this.selectedFile = file
-      this.errorMessage = ''
-      this.importResult = null
+    /**
+     * v2026-08-01：抽离 file/url 两条路径共用的"text → parse → preview"流程。
+     * 调用方在调本方法前应已清空错误/结果状态。
+     */
+    async applyParsedText (text) {
       try {
-        const text = await this.readFileAsText(file)
         const parsed = parseEchoPack(text)
         if (!parsed.success) {
           this.errorMessage = parsed.message || 'JSON 解析失败'
@@ -738,6 +828,36 @@ export default {
         this.parsedEntries = []
         this.newItems = []
         this.conflictItems = []
+      }
+    },
+    async onFileSelected (event) {
+      const file = event.target.files && event.target.files[0]
+      if (!file) return
+      this.selectedFile = file
+      this.errorMessage = ''
+      this.importResult = null
+      await this.applyParsedText(await this.readFileAsText(file))
+    },
+    async onRemoteUrlSubmit () {
+      const url = (this.remoteUrl || '').trim()
+      if (!url) {
+        this.errorMessage = '请输入 Echo Pack URL'
+        return
+      }
+      this.fetchingRemote = true
+      this.errorMessage = ''
+      this.importResult = null
+      try {
+        const res = await DatabaseClient.echoPacks.fetchRemote({ sourceUrl: url })
+        if (!res || !res.success) {
+          this.errorMessage = (res && res.message) || '抓取失败'
+          return
+        }
+        await this.applyParsedText(res.text || '')
+      } catch (e) {
+        this.errorMessage = '抓取失败: ' + (e && e.message ? e.message : String(e))
+      } finally {
+        this.fetchingRemote = false
       }
     },
     async runPreview () {

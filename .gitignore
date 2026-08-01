@@ -55,3 +55,4 @@ _temp/*
 .codegraph
 
 terminals/*.txt
+terminals/*.log

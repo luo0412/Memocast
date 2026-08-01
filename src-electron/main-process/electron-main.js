@@ -19,6 +19,7 @@ import Portkey from 'portkey-ai'
 const { DEFAULT_ROOT_CATEGORY } = require('./constants')
 const createRuneTemplateService = require('./service/rune-template-service')
 const createNoteTemplateService = require('./service/note-template-service')
+const { fetchRemoteText } = require('./service/remote-fetch')
 // 内置回响（echo）/ 符文（rune）模板的真相源：renderer 端。
 //   - echo 单源：`src/components/echo/echoBuiltins/`
 //   - rune 预设模板单源：`src/components/rune/runeTemplates/runeTemplates.js` 的 `BUILTIN_RUNE_TEMPLATE_META`
@@ -3070,6 +3071,24 @@ function registerDatabaseHandlers() {
 
   ipcMain.handle('rune-template:fetchRemote', async (event, payload) => {
     return await runeTemplateService.importFromRemote(payload || {})
+  })
+
+  // === Rune Pack / Echo Pack 在线 JSON URL 抓取（v2026-08-01）===
+  // 用于「设置 → 符文批量导入 / 回响批量导入 → 在线 URL」入口：
+  //   - 仅做 URL → text 的抓取，不解析 JSON（解析交给 renderer 端的 parseRunePack / parseEchoPack，
+  //     错误码与 file 上传路径保持完全一致：RUNE_PACK_FORMAT / ECHO_PACK_FORMAT_MISMATCH 等）。
+  //   - 复用 ./service/remote-fetch 的 fetchRemoteText，避免与 rune-template:fetchRemote 重复手写 https.get。
+  //   - SSRF 边界已在 fetchRemoteText 内部（仅允许 github.com / raw.githubusercontent.com / gist）。
+  // 不做：
+  //   - 不读 SQLite、不写 runes / echoes 表（落库仍走原有的 batchImport 链路）。
+  ipcMain.handle('rune-pack:fetchRemote', async (event, payload) => {
+    const sourceUrl = (payload && payload.sourceUrl) || ''
+    return await fetchRemoteText(sourceUrl, log)
+  })
+
+  ipcMain.handle('echo-pack:fetchRemote', async (event, payload) => {
+    const sourceUrl = (payload && payload.sourceUrl) || ''
+    return await fetchRemoteText(sourceUrl, log)
   })
 
   // === 笔记模板（独立 note_templates 表）===

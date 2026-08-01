@@ -384,6 +384,23 @@ const runeTemplates = {
 }
 
 /**
+ * Rune Pack 在线 URL 抓取（v2026-08-01）。
+ *
+ * 与 runeTemplates.fetchRemote（单文件 .vue 源码 URL）的区别：
+ *   - 本接口返回 { success, text, finalUrl }，由 renderer 端 parseRunePack 自行解析为 Rune Pack v1。
+ *   - 不写库、不调 inferTemplateMeta、不 saveMany —— 这条路径只把"URL → 文本"做完，
+ *     让弹框复用 parseRunePack / preview / commit 这一条与 file 上传完全一致的链路。
+ *
+ * 错误码与 file 上传路径统一：
+ *   INVALID_URL / FETCH_FAILED / TOO_LARGE / EMPTY_BODY / REDIRECT_LOOP。
+ */
+const runePacks = {
+  async fetchRemote ({ sourceUrl } = {}) {
+    return await invoke('rune-pack:fetchRemote', { sourceUrl })
+  }
+}
+
+/**
  * 笔记模板（note_templates 表）。
  * 由用户在 Settings → 编辑器 → 模板中维护；新建笔记时按选中的 templateId
  * 将模板内容拼到 `# {标题}` 之后（标题规则在最前不变）。
@@ -461,6 +478,18 @@ const echoes = {
   }
 }
 
+/**
+ * Echo Pack 在线 URL 抓取（v2026-08-01）。
+ *
+ * 与 runePacks.fetchRemote 对称：仅做 URL → text，JSON 解析交给 renderer 端的 parseEchoPack，
+ * 错误码与 file 上传路径完全一致，便于在弹框里复用同一套用户文案。
+ */
+const echoPacks = {
+  async fetchRemote ({ sourceUrl } = {}) {
+    return await invoke('echo-pack:fetchRemote', { sourceUrl })
+  }
+}
+
 const cdnDeps = {
   async getAll() {
     return await invoke('db:getCdnDeps')
@@ -491,8 +520,10 @@ const DatabaseClient = {
   aiSkills,
   runes,
   runeTemplates,
+  runePacks,
   noteTemplates,
   echoes,
+  echoPacks,
   cdnDeps,
   microApps
 }

@@ -376,3 +376,168 @@ describe('EchoImportService 解析混合批', () => {
     expect(reasons).toEqual(['BUILTIN_CATEGORY_NOT_ALLOWED', 'EMPTY_ANNO_SOURCE', 'EMPTY_NAME'])
   })
 })
+
+// ============================================================================
+// 在线 URL 抓取契约（v2026-08-01）
+// 弹框新增「在线 URL」Tab：填 GitHub URL → DatabaseClient.echoPacks.fetchRemote
+//   → 返回 text → 走与 file 路径完全相同的 parseEchoPack → preview。
+//
+// 等价复刻 onRemoteUrlSubmit 流程：fetchRemote 调用结果 → applyParsedText → preview。
+// 锁定的契约：
+//   1) fetchRemote 返回 success=true 时 → text 走 parseEchoPack，分类两栏 / builtinBlocked / fileDuplicates
+//      与 file 路径完全一致
+//   2) fetchRemote 返回 success=false 时 → errorMessage 直接透传 message，UI 不进入预览
+//   3) URL 为空字符串 → 立即提示「请输入 Echo Pack URL」，不发起 IPC
+//   4) fetchRemote 抛异常 → errorMessage 形如「抓取失败: <err>」
+// ============================================================================
+
+function makeRemoteFetchOk (text) {
+  return jest.fn().mockResolvedValue({ success: true, text, finalUrl: 'https://raw.githubusercontent.com/o/r/master/x.json' })
+}
+function makeRemoteFetchFail (code, message) {
+  return jest.fn().mockResolvedValue({ success: false, code, message })
+}
+function makeRemoteFetchThrow (err) {
+  return jest.fn().mockRejectedValue(err)
+}
+
+async function runEchoRemoteUrlSubmit ({ remoteUrl, fetchRemote, parsePack }) {
+  const state = {
+    fetchingRemote: false,
+    errorMessage: '',
+    parsedEntries: [],
+    sourceTab: 'url'
+  }
+  state.fetchingRemote = true
+  if (!remoteUrl || !remoteUrl.trim()) {
+    state.fetchingRemote = false
+    state.errorMessage = '请输入 Echo Pack URL'
+    return state
+  }
+  try {
+    const res = await fetchRemote({ sourceUrl: remoteUrl.trim() })
+    if (!res || !res.success) {
+      state.errorMessage = (res && res.message) || '抓取失败'
+      return state
+    }
+    const parsed = parsePack(res.text || '')
+    if (!parsed.success) {
+      state.errorMessage = parsed.message || 'JSON 解析失败'
+      return state
+    }
+    state.parsedEntries = parsed.entries
+    return state
+  } catch (e) {
+    state.errorMessage = '抓取失败: ' + (e && e.message ? e.message : String(e))
+    return state
+  } finally {
+    state.fetchingRemote = false
+  }
+}
+
+describe('EchoBatchImportDialog 在线 URL 抓取契约', () => {
+  test('空 URL → 立即提示「请输入 Echo Pack URL」，不调 fetch', async () => {
+    const fetchRemote = jest.fn()
+    const state = await runEchoRemoteUrlSubmit({ remoteUrl: '', fetchRemote, parsePack: parseEchoPack })
+    expect(state.errorMessage).toBe('请输入 Echo Pack URL')
+    expect(fetchRemote).not.toHaveBeenCalled()
+  })
+
+  test('空白 URL → 同样立即提示', async () => {
+    const fetchRemote = jest.fn()
+    const state = await runEchoRemoteUrlSubmit({ remoteUrl: '   ', fetchRemote, parsePack: parseEchoPack })
+    expect(state.errorMessage).toBe('请输入 Echo Pack URL')
+    expect(fetchRemote).not.toHaveBeenCalled()
+  })
+
+  test('fetchRemote 成功 + text 是合法 Echo Pack → 进入 parsedEntries，errorMessage 为空', async () => {
+    const text = JSON.stringify({
+      format: 'memocast.echo-pack',
+      version: 1,
+      echoes: [{ name: 'URL回响A', anno_source: 'export default {}', category: 'marker' }]
+    })
+    const state = await runEchoRemoteUrlSubmit({
+      remoteUrl: 'https://raw.githubusercontent.com/o/r/master/x.json',
+      fetchRemote: makeRemoteFetchOk(text),
+      parsePack: parseEchoPack
+    })
+    expect(state.errorMessage).toBe('')
+    expect(state.parsedEntries.length).toBe(1)
+    expect(state.parsedEntries[0].normalized.name).toBe('URL回响A')
+  })
+
+  test('fetchRemote 成功 + text 是 Rune Pack 格式（误传）→ parsePack 报 RUNE_PACK_OBJECT', async () => {
+    const text = JSON.stringify({
+      format: 'memocast.rune-pack',
+      version: 1,
+      runes: [{ name: '符文A', template: '<div>x</div>' }]
+    })
+    const state = await runEchoRemoteUrlSubmit({
+      remoteUrl: 'https://raw.githubusercontent.com/o/r/master/x.json',
+      fetchRemote: makeRemoteFetchOk(text),
+      parsePack: parseEchoPack
+    })
+    expect(state.errorMessage).toMatch(/符文/)
+    expect(state.parsedEntries.length).toBe(0)
+  })
+
+  test('fetchRemote 成功 + text 是 Rune 风格裸数组（误传）→ parsePack 报 RUNE_PACK_FORMAT', async () => {
+    const text = JSON.stringify([{ name: '符文A', template: '<div>x</div>' }])
+    const state = await runEchoRemoteUrlSubmit({
+      remoteUrl: 'https://raw.githubusercontent.com/o/r/master/x.json',
+      fetchRemote: makeRemoteFetchOk(text),
+      parsePack: parseEchoPack
+    })
+    expect(state.errorMessage).toMatch(/格式不匹配/)
+    expect(state.parsedEntries.length).toBe(0)
+  })
+
+  test('fetchRemote 返回 INVALID_URL → errorMessage 透传 message', async () => {
+    const state = await runEchoRemoteUrlSubmit({
+      remoteUrl: 'https://example.com/x.json',
+      fetchRemote: makeRemoteFetchFail('INVALID_URL', '只支持 github.com / raw.githubusercontent.com / gist.githubusercontent.com 形式的 URL'),
+      parsePack: parseEchoPack
+    })
+    expect(state.errorMessage).toMatch(/github\.com/)
+    expect(state.parsedEntries.length).toBe(0)
+  })
+
+  test('fetchRemote 返回 TOO_LARGE → errorMessage 透传 message', async () => {
+    const state = await runEchoRemoteUrlSubmit({
+      remoteUrl: 'https://raw.githubusercontent.com/o/r/master/x.json',
+      fetchRemote: makeRemoteFetchFail('TOO_LARGE', 'Response too large: 6291456 bytes'),
+      parsePack: parseEchoPack
+    })
+    expect(state.errorMessage).toMatch(/too large/i)
+    expect(state.parsedEntries.length).toBe(0)
+  })
+
+  test('fetchRemote 抛异常 → errorMessage 形如「抓取失败: <err>」', async () => {
+    const state = await runEchoRemoteUrlSubmit({
+      remoteUrl: 'https://raw.githubusercontent.com/o/r/master/x.json',
+      fetchRemote: makeRemoteFetchThrow(new Error('IPC dead')),
+      parsePack: parseEchoPack
+    })
+    expect(state.errorMessage).toBe('抓取失败: IPC dead')
+    expect(state.parsedEntries.length).toBe(0)
+  })
+
+  test('抓取完成后 fetchingRemote 必须复位为 false', async () => {
+    const text = JSON.stringify({ format: 'memocast.echo-pack', version: 1, echoes: [] })
+    const state = await runEchoRemoteUrlSubmit({
+      remoteUrl: 'https://raw.githubusercontent.com/o/r/master/x.json',
+      fetchRemote: makeRemoteFetchOk(text),
+      parsePack: parseEchoPack
+    })
+    expect(state.fetchingRemote).toBe(false)
+  })
+
+  test('抓取失败路径也必须复位 fetchingRemote', async () => {
+    const state = await runEchoRemoteUrlSubmit({
+      remoteUrl: 'https://example.com/x.json',
+      fetchRemote: makeRemoteFetchFail('INVALID_URL', 'x'),
+      parsePack: parseEchoPack
+    })
+    expect(state.fetchingRemote).toBe(false)
+  })
+})

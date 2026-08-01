@@ -19,12 +19,8 @@
  *   - log           可选 logger，console 兜底
  */
 
-const https = require('https')
-const http = require('http')
-const { URL } = require('url')
+const { toRawGithubUrl, fetchRemoteText, CODE: REMOTE_CODE } = require('./remote-fetch')
 
-const MAX_REDIRECTS = 8
-const MAX_BODY_BYTES = 1 * 1024 * 1024  // 1 MB
 const VALID_CATEGORY_KEYS = new Set([
   'general', 'education', 'outfit', 'fitness', 'music', 'novel',
   'movie', 'food', 'travel', 'research', 'legal', 'government',
@@ -35,94 +31,7 @@ const VALID_CATEGORY_KEYS = new Set([
   'environment', 'resume'
 ])
 
-function toRawGithubUrl (input) {
-  if (typeof input !== 'string' || !input.trim()) return null
-  let u
-  try {
-    u = new URL(input.trim())
-  } catch (_) {
-    return null
-  }
-  const host = (u.hostname || '').toLowerCase()
-  // 已经是 raw 形式
-  if (host === 'raw.githubusercontent.com' || host === 'gist.githubusercontent.com') {
-    return u.toString()
-  }
-  if (host !== 'github.com') return null
-  // github.com/<u>/<r>/blob/<b>/<p>  → raw.githubusercontent.com/<u>/<r>/<b>/<p>
-  // github.com/<u>/<r>/raw/<b>/<p>  → 同上
-  const parts = (u.pathname || '').split('/').filter(Boolean)
-  if (parts.length < 5) return null
-  const owner = parts[0]
-  const repo = parts[1]
-  const segment = parts[2]
-  if (segment !== 'blob' && segment !== 'raw') return null
-  const branch = parts[3]
-  const restPath = parts.slice(4).join('/')
-  if (!owner || !repo || !branch || !restPath) return null
-  return 'https://raw.githubusercontent.com/' + owner + '/' + repo + '/' + branch + '/' + restPath
-}
-
-function fetchTextWithRedirects (targetUrl, redirectsLeft, accum, logger) {
-  return new Promise((resolve, reject) => {
-    if (redirectsLeft < 0) {
-      reject(new Error('Too many redirects'))
-      return
-    }
-    let parsed
-    try {
-      parsed = new URL(targetUrl)
-    } catch (e) {
-      reject(new Error('Invalid URL: ' + targetUrl))
-      return
-    }
-    const isHttps = parsed.protocol === 'https:'
-    const client = isHttps ? https : http
-    const req = client.request({
-      method: 'GET',
-      hostname: parsed.hostname,
-      port: parsed.port || (isHttps ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: {
-        'User-Agent': 'memocast-rune-template-importer',
-        'Accept': 'text/plain, text/html;q=0.9, */*;q=0.5'
-      }
-    }, (res) => {
-      const status = res.statusCode || 0
-      if (status >= 300 && status < 400 && res.headers.location) {
-        res.resume()
-        const next = new URL(res.headers.location, parsed).toString()
-        fetchTextWithRedirects(next, redirectsLeft - 1, accum, logger).then(resolve, reject)
-        return
-      }
-      if (status < 200 || status >= 300) {
-        res.resume()
-        reject(new Error('HTTP ' + status + ' from ' + targetUrl))
-        return
-      }
-      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
-      if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-        res.resume()
-        reject(new Error('Response too large: ' + contentLength + ' bytes'))
-        return
-      }
-      res.setEncoding('utf8')
-      res.on('data', chunk => {
-        accum.push(chunk)
-        const total = accum.reduce((s, c) => s + c.length, 0)
-        if (total > MAX_BODY_BYTES) {
-          req.destroy(new Error('Response exceeded 1 MB limit'))
-        }
-      })
-      res.on('end', () => resolve(accum.join('')))
-      res.on('error', reject)
-    })
-    req.on('error', reject)
-    req.end()
-  })
-}
-
-function inferTemplateMeta (body, fallbackName) {
+function generateTemplateId (sourceUrl) {
   const lines = String(body || '').split(/\r?\n/).slice(0, 20)
   let name = ''
   let desc = ''
@@ -342,33 +251,23 @@ function createRuneTemplateService ({ db, execToObjects, execOne, saveDatabase, 
   }
 
   async function importFromRemote ({ sourceUrl, categoryKey } = {}) {
-    const raw = toRawGithubUrl(sourceUrl)
-    if (!raw) {
-      return {
-        success: false,
-        code: 'INVALID_URL',
-        message: '只支持 github.com / raw.githubusercontent.com / gist.githubusercontent.com 形式的 URL'
-      }
+    const fetched = await fetchRemoteText(sourceUrl, logger)
+    if (!fetched.success) {
+      return { success: false, code: fetched.code, message: fetched.message }
     }
-    let body
-    try {
-      body = await fetchTextWithRedirects(raw, MAX_REDIRECTS, [], logger)
-    } catch (error) {
-      logger.error && logger.error('[rune-template-service] fetch error:', error)
-      return { success: false, code: 'FETCH_FAILED', message: error && error.message ? error.message : String(error) }
-    }
+    const body = fetched.text
     if (!body || !body.trim()) {
-      return { success: false, code: 'EMPTY_BODY', message: '远端返回内容为空' }
+      return { success: false, code: REMOTE_CODE.EMPTY_BODY, message: '远端返回内容为空' }
     }
     const fallbackName = (() => {
       try {
-        const u = new URL(raw)
+        const u = new URL(fetched.finalUrl)
         const last = u.pathname.split('/').filter(Boolean).pop() || 'remote-template'
         return last.replace(/\.vue$/i, '')
       } catch (_) { return 'remote-template' }
     })()
     const meta = inferTemplateMeta(body, fallbackName)
-    const id = generateTemplateId(sourceUrl || raw)
+    const id = generateTemplateId(sourceUrl || fetched.finalUrl)
     const now = Date.now()
     const row = {
       id,
@@ -378,7 +277,7 @@ function createRuneTemplateService ({ db, execToObjects, execOne, saveDatabase, 
       color: '#7E57C2',
       icon: 'cloud_download',
       template: body,
-      source_url: sourceUrl || raw,
+      source_url: sourceUrl || fetched.finalUrl,
       is_builtin: 0,
       sort_order: 9999,
       created_at: now,
@@ -398,13 +297,11 @@ function createRuneTemplateService ({ db, execToObjects, execOne, saveDatabase, 
     saveMany,
     remove,
     importFromRemote,
-    toRawGithubUrl,
     inferTemplateMeta
   }
 }
 
 module.exports = createRuneTemplateService
 module.exports.createRuneTemplateService = createRuneTemplateService
-module.exports.toRawGithubUrl = toRawGithubUrl
 module.exports.inferTemplateMeta = inferTemplateMeta
 module.exports.VALID_CATEGORY_KEYS = VALID_CATEGORY_KEYS

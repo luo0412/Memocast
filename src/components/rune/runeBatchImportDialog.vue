@@ -12,6 +12,12 @@
     2. 符文选项悬浮显示 desc；
     3. 与内置符文名冲突的项目直接过滤，不进入预览；
     4. 提交时按所选项调用 batchImport：未重名走 normal，重名走 replace。
+
+  v2026-08-01 在线 URL 支持：
+    弹框顶部加 Tab：选择文件 / 在线 URL。
+    - 文件：FileReader 读 text → parseRunePack → 预览
+    - URL：填 GitHub URL → 主进程 IPC rune-pack:fetchRemote 抓 text → parseRunePack → 预览
+    两条路径解析失败时复用同一套错误码与 UI 文案（service 端透传 message）。
 -->
 <template>
   <q-dialog
@@ -30,24 +36,75 @@
       </q-toolbar>
 
       <q-card-section class='rune-batch-import-body'>
-        <div class='rune-batch-import-field'>
-          <div class='rune-batch-import-label'>选择 JSON 文件</div>
-          <div class='rune-batch-import-file-area' @click='triggerFileInput'>
-            <input
-              ref='fileInput'
-              type='file'
-              accept='.json'
-              style='display: none'
-              @change='onFileSelected'
-            />
-            <div v-if='!selectedFile' class='rune-batch-import-file-placeholder'>
-              <q-icon name='upload_file' size='2.5em' color='grey-5' />
-              <div class='q-mt-sm text-grey-6'>点击选择 JSON 文件</div>
+        <!-- v2026-08-01：导入源 Tab（文件 / 在线 URL），切换不重置已选分类/解析结果 -->
+        <div class='rune-batch-import-source-tabs'>
+          <q-tabs
+            v-model='sourceTab'
+            dense
+            align='left'
+            no-caps
+            active-color='primary'
+            indicator-color='primary'
+            class='rune-batch-import-tabs'
+          >
+            <q-tab name='file' icon='description' label='选择文件' />
+            <q-tab name='url' icon='cloud_download' label='在线 URL' />
+          </q-tabs>
+        </div>
+
+        <div v-show='sourceTab === "file"' class='rune-batch-import-source-pane'>
+          <div class='rune-batch-import-field'>
+            <div class='rune-batch-import-label'>选择 JSON 文件</div>
+            <div class='rune-batch-import-file-area' @click='triggerFileInput'>
+              <input
+                ref='fileInput'
+                type='file'
+                accept='.json'
+                style='display: none'
+                @change='onFileSelected'
+              />
+              <div v-if='!selectedFile' class='rune-batch-import-file-placeholder'>
+                <q-icon name='upload_file' size='2.5em' color='grey-5' />
+                <div class='q-mt-sm text-grey-6'>点击选择 JSON 文件</div>
+              </div>
+              <div v-else class='rune-batch-import-file-selected'>
+                <q-icon name='description' size='1.5em' color='purple-7' />
+                <span class='q-ml-sm'>{{ selectedFile.name }}</span>
+                <q-btn flat round dense icon='close' size='xs' @click.stop='clearFile' />
+              </div>
             </div>
-            <div v-else class='rune-batch-import-file-selected'>
-              <q-icon name='description' size='1.5em' color='purple-7' />
-              <span class='q-ml-sm'>{{ selectedFile.name }}</span>
-              <q-btn flat round dense icon='close' size='xs' @click.stop='clearFile' />
+          </div>
+        </div>
+
+        <div v-show='sourceTab === "url"' class='rune-batch-import-source-pane'>
+          <div class='rune-batch-import-field'>
+            <div class='rune-batch-import-label'>Rune Pack URL</div>
+            <el-input
+              v-model='remoteUrl'
+              placeholder='https://github.com/<u>/<r>/blob/<b>/<p>.json 或 raw 形式'
+              clearable
+              size='small'
+              :disable='fetchingRemote'
+              class='rune-batch-import-url-input'
+              @keyup.enter.native='onRemoteUrlSubmit'
+            />
+            <div class='rune-batch-import-hint'>
+              支持 <code>github.com/.../blob/...</code>、<code>github.com/.../raw/...</code>、
+              <code>raw.githubusercontent.com</code>、<code>gist.githubusercontent.com</code>。
+              URL 抓取在主进程完成，错误信息与文件路径完全一致。
+            </div>
+            <div class='rune-batch-import-url-actions'>
+              <q-btn
+                flat
+                dense
+                no-caps
+                color='primary'
+                icon='cloud_download'
+                :label='fetchingRemote ? "抓取中..." : "抓取并解析"'
+                :disable='!remoteUrl || fetchingRemote'
+                :loading='fetchingRemote'
+                @click='onRemoteUrlSubmit'
+              />
             </div>
           </div>
         </div>
@@ -258,6 +315,29 @@
   gap: 14px;
 }
 
+.rune-batch-import-source-tabs {
+  margin-bottom: -4px;
+}
+
+.rune-batch-import-tabs {
+  border-bottom: 1px solid rgba(126, 87, 194, 0.18);
+}
+
+.rune-batch-import-source-pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.rune-batch-import-url-input {
+  width: 100%;
+}
+
+.rune-batch-import-url-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
 .rune-batch-import-field {
   display: flex;
   flex-direction: column;
@@ -455,6 +535,10 @@
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
+.body--dark .rune-batch-import-tabs {
+  border-bottom-color: rgba(126, 87, 194, 0.32);
+}
+
 .body--dark .rune-batch-import-label {
   color: rgba(255, 255, 255, 0.55);
 }
@@ -563,6 +647,7 @@
 import { RuneCategoryEnum } from 'src/utils/enum'
 import runeTemplateService from 'src/services/RuneTemplateService'
 import { parseRunePack } from 'src/services/RuneImportService'
+import DatabaseClient from 'src/utils/DatabaseClient'
 
 export default {
   name: 'runeBatchImportDialog',
@@ -590,6 +675,10 @@ export default {
   },
   data () {
     return {
+      // v2026-08-01：导入源 Tab（file = 本地 JSON 文件；url = 在线 URL）
+      sourceTab: 'file',
+      remoteUrl: '',
+      fetchingRemote: false,
       selectedFile: null,
       parsedData: null,
       parsedEntries: [],
@@ -659,6 +748,9 @@ export default {
     },
     clearState () {
       this.selectedFile = null
+      this.sourceTab = 'file'
+      this.remoteUrl = ''
+      this.fetchingRemote = false
       this.parsedData = null
       this.parsedEntries = []
       this.newItems = []
@@ -681,14 +773,13 @@ export default {
         reader.readAsText(file)
       })
     },
-    async onFileSelected (event) {
-      const file = event.target.files && event.target.files[0]
-      if (!file) return
-      this.selectedFile = file
-      this.errorMessage = ''
-      this.importResult = null
+    /**
+     * v2026-08-01：抽离 file/url 两条路径共用的"text → parse → preview"流程。
+     * 调用方在调本方法前应已设置好 sourceTab / selectedFile / remoteUrl 等上下文，
+     * 并清空过错误/结果。
+     */
+    async applyParsedText (text) {
       try {
-        const text = await this.readFileAsText(file)
         const parsed = parseRunePack(text)
         if (!parsed.success) {
           // service 端已给出"误传回响 / 旧版符文 JSON / 文件过大"等友好文案，直接透传
@@ -699,9 +790,6 @@ export default {
           this.conflictItems = []
           return
         }
-        // v2026-08-01：split 真相源从 hint（existingRunes prop）改成 service.dryRunImport（= 主进程 DB）。
-        // 弹框仍保留 splitParsedIntoGroups 方法作为 fallback，理论上不可达；
-        // 这里 service 抛错时才走 fallback，避免渲染完全失败。
         const validEntries = parsed.entries
         if (validEntries.length === 0) {
           this.errorMessage = 'JSON 解析失败：未找到任何有效的符文条目'
@@ -711,27 +799,19 @@ export default {
           this.totalInvalidCount = parsed.invalidItems.length
           return
         }
-        // 保留 parsedEntries 用于 doImport（不再依赖 parsed 数组，迁到 entries + normalized）
         this.parsedData = parsed.runes
         this.parsedEntries = validEntries
         this.totalInvalidCount = parsed.invalidItems.length
         try {
-          // service.dryRunImport 内部会拉 DB 现读、按 DB 同名项切两栏
           const result = await runeTemplateService.dryRunImport(
-            // dryRunImport 接受 items 数组，做语义校验 + name 校验；
-            // 这里把 normalized 字段反向还原为 dryRunImport 期待的 raw 形状（保留 desc/category/color/icon/template）
             validEntries.map(e => e.normalized),
             this.localCategory || this.defaultCategory || RuneCategoryEnum.General,
-            {
-              builtinNames: this.builtinNames || []
-            }
+            { builtinNames: this.builtinNames || [] }
           )
           this.builtinFilteredCount = result.builtinFiltered
           this.newItems = result.newItems
           this.conflictItems = result.conflictItems
         } catch (e) {
-          // service 端异常（IPC 挂、DB 不可达等）才走本地 fallback；
-          // 并明确提示用户真相源降级了，避免静默用陈旧 hint。
           console.warn('[rune-batch-import-dialog] dryRunImport failed, fallback to local split', e)
           const invalidCount = parsed.invalidItems.length
           this.totalInvalidCount = invalidCount
@@ -744,6 +824,45 @@ export default {
         this.parsedEntries = []
         this.newItems = []
         this.conflictItems = []
+      }
+    },
+    async onFileSelected (event) {
+      const file = event.target.files && event.target.files[0]
+      if (!file) return
+      this.selectedFile = file
+      this.errorMessage = ''
+      this.importResult = null
+      try {
+        const text = await this.readFileAsText(file)
+        await this.applyParsedText(text)
+      } catch (e) {
+        this.errorMessage = 'JSON 解析失败: ' + (e && e.message ? e.message : String(e))
+        this.parsedData = null
+        this.parsedEntries = []
+        this.newItems = []
+        this.conflictItems = []
+      }
+    },
+    async onRemoteUrlSubmit () {
+      const url = (this.remoteUrl || '').trim()
+      if (!url) {
+        this.errorMessage = '请输入 Rune Pack URL'
+        return
+      }
+      this.fetchingRemote = true
+      this.errorMessage = ''
+      this.importResult = null
+      try {
+        const res = await DatabaseClient.runePacks.fetchRemote({ sourceUrl: url })
+        if (!res || !res.success) {
+          this.errorMessage = (res && res.message) || '抓取失败'
+          return
+        }
+        await this.applyParsedText(res.text || '')
+      } catch (e) {
+        this.errorMessage = '抓取失败: ' + (e && e.message ? e.message : String(e))
+      } finally {
+        this.fetchingRemote = false
       }
     },
     splitParsedIntoGroups (items) {
