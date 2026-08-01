@@ -366,6 +366,7 @@ async function batchImport (items, targetCategory = '', options = {}) {
     })
   }
   if (rows.length === 0) {
+    // skip 模式全部命中、或 normal/replace 没有可写入项时，直接返回成功并保留 skipped 计数
     return { success: true, count: 0, skipped: skipped.length }
   }
   const result = await DatabaseClient.runeTemplates.saveMany(rows)

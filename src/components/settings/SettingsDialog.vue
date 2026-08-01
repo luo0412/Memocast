@@ -149,10 +149,14 @@
       :selected-runes='runeExportSelectedRunes'
     />
     <runeBatchImportDialog
+      ref='runeBatchImportDialog'
       v-model='runeBatchImportDialogVisible'
       :default-category='runeImportCategory'
       :existing-runes='localRuneCards'
+      :builtin-names='builtinRuneNameList'
       @import='onRuneBatchImport'
+      @imported='onRuneBatchImported'
+      @import-failed='onRuneBatchImportFailed'
     />
     <echoFormDialog
       v-if='echoFormVisible'
@@ -286,6 +290,13 @@ export default {
       set (val) {
         this.updateStateAndStore({ runeCards: val })
       }
+    },
+    builtinRuneNameList () {
+      const list = this.localRuneCards || []
+      return list
+        .filter(r => r && (r.is_builtin === 1 || r.is_builtin === '1'))
+        .map(r => r.name)
+        .filter(Boolean)
     },
     localEchoCards: {
       get () {
@@ -935,7 +946,7 @@ export default {
       this.runeImportCategory = category || DEFAULT_RUNE_CATEGORY
       this.runeBatchImportDialogVisible = true
     },
-    async onRuneBatchImport ({ items, category, conflictMode, conflictNames }) {
+    async onRuneBatchImport ({ items, category, conflictMode }) {
       try {
         const result = await runeTemplateService.batchImport(items, category, {
           conflictMode,
@@ -944,39 +955,38 @@ export default {
         console.log('[Settings] onRuneBatchImport result:', result)
         console.log('[Settings] localRuneCards count before refresh:', this.localRuneCards.length)
         if (result && result.success) {
-          // 构建成功消息
-          let message = this.$t('runeBatchImportSuccess', { count: result.count || items.length })
-          if (conflictMode === 'skip' && result.skipped > 0) {
-            message += `（跳过 ${result.skipped} 个同名）`
-          } else if (conflictMode === 'replace' && conflictNames && conflictNames.length > 0) {
-            message += `（覆盖 ${conflictNames.length} 个同名）`
-          }
-          this.$q.notify({
-            message,
-            type: 'positive',
-            position: 'top'
-          })
           // 从 rune_templates 表重新加载并刷新 store
           const freshRunes = await runeTemplateService.listFlat(true)
           console.log('[Settings] freshRunes from DB count:', freshRunes.length)
           console.log('[Settings] freshRunes sample (first 3):', freshRunes.slice(0, 3).map(r => ({ id: r.id, name: r.name, category: r.category_key })))
           this.updateStateAndStore({ runeCards: freshRunes })
           console.log('[Settings] localRuneCards count after refresh:', this.localRuneCards.length)
-          this.runeBatchImportDialogVisible = false
-        } else {
           this.$q.notify({
-            message: this.$t('runeBatchImportFailed', { message: (result && result.message) || '' }),
-            type: 'negative',
+            message: this.$t('runeBatchImportSuccess', { count: result.count || items.length }),
+            type: 'positive',
             position: 'top'
           })
+          this.$emit('imported', result.count || items.length)
+        } else {
+          this.$emit('import-failed', (result && result.message) || '')
         }
       } catch (err) {
         console.error('[Settings] onRuneBatchImport error:', err)
-        this.$q.notify({
-          message: this.$t('runeBatchImportFailed', { message: '' }),
-          type: 'negative',
-          position: 'top'
-        })
+        this.$emit('import-failed', (err && err.message) || '')
+      }
+    },
+    onRuneBatchImported (count) {
+      const ref = this.$refs.runeBatchImportDialog
+      if (ref && typeof ref.onImportSuccess === 'function') {
+        ref.onImportSuccess(count)
+      } else {
+        this.runeBatchImportDialogVisible = false
+      }
+    },
+    onRuneBatchImportFailed (message) {
+      const ref = this.$refs.runeBatchImportDialog
+      if (ref && typeof ref.onImportError === 'function') {
+        ref.onImportError(message)
       }
     },
 

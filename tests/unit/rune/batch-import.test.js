@@ -253,7 +253,7 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
       expect(result.skipped).toBe(2)
     })
 
-    test('跳过模式：全部同名时返回空 rows', async () => {
+    test('跳过模式：全部同名时返回空 rows（不调用 saveMany）', async () => {
       const existingRunes = [
         { id: 'rune-001', name: '符文' }
       ]
@@ -264,9 +264,10 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
         existingRunes
       })
 
-      expect(DatabaseClient.runeTemplates.saveMany).toHaveBeenCalledWith([])
+      expect(DatabaseClient.runeTemplates.saveMany).not.toHaveBeenCalled()
       expect(result.success).toBe(true)
       expect(result.count).toBe(0)
+      expect(result.skipped).toBe(1)
     })
 
     test('跳过模式：导入列表内部重复也被去重（第一个被导入）', async () => {
@@ -293,8 +294,8 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
       ]
       const items = [
         { name: '已有重复' },   // 已有，同名跳过
-        { name: '内部重复' },   // 内部重复，跳过
-        { name: '内部重复' },   // 内部重复，跳过
+        { name: '内部重复' },   // 内部重复，第一次出现，保留
+        { name: '内部重复' },   // 内部重复，第二次出现，跳过
         { name: '新符文' }      // 新建
       ]
 
@@ -306,9 +307,9 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
       const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
       expect(rows.length).toBe(2)
       expect(rows.find(r => r.name === '已有重复')).toBeUndefined()
-      expect(rows.find(r => r.name === '内部重复')).toBeUndefined()
+      expect(rows.find(r => r.name === '内部重复')).toBeDefined()
       expect(rows.find(r => r.name === '新符文')).toBeDefined()
-      expect(result.skipped).toBe(3)
+      expect(result.skipped).toBe(2)
     })
 
     test('跳过模式：不区分大小写去重', async () => {
@@ -470,6 +471,104 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
       await expect(
         RuneTemplateService.batchImport(items, 'general', { existingRunes })
       ).resolves.not.toThrow()
+    })
+  })
+
+  // ====================================================================
+  // v2026-08-01 新增契约：与 SettingsRunePanel 双栏勾选 UI 配套
+  //   1) UI 已经把内置符文名剔除后，下传 items 只包含用户选择项；
+  //   2) 当 items 同时含「未重名」与「重名」，父组件以 conflictMode='replace'
+  //      提交，service 必须保留所有选项（包括未重名项）；
+  //   3) 仅含「未重名」时父组件传 conflictMode='normal'；
+  //   4) 未重名项也走新建路径（targetCategory），重名项走 replace 路径。
+  // ====================================================================
+  describe('双栏勾选导入契约', () => {
+    test('混合 new + replace：未重名项新建，重名项覆盖原分类', async () => {
+      const existingRunes = [
+        { id: 'rune-a', name: '旧符', category_key: 'music' },
+        { id: 'rune-b', name: '旧符2', category_key: 'novel' }
+      ]
+      const items = [
+        { name: '旧符' },     // 重名 → replace
+        { name: '新符文A' },  // 未重名 → normal
+        { name: '新符文B' },  // 未重名 → normal
+        { name: '旧符2' }     // 重名 → replace
+      ]
+
+      await RuneTemplateService.batchImport(items, 'general', {
+        conflictMode: 'replace',
+        existingRunes
+      })
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows.length).toBe(4)
+      const replace1 = rows.find(r => r.name === '旧符')
+      const replace2 = rows.find(r => r.name === '旧符2')
+      const newA = rows.find(r => r.name === '新符文A')
+      const newB = rows.find(r => r.name === '新符文B')
+      expect(replace1.id).toBe('rune-a')
+      expect(replace1.category_key).toBe('music')
+      expect(replace2.id).toBe('rune-b')
+      expect(replace2.category_key).toBe('novel')
+      expect(newA.id).not.toBe('rune-a')
+      expect(newA.id).not.toBe('rune-b')
+      expect(newA.category_key).toBe('general')
+      expect(newB.category_key).toBe('general')
+    })
+
+    test('只勾未重名项 + conflictMode=normal：全部使用 targetCategory', async () => {
+      const existingRunes = [{ id: 'rune-x', name: '完全无关', category_key: 'finance' }]
+      const items = [
+        { name: '新符1' },
+        { name: '新符2' }
+      ]
+
+      await RuneTemplateService.batchImport(items, 'gaming', {
+        conflictMode: 'normal',
+        existingRunes
+      })
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows.length).toBe(2)
+      rows.forEach(r => expect(r.category_key).toBe('gaming'))
+    })
+
+    test('只勾重名项 + conflictMode=replace：仅覆盖，分类保留', async () => {
+      const existingRunes = [
+        { id: 'rune-1', name: '覆盖A', category_key: 'research' },
+        { id: 'rune-2', name: '覆盖B', category_key: 'legal' }
+      ]
+      const items = [
+        { name: '覆盖A' },
+        { name: '覆盖B' }
+      ]
+
+      await RuneTemplateService.batchImport(items, 'general', {
+        conflictMode: 'replace',
+        existingRunes
+      })
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows.length).toBe(2)
+      expect(rows[0].id).toBe('rune-1')
+      expect(rows[0].category_key).toBe('research')
+      expect(rows[1].id).toBe('rune-2')
+      expect(rows[1].category_key).toBe('legal')
+    })
+
+    test('UI 已剔除内置名后，service 不再二次过滤（透传）', async () => {
+      // 模拟 UI 已过滤：items 内不含任何 BUILTIN_RUNE_TEMPLATE_META.name。
+      const existingRunes = []
+      const items = [{ name: '用户自定符文' }]
+
+      await RuneTemplateService.batchImport(items, 'general', {
+        conflictMode: 'normal',
+        existingRunes
+      })
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows.length).toBe(1)
+      expect(rows[0].name).toBe('用户自定符文')
     })
   })
 })
