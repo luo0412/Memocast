@@ -282,7 +282,7 @@ async function clearAll (payload) {
  * @param {string} targetCategory - 目标分类（仅用于新建符文，保留现有符文的分类）
  * @param {Object} options - 可选配置
  * @param {string} options.conflictMode - 冲突处理模式: 'normal'(默认新建) | 'replace'(覆盖) | 'skip'(跳过)
- * @param {Array} options.existingRunes - 现有符文列表，用于查找同名符文的 ID
+ * @param {Array} options.existingRunes - 现有符文列表（hint，与 UI split 同步；replace 模式下不作为 id 真相源）
  * @returns {Promise<{ success: boolean, count: number, skipped?: number, message?: string }>}
  */
 async function batchImport (items, targetCategory = '', options = {}) {
@@ -317,6 +317,31 @@ async function batchImport (items, targetCategory = '', options = {}) {
     }
   }
 
+  // v2026-08-01 replace 模式以真实 DB 为准：
+  //   选项 existingRunes 是 UI 弹框用于 split 视图的 hint，可能与 DB 漂移；
+  //   replace 必须用 DatabaseClient.runeTemplates.getAll() 返回的最新 id 才能保证
+  //   「覆盖」语义忠实——否则若 hint.id 指向已被删除的行，会触发 saveOne INSERT，
+  //   与现存同名活行并存，造成「多条重名」。
+  let dbNameMap = null
+  if (conflictMode === 'replace') {
+    let liveList
+    try {
+      liveList = await DatabaseClient.runeTemplates.getAll()
+    } catch (err) {
+      console.warn('[RUNE-TPL] batchImport: getAll failed, fallback to hint', err)
+      liveList = []
+    }
+    dbNameMap = new Map()
+    for (const r of (Array.isArray(liveList) ? liveList : [])) {
+      if (r && r.name) {
+        const key = String(r.name).trim().toLowerCase()
+        if (!dbNameMap.has(key)) {
+          dbNameMap.set(key, { id: r.id, category_key: r.category_key || 'general' })
+        }
+      }
+    }
+  }
+
   // 合并 existing + import list 的名称集合（用于 skip 模式去重）
   // skip 模式：同名符文只导入第一个，后续同名（包括 import list 内部重复）都跳过
   const seenNames = new Set()
@@ -337,12 +362,13 @@ async function batchImport (items, targetCategory = '', options = {}) {
       }
       seenNames.add(itemNameKey)
     }
-    // 覆盖模式下，保留现有符文的分类；新建符文使用目标分类
+    // 覆盖模式下，优先用真实 DB 的 id / category（v2026-08-01 修复 Bug 3）。
+    //   - DB 命中 → 用 DB 的 id + category，覆盖保留原分类（不受 targetCategory 影响）。
+    //   - DB 未命中（hint 残留或该行已被删）→ 走新建路径，绝不复活 hint.id。
     let id
     let category
-    if (conflictMode === 'replace' && existingNameMap.has(itemNameKey)) {
-      // 覆盖模式：保留现有符文的分类（只在第一次出现时覆盖）
-      const existing = existingNameMap.get(itemNameKey)
+    if (conflictMode === 'replace' && dbNameMap && dbNameMap.has(itemNameKey)) {
+      const existing = dbNameMap.get(itemNameKey)
       id = existing.id
       category = existing.category_key
     } else {

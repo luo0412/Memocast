@@ -153,7 +153,7 @@
       ref='runeBatchImportDialog'
       v-model='runeBatchImportDialogVisible'
       :default-category='runeImportCategory'
-      :existing-runes='localRuneCards'
+      :existing-runes='runeImportExistingSnapshot'
       :builtin-names='builtinRuneNameList'
       @import='onRuneBatchImport'
       @imported='onRuneBatchImported'
@@ -256,6 +256,10 @@ export default {
       editingRune: null,
       runeCategory: DEFAULT_RUNE_CATEGORY,
       runeImportCategory: DEFAULT_RUNE_CATEGORY,
+      // v2026-08-01：弹框打开瞬间从 DB 现拉一份名单作为本次 split 视图的真相源，
+      // 避免 vuex 缓存陈旧导致"未重名"误判（进而让同名新行被 INSERT）。
+      // 与 service 的 replace 路径（也已改为按 DB 现取 id）双层防护。
+      runeImportExistingSnapshot: [],
       runeExportDialogVisible: false,
       runeExportSelectedRunes: [],
       runeBatchImportDialogVisible: false,
@@ -943,8 +947,20 @@ export default {
       this.runeExportSelectedRunes = runesInCategory || []
       this.runeExportDialogVisible = true
     },
-    openBatchImport (category) {
+    async openBatchImport (category) {
       this.runeImportCategory = category || DEFAULT_RUNE_CATEGORY
+      // v2026-08-01：弹框打开瞬间重新从 DB 拉一份名单（force=true 绕过缓存），
+      // 作为 split 视图的"现快照"——这一步是修复"多条重名"的关键防线。
+      // service.batchImport 内部 replace 也会再校一次 DB，但 UI 这里要先把 split 切对。
+      try {
+        runeTemplateService.clearCache()
+        const fresh = await runeTemplateService.listFlat(true)
+        this.runeImportExistingSnapshot = Array.isArray(fresh) ? fresh : []
+      } catch (err) {
+        // 极端兜底：拉取失败不阻塞弹框打开，沿用 vuex 缓存作为 split hint
+        console.warn('[Settings] openBatchImport listFlat failed, fallback to localRuneCards', err)
+        this.runeImportExistingSnapshot = Array.isArray(this.localRuneCards) ? this.localRuneCards : []
+      }
       this.runeBatchImportDialogVisible = true
     },
     async onRuneBatchImport ({ items, category, conflictMode }) {

@@ -8,6 +8,10 @@
 //   4) 正常模式（normal）下新建同名符文（不同 id）
 //   5) 批量写入后调用 invalidate()
 //   6) 名称去重不区分大小写
+//   7) 覆盖模式（replace）的"真实 DB 校验"契约（v2026-08-01）：
+//      - replace 模式的 id 必须以 DatabaseClient.runeTemplates.getAll() 返回的数据为准，
+//        而不是 options.existingRunes.hint.id。
+//      - 这是为了避免：弹框 split 用陈旧快照误判「未重名」，导致同名新行被 INSERT。
 // ============================================================================
 
 // 必须在 import 之前定义 mock
@@ -26,8 +30,15 @@ jest.mock('src/utils/DatabaseClient', () => ({
 
 const DatabaseClient = require('src/utils/DatabaseClient').default
 
-// 必须在 jest.mock 之后 import
+  // 必须在 jest.mock 之后 import
 const RuneTemplateService = require('src/services/RuneTemplateService').default
+
+// v2026-08-01 replace 模式以真实 DB 为准：
+//   老契约里 fixture 的 existingRunes 必须同步 mirror 到 DB mock 上，
+//   否则新实现会把"DB 里没有"误判为"hint 残留"走新建路径。
+function mirrorExistingToDb (existingRunes) {
+  DatabaseClient.runeTemplates.getAll.mockResolvedValue(existingRunes || [])
+}
 
 // 辅助函数：从 batchImport 源码里提取 VALID_CATEGORY_KEYS（与被测代码保持一致）
 const VALID_CATEGORY_KEYS = new Set([
@@ -111,6 +122,7 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
         { id: 'rune-001', name: '测试符文', category_key: 'education' }
       ]
       const items = [{ name: '测试符文' }] // 导入数据里的 category 无关紧要
+      mirrorExistingToDb(existingRunes)
 
       await RuneTemplateService.batchImport(items, 'general', {
         conflictMode: 'replace',
@@ -128,6 +140,7 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
         { id: 'rune-002', name: '另一个符文', category_key: 'general' }
       ]
       const items = [{ name: '另一个符文' }]
+      mirrorExistingToDb(existingRunes)
 
       await RuneTemplateService.batchImport(items, 'gaming', {
         conflictMode: 'replace',
@@ -147,6 +160,7 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
         { name: '符文A' },
         { name: '符文B' }
       ]
+      mirrorExistingToDb(existingRunes)
 
       await RuneTemplateService.batchImport(items, 'general', {
         conflictMode: 'replace',
@@ -168,6 +182,7 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
         { name: '现有符文' },   // 同名，覆盖
         { name: '新符文' }      // 不同名，新建
       ]
+      mirrorExistingToDb(existingRunes)
 
       await RuneTemplateService.batchImport(items, 'gaming', {
         conflictMode: 'replace',
@@ -189,6 +204,7 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
         { id: 'rune-001', name: 'Test Rune', category_key: 'research' }
       ]
       const items = [{ name: 'TEST RUNE' }]
+      mirrorExistingToDb(existingRunes)
 
       await RuneTemplateService.batchImport(items, 'general', {
         conflictMode: 'replace',
@@ -482,6 +498,154 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
   //   3) 仅含「未重名」时父组件传 conflictMode='normal'；
   //   4) 未重名项也走新建路径（targetCategory），重名项走 replace 路径。
   // ====================================================================
+  // ====================================================================
+  // v2026-08-01 replace 模式"真实 DB 校验"契约（Bug 3 解耦）
+  //   旧契约：replace 分支直接用 options.existingRunes[?].id 作为 row.id
+  //   新契约：replace 分支必须以 DatabaseClient.runeTemplates.getAll() 返回的数据为准。
+  //     这样无论 UI 传过来的 existingRunes 多陈旧、服务端永远拿到最新 id。
+  // ====================================================================
+  describe('replace 模式以真实 DB 为准（v2026-08-01 修复）', () => {
+    test('DB 中存在同名 rune（不论 hint 是否命中）：用 DB 的 id 覆盖', async () => {
+      // UI hint 与 DB 不一致：hint 指向老 id，DB 已是新 id
+      const hintRunes = [
+        { id: 'stale-id-001', name: 'X', category_key: 'education' }
+      ]
+      const dbRunes = [
+        { id: 'live-id-007', name: 'X', category_key: 'music' }
+      ]
+      DatabaseClient.runeTemplates.getAll.mockResolvedValue(dbRunes)
+
+      await RuneTemplateService.batchImport(
+        [{ name: 'X' }],
+        'general',
+        { conflictMode: 'replace', existingRunes: hintRunes }
+      )
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows.length).toBe(1)
+      // 必须用 live-id-007，不能用 stale-id-001
+      expect(rows[0].id).toBe('live-id-007')
+      // category 必须用 DB 的 'music'，不能用 hint 的 'education'，也不能用 targetCategory 'general'
+      expect(rows[0].category_key).toBe('music')
+    })
+
+    test('DB 中无同名 rune 但 hint 命中：不复活 hint.id，走新建路径', async () => {
+      // UI hint 指向一个已被删除的 id，DB 里没了
+      const hintRunes = [
+        { id: 'removed-id-001', name: 'Y', category_key: 'education' }
+      ]
+      // DB 里没有 Y，getAll 返回 []
+      DatabaseClient.runeTemplates.getAll.mockResolvedValue([])
+
+      await RuneTemplateService.batchImport(
+        [{ name: 'Y' }],
+        'general',
+        { conflictMode: 'replace', existingRunes: hintRunes }
+      )
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows.length).toBe(1)
+      // 必须是新 id，绝对不能用 removed-id-001
+      expect(rows[0].id).toMatch(/^import-/)
+      expect(rows[0].id).not.toBe('removed-id-001')
+      expect(rows[0].category_key).toBe('general')
+    })
+
+    test('DB 与 hint 一致：行为不变（向后兼容）', async () => {
+      const consistent = [
+        { id: 'rune-001', name: 'Z', category_key: 'research' }
+      ]
+      DatabaseClient.runeTemplates.getAll.mockResolvedValue(consistent)
+
+      await RuneTemplateService.batchImport(
+        [{ name: 'Z' }],
+        'general',
+        { conflictMode: 'replace', existingRunes: consistent }
+      )
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows[0].id).toBe('rune-001')
+      expect(rows[0].category_key).toBe('research')
+    })
+
+    test('混合场景：hint 命中 A、B、C，DB 里只有 A、C（B 已被删），全部按 DB 走', async () => {
+      const hintRunes = [
+        { id: 'id-A', name: 'A', category_key: 'music' },
+        { id: 'id-B', name: 'B', category_key: 'novel' },
+        { id: 'id-C', name: 'C', category_key: 'legal' }
+      ]
+      // DB 里 B 已被删除
+      const dbRunes = [
+        { id: 'id-A', name: 'A', category_key: 'music' },
+        { id: 'id-C', name: 'C', category_key: 'legal' }
+      ]
+      DatabaseClient.runeTemplates.getAll.mockResolvedValue(dbRunes)
+
+      await RuneTemplateService.batchImport(
+        [
+          { name: 'A' },
+          { name: 'B' },   // DB 没有 → 新建
+          { name: 'C' },
+          { name: 'D' }    // DB、hint 都没 → 新建
+        ],
+        'general',
+        { conflictMode: 'replace', existingRunes: hintRunes }
+      )
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      expect(rows.length).toBe(4)
+      const a = rows.find(r => r.name === 'A')
+      const b = rows.find(r => r.name === 'B')
+      const c = rows.find(r => r.name === 'C')
+      const d = rows.find(r => r.name === 'D')
+      // A、C 走覆盖
+      expect(a.id).toBe('id-A')
+      expect(a.category_key).toBe('music')
+      expect(c.id).toBe('id-C')
+      expect(c.category_key).toBe('legal')
+      // B、D 走新建（绝不能用 id-B 这种 hint id）
+      expect(b.id).toMatch(/^import-/)
+      expect(b.id).not.toBe('id-B')
+      expect(b.category_key).toBe('general')
+      expect(d.id).toMatch(/^import-/)
+      expect(d.category_key).toBe('general')
+    })
+
+    test('replace 模式下，replace 路径必须调 getAll()（至少一次）', async () => {
+      const hintRunes = [{ id: 'id-A', name: 'A', category_key: 'music' }]
+      DatabaseClient.runeTemplates.getAll.mockResolvedValue([
+        { id: 'id-A', name: 'A', category_key: 'music' }
+      ])
+
+      await RuneTemplateService.batchImport(
+        [{ name: 'A' }],
+        'general',
+        { conflictMode: 'replace', existingRunes: hintRunes }
+      )
+
+      // 关键契约：replace 必须以 DB 为准，所以 getAll 必须被调
+      expect(DatabaseClient.runeTemplates.getAll).toHaveBeenCalled()
+    })
+
+    test('normal 模式下不必调 getAll（沿用 hint 即可，新增没有 replace 语义）', async () => {
+      const hintRunes = [{ id: 'id-A', name: 'A', category_key: 'music' }]
+      DatabaseClient.runeTemplates.getAll.mockResolvedValue([
+        { id: 'id-A', name: 'A', category_key: 'music' }
+      ])
+
+      await RuneTemplateService.batchImport(
+        [{ name: 'A' }],
+        'gaming',
+        { conflictMode: 'normal', existingRunes: hintRunes }
+      )
+
+      const rows = DatabaseClient.runeTemplates.saveMany.mock.calls[0][0]
+      // normal 模式直接新建，不查 DB
+      expect(rows[0].id).toMatch(/^import-/)
+      expect(rows[0].category_key).toBe('gaming')
+    })
+  })
+
   describe('双栏勾选导入契约', () => {
     test('混合 new + replace：未重名项新建，重名项覆盖原分类', async () => {
       const existingRunes = [
@@ -494,6 +658,7 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
         { name: '新符文B' },  // 未重名 → normal
         { name: '旧符2' }     // 重名 → replace
       ]
+      mirrorExistingToDb(existingRunes)
 
       await RuneTemplateService.batchImport(items, 'general', {
         conflictMode: 'replace',
@@ -542,6 +707,7 @@ describe('RuneTemplateService.batchImport 批量导入符文', () => {
         { name: '覆盖A' },
         { name: '覆盖B' }
       ]
+      mirrorExistingToDb(existingRunes)
 
       await RuneTemplateService.batchImport(items, 'general', {
         conflictMode: 'replace',
