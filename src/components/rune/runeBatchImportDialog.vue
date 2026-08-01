@@ -138,9 +138,9 @@
           </div>
         </div>
 
-        <div v-if='parsedData && parsedData.length > 0' class='rune-batch-import-preview'>
+        <div v-if='parsedEntries.length > 0' class='rune-batch-import-preview'>
           <div class='rune-batch-import-preview-title'>
-            共 {{ parsedData.length }} 个符文
+            共 {{ parsedEntries.length }} 个符文
             <span v-if='builtinFilteredCount > 0' class='text-grey-6 q-ml-xs'>
               （已过滤 {{ builtinFilteredCount }} 个内置）
             </span>
@@ -707,7 +707,9 @@ export default {
       remoteUrl: '',
       fetchingRemote: false,
       selectedFile: null,
-      parsedData: null,
+      // v2026-08-01 修复：v-if 渲染源已统一到 parsedEntries（与 echo 弹框对齐）；
+      //   旧 parsedData 字段曾指向 parsed.runes，但 parseRunePack 不返回该字段 → v-if 永远 false，
+      //   用户看到「只显示文件名，下面一片空白」面板。删除以彻底断绝歧义。
       parsedEntries: [],
       newItems: [],
       conflictItems: [],
@@ -761,7 +763,6 @@ export default {
     },
     clearFile () {
       this.selectedFile = null
-      this.parsedData = null
       this.parsedEntries = []
       this.newItems = []
       this.conflictItems = []
@@ -778,7 +779,6 @@ export default {
       this.sourceTab = 'file'
       this.remoteUrl = ''
       this.fetchingRemote = false
-      this.parsedData = null
       this.parsedEntries = []
       this.newItems = []
       this.conflictItems = []
@@ -811,7 +811,6 @@ export default {
         if (!parsed.success) {
           // service 端已给出"误传回响 / 旧版符文 JSON / 文件过大"等友好文案，直接透传
           this.errorMessage = parsed.message || 'JSON 解析失败'
-          this.parsedData = null
           this.parsedEntries = []
           this.newItems = []
           this.conflictItems = []
@@ -820,13 +819,16 @@ export default {
         const validEntries = parsed.entries
         if (validEntries.length === 0) {
           this.errorMessage = 'JSON 解析失败：未找到任何有效的符文条目'
-          this.parsedData = []
+          this.parsedEntries = []
           this.newItems = []
           this.conflictItems = []
           this.totalInvalidCount = parsed.invalidItems.length
           return
         }
-        this.parsedData = parsed.runes
+        // v2026-08-01 修复：v-if 渲染源是 parsedEntries（与 echo 弹框对齐）；
+        //   旧版曾用 parsed.runes 作为 parsedData，但 parseRunePack 不返回 runes 字段
+        //   （只返回 entries / invalidItems），导致预览区 v-if='parsedData && parsedData.length > 0'
+        //   永远为 false，用户看到"选完文件后下面一片空白"。
         this.parsedEntries = validEntries
         this.totalInvalidCount = parsed.invalidItems.length
         try {
@@ -846,12 +848,12 @@ export default {
           console.warn('[rune-batch-import-dialog] dryRunImport failed, fallback to local split', e)
           const invalidCount = parsed.invalidItems.length
           this.totalInvalidCount = invalidCount
-          this.splitParsedIntoGroups(parsed.runes)
+          // fallback 也走同一份 split（用 validEntries 的 raw 字段构造 entry）
+          this.splitParsedIntoGroups(validEntries.map(e => e.raw))
           this.errorMessage = '注意：与服务端同步异常，已用本地缓存切分，结果可能与实际数据不符'
         }
       } catch (e) {
         this.errorMessage = 'JSON 解析失败: ' + (e && e.message ? e.message : String(e))
-        this.parsedData = null
         this.parsedEntries = []
         this.newItems = []
         this.conflictItems = []
@@ -868,7 +870,6 @@ export default {
         await this.applyParsedText(text)
       } catch (e) {
         this.errorMessage = 'JSON 解析失败: ' + (e && e.message ? e.message : String(e))
-        this.parsedData = null
         this.parsedEntries = []
         this.newItems = []
         this.conflictItems = []
