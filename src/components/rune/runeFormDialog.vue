@@ -151,7 +151,10 @@ export default {
   data () {
     return {
       dialog: null,
-      form: createRuneForm(),
+      // v2026-08-01（修复）：data 初始化时立即用 defaultCategory prop，避免 v-if mount 后 + watch.rune 异步触发的
+      //   渲染抖动（用户看到下拉框空白 → 一帧后跳到目标分类）。父端 openAddRune 已先更新 runeCategory
+      //   再设 runeFormKey++ 触发重建，prop default-category 在组件创建瞬间就是目标值。
+      form: createRuneForm({}, this.defaultCategory),
       remoteImportDialogVisible: false,
       remoteImportUrl: '',
       remoteImportCategory: '',

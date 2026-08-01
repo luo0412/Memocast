@@ -591,7 +591,10 @@ export default {
       conflictItems: [],
       builtinFilteredCount: 0,
       totalInvalidCount: 0,
-      localCategory: '',
+      // v2026-08-01（修复）：data 初始化时立即用 defaultCategory，避免 v-if mount 后 + watch.value 异步触发的
+      //   渲染抖动（用户看到下拉框空白 → 一帧后跳到目标分类）。父端 openBatchImport 已先更新
+      //   runeImportCategory 再设 visible=true，prop default-category 在组件创建瞬间就是目标值。
+      localCategory: this.defaultCategory || '',
       importing: false,
       errorMessage: '',
       importResult: null
@@ -610,8 +613,21 @@ export default {
     }
   },
   watch: {
+    // v2026-08-01（修复 defaultCategory 同步）：
+    //   watch.defaultCategory 监听 prop 变化——父端如果改了 defaultCategory（罕见，但用户连续切换 tab 后点导入可能
+    //   触发时序不一致），子组件 localCategory 立即跟随。
+    //   watch.value 仅用于弹框打开瞬间触发 clearState()，localCategory 已经在 data() 初始化时绑好 prop。
+    defaultCategory: {
+      immediate: true,
+      handler (v) {
+        if (v && !this.localCategory) {
+          this.localCategory = v
+        }
+      }
+    },
     value (v) {
       if (v) {
+        // 弹框打开时再校一次 localCategory，覆盖可能的 prop 变化路径
         this.localCategory = this.defaultCategory || RuneCategoryEnum.General
         this.clearState()
       }

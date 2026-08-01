@@ -321,3 +321,91 @@ describe('SettingsDialog 默认分类同步契约', () => {
     expect(fakePanel.emitBatchImport()).toEqual({ event: 'batch-import', category: 'fitness' })
   })
 })
+
+// ============================================================================
+// 端到端契约：用户切到「娱乐」tab → 点批量导入 → 弹框「导入分类」下拉 = 娱乐
+// 链路：SettingsRunePanel.data().category → $emit('batch-import', category)
+//   → SettingsDialog.openBatchImport(category) → this.runeImportCategory = category
+//   → <runeBatchImportDialog :default-category="runeImportCategory" />
+//   → 组件 mount → data().localCategory = this.defaultCategory || ''
+//   → watch.value(true) 强制覆盖 localCategory = defaultCategory || General
+//   → <q-select v-model="localCategory"> 显示 label = 娱乐
+// ============================================================================
+describe('端到端：切 tab → 点批量导入 → 下拉默认选中', () => {
+  function makeEndToEndStub () {
+    // 1) SettingsRunePanel 子组件
+    const panel = {
+      category: 'general',  // data() 默认值
+      switchTab (val) { this.category = val },
+      onBatchImport () { return { event: 'batch-import', category: this.category } }
+    }
+    // 2) SettingsDialog 父组件
+    const dialog = {
+      runeImportCategory: 'general',  // data() 默认值
+      runeBatchImportDialogVisible: false,
+      async openBatchImport (category) {
+        this.runeImportCategory = category || 'general'
+        this.runeBatchImportDialogVisible = true
+      }
+    }
+    // 3) runeBatchImportDialog 子组件（v-if 控制）
+    function createDialogInstance (defaultCategory) {
+      return {
+        defaultCategory,
+        localCategory: defaultCategory || '',  // data() 初始化就用 prop（v2026-08-01 修复）
+        onVisible (v) {
+          // watch.value 触发
+          if (v) this.localCategory = this.defaultCategory || 'general'
+        }
+      }
+    }
+    return { panel, dialog, createDialogInstance }
+  }
+
+  test('用户在娱乐 tab 点批量导入：弹框 localCategory = entertainment', async () => {
+    const { panel, dialog, createDialogInstance } = makeEndToEndStub()
+    // 用户操作：切到娱乐 tab
+    panel.switchTab('entertainment')
+    expect(panel.category).toBe('entertainment')
+    // 用户操作：点批量导入按钮
+    const emit = panel.onBatchImport()
+    expect(emit).toEqual({ event: 'batch-import', category: 'entertainment' })
+    // 父组件接收 category
+    await dialog.openBatchImport(emit.category)
+    expect(dialog.runeImportCategory).toBe('entertainment')
+    // 弹框组件 mount：data() 用 prop 初始化
+    const dlg = createDialogInstance(dialog.runeImportCategory)
+    expect(dlg.localCategory).toBe('entertainment')  // ← 关键断言
+    // watch.value 触发（弹框从隐藏变可见）
+    dlg.onVisible(true)
+    expect(dlg.localCategory).toBe('entertainment')
+  })
+
+  test('用户连续切 tab → 点批量导入：永远跟当前 tab 走（不是上一次遗留）', async () => {
+    const { panel, dialog, createDialogInstance } = makeEndToEndStub()
+    // 第一轮：教育 → 弹框
+    panel.switchTab('education')
+    let emit = panel.onBatchImport()
+    await dialog.openBatchImport(emit.category)
+    expect(dialog.runeImportCategory).toBe('education')
+    let dlg = createDialogInstance(dialog.runeImportCategory)
+    expect(dlg.localCategory).toBe('education')
+
+    // 第二轮：用户在弹框打开状态下，切到游戏 tab（关闭+重开弹框）
+    panel.switchTab('gaming')
+    emit = panel.onBatchImport()
+    await dialog.openBatchImport(emit.category)
+    expect(dialog.runeImportCategory).toBe('gaming')
+    dlg = createDialogInstance(dialog.runeImportCategory)
+    expect(dlg.localCategory).toBe('gaming')
+  })
+
+  test('用户在 general tab 点批量导入：localCategory = general', async () => {
+    const { panel, dialog, createDialogInstance } = makeEndToEndStub()
+    panel.switchTab('general')
+    const emit = panel.onBatchImport()
+    await dialog.openBatchImport(emit.category)
+    const dlg = createDialogInstance(dialog.runeImportCategory)
+    expect(dlg.localCategory).toBe('general')
+  })
+})
