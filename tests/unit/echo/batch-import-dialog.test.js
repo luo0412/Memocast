@@ -84,14 +84,35 @@ describe('EchoImportService.parseEchoPack — 顶层 schema', () => {
     expect(result.code).toBe('RUNE_PACK_FORMAT')
   })
 
+  test('顶层裸数组 + 元素有 template 无 anno_source → 明确归类为 Rune 误传', () => {
+    const result = parseEchoPack(JSON.stringify([
+      { name: '符文A', template: '<div>a</div>', category: 'general' },
+      { name: '符文B', template: '<div>b</div>', category: 'gaming' }
+    ]))
+    expect(result.success).toBe(false)
+    expect(result.code).toBe('RUNE_PACK_FORMAT')
+    expect(result.message).toMatch(/符文/)
+  })
+
   test('非空非数组对象（无 format 头）→ 拒绝（ECHO_PACK_FORMAT_MISMATCH）', () => {
     const result = parseEchoPack(JSON.stringify({ foo: 'bar' }))
     expect(result.success).toBe(false)
     expect(result.code).toBe('ECHO_PACK_FORMAT_MISMATCH')
   })
 
-  test('format 不匹配 → 拒绝', () => {
-    const result = parseEchoPack(JSON.stringify({ format: 'memocast.rune-pack', version: 1, echoes: [] }))
+  test('format = memocast.rune-pack → 拒绝（RUNE_PACK_OBJECT）', () => {
+    const result = parseEchoPack(JSON.stringify({
+      format: 'memocast.rune-pack',
+      version: 1,
+      runes: [{ name: '符文A', template: '<div>x</div>' }]
+    }))
+    expect(result.success).toBe(false)
+    expect(result.code).toBe('RUNE_PACK_OBJECT')
+    expect(result.message).toMatch(/符文/)
+  })
+
+  test('format 不匹配（非 Rune Pack 也非 Echo Pack）→ 拒绝', () => {
+    const result = parseEchoPack(JSON.stringify({ format: 'memocast.foo-pack', version: 1, echoes: [] }))
     expect(result.success).toBe(false)
     expect(result.code).toBe('ECHO_PACK_FORMAT_MISMATCH')
   })

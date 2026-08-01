@@ -1,7 +1,11 @@
 <!--
-  RuneBatchImportDialog - rune 批量导入弹框
-  从 SettingsRunePanel 触发，支持从 JSON 文件批量导入符文到当前分类。
-  JSON 格式与远程导入格式一致。
+  RuneBatchImportDialog - rune 批量导入弹框（v2026-08-01）
+  从 SettingsRunePanel 触发，支持从 Rune Pack v1 JSON 文件批量导入符文到当前分类。
+  格式与 EchoImportService 对齐：
+    1. JSON 顶层必须为 { format: 'memocast.rune-pack', version: 1, exportedAt, runes }
+       裸数组（v2026-08-01 之前的旧版 rune JSON）或 Echo Pack 格式都会立即拒绝。
+    2. 与内置符文名冲突的项目直接过滤，不进入预览。
+    3. 提交时按所选项调用 batchImport：未重名走 normal，重名走 replace。
 
   v2026-08-01 改造：
     1. 解析文件后立刻在弹框内展示「未重名（默认勾选）/ 重名（默认不勾选）」两栏可复选方块；
@@ -558,6 +562,7 @@
 <script>
 import { RuneCategoryEnum } from 'src/utils/enum'
 import runeTemplateService from 'src/services/RuneTemplateService'
+import { parseRunePack } from 'src/services/RuneImportService'
 
 export default {
   name: 'runeBatchImportDialog',
@@ -587,6 +592,7 @@ export default {
     return {
       selectedFile: null,
       parsedData: null,
+      parsedEntries: [],
       newItems: [],
       conflictItems: [],
       builtinFilteredCount: 0,
@@ -640,6 +646,7 @@ export default {
     clearFile () {
       this.selectedFile = null
       this.parsedData = null
+      this.parsedEntries = []
       this.newItems = []
       this.conflictItems = []
       this.builtinFilteredCount = 0
@@ -653,6 +660,7 @@ export default {
     clearState () {
       this.selectedFile = null
       this.parsedData = null
+      this.parsedEntries = []
       this.newItems = []
       this.conflictItems = []
       this.builtinFilteredCount = 0
@@ -681,55 +689,43 @@ export default {
       this.importResult = null
       try {
         const text = await this.readFileAsText(file)
-        const parsed = JSON.parse(text)
-        // 顶层是对象且带 Echo Pack format 头 —— 文件格式与符文不匹配
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.format === 'memocast.echo-pack') {
-          this.errorMessage = 'JSON 格式不匹配：当前文件不是符文 JSON（疑似 Echo Pack 格式）'
+        const parsed = parseRunePack(text)
+        if (!parsed.success) {
+          // service 端已给出"误传回响 / 旧版符文 JSON / 文件过大"等友好文案，直接透传
+          this.errorMessage = parsed.message || 'JSON 解析失败'
           this.parsedData = null
+          this.parsedEntries = []
           this.newItems = []
           this.conflictItems = []
           return
-        }
-        if (!Array.isArray(parsed)) {
-          this.errorMessage = 'JSON 格式错误：根元素必须是数组'
-          this.parsedData = null
-          this.newItems = []
-          this.conflictItems = []
-          return
-        }
-        // 顶层是数组，但首个有效条目含 echo 必有字段 anno_source 且缺 rune 必有字段 template —— 疑似 Echo 导出被误传
-        if (parsed.length > 0) {
-          const firstValid = parsed.find(it => it && typeof it === 'object' && String(it.name || '').trim())
-          if (firstValid && firstValid.anno_source && !firstValid.template) {
-            this.errorMessage = 'JSON 格式不匹配：当前文件不是符文 JSON（疑似 Echo 导出）'
-            this.parsedData = null
-            this.newItems = []
-            this.conflictItems = []
-            return
-          }
         }
         // v2026-08-01：split 真相源从 hint（existingRunes prop）改成 service.dryRunImport（= 主进程 DB）。
         // 弹框仍保留 splitParsedIntoGroups 方法作为 fallback，理论上不可达；
         // 这里 service 抛错时才走 fallback，避免渲染完全失败。
-        const validItems = parsed.filter(it => it && typeof it === 'object' && String(it.name || '').trim())
-        if (validItems.length === 0) {
+        const validEntries = parsed.entries
+        if (validEntries.length === 0) {
           this.errorMessage = 'JSON 解析失败：未找到任何有效的符文条目'
-          this.parsedData = null
+          this.parsedData = []
           this.newItems = []
           this.conflictItems = []
+          this.totalInvalidCount = parsed.invalidItems.length
           return
         }
-        this.parsedData = parsed
+        // 保留 parsedEntries 用于 doImport（不再依赖 parsed 数组，迁到 entries + normalized）
+        this.parsedData = parsed.runes
+        this.parsedEntries = validEntries
+        this.totalInvalidCount = parsed.invalidItems.length
         try {
           // service.dryRunImport 内部会拉 DB 现读、按 DB 同名项切两栏
           const result = await runeTemplateService.dryRunImport(
-            parsed,
+            // dryRunImport 接受 items 数组，做语义校验 + name 校验；
+            // 这里把 normalized 字段反向还原为 dryRunImport 期待的 raw 形状（保留 desc/category/color/icon/template）
+            validEntries.map(e => e.normalized),
             this.localCategory || this.defaultCategory || RuneCategoryEnum.General,
             {
               builtinNames: this.builtinNames || []
             }
           )
-          this.totalInvalidCount = result.totalInvalid
           this.builtinFilteredCount = result.builtinFiltered
           this.newItems = result.newItems
           this.conflictItems = result.conflictItems
@@ -737,14 +733,15 @@ export default {
           // service 端异常（IPC 挂、DB 不可达等）才走本地 fallback；
           // 并明确提示用户真相源降级了，避免静默用陈旧 hint。
           console.warn('[rune-batch-import-dialog] dryRunImport failed, fallback to local split', e)
-          const invalidCount = parsed.filter(it => !it || typeof it !== 'object').length
+          const invalidCount = parsed.invalidItems.length
           this.totalInvalidCount = invalidCount
-          this.splitParsedIntoGroups(parsed)
+          this.splitParsedIntoGroups(parsed.runes)
           this.errorMessage = '注意：与服务端同步异常，已用本地缓存切分，结果可能与实际数据不符'
         }
       } catch (e) {
         this.errorMessage = 'JSON 解析失败: ' + (e && e.message ? e.message : String(e))
         this.parsedData = null
+        this.parsedEntries = []
         this.newItems = []
         this.conflictItems = []
       }

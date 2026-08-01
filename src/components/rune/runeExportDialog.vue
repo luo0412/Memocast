@@ -1,7 +1,8 @@
 <!--
-  RuneExportDialog - rune 导出到 JSON 文件
-  从 SettingsRunePanel 触发，选择要导出的符文后下载 JSON 文件。
-  JSON 格式与远程导入格式保持一致，包含 name, desc, category, template, color, icon 等字段。
+  RuneExportDialog - rune 导出到 JSON 文件（v2026-08-01）
+  导出格式：Rune Pack v1 — { format, version, exportedAt, runes: [...] }
+  对齐 EchoImportService.buildEchoPack 的顶层结构。
+  不导出数据库 id / isBuiltin / sort_order / created_at / updated_at。
 -->
 <template>
   <q-dialog
@@ -189,6 +190,8 @@
 </style>
 
 <script>
+import { buildRunePack } from 'src/services/RuneImportService'
+
 export default {
   name: 'runeExportDialog',
   model: {
@@ -241,16 +244,7 @@ export default {
       this.exporting = true
       this.errorMessage = ''
       try {
-        // 构建导出数据，与远程导入格式保持一致
-        const exportData = this.selectedRunes.map(rune => ({
-          name: rune.name || '',
-          desc: rune.desc || '',
-          category: rune.category || rune.category_key || 'general',
-          color: rune.color || '#7E57C2',
-          icon: rune.icon || 'star',
-          template: rune.template || ''
-        }))
-        const jsonStr = JSON.stringify(exportData, null, 2)
+        const jsonStr = buildRunePack(this.selectedRunes)
         const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' })
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')

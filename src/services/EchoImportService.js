@@ -109,11 +109,26 @@ export function parseEchoPack (rawText) {
     return { success: false, code: 'JSON_PARSE_FAILED', message: e && e.message ? e.message : String(e) }
   }
   if (Array.isArray(parsed)) {
-    // 检测到 Rune JSON 裸数组——文件格式与回响（Echo Pack）不匹配
-    return { success: false, code: 'RUNE_PACK_FORMAT', message: 'JSON 格式不匹配：当前文件不是有效的 Echo Pack（疑似 Rune 格式）' }
+    // 检测到裸数组——文件格式与回响（Echo Pack）不匹配
+    // 兼容两种典型误传场景：
+    //   a) Rune Pack v1 之前的旧版符文 JSON 裸数组（v2026-08-01 之前）
+    //   b) v2026-08-01 之后 Rune Pack 的 runes 数组被误传
+    // 进一步：若首个有效条目含 rune 必有字段 template 且缺 echo 必有字段 anno_source → 明确归类为 Rune 误传
+    let message = 'JSON 格式不匹配：当前文件不是有效的 Echo Pack（疑似 Rune 格式）'
+    if (parsed.length > 0) {
+      const firstValid = parsed.find(it => it && typeof it === 'object' && String(it.name || '').trim())
+      if (firstValid && firstValid.template && !firstValid.anno_source) {
+        message = 'JSON 格式不匹配：当前文件不是回响 Echo Pack（疑似符文导出）'
+      }
+    }
+    return { success: false, code: 'RUNE_PACK_FORMAT', message }
   }
   if (!isPlainObject(parsed)) {
     return { success: false, code: 'ECHO_PACK_INVALID', message: 'Echo Pack 必须为 JSON 对象' }
+  }
+  // 顶层带 format 但不是 'memocast.echo-pack' → 极有可能是 Rune Pack 对象误传
+  if (parsed.format === 'memocast.rune-pack') {
+    return { success: false, code: 'RUNE_PACK_OBJECT', message: 'JSON 格式不匹配：当前文件不是回响 Echo Pack（疑似符文 Rune Pack 格式）' }
   }
   if (parsed.format !== ECHO_PACK_FORMAT) {
     return { success: false, code: 'ECHO_PACK_FORMAT_MISMATCH', message: `format 应为 ${ECHO_PACK_FORMAT}` }

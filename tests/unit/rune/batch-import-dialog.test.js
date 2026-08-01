@@ -411,44 +411,79 @@ describe('端到端：切 tab → 点批量导入 → 下拉默认选中', () =>
 })
 
 // ============================================================================
-// 文件格式校验（v2026-08-01）：
-//   检测 Echo 文件误传到符文弹框时弹显式错误，阻止进入预览。
-//   两种典型误传：
-//     a) 顶层是对象 + 带 format: 'memocast.echo-pack'（整个 Echo Pack 被误传）
-//     b) 顶层是数组 + 数组元素含 echo 必有字段 anno_source 且缺 rune 必有字段 template
-//        （用户把 Echo 导出 echoes 数组误传成 runes 数组，最常见场景）
-//   等价复刻 runeBatchImportDialog.vue 内 onFileSelected 的判断逻辑：
-//     1) 对象 + format 头 → ECHO_PACK_OBJECT
-//     2) 非数组 → ROOT_NOT_ARRAY
-//     3) 数组元素含 anno_source & 无 template → ECHO_PACK_ARRAY
-//   .vue 内的实际错误信息文案也在此测试锁定。
+// 文件格式校验（v2026-08-01 对齐 EchoImportService）：
+//   Rune Pack v1 顶层必须为 { format: 'memocast.rune-pack', version: 1, exportedAt, runes: [...] }
+//   误传检测（弹框 → service → UI 三层共用同一份契约）：
+//     a) 顶层是对象 + 带 format: 'memocast.echo-pack' → 拒绝（Echo Pack 误传）
+//     b) 顶层是裸数组（v2026-08-01 之前的旧版 Rune JSON）
+//     c) 顶层是 runes 裸数组（误把 Rune Pack 的 runes 字段单独拿出来）
+//     d) 顶层是裸数组 + 数组元素有 anno_source 而缺 template（Echo 导出被误传）
+//   等价复刻 runeBatchImportDialog.vue → parseRunePack 的判断逻辑。
 // ============================================================================
 
-// 等价复刻 runeBatchImportDialog.vue 的 onFileSelected 类型校验
+// 等价复刻 parseRunePack 的 schema 校验顺序（与 src/services/RuneImportService.js 保持一致）
 function classifyParsedFile (rawText) {
+  if (typeof rawText !== 'string') {
+    return { kind: 'INVALID_TEXT', errorMessage: '文件内容不是文本' }
+  }
+  if (rawText.length > 5 * 1024 * 1024) {
+    return { kind: 'FILE_TOO_LARGE', errorMessage: '文件过大（> 5242880 字节）' }
+  }
   let parsed
   try {
     parsed = JSON.parse(rawText)
   } catch (e) {
     return { kind: 'JSON_PARSE_FAILED', errorMessage: 'JSON 解析失败: ' + (e && e.message ? e.message : String(e)) }
   }
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.format === 'memocast.echo-pack') {
-    return { kind: 'ECHO_PACK_OBJECT', errorMessage: 'JSON 格式不匹配：当前文件不是符文 JSON（疑似 Echo Pack 格式）' }
-  }
-  if (!Array.isArray(parsed)) {
-    return { kind: 'ROOT_NOT_ARRAY', errorMessage: 'JSON 格式错误：根元素必须是数组' }
-  }
-  if (parsed.length > 0) {
-    const firstValid = parsed.find(it => it && typeof it === 'object' && String(it.name || '').trim())
-    if (firstValid && firstValid.anno_source && !firstValid.template) {
-      return { kind: 'ECHO_PACK_ARRAY', errorMessage: 'JSON 格式不匹配：当前文件不是符文 JSON（疑似 Echo 导出）' }
+  if (Array.isArray(parsed)) {
+    // 裸数组：旧版符文 JSON 或 Rune Pack 的 runes 数组被误传
+    let message = 'JSON 格式不匹配：当前文件不是有效的 Rune Pack（疑似回响导出或旧版符文 JSON）'
+    if (parsed.length > 0) {
+      const firstValid = parsed.find(it => it && typeof it === 'object' && String(it.name || '').trim())
+      if (firstValid && firstValid.anno_source && !firstValid.template) {
+        message = 'JSON 格式不匹配：当前文件不是符文 Rune Pack（疑似回响 Echo 导出）'
+      }
     }
+    return { kind: 'RUNE_PACK_FORMAT', errorMessage: message }
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return { kind: 'RUNE_PACK_INVALID', errorMessage: 'Rune Pack 必须为 JSON 对象' }
+  }
+  if (parsed.format === 'memocast.echo-pack') {
+    return { kind: 'ECHO_PACK_OBJECT', errorMessage: 'JSON 格式不匹配：当前文件不是符文 Rune Pack（疑似回响 Echo Pack 格式）' }
+  }
+  if (parsed.format !== 'memocast.rune-pack') {
+    return { kind: 'RUNE_PACK_FORMAT_MISMATCH', errorMessage: 'JSON 格式不匹配：当前文件不是符文 Rune Pack（疑似回响 Echo Pack 格式）' }
+  }
+  if (parsed.version !== 1) {
+    return { kind: 'RUNE_PACK_VERSION_UNSUPPORTED', errorMessage: 'version 应为 1' }
+  }
+  if (!Array.isArray(parsed.runes)) {
+    return { kind: 'RUNE_PACK_INVALID', errorMessage: 'runes 必须为数组' }
+  }
+  if (parsed.runes.length > 500) {
+    return { kind: 'RUNE_PACK_TOO_MANY', errorMessage: '条目超过 500 条' }
   }
   return { kind: 'OK', parsed }
 }
 
-describe('RuneBatchImportDialog 文件格式校验：拒绝 Echo 文件误传', () => {
-  test('顶层 Echo Pack 对象（带 format 头）→ 拒绝', () => {
+describe('RuneBatchImportDialog 文件格式校验：Rune Pack v1 + 拒 Echo 误传', () => {
+  test('合法 Rune Pack v1 → 通过', () => {
+    const text = JSON.stringify({
+      format: 'memocast.rune-pack',
+      version: 1,
+      exportedAt: '2026-08-01T00:00:00.000Z',
+      runes: [
+        { name: '符文A', template: '<div>A</div>', category: 'general' },
+        { name: '符文B', template: '<div>B</div>', category: 'gaming' }
+      ]
+    })
+    const result = classifyParsedFile(text)
+    expect(result.kind).toBe('OK')
+    expect(result.parsed.runes.length).toBe(2)
+  })
+
+  test('顶层 Echo Pack 对象（带 format 头）→ 拒绝（ECHO_PACK_OBJECT）', () => {
     const text = JSON.stringify({
       format: 'memocast.echo-pack',
       version: 1,
@@ -460,62 +495,96 @@ describe('RuneBatchImportDialog 文件格式校验：拒绝 Echo 文件误传', 
     const result = classifyParsedFile(text)
     expect(result.kind).toBe('ECHO_PACK_OBJECT')
     expect(result.errorMessage).toMatch(/格式不匹配/)
-    expect(result.errorMessage).not.toMatch(/请使用/)
-  })
-
-  test('顶层是 echoes 数组 + 元素有 anno_source 无 template → 拒绝（疑似 Echo 导出）', () => {
-    const text = JSON.stringify([
-      { name: '回响A', anno_source: 'export default {}', category: 'marker', render_type: 'anno' },
-      { name: '回响B', anno_source: 'export default {}', category: 'showy', render_type: 'anno' }
-    ])
-    const result = classifyParsedFile(text)
-    expect(result.kind).toBe('ECHO_PACK_ARRAY')
-    expect(result.errorMessage).toMatch(/格式不匹配/)
     expect(result.errorMessage).toMatch(/Echo/)
   })
 
-  test('顶层是 echoes 数组但首个有效条目缺 name → 跳过 anno_source 检测（不误判）', () => {
+  test('旧版裸数组（v2026-08-01 之前）→ 拒绝（RUNE_PACK_FORMAT）', () => {
     const text = JSON.stringify([
-      { anno_source: 'export default {}' },
-      { name: '正常符文', template: '<div>A</div>' }
+      { name: '符文A', template: '<div>A</div>', category: 'general' }
     ])
     const result = classifyParsedFile(text)
-    // 第一个条目因 name 缺失被跳过，第二条是有效 rune → OK
-    expect(result.kind).toBe('OK')
+    expect(result.kind).toBe('RUNE_PACK_FORMAT')
+    expect(result.errorMessage).toMatch(/格式不匹配/)
+    expect(result.errorMessage).toMatch(/Rune Pack/i)
   })
 
-  test('合法 rune 数组（含 template 字段）→ 通过', () => {
+  test('顶层是 runes 数组但其他字段缺失（v2026-08-01 之后单独拿出 runes 字段）→ 拒绝', () => {
     const text = JSON.stringify([
       { name: '符文A', template: '<div>A</div>', category: 'general' },
       { name: '符文B', template: '<div>B</div>', category: 'gaming' }
     ])
     const result = classifyParsedFile(text)
-    expect(result.kind).toBe('OK')
+    expect(result.kind).toBe('RUNE_PACK_FORMAT')
   })
 
-  test('同时含 template 和 anno_source 的元素 → 优先按 rune 处理（不误判）', () => {
-    // 极端情况：用户自定义字段名与 echo 撞了，但仍带 rune 关键字段
+  test('顶层是裸数组 + 元素有 anno_source 无 template → 拒绝（疑似 Echo 导出）', () => {
     const text = JSON.stringify([
-      { name: '混搭', template: '<div>X</div>', anno_source: 'legacy field' }
+      { name: '回响A', anno_source: 'export default {}', category: 'marker', render_type: 'anno' },
+      { name: '回响B', anno_source: 'export default {}', category: 'showy', render_type: 'anno' }
     ])
     const result = classifyParsedFile(text)
-    expect(result.kind).toBe('OK')
+    expect(result.kind).toBe('RUNE_PACK_FORMAT')
+    expect(result.errorMessage).toMatch(/格式不匹配/)
+    expect(result.errorMessage).toMatch(/Echo/)
   })
 
-  test('非数组 + 无 format 头 → 仍走原始"根元素必须是数组"分支', () => {
-    const text = JSON.stringify({ foo: 'bar' })
+  test('顶层是裸数组但首个有效条目缺 name → 跳过 anno_source 检测（仍按 RUNE_PACK_FORMAT 拒绝）', () => {
+    const text = JSON.stringify([
+      { anno_source: 'export default {}' },
+      { name: '正常符文', template: '<div>A</div>' }
+    ])
     const result = classifyParsedFile(text)
-    expect(result.kind).toBe('ROOT_NOT_ARRAY')
-    expect(result.errorMessage).toMatch(/根元素必须是数组/)
+    // 第一个条目因 name 缺失被跳过，第二条是有效 rune；
+    // 但顶层仍是裸数组 → 仍然 RUNE_PACK_FORMAT
+    expect(result.kind).toBe('RUNE_PACK_FORMAT')
   })
 
-  test('空数组 → OK（后续由"未找到任何有效的符文条目"拦截）', () => {
-    const result = classifyParsedFile('[]')
-    expect(result.kind).toBe('OK')
+  test('顶层 format 写错（既不是 memocast.rune-pack 也不是 memocast.echo-pack）→ 拒绝', () => {
+    const text = JSON.stringify({
+      format: 'memocast.foo-pack',
+      version: 1,
+      runes: []
+    })
+    const result = classifyParsedFile(text)
+    expect(result.kind).toBe('RUNE_PACK_FORMAT_MISMATCH')
+    expect(result.errorMessage).toMatch(/格式不匹配/)
   })
 
-  test('非法 JSON → JSON_PARSE_FAILED', () => {
+  test('version 不匹配 → 拒绝', () => {
+    const text = JSON.stringify({
+      format: 'memocast.rune-pack',
+      version: 99,
+      runes: []
+    })
+    const result = classifyParsedFile(text)
+    expect(result.kind).toBe('RUNE_PACK_VERSION_UNSUPPORTED')
+  })
+
+  test('runes 字段缺失 → 拒绝', () => {
+    const text = JSON.stringify({
+      format: 'memocast.rune-pack',
+      version: 1
+    })
+    const result = classifyParsedFile(text)
+    expect(result.kind).toBe('RUNE_PACK_INVALID')
+    expect(result.errorMessage).toMatch(/runes 必须为数组/)
+  })
+
+  test('非 JSON 文本 → JSON_PARSE_FAILED', () => {
     const result = classifyParsedFile('not json')
     expect(result.kind).toBe('JSON_PARSE_FAILED')
+  })
+
+  test('合法 rune 数组但被错误地放进「runes」键下时 → 仍按 Rune Pack 解析（OK）', () => {
+    // 验证 schema 解析只信任顶层格式头，不深入单个元素判定
+    const text = JSON.stringify({
+      format: 'memocast.rune-pack',
+      version: 1,
+      runes: [
+        { name: '符文A', template: '<div>A</div>', category: 'general' }
+      ]
+    })
+    const result = classifyParsedFile(text)
+    expect(result.kind).toBe('OK')
   })
 })
