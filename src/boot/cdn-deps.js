@@ -210,13 +210,14 @@ function ensureJQueryGlobals () {
  * 内置 CDN 依赖（首次启动时使用）
  */
 const BUILT_IN_DEPS = [
-  { name: 'jQuery', url: 'https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js', enabled: true, applyToBlog: false, isBuiltIn: true },
-  { name: 'jQuery Migrate', url: 'https://cdn.jsdelivr.net/npm/jquery-migrate@3/dist/jquery-migrate.min.js', enabled: true, applyToBlog: false, isBuiltIn: true },
-  { name: 'layui CSS', url: '//unpkg.com/layui@2.13.8/dist/css/layui.css', enabled: true, applyToBlog: false, isBuiltIn: true },
-  { name: 'layui JS', url: '//unpkg.com/layui@2.13.8/dist/layui.js', enabled: true, applyToBlog: false, isBuiltIn: true },
-  { name: 'city-picker data', url: 'https://tshi0912.github.io/city-picker/js/city-picker.data.js', enabled: true, applyToBlog: false, isBuiltIn: true },
-  { name: 'city-picker JS', url: 'https://tshi0912.github.io/city-picker/js/city-picker.js', enabled: true, applyToBlog: false, isBuiltIn: true },
-  { name: 'city-picker CSS', url: 'https://tshi0912.github.io/city-picker/css/city-picker.css', enabled: true, applyToBlog: false, isBuiltIn: true }
+  { name: 'jQuery', url: 'https://luo0412.github.io/cdn/jquery/jquery.min.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'jQuery Migrate', url: 'https://luo0412.github.io/cdn/jquery/jquery-migrate.min.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'layui CSS', url: 'https://luo0412.github.io/cdn/layui/css/layui.css', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'layui JS', url: 'https://luo0412.github.io/cdn/layui/layui.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+  // v2026-08-01：city-picker 默认域名统一从 tshi0912.github.io 改为 luo0412.github.io/cdn
+  { name: 'city-picker data', url: 'https://luo0412.github.io/cdn/city-picker/city-picker.data.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'city-picker JS', url: 'https://luo0412.github.io/cdn/city-picker/city-picker.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+  { name: 'city-picker CSS', url: 'https://luo0412.github.io/cdn/city-picker/city-picker.css', enabled: true, applyToBlog: false, isBuiltIn: true }
 ]
 
 const builtInNames = BUILT_IN_DEPS.map(d => d.name)

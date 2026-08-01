@@ -244,6 +244,13 @@ export default {
   cdnDepsPresetCustom: '自定义',
   cdnDepsBuiltIn: '内置（不可删除）',
   cdnDepsBuiltInCannotDelete: '内置CDN注入项不可删除，但可以禁用或编辑其 URL。',
+  cdnDepsAddTitle: '新增 CDN 注入',
+  cdnDepsEditTitle: '编辑 CDN 注入',
+  cdnDepsNameRequired: '请填写名称',
+  cdnDepsNameMaxLength: '名称最长 {max} 个字符',
+  cdnDepsUrlRequired: '请填写 CDN 地址',
+  cdnDepsApplyToBlogHint: '启用后会一并注入到 VuePress index.html；需同时启用"启用"开关。',
+  cdnDepsEdit: '编辑',
   // 微应用（聊天弹框内的 wujie 子应用）
   microApps: '微应用',
   microAppsHint: '编辑应用后即时生效；如需刷新已挂载的子应用，请点击「刷新应用」。开发环境（dev server 启动时）使用 devUrl，打包后使用 url。',

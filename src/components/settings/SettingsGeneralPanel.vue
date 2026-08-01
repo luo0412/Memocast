@@ -125,6 +125,78 @@
           />
         </div>
       </SettingsSectionContent>
+
+      <!-- CDN注入（v2026-08-01 起从 ServerSubEnum 挪到 GeneralSubEnum） -->
+      <SettingsSectionContent v-if="subTab === $enums.GeneralSubEnum.Cdn" :title="$t('cdnInjectTitle')" accent-color='red-7'>
+        <q-banner rounded dense class='bg-red-1 text-red-10 q-mb-md'>
+          <template v-slot:avatar>
+            <q-icon name='info_outline' color='red-7' />
+          </template>
+          {{ $t('cdnInjectHint') }}
+        </q-banner>
+        <!-- 操作按钮 -->
+        <div class='q-mb-md row q-gutter-sm'>
+          <q-btn outline color='red-7' icon='add' :label="$t('cdnInjectAdd')" @click='openCdnEdit(null)' />
+          <q-btn unelevated color='red-7' icon='rocket_launch' :label="$t('cdnInject')" :loading='cdnDepsSaving' @click='saveCdnDeps' />
+        </div>
+        <!-- CDN 依赖列表（v2026-08-01 起改为只读 + 弹框编辑） -->
+        <div v-if='cdnDeps.length === 0' class='text-center q-pa-md text-grey-6'>
+          <q-icon name='link_off' size='2rem' />
+          <div class='q-mt-sm'>{{ $t('noData') }}</div>
+        </div>
+        <div v-else class='cdn-deps-list'>
+          <div v-for='dep in cdnDeps' :key='dep.id' class='cdn-dep-item q-pa-sm q-mb-xs rounded-borders'>
+            <div class='row items-center q-col-gutter-sm no-wrap'>
+              <div class='col-auto'>
+                <q-icon
+                  :name='dep.enabled ? "link" : "link_off"'
+                  :color='dep.enabled ? "red-7" : "grey-5"'
+                  size='1.2em'
+                />
+              </div>
+              <div class='col cdn-dep-item__name'>
+                <div class='text-body2 text-weight-medium ellipsis'>{{ dep.name || '(未命名)' }}</div>
+                <div class='text-caption text-grey-6 ellipsis'>{{ dep.url }}</div>
+              </div>
+              <div class='col-auto'>
+                <q-badge v-if='dep.isBuiltIn' outline color='grey-7' :label='$t("cdnDepsBuiltIn")' />
+              </div>
+              <div class='col-auto'>
+                <q-icon
+                  v-if='dep.applyToBlog'
+                  name='web'
+                  color='red-7'
+                  size='1.2em'
+                >
+                  <q-tooltip>{{ $t('cdnDepsApplyToBlog') }}</q-tooltip>
+                </q-icon>
+              </div>
+              <div class='col-auto text-right'>
+                <q-btn flat dense round icon='edit' color='red-7' size='sm' @click='openCdnEdit(dep)'>
+                  <q-tooltip>{{ $t('cdnDepsEdit') }}</q-tooltip>
+                </q-btn>
+                <q-btn v-if='!dep.isBuiltIn' flat dense round icon='delete' color='negative' size='sm' @click='deleteCdnDep(dep.id)' />
+                <q-icon v-else name='lock' color='grey-5' size='sm'>
+                  <q-tooltip>{{ $t('cdnDepsBuiltIn') }}</q-tooltip>
+                </q-icon>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CDN 依赖编辑弹框（v2026-08-01 起从行内编辑改为弹框） -->
+        <cdnDepEditDialog
+          v-model='cdnEditVisible'
+          :source='cdnEditSource'
+          @submit='onCdnEditSubmit'
+        />
+      </SettingsSectionContent>
+
+      <!-- 微应用（v2026-08-01 起从 ServerSubEnum 挪到 GeneralSubEnum） -->
+      <SettingsMicroAppsPanel v-if='subTab === $enums.GeneralSubEnum.MicroApps' ref='microAppsPanel' />
+
+      <!-- 个人信息（v2026-08-01 起从 ServerSubEnum 挪到 GeneralSubEnum） -->
+      <SettingsProfilePanel v-if='subTab === $enums.GeneralSubEnum.Profile' />
     </div>
   </div>
 </template>
@@ -132,14 +204,22 @@
 <script>
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
+import SettingsMicroAppsPanel from 'components/settings/SettingsMicroAppsPanel'
+import SettingsProfilePanel from 'components/settings/settingsProfilePanel'
+import CdnDepEditDialog from 'components/settings/cdnDepEditDialog'
 import { i18n, updateDialogDefaults } from 'boot/i18n'
 import { openThemeFolder, refreshThemeFolder } from 'src/ApiInvoker'
+import DatabaseClient from 'src/utils/DatabaseClient'
+import bus from 'components/common/bus'
 
 export default {
   name: 'SettingsGeneralPanel',
   components: {
     CategoryTabs,
-    SettingsSectionContent
+    SettingsSectionContent,
+    SettingsMicroAppsPanel,
+    SettingsProfilePanel,
+    CdnDepEditDialog
   },
   props: {
     language: {
@@ -157,11 +237,19 @@ export default {
     version: {
       type: String,
       required: true
+    },
+    cdnDeps: {
+      type: Array,
+      required: true
     }
   },
   data () {
     return {
-      subTab: this.$enums.GeneralSubEnum.Language
+      subTab: this.$enums.GeneralSubEnum.Language,
+      cdnDepsSaving: false,
+      // v2026-08-01：CDN 注入改用弹框形式编辑，记录当前编辑的源（新增时为 null）
+      cdnEditVisible: false,
+      cdnEditSource: null
     }
   },
   computed: {
@@ -210,6 +298,86 @@ export default {
     refreshThemeFolderHandler: async function () {
       const themes = await refreshThemeFolder()
       this.$emit('update-themes', themes)
+    },
+    // ===== CDN 注入（v2026-08-01 起从 SettingsServerPanel 挪到通用面板） =====
+    // v2026-08-01：参考微应用的弹框形式，新增 / 编辑改为 cdnDepEditDialog，
+    // 列表只读展示，避免在表格里行内编辑体验割裂。
+    openCdnEdit: function (source) {
+      this.cdnEditSource = source || null
+      this.cdnEditVisible = true
+    },
+    onCdnEditSubmit: function (payload) {
+      // 新增 / 编辑统一处理：按 id 找，命中则替换；未命中则追加
+      const idx = this.cdnDeps.findIndex(d => d.id === payload.id)
+      if (idx === -1) {
+        this.cdnDeps.push({ ...payload })
+      } else {
+        // 保留内置标记 isBuiltIn，避免被弹框覆盖
+        this.cdnDeps.splice(idx, 1, {
+          ...this.cdnDeps[idx],
+          ...payload,
+          isBuiltIn: this.cdnDeps[idx].isBuiltIn
+        })
+      }
+      this.cdnEditVisible = false
+    },
+    deleteCdnDep: function (id) {
+      const dep = this.cdnDeps.find(d => d.id === id)
+      if (dep && dep.isBuiltIn) {
+        this.$q.notify({
+          message: this.$t('cdnDepsBuiltInCannotDelete'),
+          type: 'warning',
+          position: 'top'
+        })
+        return
+      }
+      this.$q.dialog({
+        title: this.$t('confirm'),
+        message: this.$t('cdnDepsDeleteConfirm'),
+        ok: { label: this.$t('confirm'), color: 'negative' },
+        cancel: { label: this.$t('cancel'), flat: true }
+      }).onOk(() => {
+        const idx = this.cdnDeps.findIndex(d => d.id === id)
+        if (idx !== -1) {
+          this.cdnDeps.splice(idx, 1)
+        }
+      })
+    },
+    saveCdnDeps: async function () {
+      this.cdnDepsSaving = true
+      try {
+        await DatabaseClient.cdnDeps.saveAll(this.cdnDeps)
+        localStorage.setItem('v__2_client_cdnDeps', JSON.stringify(this.cdnDeps))
+        bus.$emit('cdnDepsChanged')
+        this.$q.notify({
+          message: this.$t('cdnDepsSaveSuccess'),
+          type: 'positive',
+          position: 'top',
+          timeout: 1500
+        })
+      } catch (err) {
+        console.error('[Settings] saveCdnDeps error:', err)
+        this.$q.notify({
+          message: this.$t('cdnDepsSaveFailed') || '保存失败',
+          type: 'negative',
+          position: 'top'
+        })
+      } finally {
+        this.cdnDepsSaving = false
+      }
+    }
+  },
+  watch: {
+    // 微应用：进入 tab 时自动 load（与 SettingsServerPanel 原行为一致）
+    subTab (val) {
+      if (val === this.$enums.GeneralSubEnum.MicroApps) {
+        this.$nextTick(() => {
+          const panel = this.$refs.microAppsPanel
+          if (panel && typeof panel.load === 'function') {
+            panel.load()
+          }
+        })
+      }
     }
   }
 }
@@ -259,5 +427,24 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* CDN 注入（v2026-08-01 起从 SettingsServerPanel 挪到通用面板） */
+.cdn-deps-list {
+  /* 内容自然流出，由父容器 settings-general-panel 统一滚动 */
+}
+
+.cdn-dep-item {
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cdn-dep-item__name {
+  min-width: 0;
+}
+
+.body--dark .cdn-dep-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 </style>

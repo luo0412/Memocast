@@ -245,6 +245,13 @@ export default {
   cdnDepsPresetCustom: 'Custom',
   cdnDepsBuiltIn: 'Built-in (cannot delete)',
   cdnDepsBuiltInCannotDelete: 'Built-in CDN items cannot be deleted, but can be disabled or have their URL edited.',
+  cdnDepsAddTitle: 'Add CDN injection',
+  cdnDepsEditTitle: 'Edit CDN injection',
+  cdnDepsNameRequired: 'Name is required',
+  cdnDepsNameMaxLength: 'Name must be at most {max} characters',
+  cdnDepsUrlRequired: 'CDN URL is required',
+  cdnDepsApplyToBlogHint: 'When enabled, the item is also injected into VuePress index.html. Requires the "Enabled" toggle to be on.',
+  cdnDepsEdit: 'Edit',
   // Micro Apps (wujie sub-apps loaded from the chat drawer)
   microApps: 'Micro Apps',
   microAppsHint: 'Changes take effect immediately after editing. Use "Refresh apps" to remount sub-apps currently running in the drawer. In dev mode devUrl is used; otherwise url is used.',

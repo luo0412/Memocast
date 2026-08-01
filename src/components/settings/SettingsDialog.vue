@@ -22,6 +22,7 @@
                   :theme='theme'
                   :themes='themes'
                   :version='version'
+                  :cdn-deps='cdnDeps'
                   @update-language='updateLanguage'
                   @update-theme='updateTheme'
                   @update-dark-mode='updateDarkMode'
@@ -76,7 +77,6 @@
                   :cloud-sync-provider='cloudSyncProvider'
                   :sync-status='syncStatus'
                   :image-upload-service='imageUploadService'
-                  :cdn-deps='cdnDeps'
                   @update-cloud-sync-provider='updateCloudSyncProvider'
                   @update-image-upload-service='updateImageUploadService'
                   @open-login-dialog='openLoginDialog'
@@ -1182,9 +1182,10 @@ export default {
         { id: newId(), name: 'jQuery Migrate', url: 'https://cdn.jsdelivr.net/npm/jquery-migrate@3/dist/jquery-migrate.min.js', enabled: true, applyToBlog: false, isBuiltIn: true },
         { id: newId(), name: 'layui CSS', url: '//unpkg.com/layui@2.13.8/dist/css/layui.css', enabled: true, applyToBlog: false, isBuiltIn: true },
         { id: newId(), name: 'layui JS', url: '//unpkg.com/layui@2.13.8/dist/layui.js', enabled: true, applyToBlog: false, isBuiltIn: true },
-        { id: newId(), name: 'city-picker data', url: 'https://tshi0912.github.io/city-picker/js/city-picker.data.js', enabled: true, applyToBlog: false, isBuiltIn: true },
-        { id: newId(), name: 'city-picker JS', url: 'https://tshi0912.github.io/city-picker/js/city-picker.js', enabled: true, applyToBlog: false, isBuiltIn: true },
-        { id: newId(), name: 'city-picker CSS', url: 'https://tshi0912.github.io/city-picker/css/city-picker.css', enabled: true, applyToBlog: false, isBuiltIn: true }
+        // v2026-08-01：city-picker 默认域名统一从 tshi0912.github.io 改为 luo0412.github.io/cdn
+        { id: newId(), name: 'city-picker data', url: 'https://luo0412.github.io/cdn/city-picker/city-picker.data.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+        { id: newId(), name: 'city-picker JS', url: 'https://luo0412.github.io/cdn/city-picker/city-picker.js', enabled: true, applyToBlog: false, isBuiltIn: true },
+        { id: newId(), name: 'city-picker CSS', url: 'https://luo0412.github.io/cdn/city-picker/city-picker.css', enabled: true, applyToBlog: false, isBuiltIn: true }
       ]
       if (Array.isArray(savedDeps) && savedDeps.length > 0) {
         const existingBuiltInNames = ['jQuery', 'jQuery Migrate', 'layui CSS', 'layui JS', 'city-picker data', 'city-picker JS', 'city-picker CSS']

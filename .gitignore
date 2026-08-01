@@ -53,3 +53,5 @@ _temp/*
 !_temp/.gitkeep
 
 .codegraph
+
+terminals/*.txt

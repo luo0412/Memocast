@@ -83,57 +83,7 @@
         </div>
       </SettingsSectionContent>
 
-      <!-- CDN注入 -->
-      <SettingsSectionContent v-if='subTab === $enums.ServerSubEnum.Cdn' :title="$t('cdnInjectTitle')" accent-color='green-7'>
-        <q-banner rounded dense class='bg-green-1 text-green-10 q-mb-md'>
-          <template v-slot:avatar>
-            <q-icon name='info_outline' color='green-7' />
-          </template>
-          {{ $t('cdnInjectHint') }}
-        </q-banner>
-        <!-- 操作按钮 -->
-        <div class='q-mb-md row q-gutter-sm'>
-          <q-btn outline color='green-7' icon='add' :label="$t('cdnInjectAdd')" @click='addCdnDep' />
-          <q-btn unelevated color='green-7' icon='rocket_launch' :label="$t('cdnInject')" :loading='cdnDepsSaving' @click='saveCdnDeps' />
-        </div>
-        <!-- CDN 依赖列表 -->
-        <div v-if='cdnDeps.length === 0' class='text-center q-pa-md text-grey-6'>
-          <q-icon name='link_off' size='2rem' />
-          <div class='q-mt-sm'>{{ $t('noData') }}</div>
-        </div>
-        <div v-else class='cdn-deps-list'>
-          <div v-for='dep in cdnDeps' :key='dep.id' class='cdn-dep-item q-pa-sm q-mb-xs rounded-borders'>
-            <div class='row items-start q-col-gutter-sm no-wrap'>
-              <div class='col-3'>
-                <q-input dense v-model='dep.name' :label="$t('cdnDepsName')" :placeholder="$t('cdnDepsNamePlaceholder')" />
-              </div>
-              <div class='col-3'>
-                <q-input dense v-model='dep.url' :label="$t('cdnDepsUrl')" :placeholder="$t('cdnDepsUrlPlaceholder')" />
-              </div>
-              <div class='col-2'>
-                <div class='text-caption text-grey-6 q-mb-xs'>{{ $t('cdnDepsEnabled') }}</div>
-                <q-toggle dense v-model='dep.enabled' color='green-7' />
-              </div>
-              <div class='col-3'>
-                <div class='text-caption text-grey-6 q-mb-xs'>{{ $t('cdnDepsApplyToBlog') }}</div>
-                <q-checkbox dense v-model='dep.applyToBlog' color='green-7' />
-              </div>
-              <div class='col-1 text-right'>
-                <q-btn v-if='!dep.isBuiltIn' flat dense round icon='delete' color='negative' size='sm' @click='deleteCdnDep(dep.id)' />
-                <q-icon v-else name='lock' color='grey-5' size='sm'>
-                  <q-tooltip>{{ $t('cdnDepsBuiltIn') }}</q-tooltip>
-                </q-icon>
-              </div>
-            </div>
-          </div>
-        </div>
-      </SettingsSectionContent>
-
-      <!-- 个人信息 -->
-      <SettingsProfilePanel v-if='subTab === $enums.ServerSubEnum.Profile' />
-
-      <!-- 微应用（聊天弹框内的 wujie 子应用） -->
-      <SettingsMicroAppsPanel v-if='subTab === $enums.ServerSubEnum.MicroApps' ref='microAppsPanel' />
+      <!-- v2026-08-01 起：CDN注入 / 微应用 / 个人信息 已挪到 GeneralSubEnum（通用面板） -->
     </div>
   </div>
 </template>
@@ -141,20 +91,13 @@
 <script>
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
-import SettingsMicroAppsPanel from 'components/settings/SettingsMicroAppsPanel'
-import SettingsProfilePanel from 'components/settings/settingsProfilePanel'
 import SessionStorageService from 'src/services/SessionStorageService'
-import CloudSyncService from 'src/services/CloudSyncService'
-import DatabaseClient from 'src/utils/DatabaseClient'
-import bus from 'components/common/bus'
 
 export default {
   name: 'SettingsServerPanel',
   components: {
     CategoryTabs,
-    SettingsSectionContent,
-    SettingsMicroAppsPanel,
-    SettingsProfilePanel
+    SettingsSectionContent
   },
   props: {
     cloudSyncProvider: {
@@ -167,10 +110,6 @@ export default {
     },
     imageUploadService: {
       type: String,
-      required: true
-    },
-    cdnDeps: {
-      type: Array,
       required: true
     }
   },
@@ -185,7 +124,6 @@ export default {
       lastSyncTimeDisplay: null,
       isSyncing: false,
       syncError: null,
-      cdnDepsSaving: false,
       cloudSyncStrategy: 'offlineFirst',
       cloudSyncStrategyOptions: [
         { label: 'cloudSyncStrategyPureOnline', value: 'pureOnline' },
@@ -260,17 +198,8 @@ export default {
         }
       },
       deep: true
-    },
-    subTab (val) {
-      if (val === this.$enums.ServerSubEnum.MicroApps) {
-        this.$nextTick(() => {
-          const panel = this.$refs.microAppsPanel
-          if (panel && typeof panel.load === 'function') {
-            panel.load()
-          }
-        })
-      }
     }
+    // v2026-08-01 起：subTab 切到 MicroApps 的自动 load 逻辑已挪到 SettingsGeneralPanel
   },
   methods: {
     formatSyncTime (timestamp) {
@@ -302,62 +231,8 @@ export default {
         i => this.$t(i) === service
       )
       this.$emit('update-image-upload-service', servicePlain)
-    },
-    addCdnDep: function () {
-      const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
-      this.cdnDeps.push({
-        id,
-        name: '',
-        url: '',
-        enabled: true,
-        applyToBlog: false
-      })
-    },
-    deleteCdnDep: function (id) {
-      const dep = this.cdnDeps.find(d => d.id === id)
-      if (dep && dep.isBuiltIn) {
-        this.$q.notify({
-          message: this.$t('cdnDepsBuiltInCannotDelete'),
-          type: 'warning',
-          position: 'top'
-        })
-        return
-      }
-      this.$q.dialog({
-        title: this.$t('confirm'),
-        message: this.$t('cdnDepsDeleteConfirm'),
-        ok: { label: this.$t('confirm'), color: 'negative' },
-        cancel: { label: this.$t('cancel'), flat: true }
-      }).onOk(() => {
-        const idx = this.cdnDeps.findIndex(d => d.id === id)
-        if (idx !== -1) {
-          this.cdnDeps.splice(idx, 1)
-        }
-      })
-    },
-    saveCdnDeps: async function () {
-      this.cdnDepsSaving = true
-      try {
-        await DatabaseClient.cdnDeps.saveAll(this.cdnDeps)
-        localStorage.setItem('v__2_client_cdnDeps', JSON.stringify(this.cdnDeps))
-        bus.$emit('cdnDepsChanged')
-        this.$q.notify({
-          message: this.$t('cdnDepsSaveSuccess'),
-          type: 'positive',
-          position: 'top',
-          timeout: 1500
-        })
-      } catch (err) {
-        console.error('[Settings] saveCdnDeps error:', err)
-        this.$q.notify({
-          message: this.$t('cdnDepsSaveFailed') || '保存失败',
-          type: 'negative',
-          position: 'top'
-        })
-      } finally {
-        this.cdnDepsSaving = false
-      }
     }
+    // v2026-08-01 起：addCdnDep / deleteCdnDep / saveCdnDeps 已挪到 SettingsGeneralPanel
   },
   mounted () {
     this.refreshCloudSyncLoginState()
@@ -433,17 +308,5 @@ export default {
   background: #2a2a2a;
 }
 
-.cdn-deps-list {
-  /* 内容自然流出，由父容器 settings-server-panel 统一滚动 */
-}
-
-.cdn-dep-item {
-  background: rgba(0, 0, 0, 0.03);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.body--dark .cdn-dep-item {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-}
+/* v2026-08-01 起：.cdn-deps-list / .cdn-dep-item 样式已挪到 SettingsGeneralPanel */
 </style>

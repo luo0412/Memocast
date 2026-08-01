@@ -17,12 +17,19 @@
 import { Enum } from 'enum-plus'
 
 // ---------- 通用 ----------
+// v2026-08-01 起把「CDN 注入 / 微应用 / 个人信息」从云服务挪到通用：
+// - CDN 注入：和编辑器渲染/打包有关，是客户端通用基础配置。
+// - 微应用：聊天抽屉内 wujie 子应用列表，是宿主层面的扩展管理。
+// - 个人信息（地区偏好）：和当前账号无关，是终端用户偏好。
 const GeneralSubEnum = Enum({
-  Language: { value: 'language', label: 'generalLanguage', icon: 'language' },
-  Theme:    { value: 'theme',    label: 'generalTheme',    icon: 'palette' },
-  Log:      { value: 'log',      label: 'generalLog',      icon: 'description' },
-  Database: { value: 'database', label: 'generalDatabase', icon: 'storage' },
-  Version:  { value: 'version',  label: 'generalVersion',  icon: 'info' }
+  Language: { value: 'language', label: 'generalLanguage',  icon: 'language' },
+  Theme:    { value: 'theme',    label: 'generalTheme',     icon: 'palette' },
+  Log:      { value: 'log',      label: 'generalLog',       icon: 'description' },
+  Database: { value: 'database', label: 'generalDatabase',  icon: 'storage' },
+  Version:  { value: 'version',  label: 'generalVersion',   icon: 'info' },
+  Cdn:       { value: 'cdn',       label: 'cloudCdnInject',   icon: 'link' },
+  MicroApps: { value: 'microApps', label: 'microApps',        icon: 'apps' },
+  Profile:   { value: 'profile',   label: 'cloudProfile',     icon: 'person' }
 })
 
 // ---------- 编辑器 ----------
@@ -44,12 +51,11 @@ const AiSubEnum = Enum({
 })
 
 // ---------- 云服务 ----------
+// v2026-08-01 起仅保留「同步 / 图片上传」两个 sub-tab；CDN 注入 / 微应用 / 个人信息
+// 已挪到 GeneralSubEnum（见 GeneralSubEnum 的注释）。
 const ServerSubEnum = Enum({
-  Sync:      { value: 'sync',      label: 'cloudSync',         icon: 'cloud_sync' },
-  Image:     { value: 'image',     label: 'cloudImage',        icon: 'image' },
-  Cdn:       { value: 'cdn',       label: 'cloudCdnInject',    icon: 'link' },
-  MicroApps: { value: 'microApps', label: 'microApps',         icon: 'apps' },
-  Profile:   { value: 'profile',   label: 'cloudProfile',      icon: 'person' }
+  Sync:  { value: 'sync',  label: 'cloudSync',  icon: 'cloud_sync' },
+  Image: { value: 'image', label: 'cloudImage', icon: 'image' }
 })
 
 // ---------- 云函数 ----------
