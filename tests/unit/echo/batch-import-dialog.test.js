@@ -72,6 +72,22 @@ describe('EchoImportService.parseEchoPack — 顶层 schema', () => {
     const result = parseEchoPack('[]')
     expect(result.success).toBe(false)
     expect(result.code).toBe('RUNE_PACK_FORMAT')
+    expect(result.message).toMatch(/格式不匹配/)
+    expect(result.message).not.toMatch(/请使用/)
+  })
+
+  test('Rune 风格的非空裸数组 → 同样拒绝（RUNE_PACK_FORMAT）', () => {
+    const result = parseEchoPack(JSON.stringify([
+      { name: '符文A', template: '<div>a</div>' }
+    ]))
+    expect(result.success).toBe(false)
+    expect(result.code).toBe('RUNE_PACK_FORMAT')
+  })
+
+  test('非空非数组对象（无 format 头）→ 拒绝（ECHO_PACK_FORMAT_MISMATCH）', () => {
+    const result = parseEchoPack(JSON.stringify({ foo: 'bar' }))
+    expect(result.success).toBe(false)
+    expect(result.code).toBe('ECHO_PACK_FORMAT_MISMATCH')
   })
 
   test('format 不匹配 → 拒绝', () => {

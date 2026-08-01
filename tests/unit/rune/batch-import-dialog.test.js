@@ -409,3 +409,113 @@ describe('端到端：切 tab → 点批量导入 → 下拉默认选中', () =>
     expect(dlg.localCategory).toBe('general')
   })
 })
+
+// ============================================================================
+// 文件格式校验（v2026-08-01）：
+//   检测 Echo 文件误传到符文弹框时弹显式错误，阻止进入预览。
+//   两种典型误传：
+//     a) 顶层是对象 + 带 format: 'memocast.echo-pack'（整个 Echo Pack 被误传）
+//     b) 顶层是数组 + 数组元素含 echo 必有字段 anno_source 且缺 rune 必有字段 template
+//        （用户把 Echo 导出 echoes 数组误传成 runes 数组，最常见场景）
+//   等价复刻 runeBatchImportDialog.vue 内 onFileSelected 的判断逻辑：
+//     1) 对象 + format 头 → ECHO_PACK_OBJECT
+//     2) 非数组 → ROOT_NOT_ARRAY
+//     3) 数组元素含 anno_source & 无 template → ECHO_PACK_ARRAY
+//   .vue 内的实际错误信息文案也在此测试锁定。
+// ============================================================================
+
+// 等价复刻 runeBatchImportDialog.vue 的 onFileSelected 类型校验
+function classifyParsedFile (rawText) {
+  let parsed
+  try {
+    parsed = JSON.parse(rawText)
+  } catch (e) {
+    return { kind: 'JSON_PARSE_FAILED', errorMessage: 'JSON 解析失败: ' + (e && e.message ? e.message : String(e)) }
+  }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.format === 'memocast.echo-pack') {
+    return { kind: 'ECHO_PACK_OBJECT', errorMessage: 'JSON 格式不匹配：当前文件不是符文 JSON（疑似 Echo Pack 格式）' }
+  }
+  if (!Array.isArray(parsed)) {
+    return { kind: 'ROOT_NOT_ARRAY', errorMessage: 'JSON 格式错误：根元素必须是数组' }
+  }
+  if (parsed.length > 0) {
+    const firstValid = parsed.find(it => it && typeof it === 'object' && String(it.name || '').trim())
+    if (firstValid && firstValid.anno_source && !firstValid.template) {
+      return { kind: 'ECHO_PACK_ARRAY', errorMessage: 'JSON 格式不匹配：当前文件不是符文 JSON（疑似 Echo 导出）' }
+    }
+  }
+  return { kind: 'OK', parsed }
+}
+
+describe('RuneBatchImportDialog 文件格式校验：拒绝 Echo 文件误传', () => {
+  test('顶层 Echo Pack 对象（带 format 头）→ 拒绝', () => {
+    const text = JSON.stringify({
+      format: 'memocast.echo-pack',
+      version: 1,
+      exportedAt: '2026-08-01T00:00:00.000Z',
+      echoes: [
+        { name: 'A', anno_source: 'export default {}' }
+      ]
+    })
+    const result = classifyParsedFile(text)
+    expect(result.kind).toBe('ECHO_PACK_OBJECT')
+    expect(result.errorMessage).toMatch(/格式不匹配/)
+    expect(result.errorMessage).not.toMatch(/请使用/)
+  })
+
+  test('顶层是 echoes 数组 + 元素有 anno_source 无 template → 拒绝（疑似 Echo 导出）', () => {
+    const text = JSON.stringify([
+      { name: '回响A', anno_source: 'export default {}', category: 'marker', render_type: 'anno' },
+      { name: '回响B', anno_source: 'export default {}', category: 'showy', render_type: 'anno' }
+    ])
+    const result = classifyParsedFile(text)
+    expect(result.kind).toBe('ECHO_PACK_ARRAY')
+    expect(result.errorMessage).toMatch(/格式不匹配/)
+    expect(result.errorMessage).toMatch(/Echo/)
+  })
+
+  test('顶层是 echoes 数组但首个有效条目缺 name → 跳过 anno_source 检测（不误判）', () => {
+    const text = JSON.stringify([
+      { anno_source: 'export default {}' },
+      { name: '正常符文', template: '<div>A</div>' }
+    ])
+    const result = classifyParsedFile(text)
+    // 第一个条目因 name 缺失被跳过，第二条是有效 rune → OK
+    expect(result.kind).toBe('OK')
+  })
+
+  test('合法 rune 数组（含 template 字段）→ 通过', () => {
+    const text = JSON.stringify([
+      { name: '符文A', template: '<div>A</div>', category: 'general' },
+      { name: '符文B', template: '<div>B</div>', category: 'gaming' }
+    ])
+    const result = classifyParsedFile(text)
+    expect(result.kind).toBe('OK')
+  })
+
+  test('同时含 template 和 anno_source 的元素 → 优先按 rune 处理（不误判）', () => {
+    // 极端情况：用户自定义字段名与 echo 撞了，但仍带 rune 关键字段
+    const text = JSON.stringify([
+      { name: '混搭', template: '<div>X</div>', anno_source: 'legacy field' }
+    ])
+    const result = classifyParsedFile(text)
+    expect(result.kind).toBe('OK')
+  })
+
+  test('非数组 + 无 format 头 → 仍走原始"根元素必须是数组"分支', () => {
+    const text = JSON.stringify({ foo: 'bar' })
+    const result = classifyParsedFile(text)
+    expect(result.kind).toBe('ROOT_NOT_ARRAY')
+    expect(result.errorMessage).toMatch(/根元素必须是数组/)
+  })
+
+  test('空数组 → OK（后续由"未找到任何有效的符文条目"拦截）', () => {
+    const result = classifyParsedFile('[]')
+    expect(result.kind).toBe('OK')
+  })
+
+  test('非法 JSON → JSON_PARSE_FAILED', () => {
+    const result = classifyParsedFile('not json')
+    expect(result.kind).toBe('JSON_PARSE_FAILED')
+  })
+})

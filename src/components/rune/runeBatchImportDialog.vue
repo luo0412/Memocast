@@ -682,12 +682,31 @@ export default {
       try {
         const text = await this.readFileAsText(file)
         const parsed = JSON.parse(text)
+        // 顶层是对象且带 Echo Pack format 头 —— 文件格式与符文不匹配
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.format === 'memocast.echo-pack') {
+          this.errorMessage = 'JSON 格式不匹配：当前文件不是符文 JSON（疑似 Echo Pack 格式）'
+          this.parsedData = null
+          this.newItems = []
+          this.conflictItems = []
+          return
+        }
         if (!Array.isArray(parsed)) {
           this.errorMessage = 'JSON 格式错误：根元素必须是数组'
           this.parsedData = null
           this.newItems = []
           this.conflictItems = []
           return
+        }
+        // 顶层是数组，但首个有效条目含 echo 必有字段 anno_source 且缺 rune 必有字段 template —— 疑似 Echo 导出被误传
+        if (parsed.length > 0) {
+          const firstValid = parsed.find(it => it && typeof it === 'object' && String(it.name || '').trim())
+          if (firstValid && firstValid.anno_source && !firstValid.template) {
+            this.errorMessage = 'JSON 格式不匹配：当前文件不是符文 JSON（疑似 Echo 导出）'
+            this.parsedData = null
+            this.newItems = []
+            this.conflictItems = []
+            return
+          }
         }
         // v2026-08-01：split 真相源从 hint（existingRunes prop）改成 service.dryRunImport（= 主进程 DB）。
         // 弹框仍保留 splitParsedIntoGroups 方法作为 fallback，理论上不可达；

@@ -109,7 +109,8 @@ export function parseEchoPack (rawText) {
     return { success: false, code: 'JSON_PARSE_FAILED', message: e && e.message ? e.message : String(e) }
   }
   if (Array.isArray(parsed)) {
-    return { success: false, code: 'RUNE_PACK_FORMAT', message: '检测到 Rune JSON 裸数组，请使用回响专用的 Echo Pack' }
+    // 检测到 Rune JSON 裸数组——文件格式与回响（Echo Pack）不匹配
+    return { success: false, code: 'RUNE_PACK_FORMAT', message: 'JSON 格式不匹配：当前文件不是有效的 Echo Pack（疑似 Rune 格式）' }
   }
   if (!isPlainObject(parsed)) {
     return { success: false, code: 'ECHO_PACK_INVALID', message: 'Echo Pack 必须为 JSON 对象' }
