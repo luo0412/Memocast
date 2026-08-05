@@ -10,7 +10,7 @@
 import { createNamespacedHelpers } from 'vuex'
 import helper from 'src/utils/helper'
 import Vue from 'vue'
-import * as VueTemplateCompiler from 'vue-template-compiler'
+import { createRuneRendererCtor } from './runeSfcRendererFactory.js'
 import {
   default as Muya,
   TablePicker,
@@ -116,70 +116,7 @@ const rewriteRunePlaceholderByNodeId = (markdown = '', nodeId = '', nextValue = 
 
   return rewritten ? nextMarkdown : source
 }
-const vueSfcCompiler = VueTemplateCompiler && typeof VueTemplateCompiler.parseComponent === 'function'
-  ? VueTemplateCompiler
-  : VueTemplateCompiler?.default && typeof VueTemplateCompiler.default.parseComponent === 'function'
-    ? VueTemplateCompiler.default
-    : null
-const compileTemplateToFunctions = vueSfcCompiler && typeof vueSfcCompiler.compileToFunctions === 'function'
-  ? vueSfcCompiler.compileToFunctions.bind(vueSfcCompiler)
-  : vueSfcCompiler?.default && typeof vueSfcCompiler.default.compileToFunctions === 'function'
-    ? vueSfcCompiler.default.compileToFunctions.bind(vueSfcCompiler.default)
-    : null
 const RUNE_TEXT_SLOT = 'default'
-
-const injectScopedAttribute = (template = '', scopeId = '') => {
-  if (!scopeId || !template) return template
-  return template.replace(/<([a-zA-Z][^\s/>]*)(\s[^<>]*?)?(\/?\s*)>/g, (match, tagName, attrs = '', tail = '') => {
-    if (/^(template|slot)$/i.test(tagName) || attrs.includes(scopeId)) {
-      return match
-    }
-    return `<${tagName}${attrs} ${scopeId}${tail}>`
-  })
-}
-
-const normalizeRuneSfc = (template = '') => {
-  const source = String(template || '').trim()
-  console.log('[Muya.normalizeRuneSfc] received template source', {
-    sourceLen: source.length,
-    sourcePreview: source.substring(0, 160)
-  })
-  if (!source) {
-    return {
-      template: EMPTY_RUNE_TEMPLATE,
-      script: 'export default {}',
-      styles: [],
-      hasTemplate: false
-    }
-  }
-
-  if (!vueSfcCompiler) {
-    console.warn('[Muya.normalizeRuneSfc] vue-template-compiler unavailable, fallback to raw template')
-    return {
-      template: source,
-      script: 'export default {}',
-      styles: [],
-      hasTemplate: true
-    }
-  }
-
-  const parsed = vueSfcCompiler.parseComponent(source)
-  const templateContent = (parsed.template && parsed.template.content && parsed.template.content.trim()) || ''
-  console.log('[Muya.normalizeRuneSfc] parsed template result', {
-    hasTemplateBlock: !!parsed.template,
-    templateContentLen: templateContent.length,
-    templateContentPreview: templateContent.substring(0, 160),
-    scriptLen: ((parsed.script && parsed.script.content) || '').length,
-    stylesCount: Array.isArray(parsed.styles) ? parsed.styles.length : 0
-  })
-
-  return {
-    template: templateContent || EMPTY_RUNE_TEMPLATE,
-    script: (parsed.script && parsed.script.content) || 'export default {}',
-    styles: parsed.styles || [],
-    hasTemplate: !!templateContent
-  }
-}
 
 const createRuneInstanceId = () => uuidv4()
 const createRuneNodeId = () => `rune-${uuidv4()}`
@@ -244,124 +181,6 @@ const createEchoPlaceholderMarkup = (echo = {}, options = {}) => {
   })
 }
 
-const evalRuneScript = (scriptContent = '') => {
-  const sanitized = scriptContent.replace(/export\s+default/, 'return ')
-  const factory = new Function(sanitized)
-  const result = factory()
-  return result && typeof result === 'object' ? result : {}
-}
-
-const ensureRuneStyle = (styleId, cssText) => {
-  if (!styleId || typeof document === 'undefined') return
-  let styleEl = document.getElementById(styleId)
-  if (!styleEl) {
-    styleEl = document.createElement('style')
-    styleEl.id = styleId
-    document.head.appendChild(styleEl)
-  }
-  if (styleEl.textContent !== cssText) {
-    styleEl.textContent = cssText
-  }
-}
-
-const createRuneRendererCtor = (rune = {}) => {
-  console.log('[Muya.createRuneRendererCtor] building renderer', {
-    runeId: rune?.id || '',
-    runeName: rune?.name || '',
-    rawTemplateLen: String(rune?.template || '').length,
-    rawTemplatePreview: String(rune?.template || '').substring(0, 160)
-  })
-  const { template, script, styles, hasTemplate } = normalizeRuneSfc(rune.template)
-  console.log('[Muya.createRuneRendererCtor] normalized rune sfc', {
-    runeId: rune?.id || '',
-    runeName: rune?.name || '',
-    hasTemplate,
-    normalizedTemplateLen: String(template || '').length,
-    normalizedTemplatePreview: String(template || '').substring(0, 160),
-    scriptLen: String(script || '').length,
-    stylesCount: Array.isArray(styles) ? styles.length : 0
-  })
-  if (!hasTemplate) return null
-
-  const scopeId = `data-rune-scope-${rune.id || 'default'}`
-  const styleText = styles.map(style => style.content || '').join('\n')
-  const componentOptions = evalRuneScript(script)
-  const baseData = typeof componentOptions.data === 'function' ? componentOptions.data : () => ({})
-  const declaredPropNames = Array.isArray(componentOptions.props)
-    ? componentOptions.props
-      .map(propName => String(propName || '').trim())
-      .filter(Boolean)
-    : (componentOptions.props && typeof componentOptions.props === 'object'
-      ? Object.keys(componentOptions.props)
-      : [])
-  if (!compileTemplateToFunctions) {
-    console.warn('[Muya.createRuneRendererCtor] compileToFunctions unavailable, skip renderer', {
-      runeId: rune?.id || '',
-      runeName: rune?.name || ''
-    })
-    return null
-  }
-  const compiled = compileTemplateToFunctions(injectScopedAttribute(template, scopeId))
-
-  ensureRuneStyle(`rune-style-${rune.id || 'default'}`, styleText)
-
-  return Vue.extend({
-    ...componentOptions,
-    name: componentOptions.name || 'RunePreviewRenderer',
-    props: {
-      ...(Array.isArray(componentOptions.props)
-        ? declaredPropNames.reduce((props, propName) => {
-          props[propName] = null
-          return props
-        }, {})
-        : (componentOptions.props && typeof componentOptions.props === 'object'
-          ? componentOptions.props
-          : {})),
-      ...(declaredPropNames.includes('runeId') ? {} : {
-        runeId: {
-          type: String,
-          default: ''
-        }
-      }),
-      ...(declaredPropNames.includes('nodeId') ? {} : {
-        nodeId: {
-          type: String,
-          default: ''
-        }
-      }),
-      ...(declaredPropNames.includes('rune') ? {} : {
-        rune: {
-          type: Object,
-          default: null
-        }
-      }),
-      ...(declaredPropNames.includes('value') ? {} : {
-        value: {
-          type: String,
-          default: ''
-        }
-      })
-    },
-    data () {
-      return {
-        ...baseData.call(this)
-      }
-    },
-    render (h) {
-      const vnode = compiled.render.call(this, h)
-      if (vnode && typeof vnode === 'object') {
-        const existingChildren = Array.isArray(vnode.children) ? vnode.children : []
-        if (!existingChildren.length) {
-          vnode.children = [String(this.value == null ? '' : this.value)]
-        }
-      }
-      return vnode
-    },
-    staticRenderFns: compiled.staticRenderFns,
-    _scopeId: scopeId
-  })
-}
-
 const RunePreviewRenderer = Vue.extend({
   name: 'RunePreviewRenderer',
   props: {
@@ -389,19 +208,77 @@ const RunePreviewRenderer = Vue.extend({
     // 通过三优先级合并写到 host.dataset，再按 Vue props 规则显式传入。
     // 因此本渲染层不预先声明这些 prop，交给 Vue 自身的 props 解析决定要不要传。
   },
-  computed: {
-    rendererCtor () {
-      const rune = this.rune || {}
-      return createRuneRendererCtor(rune)
+  data () {
+    return {
+      rendererCtor: null,
+      loadError: null,
+      isCompiling: false,
+      _refreshToken: 0
+    }
+  },
+  created () {
+    this.refreshRendererCtor()
+  },
+  watch: {
+    rune: {
+      handler () { this.refreshRendererCtor() },
+      deep: true
+    }
+  },
+  methods: {
+    async refreshRendererCtor () {
+      const rune = this.rune
+      if (!rune || !String(rune.template || '').trim()) {
+        this.rendererCtor = null
+        this.loadError = null
+        this.isCompiling = false
+        return
+      }
+      // 用单调递增的 refreshToken 标记本次刷新；
+      // 后续 await 回来时若 token 已变（说明期间又触发了一次 refresh），就放弃写入，
+      // 避免慢响应的 stale 结果覆盖最新一刷的 rendererCtor / loadError。
+      const myToken = ++this._refreshToken
+      this.isCompiling = true
+      this.loadError = null
+      try {
+        const ctor = await createRuneRendererCtor(rune)
+        if (myToken !== this._refreshToken) return
+        this.rendererCtor = ctor
+      } catch (error) {
+        if (myToken !== this._refreshToken) return
+        this.rendererCtor = null
+        this.loadError = error
+        console.warn('[Muya.RunePreviewRenderer] SFC compile failed:', error)
+      } finally {
+        if (myToken === this._refreshToken) {
+          this.isCompiling = false
+        }
+      }
     }
   },
   render (h) {
+    if (this.loadError) {
+      return h('div', {
+        staticClass: 'rune-renderer-error',
+        attrs: {
+          contenteditable: 'false',
+          title: this.loadError && this.loadError.message ? this.loadError.message : 'Rune SFC compile failed'
+        }
+      }, ['⚠ 符文编译失败'])
+    }
     if (!this.rendererCtor) {
-      return h('div')
+      if (this.isCompiling) {
+        return h('div', {
+          staticClass: 'rune-renderer-loading',
+          attrs: { contenteditable: 'false' }
+        })
+      }
+      return h('div', {
+        staticClass: 'rune-renderer-empty',
+        attrs: { contenteditable: 'false' }
+      })
     }
 
-    // 把内层 SFC 的 input 事件转发到 onValueChange，
-    // 让 RuneValue { runeId, nodeId, value } 回流到 Markdown 源。
     const self = this
     return h(this.rendererCtor, {
       props: {
@@ -1589,5 +1466,47 @@ this._echoDelegate = { container: document, handler: echoCaptureHandler }
   line-height: 1.4;
   opacity: 0.72;
   word-break: break-word;
+}
+
+/* 符文 SFC 异步编译过渡态（与 .ag-rune-placeholder-host 形态保持一致，避免抖动） */
+.rune-renderer-loading,
+.rune-renderer-empty,
+.rune-renderer-error {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 56px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  box-sizing: border-box;
+  font-size: 13px;
+  line-height: 1.4;
+  border: 1px dashed rgba(126, 87, 194, 0.28);
+  background: linear-gradient(180deg, rgba(126, 87, 194, 0.06), rgba(126, 87, 194, 0.02));
+  color: rgba(126, 87, 194, 0.78);
+  user-select: none;
+}
+
+.rune-renderer-loading::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: rune-renderer-spin 0.8s linear infinite;
+}
+
+@keyframes rune-renderer-spin {
+  to { transform: rotate(360deg); }
+}
+
+.rune-renderer-error {
+  border-color: rgba(229, 57, 53, 0.32);
+  background: linear-gradient(180deg, rgba(229, 57, 53, 0.08), rgba(229, 57, 53, 0.02));
+  color: rgba(229, 57, 53, 0.92);
+  border-style: solid;
 }
 </style>

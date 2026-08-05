@@ -44,6 +44,10 @@ async function uploadImages (imagePaths, type, options = {}) {
   return ipcRenderer.invoke(channels.uploadImages, { imagePaths, type, options })
 }
 
+async function parseVueSfc (source, options = {}) {
+  return ipcRenderer.invoke(channels.parseVueSfc, { source, options })
+}
+
 async function checkUpdate () {
   return ipcRenderer.invoke(channels.checkUpdate)
 }
@@ -162,6 +166,7 @@ export {
   exportMarkdownFiles,
   importImage,
   uploadImages,
+  parseVueSfc,
   checkUpdate,
   needUpdate,
   quitAndUpdate,

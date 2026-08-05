@@ -5,6 +5,7 @@ export default {
   exportMarkdownFiles: 'export-markdown-files',
   importImage: 'import-image',
   uploadImages: 'upload-images',
+  parseVueSfc: 'vue-sfc:parse',
   checkUpdate: 'check-update',
   needUpdate: 'need-update',
   quitAndUpdate: 'quit-and-install',

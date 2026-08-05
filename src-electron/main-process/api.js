@@ -12,6 +12,7 @@ import i18n from './i18n'
 import log from 'electron-log'
 
 const { uploadImagesByPicGo } = require('./utils/PicGoUtils')
+const { parseVueSfc } = require('./service/vueSfcCompilerService')
 
 const {
   ipcMain,
@@ -82,6 +83,12 @@ export async function handleApi (channel, api) {
 
 export default {
   registerApiHandler () {
+    handleApi('vue-sfc:parse', (event, payload = {}) => {
+      const source = typeof payload === 'string' ? payload : payload.source
+      const options = typeof payload === 'object' && payload !== null ? payload.options : {}
+      return parseVueSfc(source, options)
+    }).catch(err => { throw err })
+
     /**
      *  export single note
      */
