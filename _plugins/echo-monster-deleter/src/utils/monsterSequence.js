@@ -161,8 +161,9 @@ export class MonsterStageController {
     }
     await this._stageLeo()
     await this._stageFly()
+    // 注意：_stageFly 内部 rAF 推进到 t>=1 时已经调过 onFlyFinished()，
+    // 这里不要再调一次（否则 monsterStage._teardown 被调用两遍）
     this._setStage(STAGE.DONE)
-    this.onFlyFinished()
   }
 
   async _stageWalk () {

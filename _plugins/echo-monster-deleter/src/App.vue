@@ -58,6 +58,7 @@
       :on-finished="onFinished"
       @target-selected="onTargetSelected"
       @choice="onChoice"
+      @stage-change="onStageChange"
     />
 
     <footer class="app-footer">
@@ -173,11 +174,11 @@ export default {
     onFinished () {
       // 整个 5 阶段剧本结束：标记目标文件被摧毁 + 隐藏舞台 + 彻底清理锚点状态
       if (this.targetFile) {
-        const ix = this.fakeFiles.findIndex(f => f === this.targetFile)
-        if (ix !== -1) {
-          // 重新赋值以触发响应式（Vue 2.7 替换对象即可）
-          this.$set(this.fakeFiles, ix, { ...this.fakeFiles[ix], destroyed: true })
-        }
+        // 按 name 匹配（避免 fakeFiles 整体替换后 targetFile 引用失效）
+        const targetName = this.targetFile.name
+        this.fakeFiles = this.fakeFiles.map(f =>
+          f.name === targetName ? { ...f, destroyed: true } : f
+        )
       }
       // 彻底重置状态机（避免上轮 AWAIT_AIM / WALK 等残留影响下一轮召唤）
       this.targetFile = null

@@ -147,9 +147,18 @@ export default {
       if (val === STAGE.AWAIT_AIM) this.statusMessage = '狙击瞄准中，点击目标位置'
       else if (val === STAGE.AWAIT_CONFIRM) this.statusMessage = '等用户确认'
     },
-    visible (val) {
-      if (val) this._start()
-      else this._teardown({ silent: true })
+    visible: {
+      handler (val) {
+        if (val) {
+          this._start()
+        } else {
+          // visible=false 兜底：保证所有内部状态彻底复位 + 通知父级
+          this._teardown({ silent: false })
+        }
+      },
+      // 同步触发 —— onFinished 走 _teardown 同步设 stageVisible=false，
+      // 若 watcher 异步，第二次 _teardown 要等 nextTick 才跑，期间 visible=false 状态未清理
+      flush: 'sync'
     }
   },
   beforeDestroy () {
@@ -159,6 +168,9 @@ export default {
     // 启动瞄准 overlay（半透明背景 + 红色十字光标 + "请选择"文案）
     // 进入 AWAIT_AIM 阶段，等用户点击。在此之前不召唤怪兽。
     _start () {
+      // 重置 teardown 幂等标记（允许新一轮召唤）
+      this._tornDown = false
+      this._notifiedFinished = false
       this.stage = STAGE.AWAIT_AIM
       this.bgOpacity = 0
       this.textOpacity = 0
@@ -192,6 +204,8 @@ export default {
           else if (stage === STAGE.LEO) this.statusMessage = '雷欧登场'
           else if (stage === STAGE.FLY) this.statusMessage = '飞走了'
           else if (stage === STAGE.DONE) this.statusMessage = '剧场结束'
+          // 通知父级更新底部状态栏
+          this.$emit('stage-change', stage)
         },
         onWalkProgress: ({ x, y, ratio }) => {
           // 走路过程就要把 monsterSprite 设上 —— 之前只在 ratio===1 才设，
@@ -338,7 +352,16 @@ export default {
       // 兼容性保留：什么都不做，所有清理都走 _teardown
     },
     _teardown (opts = {}) {
-      const { silent = false } = opts
+      const { silent = false, force = false } = opts
+      // 幂等保护：已 teardown 过就不重复（除非 force）
+      if (this._tornDown && !force) {
+        if (!silent && !this._notifiedFinished) {
+          this._notifiedFinished = true
+          try { this.onFinished() } catch (e) { console.error('[monsterStage] onFinished threw:', e) }
+        }
+        return
+      }
+      this._tornDown = true
       if (this.controller) {
         this.controller.stop()
         this.controller = null
@@ -350,13 +373,15 @@ export default {
       this.explosionVisible = false
       this.explosionVideoUrl = ''
       this.monsterPos = null
+      this.bubblePos = { x: 0, y: 0 }
+      this.choicesPos = { x: 0, y: 0 }
       this.bubbleVisible = false
       this.choicesVisible = false
       this.stage = STAGE.IDLE
       this.statusMessage = '点击文件召唤怪兽'
-      // 通知父级：要么"剧场结束"，要么"被父级强制关闭"
       if (!silent) {
-        try { this.onFinished() } catch (e) { /* 防止父级回调异常影响清理 */ }
+        this._notifiedFinished = true
+        try { this.onFinished() } catch (e) { console.error('[monsterStage] onFinished threw:', e) }
       }
     }
   }
