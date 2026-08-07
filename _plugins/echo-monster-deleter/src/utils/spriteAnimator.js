@@ -26,6 +26,7 @@ const sliceSpritesheet = async (image, {
   cols = COLS,
   rows = ROWS,
   targetHeight = DEFAULT_TARGET_HEIGHT,
+  targetWidth = null, // 若指定，按 targetWidth 等比缩放（覆盖默认按 targetHeight 等比）
   frameIndices = null
 } = {}) => {
   const naturalW = image.naturalWidth || image.width
@@ -35,29 +36,40 @@ const sliceSpritesheet = async (image, {
   }
   const frameW = Math.floor(naturalW / cols)
   const frameH = Math.floor(naturalH / rows)
-  // 等比缩放高度到 targetHeight
-  const scale = targetHeight / frameH
+  // 等比缩放：默认按 targetHeight；如指定 targetWidth 则按 targetWidth（让爆炸缩到正方形 240x240）
+  let scale
+  if (targetWidth != null && targetWidth > 0) {
+    scale = targetWidth / frameW
+  } else {
+    scale = targetHeight / frameH
+  }
   const dstW = Math.round(frameW * scale)
-  const dstH = Math.round(targetHeight)
+  const dstH = Math.round(frameH * scale)
   const frameCount = cols * rows
-  const bitmaps = []
+  // 不再 createImageBitmap —— 直接保存原始 image + 切片矩形 + 目标尺寸，
+  // render 时用 ctx.drawImage(image, sx, sy, sw, sh, 0, 0, dstW, dstH)。
+  // 原因：createImageBitmap resize 在某些 PNG 上会丢失 alpha 细节（爆炸 spritesheet
+  // 实测 frame 0 max alpha=94，但仍应保留原始像素；createImageBitmap 会把稀疏
+  // alpha 进一步抹掉变 0）。drawImage 走原始 alpha。
+  const slices = []
   for (let i = 0; i < frameCount; i++) {
     const r = Math.floor(i / cols)
     const c = i % cols
-    const sx = c * frameW
-    const sy = r * frameH
-    const bitmap = await createImageBitmap(image, sx, sy, frameW, frameH, {
-      resizeWidth: dstW,
-      resizeHeight: dstH,
-      resizeQuality: 'high'
+    slices.push({
+      sx: c * frameW,
+      sy: r * frameH,
+      sw: frameW,
+      sh: frameH,
+      dw: dstW,
+      dh: dstH,
+      src: image
     })
-    bitmaps.push(bitmap)
   }
-  let frames = bitmaps
+  let frames = slices
   if (Array.isArray(frameIndices)) {
     frames = frameIndices
-      .filter(i => Number.isInteger(i) && i >= 0 && i < bitmaps.length)
-      .map(i => bitmaps[i])
+      .filter(i => Number.isInteger(i) && i >= 0 && i < slices.length)
+      .map(i => slices[i])
   }
   return { frameW: dstW, frameH: dstH, frames }
 }
@@ -82,7 +94,9 @@ export class SpriteAnimator {
   get frameCount () { return this.frames.length }
   get size () {
     if (!this.frames.length) return { width: 0, height: 0 }
-    return { width: this.frames[0].width, height: this.frames[0].height }
+    const f = this.frames[0]
+    // 兼容旧结构（ImageBitmap 有 width/height）和新结构（{dw, dh}）
+    return { width: f.dw ?? f.width ?? 0, height: f.dh ?? f.height ?? 0 }
   }
 
   setFlip (flip) {
@@ -94,7 +108,9 @@ export class SpriteAnimator {
     this.stop()
     const img = await new Promise((resolve, reject) => {
       const i = new Image()
-      i.crossOrigin = 'anonymous'
+      // 不强制 crossOrigin —— file:// 协议下 'anonymous' 会让图片加载失败（CORS）
+      // 同源 http/https 下默认就有 CORS 头；跨域场景可在 options 里强制开
+      if (options.crossOrigin) i.crossOrigin = options.crossOrigin
       i.onload = () => resolve(i)
       i.onerror = (err) => reject(err)
       i.src = src
@@ -139,8 +155,9 @@ export class SpriteAnimator {
     const frame = this.frames[clampIndex(this.currentFrame, this.frames.length)]
     if (!frame) return
     const canvas = ctx.canvas
-    const w = frame.width
-    const h = frame.height
+    // frame 现在是 { sx, sy, sw, sh, dw, dh, src } —— 走 drawImage 9 参数版
+    const w = frame.dw
+    const h = frame.dh
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w
       canvas.height = h
@@ -150,10 +167,10 @@ export class SpriteAnimator {
       ctx.save()
       ctx.translate(canvas.width, 0)
       ctx.scale(-1, 1)
-      ctx.drawImage(frame, 0, 0)
+      ctx.drawImage(frame.src, frame.sx, frame.sy, frame.sw, frame.sh, 0, 0, frame.dw, frame.dh)
       ctx.restore()
     } else {
-      ctx.drawImage(frame, 0, 0)
+      ctx.drawImage(frame.src, frame.sx, frame.sy, frame.sw, frame.sh, 0, 0, frame.dw, frame.dh)
     }
   }
 

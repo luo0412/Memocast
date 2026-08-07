@@ -52,17 +52,12 @@
       :y="monsterPos.y"
     />
 
-    <!-- 爆炸层（直接用 <video> 元素播爆炸 MP4；spritesheet PNG 内容太稀疏画不出可见效果） -->
-    <video
-      v-if="explosionVideoUrl"
-      ref="explosionVideo"
-      class="monster-explosion-video"
-      :src="explosionVideoUrl"
-      :style="{ left: explosionPos.x + 'px', top: explosionPos.y + 'px', width: explosionSize.width + 'px', height: explosionSize.height + 'px' }"
-      autoplay
-      muted
-      playsinline
-      @ended="onExplosionVideoEnded"
+    <!-- 爆炸层（spritesheet canvas 渲染爆炸帧序列 + Audio 单独播 MP4 声音） -->
+    <monsterSprite
+      v-if="explosionSprite"
+      :sprite="explosionSprite"
+      :x="explosionPos.x"
+      :y="explosionPos.y"
     />
 
     <!-- 对话泡 + 按钮 -->
@@ -133,7 +128,7 @@ export default {
       monsterSprite: null,
       monsterPos: null,
       // 爆炸改用 spritesheet + Audio 播声音（视频元素不再负责显示）
-      explosionVideoUrl: null,
+      explosionSprite: null,
       explosionPos: { x: 0, y: 0 },
       explosionSize: { width: 200, height: 200 },
       bubbleVisible: false,
@@ -245,15 +240,15 @@ export default {
           // controller 内部已经触发 _stageExplosion()，这里不再做任何事
           // —— 等 controller 的 onExplosionStarted 回调拿到 explosion 加载完成的位置
         },
-        onExplosionStarted: ({ x, y, width, height }) => {
-          // 爆炸用 <video> 元素直接播 MP4（spritesheet PNG 内容太稀疏画不出可见效果）
+        onExplosionStarted: ({ x, y, width, height, sprite }) => {
+          // 爆炸改回 spritesheet + Audio 播声音（视频元素不再负责显示）
           console.log('[monsterStage] onExplosionStarted: pos=', x, y, 'size=', width, height, 'viewport=', window.innerWidth, window.innerHeight)
           this.explosionPos = { x, y }
           this.explosionSize = { width, height }
-          this.explosionVideoUrl = ASSETS.audio.explosion
+          this.explosionSprite = sprite
         },
         onExplosionFinished: () => {
-          this.explosionVideoUrl = null
+          this.explosionSprite = null
         },
         onLeoFinished: () => {},
         onFlyFinished: () => {
@@ -373,7 +368,7 @@ export default {
       this.textOpacity = 0
       this.monsterSprite = null
       this.monsterPos = null
-      this.explosionVideoUrl = null
+      this.explosionSprite = null
       this.bubblePos = { x: 0, y: 0 }
       this.choicesPos = { x: 0, y: 0 }
       this.bubbleVisible = false

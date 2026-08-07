@@ -328,32 +328,44 @@ export class MonsterStageController {
 
   async _stageExplosion () {
     this._setStage(STAGE.EXPLOSION)
-    // 爆炸不再用 spritesheet —— 直接播 <video> MP4（spritesheet PNG 内容太稀疏画不出可见效果）。
-    console.log('[controller] explosion: using <video> MP4 path')
-    const W = 240
-    const H = 240
+    // 爆炸用 spritesheet（canvas 渲染 5×3 帧序列）+ Audio 单独播 MP4 声音
+    // —— 视频元素只用来播声音，不负责显示
+    await this.explosion.load(this._resolve('explosion'), {
+      // 缩放到正方形 240x240（与原 MP4 视频元素位置/大小一致；1440x1920 单帧会等比拉成正方形）
+      targetWidth: 240,
+      targetHeight: 240
+    })
+    console.log('[controller] explosion loaded:', {
+      isLoaded: this.explosion.isLoaded,
+      frames: this.explosion.frames.length,
+      size: this.explosion.size,
+      src: this._resolve('explosion')
+    })
+    // 用 sprite.size 作为定位基础（不再写死 240x240），保证 canvas 中心和 W/2,H/2 对齐
+    const spriteSize = this.explosion.size
+    const W = spriteSize.width || 240
+    const H = spriteSize.height || 240
     const x = this.targetPos.x - W / 2
     const y = this.targetPos.y - H / 2 - 40
-    // 通知上层挂上 <video> 元素（monsterStage 渲染 <video>）
+    // 通知上层挂上 explosion sprite（monsterStage 渲染 <monsterSprite>）
     this.onExplosionStarted({
-      x, y, width: W, height: H
+      x, y, width: W, height: H,
+      sprite: this.explosion
     })
-    // 同步播爆炸（audio 元素播 MP4 声音 + monsterStage 那边 <video> 播画面）
+    // 同步播爆炸音效（Audio 元素，不影响 sprite 显示）
     this.audio.playExplosion()
-    // 等 audio 元素播完（MP4 自身配带声音，画面由 monsterStage 的 <video> 元素单独播）
-    await this._waitForAudioEnded(this.audio.explosion)
-    console.log('[controller] explosion (audio/video) ended')
-    // 兼容旧 resolveExplosion 调用 —— 内部 safe
-    this.onExplosionFinished()
-  }
-
-  _waitForAudioEnded (audioEl) {
-    return new Promise(resolve => {
-      if (!audioEl) { resolve(); return }
-      const onEnd = () => { audioEl.removeEventListener('ended', onEnd); resolve() }
-      audioEl.addEventListener('ended', onEnd)
-      // 兜底：3 秒后强制 resolve（防止 MP4 路径挂掉）
-      setTimeout(() => { audioEl.removeEventListener('ended', onEnd); resolve() }, 3000)
+    // sprite 播完后 resolve，让 _stageLeo 推进
+    await new Promise(resolve => {
+      this.explosion.play({
+        fps: 12,
+        loop: false,
+        onFrame: (currentFrame, frameCount) => this.onFrame({ stage: STAGE.EXPLOSION, currentFrame, frameCount }),
+        onFinish: () => {
+          console.log('[controller] explosion play finished')
+          this.explosion.stop()
+          resolve()
+        }
+      })
     })
   }
 
