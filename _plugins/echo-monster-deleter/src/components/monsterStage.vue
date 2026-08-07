@@ -52,15 +52,17 @@
       :y="monsterPos.y"
     />
 
-    <!-- 爆炸层（MP4 视频元素，绕开 spritesheet canvas 渲染问题） -->
+    <!-- 爆炸层（直接用 <video> 元素播爆炸 MP4；spritesheet PNG 内容太稀疏画不出可见效果） -->
     <video
-      v-show="explosionVisible"
+      v-if="explosionVideoUrl"
       ref="explosionVideo"
       class="monster-explosion-video"
       :src="explosionVideoUrl"
       :style="{ left: explosionPos.x + 'px', top: explosionPos.y + 'px', width: explosionSize.width + 'px', height: explosionSize.height + 'px' }"
       autoplay
+      muted
       playsinline
+      @ended="onExplosionVideoEnded"
     />
 
     <!-- 对话泡 + 按钮 -->
@@ -93,7 +95,7 @@ import { SNIPER_CURSOR_URL_HREF, SNIPER_CURSOR_FALLBACK, SNIPER_CURSOR_HOTSPOT }
 import monsterSprite from './monsterSprite.vue'
 
 const BUBBLE_DEFAULT_TEXT = '喂，是这个吗？'
-const CHOICE_DEFAULT_LABELS = ['是的', '嘤嘤嘤就是这个']
+const CHOICE_DEFAULT_LABELS = ['不是', '嘤嘤嘤就是这个']
 const PROMPT_DEFAULT_TEXT = '请选择你要摧毁的文件'
 const FADE_IN_MS = 800
 const FADE_OUT_MS = 500
@@ -108,17 +110,30 @@ export default {
     bubbleText: { type: String, default: BUBBLE_DEFAULT_TEXT },
     choiceLabels: { type: Array, default: () => CHOICE_DEFAULT_LABELS },
     promptText: { type: String, default: PROMPT_DEFAULT_TEXT },
-    onFinished: { type: Function, default: () => {} }
+    onFinished: {
+      type: Function,
+      default: () => {}
+    },
+    /**
+     * 流程结束回调，与 onFinished 二选一；优先级高于 onFinished。
+     * 参数: { outcome: 'destroyed' | 'cancelled' }
+     *  - outcome='destroyed'   怪兽 + 爆炸摧毁完成，应该把目标文件标记 destroyed
+     *  - outcome='cancelled'   用户在对话泡上点了"不是"（或类似否定），跳过炸毁，
+     *                          怪兽 + 雷欧一起飞走；目标文件**不应**被标记 destroyed
+     */
+    onCompleted: {
+      type: Function,
+      default: null
+    }
   },
   data () {
     return {
       bgOpacity: 0,
       textOpacity: 0,
       monsterSprite: null,
-      // 爆炸改用 MP4 video 元素（避开 spritesheet canvas 渲染的坑）
-      explosionVideoUrl: '',
-      explosionVisible: false,
       monsterPos: null,
+      // 爆炸改用 spritesheet + Audio 播声音（视频元素不再负责显示）
+      explosionVideoUrl: null,
       explosionPos: { x: 0, y: 0 },
       explosionSize: { width: 200, height: 200 },
       bubbleVisible: false,
@@ -231,30 +246,14 @@ export default {
           // —— 等 controller 的 onExplosionStarted 回调拿到 explosion 加载完成的位置
         },
         onExplosionStarted: ({ x, y, width, height }) => {
-          // 视频 MP4 爆炸：直接挂 url + 位置 + 尺寸，然后 play video
-          this.explosionVideoUrl = ASSETS.audio.explosion
+          // 爆炸用 <video> 元素直接播 MP4（spritesheet PNG 内容太稀疏画不出可见效果）
+          console.log('[monsterStage] onExplosionStarted: pos=', x, y, 'size=', width, height, 'viewport=', window.innerWidth, window.innerHeight)
           this.explosionPos = { x, y }
           this.explosionSize = { width, height }
-          this.explosionVisible = true
-          // 等 nextTick 让 <video> 渲染出来再 play()，否则 play() 在 src 切时无效
-          this.$nextTick(() => {
-            const v = this.$refs.explosionVideo
-            if (!v) return
-            v.currentTime = 0
-            // video 播放结束后通知 controller，让 _stageLeo 开始
-            const onEnded = () => {
-              v.removeEventListener('ended', onEnded)
-              if (this.controller) this.controller.resolveExplosion()
-            }
-            v.addEventListener('ended', onEnded)
-            // 不 promise-return —— 用户代理可能 reject（autoplay policy）
-            const p = v.play()
-            if (p && typeof p.catch === 'function') p.catch(() => {})
-          })
+          this.explosionVideoUrl = ASSETS.audio.explosion
         },
         onExplosionFinished: () => {
-          this.explosionVisible = false
-          this.explosionVideoUrl = ''
+          this.explosionVideoUrl = null
         },
         onLeoFinished: () => {},
         onFlyFinished: () => {
@@ -309,17 +308,20 @@ export default {
       }
     },
     onChoice (label) {
-      // 不管是的 / 不是，都代表用户已确认指向当前文件
-      // 原 PyQt 的两个按钮都触发踢腿（cancel 路径没有实现）；
-      // 后续要交互区分，可加 confirm()/cancel() 分支
       this.bubbleVisible = false
       this.choicesVisible = false
       this.$emit('choice', label)
-      // 通知 controller 把怪兽从 AWAIT_CONFIRM 推到 KICK
-      if (this.controller) {
+      if (!this.controller) return
+      // 第一个按钮（"不是"）= 不摧毁当前文件，跳过 kick/explosion，
+      // 走 leo + fly 一起飞走（怪兽 + 雷欧）
+      // 第二个按钮（"嘤嘤嘤就是这个"）= 确认摧毁，走 kick + explosion
+      const isNegative = label === CHOICE_DEFAULT_LABELS[0]
+      if (isNegative) {
+        this.statusMessage = '不是这个？那走吧……'
+        this.controller.cancel({ fly: true })
+      } else {
         const ok = this.controller.confirm()
         if (!ok) {
-          // 状态机不在等确认；保险打印
           console.warn('[monsterStage] confirm() returned false, stage =', this.controller.stage)
         }
       }
@@ -370,9 +372,8 @@ export default {
       this.bgOpacity = 0
       this.textOpacity = 0
       this.monsterSprite = null
-      this.explosionVisible = false
-      this.explosionVideoUrl = ''
       this.monsterPos = null
+      this.explosionVideoUrl = null
       this.bubblePos = { x: 0, y: 0 }
       this.choicesPos = { x: 0, y: 0 }
       this.bubbleVisible = false
@@ -381,7 +382,13 @@ export default {
       this.statusMessage = '点击文件召唤怪兽'
       if (!silent) {
         this._notifiedFinished = true
-        try { this.onFinished() } catch (e) { console.error('[monsterStage] onFinished threw:', e) }
+        const outcome = (this.controller && this.controller.outcome) || 'destroyed'
+        if (typeof this.onCompleted === 'function') {
+          this.onCompleted({ outcome })
+        } else {
+          // 兼容旧的 onFinished(Fn) —— 默认按 destroyed 走（保留旧行为）
+          this.onFinished()
+        }
       }
     }
   }

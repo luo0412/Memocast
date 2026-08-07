@@ -55,7 +55,7 @@
       ref="stage"
       :visible="stageVisible"
       :target-pos="targetPos"
-      :on-finished="onFinished"
+      :on-completed="onCompleted"
       @target-selected="onTargetSelected"
       @choice="onChoice"
       @stage-change="onStageChange"
@@ -171,9 +171,10 @@ export default {
     onStageChange (stage) {
       this.currentStage = stage
     },
-    onFinished () {
-      // 整个 5 阶段剧本结束：标记目标文件被摧毁 + 隐藏舞台 + 彻底清理锚点状态
-      if (this.targetFile) {
+    onCompleted ({ outcome }) {
+      // 整个剧本结束：只有在 outcome='destroyed' 时标记目标文件被摧毁；
+      // outcome='cancelled'（用户点了"不是"）则不摧毁，跟怪兽 + 雷欧一起飞走
+      if (outcome === 'destroyed' && this.targetFile) {
         // 按 name 匹配（避免 fakeFiles 整体替换后 targetFile 引用失效）
         const targetName = this.targetFile.name
         this.fakeFiles = this.fakeFiles.map(f =>
@@ -184,9 +185,13 @@ export default {
       this.targetFile = null
       this.stageVisible = false
       this.currentStage = STAGE.IDLE
-      this.lastLog = this.destroyedCount === this.fakeFiles.length
-        ? '全部文件都已被摧毁 ✓ 点"重置"恢复'
-        : `本轮结束，已摧毁 ${this.destroyedCount} 个文件`
+      if (outcome === 'cancelled') {
+        this.lastLog = '不是这个？怪兽 + 雷欧一起飞走了'
+      } else {
+        this.lastLog = this.destroyedCount === this.fakeFiles.length
+          ? '全部文件都已被摧毁 ✓ 点"重置"恢复'
+          : `本轮结束，已摧毁 ${this.destroyedCount} 个文件`
+      }
     },
     resetAllFiles () {
       this.fakeFiles = FAKE_FILES.map(f => ({ ...f, destroyed: false }))

@@ -147,14 +147,26 @@ export class MonsterStageController {
     this.targetPos = { ...targetPos }
     this.monster = new SpriteAnimator()
     this.explosion = new SpriteAnimator()
+    this.outcome = 'destroyed' // 默认走完所有阶段 = 摧毁
     await this._stageWalk()
-    // _stagePoint 内部会 await confirmPromise；用户 confirm() 后
-    // 这里继续走 kick → 同步触发 explosion → leo → fly
-    // 用 try/catch 抓住 cancel() 抛出的 'cancelled' 错误，作为优雅退出
+    // _stagePoint 内部会 await confirmPromise；用户 confirm() 后 resolve → 走 kick
+    // 用户 cancel() 后 reject → catch 块走 leo + fly 一起飞走（不摧毁文件）
     try {
+      await this._stagePoint()
       await this._stageKick()
     } catch (e) {
-      // cancelled 或 stop 触发
+      // cancelled（用户点"不是"或外部 stop 触发）
+      if (this._cancelFly) {
+        this._cancelFly = false
+        this.outcome = 'cancelled'
+        try {
+          await this._stageLeo()
+          await this._stageFly()
+        } catch (e2) { /* ignore */ }
+      } else {
+        // 真正的 stop() 取消（不是用户主动 cancel）—— 也当作 cancelled
+        this.outcome = 'cancelled'
+      }
       this._setStage(STAGE.DONE)
       this.onFlyFinished()
       return
@@ -210,7 +222,6 @@ export class MonsterStageController {
       }
       this._walkRafId = requestAnimationFrame(step)
     })
-    await this._stagePoint()
   }
 
   _setWalkProgress (ratio) {
@@ -271,10 +282,12 @@ export class MonsterStageController {
   }
 
   // 外部调用：用户取消（保留接口；当前不真的取消）
-  cancel () {
+  // options.fly = true → 走 leo + fly 动画一起飞走（怪兽 + 雷欧）
+  cancel (options = {}) {
     if (this.stage !== STAGE.AWAIT_CONFIRM) {
       return false
     }
+    if (options.fly) this._cancelFly = true
     if (this._confirmReject) {
       const r = this._confirmReject
       this._confirmResolve = null
@@ -315,35 +328,44 @@ export class MonsterStageController {
 
   async _stageExplosion () {
     this._setStage(STAGE.EXPLOSION)
-    // 不调 audio.playExplosion() —— 让 <video> 元素自己带音轨播 MP4。
-    // 同一个 MP4 文件被 Audio + Video 同时解码会互踢（最后播放的赢）。
-    // 视频改用 MP4 video 元素渲染（避开 spritesheet + canvas 渲染时序坑）；
-    // 这里直接把 video URL + 位置 / 尺寸回调给上层。
-    // 视频时长由浏览器根据 MP4 决定，不再用 _advanceFrame 切帧
+    // 爆炸不再用 spritesheet —— 直接播 <video> MP4（spritesheet PNG 内容太稀疏画不出可见效果）。
+    console.log('[controller] explosion: using <video> MP4 path')
     const W = 240
     const H = 240
+    const x = this.targetPos.x - W / 2
+    const y = this.targetPos.y - H / 2 - 40
+    // 通知上层挂上 <video> 元素（monsterStage 渲染 <video>）
     this.onExplosionStarted({
-      x: this.targetPos.x - W / 2,
-      y: this.targetPos.y - H / 2 - 40,
-      width: W,
-      height: H
+      x, y, width: W, height: H
     })
-    // 等待 video 的 'ended' 事件来推进 _stageLeo。
-    // 由于 video play 是上层（monsterStage）在 nextTick 里调的，
-    // 我们在这里返回一个 promise，让上层在 onExplosionFinished 里 resolve
-    await new Promise(resolve => {
-      // 上层 onExplosionFinished 回调会 resolve 这个 promise
-      this._explosionResolve = resolve
+    // 同步播爆炸（audio 元素播 MP4 声音 + monsterStage 那边 <video> 播画面）
+    this.audio.playExplosion()
+    // 等 audio 元素播完（MP4 自身配带声音，画面由 monsterStage 的 <video> 元素单独播）
+    await this._waitForAudioEnded(this.audio.explosion)
+    console.log('[controller] explosion (audio/video) ended')
+    // 兼容旧 resolveExplosion 调用 —— 内部 safe
+    this.onExplosionFinished()
+  }
+
+  _waitForAudioEnded (audioEl) {
+    return new Promise(resolve => {
+      if (!audioEl) { resolve(); return }
+      const onEnd = () => { audioEl.removeEventListener('ended', onEnd); resolve() }
+      audioEl.addEventListener('ended', onEnd)
+      // 兜底：3 秒后强制 resolve（防止 MP4 路径挂掉）
+      setTimeout(() => { audioEl.removeEventListener('ended', onEnd); resolve() }, 3000)
     })
   }
 
   resolveExplosion () {
+    // 兼容保留：旧版本 monsterStage 会在 video 'ended' 时调它来推进 _stageLeo。
+    // 现在 _stageExplosion 用 spritesheet + onFinish 自行 resolve，理论上不该再被调；
+    // 但保留兜底（防止旧 video 路径偶发残留）
     if (this._explosionResolve) {
       const r = this._explosionResolve
       this._explosionResolve = null
       r()
     }
-    // 通知上层清 UI
     this.onExplosionFinished()
   }
 
