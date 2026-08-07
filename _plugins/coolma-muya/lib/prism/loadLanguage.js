@@ -100,7 +100,8 @@ function initLoadLanguage (Prism) {
       }
 
       delete Prism.languages[language]
-      await import('prismjs/components/prism-' + language)
+      // demo 模式下不会触发实际加载，/* @vite-ignore */ 让 vite 别静态分析这条动态拼接路径
+      await import(/* @vite-ignore */ 'prismjs/components/prism-' + language)
       loadedCache.add(language)
       promises.push(Promise.resolve({
         status: 'loaded',

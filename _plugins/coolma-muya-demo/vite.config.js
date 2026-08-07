@@ -26,15 +26,25 @@ export default defineConfig({
       { find: 'src/components/echo/echoCore', replacement: path.resolve(__dirname, './src/components/echo/echoCore.js') },
       // coolma-muya lib (精确匹配，防止 /lib -> /lib/lib)
       { find: /^coolma-muya\/lib$/, replacement: path.resolve(__dirname, '../coolma-muya/lib') },
+      // lib 内部 CSS：demo 不调用 exportHtml()，导出 HTML 时不会用到这些样式表。
+      // 走真 CSS 在 vite 下没有 default export（仅副作用注入），而 lib 代码
+      // `import xxx from 'xxx.css'` 期望拿到 CSS 字符串嵌入 HTML。所以 demo
+      // 端把这两个具体文件 stub 成空字符串，与 github-markdown-css / prism.css 同套路。
+      // 注：alias resolve 阶段拿到的 importee 是原始的相对路径字符串
+      // (如 '../assets/styles/exportStyle.css')，不是 resolve 后的 @fs 绝对路径，
+      // 所以必须用 importee 字符串本身作为 find。
+      { find: '../assets/styles/exportStyle.css', replacement: path.resolve(__dirname, './stubs/coolma-muya/lib/assets/styles/exportStyle.css.js') },
+      { find: '../assets/styles/headerFooterStyle.css', replacement: path.resolve(__dirname, './stubs/coolma-muya/lib/assets/styles/headerFooterStyle.css.js') },
       { find: /^coolma-muya\/themes\/default\.css$/, replacement: path.resolve(__dirname, '../coolma-muya/themes/default.css') },
       // === stub：单文件 + 带子路径 ===
-      { find: /^prismjs(\/.*)?$/, replacement: `${stubDir}/prismjs$1` },
+      // 注：file-icons-js 和 prismjs 已在 coolma-muya/lib 的 node_modules 里真实安装
+      // (file-icons-js@1.0.3 + prismjs@1.30.0，lib 自身依赖)。
+      // demo 通过 file: 引用 lib 的 node_modules，所以走真包即可，不再 alias 到 stub。
       { find: /^unsplash-js(\/.*)?$/, replacement: `${stubDir}/unsplash-js$1` },
       { find: /^github-markdown-css(\/.*)?$/, replacement: `${stubDir}/github-markdown-css$1` },
       { find: /^turndown(\/.*)?$/, replacement: `${stubDir}/turndown$1` },
       { find: /^webfontloader(\/.*)?$/, replacement: `${stubDir}/webfontloader$1` },
       { find: /^execall(\/.*)?$/, replacement: `${stubDir}/execall$1` },
-      { find: /^file-icons-js(\/.*)?$/, replacement: `${stubDir}/file-icons-js$1` },
       { find: /^dompurify(\/.*)?$/, replacement: `${stubDir}/dompurify$1` },
       { find: /^element-resize-detector(\/.*)?$/, replacement: `${stubDir}/element-resize-detector$1` },
       { find: /^popper\.js(\/.*)?$/, replacement: `${stubDir}/popper.js$1` },
@@ -55,16 +65,14 @@ export default defineConfig({
     //     运行时不调用即可；
     //   - 生产 build 的 prebundle 由 Rollup 自行处理（不影响 dev）。
     noDiscovery: true,
-    include: ['katex', 'vue', 'vue-i18n'],
+    include: ['katex', 'vue', 'vue-i18n', 'file-icons-js', 'prismjs'],
     // 不让 vite 把上面这些 stub 包误识别为预构建对象
     exclude: [
-      'prismjs',
       'unsplash-js',
       'github-markdown-css',
       'turndown',
       'webfontloader',
       'execall',
-      'file-icons-js',
       'dompurify',
       'element-resize-detector',
       'popper.js',

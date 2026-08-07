@@ -41,6 +41,7 @@
     "element-resize-detector": "^1.2.1",
     "file-icons-js": "1.0.3",
     "popper.js": "^1.16.1",
+    "prismjs": "^1.29.0",
     "snabbdom": "^0.7.4",
     "uuid": "^9.0.1"
   },
