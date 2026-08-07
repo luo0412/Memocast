@@ -29,6 +29,10 @@ export function isDevEnv () {
 /**
  * 构建默认微应用列表。
  * 第一个默认应用「box-im」对应原聊天图标使用的 IM 应用（提取自老代码 microAppDrawer.vue 的硬编码 url）。
+ *
+ * 「vue2-sfc-playground」是 _plugins/vue2-sfc-playground 的本地入口，
+ * dev 模式走 http://127.0.0.1:3333/（playground 的 vite dev server），
+ * production 模式走内置 _plugins/vue2-sfc-playground/dist/index.html（file:// 加载）。
  */
 export function buildDefaultMicroApps () {
   return [
@@ -51,6 +55,21 @@ export function buildDefaultMicroApps () {
       isDefault: false,
       enabled: true,
       isMobile: true
+    },
+    {
+      id: 'vue2-sfc-playground',
+      name: 'Vue2 SFC Playground',
+      icon: 'el-icon-cpu',
+      // dev 模式：走 playground 自己的 vite dev server，
+      // vite proxy 会把 /parse 转发到主进程 18090 HTTP 服务，
+      // 因此 wujie iframe 内 axios.post 命中本地 /parse → 主进程 IPC 同款。
+      devUrl: 'http://localhost:3333/',
+      // production 模式：从仓库内 _plugins/vue2-sfc-playground/dist 加载（需先 yarn build）。
+      // 留空字符串意味着 resolveActiveUrl 在 prod 下回退到 devUrl；用户可自行在设置里改成 file://。
+      url: '',
+      isDefault: false,
+      enabled: true,
+      isMobile: false
     }
   ]
 }

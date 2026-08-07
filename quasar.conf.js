@@ -506,7 +506,11 @@ module.exports = function (/* ctx */) {
           'electron-updater': 'commonjs electron-updater',
           'electron-window-state': 'commonjs electron-window-state',
           'sql.js': 'commonjs sql.js',
-          consola: 'commonjs consola'
+          consola: 'commonjs consola',
+          // 把 @vue/compiler-sfc 整体作为外部模块：webpack 不去分析它的内部 require()，
+          // 运行时由 Node 从 node_modules 加载。避免 @vue/compiler-sfc 静态引用
+          // 几十个可选模板/样式引擎（pug/jade/handlebars/stylus/less/...）导致构建失败。
+          '@vue/compiler-sfc': 'commonjs @vue/compiler-sfc'
         }
 
         // 使用 babel-loader 转译 openai 和 portkey-ai

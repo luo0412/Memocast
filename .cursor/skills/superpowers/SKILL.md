@@ -195,21 +195,54 @@ export const NoteOrderTypeEnum = Enum({
 
 #### 3. 组件消费模式
 
+##### 3a. 全局访问（推荐）：`this.$enums`
+
+项目在 `boot/globalGlobals.js` 中将所有业务 enum 通过**显式 import + 列举**统一挂载到 `Vue.prototype.$enums`（复数语义：一个对象里多个 enum 实例的集合）。**模板和组件中推荐使用 `$enums`**，无需逐个 import：
+
+```html
+<!-- ✅ 模板直接用 $enums，不需要 import -->
+<SettingsSectionContent v-if="subTab === $enums.GeneralSubEnum.Language" ...>
+  ...
+</SettingsSectionContent>
+```
+
 ```javascript
-// ✅ 正确：原生 enum-plus API，无第三方 helper
-options () {
-  return NoteOrderTypeEnum.items.map(c => ({
-    value: c.value,
-    label: this.$t(c.label),
-    icon: c.icon        // 需要 icon 时直接读 item.icon，来自 raw.icon
-  }))
+// ✅ JS 中通过 this.$enums 访问
+computed: {
+  subTabOptions () {
+    return this.$enums.GeneralSubEnum.items.map(c => ({
+      value: c.value,
+      label: this.$t(c.label),
+      icon: c.icon
+    }))
+  }
 }
+```
+
+> **设计原因**：避免每个组件都写 `import { XxxEnum }` + 挂实例。新增 enum 后只需在 `boot/globalGlobals.js` 的 `$enums` 对象里加一行 + 对应 import。
+>
+> **命名说明**：用复数 `$enums` 而非 `$enum`——对象里装的是"多个 enum 实例的集合"。
+
+##### 3b. 显式 import（服务函数 / store action / 非 .vue 文件）
+
+在 `.vue` 组件以外的场景（如 service、store action、工具函数），**仍然用显式 import**：
+
+```javascript
+// ✅ 非 .vue 文件中显式 import
+import { NoteOrderTypeEnum } from 'src/utils/enum'
+
+// 原生 enum-plus API
+const options = NoteOrderTypeEnum.items.map(c => ({
+  value: c.value,
+  label: c.label,
+  icon: c.icon
+}))
 
 // 数据校验
 if (!NoteOrderTypeEnum.has(this.form.status)) return null
 
 // label 回显
-$statusLabel () { return this.$t(NoteOrderTypeEnum.label(this.status)) }
+const statusLabel = i18n.t(NoteOrderTypeEnum.label(this.status))
 ```
 
 #### 4. 全局扩展（`Enum.extends`）
@@ -264,13 +297,11 @@ export function normalizeEchoCategory (raw, isBuiltin, echoCategory) {
 - ❌ **`const RUNE_CATEGORIES = Object.freeze([{value, i18nKey}, ...])`** 二次暴露 frozen 数组——直接 `RuneCategoryEnum.items` 或 `RuneCategoryEnum.values`
 - ❌ **`getRuneCategoryValue(raw)` / `getEchoCategoryValue(raw, ...)`** 等以 enum 为基础导出的二次封装——只允许业务规则的归一化函数（如 `normalizeEchoCategory`），但实现里要用 `enum.has`/`enum.findBy`
 - ❌ **`runeCategoryEnum.js` / `echoCategoryEnum.js`** 这种 `export { Foo } from '../const/real-source.js'` 的过水 wrapper——barrel 直接 from 真实源即可
-- ❌ **`this.$enum.XxxEnum` 全局原型链访问器**（在 main.js 里 `require.context('./utils/enum', false, /.*Enum\.js$/).keys().forEach(...)` 然后 `Vue.prototype.$enum = {...}`）——理由：
-  - enum-plus 设计意图是**显式 `import`**，挂原型链等于把它降级成"全局变量"，失去枚举语义
-  - `require.context` 是 webpack 魔法，IDE 跳转、TypeScript 推断、单元测试全部失灵
-  - 组件 / 模板 / store action / 服务函数中**所有需要 enum 的地方都已经能 `import { ... } from 'src/utils/enum'`**——这是零成本的方案
-  - 模板里 `RuneCategoryEnum.General` 已经是 enum-plus 原生支持的字面量访问（README：完全兼容原生 enum 用法）
-  - 真要避免重复 import，`enum/index.js` 已经做好了 barrel
-  - 自动扫描 `utils/enum/**/*.js` 会让"新增一个 enum 文件就自动全局暴露"，绕过 code review
+- ✅ **`this.$enums.XxxEnum` 全局原型链访问器**（在 `boot/globalGlobals.js` 里显式 `import` + 列举后挂到 `Vue.prototype.$enums`）——这是**项目推荐做法**，`.vue` 模板和组件中优先使用 `$enums` 访问，避免重复 import。详见第 3a 节。
+- ❌ **`require.context` 自动扫描 enum 目录并挂原型链**——虽然 `$enums` 本身是推荐的，但用 `require.context('./utils/enum', false, /.*Enum\.js$/).keys().forEach(...)` **自动扫描**来填充 `$enums` 是禁止的。理由：
+  - 自动扫描是 webpack 魔法，IDE 跳转、TypeScript 推断、单元测试全部失灵
+  - 自动扫描会让"新增一个 enum 文件就自动全局暴露"，绕过 code review
+  - 正确做法是 `boot/globalGlobals.js` 中**显式 import + 手动列举**每个 enum（当前实现就是这样）
 - ❌ **`XxxEnum.General.value`** —— enum-plus 直接访问就是值，`XxxEnum.General === 'general'`，加 `.value` 会得到 `undefined`！这是**最容易犯的错误**，一定要避免：
   ```javascript
   // ❌ 错误
@@ -306,7 +337,7 @@ export function normalizeEchoCategory (raw, isBuiltin, echoCategory) {
 - 是否遗漏相关状态、文案、i18n 或调用链
 - 是否引入明显 lint / 语法问题
 - 是否真正满足用户目标，而不是只做了局部表面修改
-- **业务 enum** 是否按上面"业务枚举与字典（enum-plus）"章节写（无 alias 字段、无第三方 helper、无 wrapper 文件、barrel 顺序正确）
+- **业务 enum** 是否按上面"业务枚举与字典（enum-plus）"章节写（无 alias 字段、无第三方 helper、无 wrapper 文件、barrel 顺序正确；`.vue` 中用 `$enums`、非 `.vue` 中用显式 import；新增 enum 同步更新 `boot/globalGlobals.js`）
 
 ## 详细参考
 

@@ -20,6 +20,7 @@
 <script>
 import WujieVue from 'wujie-vue2'
 import { resolveActiveUrl } from './microAppService'
+import { installMicroAppParseBridge } from './microAppIpcBridge'
 
 export default {
   name: 'microAppHost',
@@ -38,6 +39,18 @@ export default {
         default: '0'
       }
     },
+  mounted () {
+    // 注册 wujie bus 上的 /parse 桥，让子应用（vue2-sfc-playground 等）
+    // 通过 bus.$emit('microapp:parse:request', ...) 调用本进程 vue-sfc:parse IPC。
+    // 微应用整体生命周期内只需要一个 bridge 句柄；hostKey 变化触发 v-if 重建时会重走 mounted。
+    this._uninstallBridge = installMicroAppParseBridge()
+  },
+  beforeDestroy () {
+    if (typeof this._uninstallBridge === 'function') {
+      this._uninstallBridge()
+      this._uninstallBridge = null
+    }
+  },
   computed: {
     resolvedUrl () {
       return resolveActiveUrl(this.app) || ''
