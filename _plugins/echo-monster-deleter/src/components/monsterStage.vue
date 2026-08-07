@@ -52,12 +52,15 @@
       :y="monsterPos.y"
     />
 
-    <!-- 爆炸层（独立 sprite 帧 + MP4 音轨） -->
-    <monsterSprite
-      v-if="explosionSprite && explosionPos"
-      :sprite="explosionSprite"
-      :x="explosionPos.x"
-      :y="explosionPos.y"
+    <!-- 爆炸层（MP4 视频元素，绕开 spritesheet canvas 渲染问题） -->
+    <video
+      v-show="explosionVisible"
+      ref="explosionVideo"
+      class="monster-explosion-video"
+      :src="explosionVideoUrl"
+      :style="{ left: explosionPos.x + 'px', top: explosionPos.y + 'px', width: explosionSize.width + 'px', height: explosionSize.height + 'px' }"
+      autoplay
+      playsinline
     />
 
     <!-- 对话泡 + 按钮 -->
@@ -112,9 +115,12 @@ export default {
       bgOpacity: 0,
       textOpacity: 0,
       monsterSprite: null,
-      explosionSprite: null,
+      // 爆炸改用 MP4 video 元素（避开 spritesheet canvas 渲染的坑）
+      explosionVideoUrl: '',
+      explosionVisible: false,
       monsterPos: null,
-      explosionPos: null,
+      explosionPos: { x: 0, y: 0 },
+      explosionSize: { width: 200, height: 200 },
       bubbleVisible: false,
       bubblePos: { x: 0, y: 0 },
       choicesVisible: false,
@@ -210,14 +216,31 @@ export default {
           // controller 内部已经触发 _stageExplosion()，这里不再做任何事
           // —— 等 controller 的 onExplosionStarted 回调拿到 explosion 加载完成的位置
         },
-        onExplosionStarted: ({ x, y }) => {
-          // controller 已经把 explosion 帧加载完了，挂到模板上开始渲染
-          this.explosionSprite = controller.explosion
+        onExplosionStarted: ({ x, y, width, height }) => {
+          // 视频 MP4 爆炸：直接挂 url + 位置 + 尺寸，然后 play video
+          this.explosionVideoUrl = ASSETS.audio.explosion
           this.explosionPos = { x, y }
+          this.explosionSize = { width, height }
+          this.explosionVisible = true
+          // 等 nextTick 让 <video> 渲染出来再 play()，否则 play() 在 src 切时无效
+          this.$nextTick(() => {
+            const v = this.$refs.explosionVideo
+            if (!v) return
+            v.currentTime = 0
+            // video 播放结束后通知 controller，让 _stageLeo 开始
+            const onEnded = () => {
+              v.removeEventListener('ended', onEnded)
+              if (this.controller) this.controller.resolveExplosion()
+            }
+            v.addEventListener('ended', onEnded)
+            // 不 promise-return —— 用户代理可能 reject（autoplay policy）
+            const p = v.play()
+            if (p && typeof p.catch === 'function') p.catch(() => {})
+          })
         },
         onExplosionFinished: () => {
-          this.explosionSprite = null
-          this.explosionPos = null
+          this.explosionVisible = false
+          this.explosionVideoUrl = ''
         },
         onLeoFinished: () => {},
         onFlyFinished: () => {
@@ -324,9 +347,9 @@ export default {
       this.bgOpacity = 0
       this.textOpacity = 0
       this.monsterSprite = null
-      this.explosionSprite = null
+      this.explosionVisible = false
+      this.explosionVideoUrl = ''
       this.monsterPos = null
-      this.explosionPos = null
       this.bubbleVisible = false
       this.choicesVisible = false
       this.stage = STAGE.IDLE
@@ -442,5 +465,11 @@ export default {
 .monster-cancel-btn:hover {
   background: rgba(255, 82, 82, 0.8);
   border-color: rgba(255, 82, 82, 1);
+}
+.monster-explosion-video {
+  position: absolute;
+  pointer-events: none;
+  object-fit: contain;
+  z-index: 5;
 }
 </style>

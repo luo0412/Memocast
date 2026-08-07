@@ -314,26 +314,36 @@ export class MonsterStageController {
 
   async _stageExplosion () {
     this._setStage(STAGE.EXPLOSION)
-    this.audio.playExplosion()
-    await this.explosion.load(this._resolve('explosion'), { targetHeight: 150 })
-    // explosion 帧加载完成后才通知上层挂 sprite —— 避免上层拿到的是
-    // isLoaded=false 的 animator，canvas 一直空白
-    const { width, height } = this.explosion.size
+    // 不调 audio.playExplosion() —— 让 <video> 元素自己带音轨播 MP4。
+    // 同一个 MP4 文件被 Audio + Video 同时解码会互踢（最后播放的赢）。
+    // 视频改用 MP4 video 元素渲染（避开 spritesheet + canvas 渲染时序坑）；
+    // 这里直接把 video URL + 位置 / 尺寸回调给上层。
+    // 视频时长由浏览器根据 MP4 决定，不再用 _advanceFrame 切帧
+    const W = 240
+    const H = 240
     this.onExplosionStarted({
-      x: this.targetPos.x - width / 2,
-      y: this.targetPos.y - height / 2 - 40
+      x: this.targetPos.x - W / 2,
+      y: this.targetPos.y - H / 2 - 40,
+      width: W,
+      height: H
     })
+    // 等待 video 的 'ended' 事件来推进 _stageLeo。
+    // 由于 video play 是上层（monsterStage）在 nextTick 里调的，
+    // 我们在这里返回一个 promise，让上层在 onExplosionFinished 里 resolve
     await new Promise(resolve => {
-      this.explosion.play({
-        fps: 8,
-        loop: false,
-        onFrame: (currentFrame, frameCount) => this.onFrame({ stage: STAGE.EXPLOSION, currentFrame, frameCount }),
-        onFinish: () => {
-          this.onExplosionFinished()
-          resolve()
-        }
-      })
+      // 上层 onExplosionFinished 回调会 resolve 这个 promise
+      this._explosionResolve = resolve
     })
+  }
+
+  resolveExplosion () {
+    if (this._explosionResolve) {
+      const r = this._explosionResolve
+      this._explosionResolve = null
+      r()
+    }
+    // 通知上层清 UI
+    this.onExplosionFinished()
   }
 
   async _stageLeo () {
