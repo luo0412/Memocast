@@ -77,9 +77,9 @@ const { mapState: mapClientState, mapActions: mapClientActions } = createNamespa
 export default {
   name: 'NoteList',
   components: { Loading, NoteItem, CategoryDialog, rankingTierDialog, Loading: LoadingComponent, fullscreenOverlay },
-  // 业务「删除确认」hook：从 builtins/deleteEffect.js 注入（默认行为是「关闭就走 $q.dialog 二次确认」）。
-  // 下架怪兽特效：删 builtins/deleteEffect.js + boot 处 install 调用即可，这里会自动 fallback 到 $q.dialog。
-  deleteConfirmHook: installDeleteEffectConfirmHook(),
+  // 注意：deleteConfirmHook 不能放在组件选项顶层（与 data/methods 同级），
+  // 因为 Vue 2 不会把自定义选项挂到 this 上 → this.deleteConfirmHook === undefined。
+  // 正确做法：在 created() 里赋值为实例属性（非响应式，无需 data）。
   data () {
     return {
       categoryDialogLabel: '',
@@ -348,7 +348,29 @@ export default {
       'exportPng',
       'getCategoryNotesForExport'
     ]),
-    ...mapClientActions(['setRightClickNoteItem'])
+    ...mapClientActions(['setRightClickNoteItem']),
+    /**
+     * 私有方法：从 SQLite 读取 microApps 列表，注入 fullscreenAppEntry。
+     * 走业务 hook 的私有 _findBuiltinEntry（内置了 try/catch 兜底）。
+     * 注意：必须放在 methods 里，放在组件选项顶层会被 Vue 2 忽略 → this 访问不到。
+     */
+    async _loadFullscreenAppEntry () {
+      try {
+        // hook 暴露的内部查找函数（实际是 builtins/deleteEffect.js 的 _findBuiltinEntry）。
+        // 下架怪兽特效后这个 import 路径不存在，NoteList 直接 fallback 到 null，overlay 不挂载。
+        const entry = await this.deleteConfirmHook._findBuiltinEntry()
+        this.fullscreenAppEntry = entry
+      } catch (err) {
+        console.warn('[NoteList] loadFullscreenAppEntry failed:', err)
+        this.fullscreenAppEntry = null
+      }
+    }
+  },
+  created () {
+    // 业务「删除确认」hook：从 builtins/deleteEffect.js 注入（默认行为是「关闭就走 $q.dialog 二次确认」）。
+    // 下架怪兽特效：删 builtins/deleteEffect.js + boot 处 install 调用即可，这里会自动 fallback 到 $q.dialog。
+    // 必须赋值到实例属性 this.deleteConfirmHook，deleteCategoryHandler / _loadFullscreenAppEntry 里才能通过 this 访问到。
+    this.deleteConfirmHook = installDeleteEffectConfirmHook()
   },
   mounted () {
     bus.$on(events.SIDE_DRAWER_CONTEXT_MENU.exportCategory.markdown, this.exportCategoryHandler)
@@ -373,21 +395,6 @@ export default {
     bus.$off(events.NOTE_ITEM_CONTEXT_MENU.openTierRankingForNote, this.openTierRankingForNoteHandler)
     // v2026-08-08：取消微应用变更订阅
     bus.$off('microAppsChanged', this._onMicroAppsChanged)
-  },
-  /**
-   * 私有方法：从 SQLite 读取 microApps 列表，注入 fullscreenAppEntry。
-   * 走业务 hook 的私有 _findBuiltinEntry（内置了 try/catch 兜底）。
-   */
-  async _loadFullscreenAppEntry () {
-    try {
-      // hook 暴露的内部查找函数（实际是 builtins/deleteEffect.js 的 _findBuiltinEntry）。
-      // 下架怪兽特效后这个 import 路径不存在，NoteList 直接 fallback 到 null，overlay 不挂载。
-      const entry = await this.deleteConfirmHook._findBuiltinEntry()
-      this.fullscreenAppEntry = entry
-    } catch (err) {
-      console.warn('[NoteList] loadFullscreenAppEntry failed:', err)
-      this.fullscreenAppEntry = null
-    }
   }
 }
 </script>

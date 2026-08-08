@@ -72,7 +72,7 @@
               size="sm"
               @click="openEdit(app)"
             >
-              <q-tooltip>{{ app.isBuiltIn ? $t('microAppsBuiltinView') : $t('edit') }}</q-tooltip>
+              <q-tooltip>{{ $t('edit') }}</q-tooltip>
             </q-btn>
             <!-- v2026-08-08 新增：内置条目不显示删除按钮（不可删） -->
             <q-btn
@@ -192,22 +192,9 @@ export default {
         // 新增 —— 新增的条目强制 isBuiltIn=false（用户不能新增内置条目）
         next = [...this.apps, { ...form, isBuiltIn: false }]
       } else {
-        // 更新：内置条目的 url / devUrl / displayMode / isBuiltIn 字段永远以原值为准，
-        // 用户在只读模式下即便绕过 disabled 也改不掉这些字段（normalizeMicroApp 加载时会再刷一次）。
-        const old = this.apps[idx]
-        const merged = old.isBuiltIn
-          ? {
-            ...old,
-            // 内置条目：保留 url/devUrl/displayMode/isBuiltIn，name/icon/enabled/isDefault 可改
-            name: form.name,
-            icon: form.icon,
-            enabled: form.enabled,
-            isDefault: form.isDefault,
-            isMobile: form.isMobile
-          }
-          : { ...form }
+        // 更新：内置条目和普通条目一样，全字段以表单为准（可编辑、不可删除）。
         next = this.apps.slice()
-        next.splice(idx, 1, merged)
+        next.splice(idx, 1, { ...form })
       }
       // isDefault 唯一性
       if (form.isDefault) {

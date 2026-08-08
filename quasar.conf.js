@@ -158,21 +158,6 @@ module.exports = function (/* ctx */) {
       https: false,
       port: 8080,
       open: true,
-      // 关闭 webpack-dev-server 内置的 HMR client 注入：
-      // wds 4.x 的 client/utils/createSocketUrl.js 会 `require('url')`（Node 内置模块），
-      // webpack 4 在 electron-renderer target 下把它标记为 `external "url": require('url')`。
-      // electron 41 默认 sandbox 模式下 window 上没有 require 函数，
-      // 客户端加载时即抛 `Uncaught ReferenceError: require is not defined`。
-      // 我们走 electron 自身的 hard reload（main process 检测到 renderer crash 后自动重启），
-      // 不依赖 wds 的 HMR。代价：手动改完代码后 Ctrl+R 手动刷新；不影响生产构建。
-      // 关键：单设 hot:false 不够，wds 的 addEntries 默认 options.inline===true，
-      // 即便 hot=false 仍会注入 clientEntry（webpack-dev-server/client/index.js），
-      // 它内部 require('url') 仍会崩。必须同时关 inline/injectClient/injectHot。
-      hot: false,
-      liveReload: false,
-      inline: false,
-      injectClient: false,
-      injectHot: false,
       proxy: {
         '/api': {
           target: 'http://127.0.0.1:8888',

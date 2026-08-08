@@ -33,7 +33,6 @@
               :placeholder="$t('microAppsNamePlaceholder')"
               maxlength="32"
               clearable
-              :disabled="readonly"
             />
           </el-form-item>
 
@@ -42,7 +41,6 @@
               v-model="form.icon"
               :placeholder="$t('microAppsIconPlaceholder')"
               clearable
-              :disabled="readonly"
             >
               <template v-slot:append>
                 <q-icon :name="iconPreview" size="20px" class="micro-app-edit-dialog__icon-preview">
@@ -59,7 +57,6 @@
               v-model="form.url"
               :placeholder="$t('microAppsUrlPlaceholder')"
               clearable
-              :disabled="readonly"
             />
           </el-form-item>
 
@@ -68,49 +65,37 @@
               v-model="form.devUrl"
               :placeholder="$t('microAppsDevUrlPlaceholder')"
               clearable
-              :disabled="readonly"
             />
           </el-form-item>
 
           <el-form-item :label="$t('microAppsEnabled')">
-            <el-switch v-model="form.enabled" active-color="green-7" :disabled="readonly" />
+            <el-switch v-model="form.enabled" active-color="green-7" />
           </el-form-item>
 
           <el-form-item :label="$t('microAppsDefault')">
-            <el-radio v-model="form.isDefault" :label="true" :disabled="!form.enabled || readonly" border size="mini">
+            <el-radio v-model="form.isDefault" :label="true" :disabled="!form.enabled" border size="mini">
               {{ $t('yes') }}
             </el-radio>
-            <el-radio v-model="form.isDefault" :label="false" :disabled="!form.enabled || readonly" border size="mini">
+            <el-radio v-model="form.isDefault" :label="false" :disabled="!form.enabled" border size="mini">
               {{ $t('no') }}
             </el-radio>
             <span class="text-caption text-grey-6 q-ml-sm">{{ $t('microAppsDefaultHint') }}</span>
           </el-form-item>
 
           <el-form-item :label="$t('microAppsIsMobile')">
-            <el-switch v-model="form.isMobile" :disabled="readonly" />
+            <el-switch v-model="form.isMobile" />
             <span class="text-caption text-grey-6 q-ml-sm">{{ $t('microAppsIsMobileHint') }}</span>
           </el-form-item>
 
-          <!-- v2026-08-08 新增：displayMode（抽屉 / 全屏）。
-               内置条目 readonly 时也禁用，不暴露给用户修改展示形态。 -->
+          <!-- v2026-08-08 新增：displayMode（抽屉 / 全屏）。内置条目也可编辑。 -->
           <el-form-item :label="$t('microAppsDisplayMode')">
-            <el-radio v-model="form.displayMode" :label="'drawer'" :disabled="readonly" border size="mini">
+            <el-radio v-model="form.displayMode" :label="'drawer'" border size="mini">
               {{ $t('microAppsDisplayModeDrawer') }}
             </el-radio>
-            <el-radio v-model="form.displayMode" :label="'fullscreen'" :disabled="readonly" border size="mini">
+            <el-radio v-model="form.displayMode" :label="'fullscreen'" border size="mini">
               {{ $t('microAppsDisplayModeFullscreen') }}
             </el-radio>
             <span class="text-caption text-grey-6 q-ml-sm">{{ $t('microAppsDisplayModeHint') }}</span>
-          </el-form-item>
-
-          <!-- v2026-08-08 新增：内置条目提示（只读模式下在弹框底部展示一行说明）。 -->
-          <el-form-item v-if="readonly" label-width="0">
-            <q-banner rounded dense class="bg-grey-2 text-grey-8">
-              <template v-slot:avatar>
-                <q-icon name="lock" color="grey-7" />
-              </template>
-              {{ $t('microAppsBuiltinReadonlyHint') }}
-            </q-banner>
           </el-form-item>
         </el-form>
       </q-card-section>
@@ -125,10 +110,8 @@
           icon="check"
           :label="$t('ok')"
           :loading="submitting"
-          :disable="readonly"
           @click="onSubmit"
         >
-          <q-tooltip v-if="readonly">{{ $t('microAppsBuiltinReadonly') }}</q-tooltip>
         </q-btn>
       </q-card-actions>
     </q-card>
@@ -201,12 +184,15 @@ export default {
       return !!(this.source && this.source.id)
     },
     /**
-     * 【v2026-08-08】内置条目在编辑弹框里全字段只读。
-     * SettingsMicroAppsPanel 对内置条目也允许打开弹框（让用户能看到内置信息），
-     * 但不允许保存修改；这里的 readonly 决定所有控件 disabled 状态。
+     * 【v2026-08-08 调整】内置条目也像普通条目一样允许编辑（url/devUrl/displayMode/name 等均可修改），
+     * 唯一的限制是「不可删除」（由 SettingsMicroAppsPanel 的删除按钮 v-if 控制）。
+     * 此处 readonly 恒为 false，保留 computed 占位以方便未来扩展。
      */
-    readonly () {
+    isBuiltin () {
       return Boolean(this.source && this.source.isBuiltIn)
+    },
+    readonly () {
+      return false
     },
     iconPreview () {
       const icon = String(this.form.icon || '').trim()
@@ -250,7 +236,11 @@ export default {
       this.$refs.form.validate(async valid => {
         if (!valid) return
         // 至少要填一个 url（生产 / 开发）
-        if (!this.form.url && !this.form.devUrl) {
+        // 例外：内置全屏应用（isBuiltIn && displayMode==='fullscreen'）可以两者都空，
+        // 由 fullscreenOverlay 自动解析 _plugins/<id>/dist/index.html。
+        const isBuiltinFullscreen =
+          this.form.isBuiltIn && this.form.displayMode === 'fullscreen'
+        if (!isBuiltinFullscreen && !this.form.url && !this.form.devUrl) {
           this.$q.notify({
             message: this.$t('microAppsUrlRequired'),
             type: 'warning',

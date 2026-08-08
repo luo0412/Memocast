@@ -148,12 +148,13 @@ export function buildDefaultMicroApps () {
 /**
  * 归一化一条微应用记录，补齐缺失字段，过滤掉完全没用的残缺记录。
  *
- * 内置条目（isBuiltIn=true）的 url / devUrl 在这里会被强制刷成最新代码值，
- * 因为内置子项目的 build 产物路径可能随仓库迁移而变化。如果不强制刷，用户改 enabled
- * 时拿到的还是旧 url，怪兽特效就走不到最新资源。
+ * 内置条目（isBuiltIn=true）与普通条目**一样**允许被用户编辑（url / devUrl / displayMode
+ * 均来自用户输入），唯一的区别是：不可被删除。
  *
- * 【注意】mergeBuiltInApps 是唯一允许「保留用户对内置条目的修改」的入口；
- * merge 阶段不再走 normalizeMicroApp 内置强制刷新逻辑（参见 mergeBuiltInApps 注释）。
+ * 注册表（_builtinAppsRegistry）仅在「识别 isBuiltIn 身份」和「提供缺省 displayMode」时使用：
+ *  - isBuiltIn 标记：用于 UI 隐藏删除按钮。
+ *  - displayMode 缺省值：如果用户未指定 displayMode 且该条目是注册的内置条目，则用注册表默认值；
+ *    如果用户已指定，则尊重用户输入。
  */
 export function normalizeMicroApp (raw) {
   if (!raw || typeof raw !== 'object') return null
@@ -162,17 +163,18 @@ export function normalizeMicroApp (raw) {
   // 兼容「业务方已注册的内置条目」
   const builtinDef = _builtinAppsRegistry.find(a => a.id === id)
   const isBuiltIn = builtinDef ? true : Boolean(raw.isBuiltIn)
-  const baseDisplayMode = builtinDef
-    ? builtinDef.displayMode
-    : (raw.displayMode === MICRO_APP_DISPLAY_MODES.FULLSCREEN
+  // displayMode：用户输入优先；没有输入时用注册表默认值（内置）或 DRAWER（普通）
+  const baseDisplayMode = raw.displayMode
+    ? (raw.displayMode === MICRO_APP_DISPLAY_MODES.FULLSCREEN
         ? MICRO_APP_DISPLAY_MODES.FULLSCREEN
         : MICRO_APP_DISPLAY_MODES.DRAWER)
+    : (builtinDef ? builtinDef.displayMode : MICRO_APP_DISPLAY_MODES.DRAWER)
   return {
     id,
     name: String(raw.name || id),
     icon: String(raw.icon || 'el-icon-chat-dot-round'),
-    url: isBuiltIn && builtinDef ? String(builtinDef.url || '') : String(raw.url || ''),
-    devUrl: isBuiltIn && builtinDef ? String(builtinDef.devUrl || '') : String(raw.devUrl || ''),
+    url: String(raw.url || ''),
+    devUrl: String(raw.devUrl || ''),
     isDefault: Boolean(raw.isDefault),
     enabled: raw.enabled === undefined ? true : Boolean(raw.enabled),
     isMobile: raw.isMobile === true,

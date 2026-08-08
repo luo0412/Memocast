@@ -12,6 +12,7 @@ import {
   buildCategoryTreeFromNotes,
   categoryExistsInTree,
   findCategoryNode,
+  removeCategoryNode,
   formatYmd,
   getCalendarNoteTimestamp,
   mapLocalNoteToSummary
@@ -1873,10 +1874,27 @@ export default {
     // 再删本地记录
     try {
       await DatabaseClient.categories.remove(category)
-      const { tree } = await loadLocalWorkspaceData()
-      commit(types.SET_CATEGORIES, tree)
-      // 删除该目录下的所有本地笔记（同时删除整个分类）
-      await this.dispatch('server/updateCurrentCategory', { data: '', type: '' })
+
+      // 乐观更新目录树：直接从现有 state.categories 中移除被删节点（含子树），
+      // 而不是调用 loadLocalWorkspaceData() 全量重建——全量重建会导致整棵树组件
+      // 被替换、展开状态丢失、闪烁，严重影响体验。
+      const currentTree = state.categories
+      if (currentTree && currentTree.length > 0) {
+        const removed = removeCategoryNode(currentTree, category)
+        if (removed) {
+          // 创建新数组引用触发响应式更新，但节点对象本身保持引用稳定
+          commit(types.SET_CATEGORIES, [...currentTree])
+        }
+      }
+
+      // 仅当当前选中的分类属于被删除的目录（本身或其子目录），才重置 currentCategory。
+      // 否则保持当前选中，避免因为删除其他文件夹而丢失当前笔记浏览状态。
+      const needsReset = !state.currentCategory ||
+        state.currentCategory === category ||
+        state.currentCategory.startsWith(category)
+      if (needsReset) {
+        await this.dispatch('server/updateCurrentCategory', { data: '', type: '' })
+      }
     } catch (err) {
       console.error('[deleteCategory] local delete failed:', err)
     }

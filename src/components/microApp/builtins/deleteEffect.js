@@ -44,8 +44,12 @@ export const DELETE_EFFECT_APP_ID = 'echo-monster-deleter'
 /**
  * 内置条目定义
  *
- * url / devUrl 为空字符串：实际 URL 由 fullscreenOverlay 内部解析（按 dev/prod 模式 fallback）。
- * enabled=false：默认关闭 → 用户删除目录时仍走 $q.dialog 二次确认；用户在「设置 → 通用 →
+ * devUrl 指向 echo-monster-deleter 子项目的 vite dev-server（端口 5175，与
+ * _plugins/echo-monster-deleter/vite.config.js 中 server.port 一致）。
+ * url 在生产环境由 fullscreenOverlay 的 resolveEntryUrl 自动解析到
+ * appBasePath/_plugins/echo-monster-deleter/dist/index.html，这里留空即可。
+ *
+ * enabled=false：默认关闭 → 用户删除目录时仍走 $q.dialog 二次确认；用户在「设置 →
  * 微应用」里手动开启后才走怪兽特效 overlay。
  */
 export const deleteEffectBuiltinApp = Object.freeze({
@@ -53,7 +57,7 @@ export const deleteEffectBuiltinApp = Object.freeze({
   name: '小怪兽删除特效',
   icon: 'el-icon-magic-stick',
   url: '',
-  devUrl: '',
+  devUrl: 'http://localhost:5175/',
   isDefault: false,
   enabled: false,
   isMobile: false,
@@ -83,10 +87,10 @@ export function installDeleteEffectBuiltin () {
  * NoteList.vue 调用：
  *   import { installDeleteEffectConfirmHook } from 'components/microApp/builtins/deleteEffect'
  *   ...
- *   deleteConfirmHook: installDeleteEffectConfirmHook(),  // component option
+ *   created() { this.deleteConfirmHook = installDeleteEffectConfirmHook() }  // 实例属性
  *
  *   deleteCategoryHandler(...) {
- *     if (await deleteConfirmHook.isEnabled()) {
+ *     if (await this.deleteConfirmHook.isEnabled()) {
  *       const result = await deleteConfirmHook.runSummon(this.$refs.fullscreenOverlay, { ... })
  *       ...
  *     } else {

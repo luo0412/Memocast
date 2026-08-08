@@ -142,16 +142,37 @@ import {
  *   - 删 electron-main.js 里对应的 register 调用
  *   - 主项目代码本身无需任何其它改动
  */
+/**
+ * 把本地绝对路径转成 file:// URL（统一正斜杠，避免 Windows 反斜杠问题）。
+ */
+function toFileUrl (p) {
+  if (!p) return ''
+  const normalized = String(p).replace(/\\/g, '/')
+  return 'file://' + (normalized.startsWith('/') ? '' : '/') + normalized
+}
+
+/**
+ * 解析内置全屏微应用的入口 URL。
+ * 优先级：
+ *   1. dev 环境：cfg.devUrl（子项目 dev-server 地址）
+ *   2. 生产环境：cfg.url
+ *   3. 兜底：内置应用（isBuiltIn）且 appBasePath 可用时，
+ *      回退到 appBasePath/_plugins/<id>/dist/index.html（vite-plugin-singlefile 打包产物）。
+ * 全部为空 → 返回空字符串，wujie 不挂载（fail-safe）。
+ */
 function resolveEntryUrl (appBasePath, app) {
   const safeApp = app || {}
   const cfg = safeApp && typeof safeApp === 'object' ? safeApp : null
+  if (!cfg) return ''
+  const builtinDistFallback =
+    (cfg.isBuiltIn && cfg.id && appBasePath)
+      ? toFileUrl(appBasePath + '/_plugins/' + cfg.id + '/dist/index.html')
+      : ''
   if (isDevEnv()) {
-    return cfg && cfg.devUrl ? cfg.devUrl : ''
+    return (cfg && cfg.devUrl) ? cfg.devUrl : builtinDistFallback
   }
   if (cfg && cfg.url) return cfg.url
-  // 没有 cfg.url 时返回空字符串，wujie 不挂载（fail-safe）。
-  // 不在这里硬编码任何子项目路径——子项目目录命名是业务的私事。
-  return ''
+  return builtinDistFallback
 }
 
 export default {

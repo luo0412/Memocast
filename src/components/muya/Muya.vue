@@ -209,14 +209,15 @@ const RunePreviewRenderer = Vue.extend({
     // 因此本渲染层不预先声明这些 prop，交给 Vue 自身的 props 解析决定要不要传。
   },
   // v2026-08-08 恢复老 Muya 同步形态：rune.template 在视频编辑器启动时已经决断
-  // （DB 里的 rune 卡片字符串就是 SFC），所以这里直接走同步工厂，避开 async +
-  // loading 占位卡片 的竞态。
+  // （DB 里的 rune 卡片字符串就是 SFC），所以这里直接走同步工厂。
+  // createRuneRendererCtor 是同步函数（vue-template-compiler 是同步 API），
+  // 所以 computed 可以直接返回值，无需 async/await loading 占位。
   computed: {
     rendererCtor () {
       const rune = this.rune || {}
       if (!String(rune.template || '').trim()) return null
       try {
-        // createRuneRendererCtor 内部就是同步编译（cache + 首次都在微任务里同步完成）。
+        // 工厂内部已含缓存：同 cacheKey 直接命中 map，无重复编译。
         return createRuneRendererCtor(rune) || null
       } catch (error) {
         console.warn('[Muya.RunePreviewRenderer] SFC compile failed:', error)

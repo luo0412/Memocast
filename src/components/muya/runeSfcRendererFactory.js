@@ -3,22 +3,27 @@
 //
 // 把 Muya.vue 里的 createRuneRendererCtor + 缓存层抽出成独立工廠。
 // 目的：
-//   1) 让 RunePreviewRenderer 的缓存 / in-flight 去重逻辑可单测
+//   1) 让 RunePreviewRenderer 的缓存逻辑可单测
 //   2) 让其它需要 rune SFC 实时编译的弹框（如 RuneFormDialog）复用同一份
 //   3) 让 Muya.vue 自身只承担「Vue 组件渲染」，不堆业务逻辑
 //
 // === 契约 ===
 //   - 输入：rune 对象 { id, name, template }
-//   - 输出：Vue.extend 后的组件构造器（同步）| null（无 template / 编译失败 throw）
+//   - 输出：Vue.extend 后的组件构造器（同步）| null（无 template / 编译失败）
 //   - 缓存策略：按 `${rune.id || rune.name || 'default'}:${template}` 作 cacheKey
 //       - 同 key 命中缓存：直接返回
-//       - 同 key in-flight：共享 promise
 //       - 编译失败：清缓存，下次重试
+//
+// === 同步说明（v2026-08-08 修正）===
+//   vue-template-compiler 的 parseComponent / compileToFunctions 都是同步 API，
+//   所以 createRuneRendererCtor 本身也是同步的。
+//   之前的 async 包装会让 Muya.vue 的 computed 拿到一个 Promise（而非 ctor），
+//   导致 Vue 尝试以 Promise 作为组件定义挂载 → "template or render function not defined"。
 //
 // === 导出 ===
 //   - createRuneRendererCtor: 主工厂
 //   - normalizeRuneSfc: normalize 入口（仅在测试里使用，主项目通过 createRuneRendererCtor 调用）
-//   - clearCaches: 测试 hook，清空两个 Map
+//   - clearCaches: 测试 hook，清空缓存 Map
 // ============================================================================
 
 import Vue from 'vue'
@@ -34,9 +39,12 @@ import * as VueTemplateCompiler from 'vue-template-compiler'
 //   配对的 vue-template-compiler，行为与原 Muya 完全一致。
 
 const runeRendererCtorCache = new Map()
-const runeRendererCtorInflight = new Map()
 
-export const normalizeRuneSfc = (template = '', options = {}) => {
+// ---------------------------------------------------------------------------
+// normalizeRuneSfc：把 rune.template（一段 .vue SFC 源码）拆成 template/script/style。
+// 同步函数——vue-template-compiler 是同步 API。
+// ---------------------------------------------------------------------------
+export const normalizeRuneSfc = (template = '') => {
   const source = String(template || '').trim()
   if (!source) {
     return {
@@ -47,9 +55,6 @@ export const normalizeRuneSfc = (template = '', options = {}) => {
     }
   }
 
-  // 与 vue-template-compiler 一起，2.7.16 是同步 API；保持函数同步（不返回 Promise）
-  // 是为了让上层 createRuneRendererCtor 同步完成 RunePreviewRenderer 的 ctor 计算，
-  // 避免出现「先渲染 loading 占位，async resolve 后再切回真实模板」的闪烁。
   const vueSfcCompiler = (VueTemplateCompiler && typeof VueTemplateCompiler.parseComponent === 'function')
     ? VueTemplateCompiler
     : (VueTemplateCompiler && VueTemplateCompiler.default && typeof VueTemplateCompiler.default.parseComponent === 'function')
@@ -81,6 +86,9 @@ export const normalizeRuneSfc = (template = '', options = {}) => {
   }
 }
 
+// ---------------------------------------------------------------------------
+// evalRuneScript：把 SFC <script> 里的 `export default { ... }` 安全执行成对象。
+// ---------------------------------------------------------------------------
 const evalRuneScript = (scriptContent = '') => {
   const sanitized = String(scriptContent || '').replace(/export\s+default/, 'return ')
   const factory = new Function(sanitized)
@@ -88,10 +96,20 @@ const evalRuneScript = (scriptContent = '') => {
   return result && typeof result === 'object' ? result : {}
 }
 
+// 把 scopeId（data-v-xxx）写到模板里每个非 template/slot 标签上，与 Muya 老实现完全一致，
+// 否则多个 rune SFC 的样式会互相串。
+const injectScopedAttribute = (template = '', scopeId = '') => {
+  if (!scopeId || !template) return template
+  return String(template).replace(/<([a-zA-Z][^\s/>]*)(\s[^<>]*?)?(\/?\s*)>/g, (match, tagName, attrs = '', tail = '') => {
+    if (/^(template|slot)$/i.test(tagName) || attrs.includes(scopeId)) {
+      return match
+    }
+    return `<${tagName}${attrs} ${scopeId}${tail}>`
+  })
+}
+
 // 与老 Muya 逻辑一致：把模板源码（已剥离 <template> 标签外层）通过
 // `compileToFunctions` 编译为 render / staticRenderFns 函数对。
-// 注意：vue-template-compiler 在 rune SFC <template> 里只放 markup（不含 <template> 标签），
-// 所以这里不需要再 strip 一次，直接交给编译器。
 const compileRuneTemplate = (templateCode = '', scopeId = '') => {
   const compiler = (VueTemplateCompiler && typeof VueTemplateCompiler.compileToFunctions === 'function')
     ? VueTemplateCompiler
@@ -107,18 +125,6 @@ const compileRuneTemplate = (templateCode = '', scopeId = '') => {
   }
 }
 
-// 把 scopeId（data-v-xxx）写到模板里每个非 template/slot 标签上，与 Muya 老实现完全一致，
-// 否则多个 rune SFC 的样式会互相串。
-const injectScopedAttribute = (template = '', scopeId = '') => {
-  if (!scopeId || !template) return template
-  return String(template).replace(/<([a-zA-Z][^\s/>]*)(\s[^<>]*?)?(\/?\s*)>/g, (match, tagName, attrs = '', tail = '') => {
-    if (/^(template|slot)$/i.test(tagName) || attrs.includes(scopeId)) {
-      return match
-    }
-    return `<${tagName}${attrs} ${scopeId}${tail}>`
-  })
-}
-
 const ensureRuneStyle = (styleId, cssText) => {
   if (!styleId || typeof document === 'undefined') return
   let styleEl = document.getElementById(styleId)
@@ -132,29 +138,34 @@ const ensureRuneStyle = (styleId, cssText) => {
   }
 }
 
-export const createRuneRendererCtor = async (rune = {}) => {
+// ---------------------------------------------------------------------------
+// createRuneRendererCtor：主工厂（同步）。
+//
+// vue-template-compiler 的 parseComponent / compileToFunctions 都是同步的，
+// 所以这里不需要 async/await。Muya.vue 的 computed 直接 `return createRuneRendererCtor(rune)`
+// 拿到的就是 Vue.extend 构造器或 null，不会是 Promise。
+// ---------------------------------------------------------------------------
+export const createRuneRendererCtor = (rune = {}) => {
   if (!rune) return null
   const templateSource = String(rune.template || '')
   const cacheKey = `${rune.id || rune.name || 'default'}:${templateSource}`
   if (runeRendererCtorCache.has(cacheKey)) {
     return runeRendererCtorCache.get(cacheKey)
   }
-  if (runeRendererCtorInflight.has(cacheKey)) {
-    return runeRendererCtorInflight.get(cacheKey)
-  }
 
-  const rendererPromise = (async () => {
+  let ctor
+  try {
     const scopeId = `v-rune-${String(rune.id || 'default').replace(/[^a-zA-Z0-9_-]/g, '-')}`
-    const { templateCode, script, style, hasTemplate } = normalizeRuneSfc(templateSource, {
-      filename: `rune-${rune.id || 'default'}.vue`,
-      scopeId
-    })
-    if (!hasTemplate) return null
+    const { templateCode, script, style, hasTemplate } = normalizeRuneSfc(templateSource)
+    if (!hasTemplate) {
+      runeRendererCtorCache.set(cacheKey, null)
+      return null
+    }
 
     const componentOptions = evalRuneScript(script)
     const compiled = compileRuneTemplate(templateCode, scopeId)
     if (!compiled || typeof compiled.render !== 'function') {
-      // 编译失败/不可用时直接返回 null，让上层走「默认占位符 + loadError」兜底，
+      // 编译失败/不可用时直接返回 null，让上层走「默认占位符」兜底，
       // 而不是抛错让整张笔记编辑器挂掉。
       return null
     }
@@ -169,7 +180,7 @@ export const createRuneRendererCtor = async (rune = {}) => {
 
     ensureRuneStyle(`rune-style-${rune.id || 'default'}`, style)
 
-    return Vue.extend({
+    ctor = Vue.extend({
       ...componentOptions,
       name: componentOptions.name || 'RunePreviewRenderer',
       props: {
@@ -224,24 +235,17 @@ export const createRuneRendererCtor = async (rune = {}) => {
       staticRenderFns: compiled.staticRenderFns,
       _scopeId: scopeId
     })
-  })()
-
-  runeRendererCtorInflight.set(cacheKey, rendererPromise)
-  try {
-    const ctor = await rendererPromise
-    runeRendererCtorCache.set(cacheKey, ctor)
-    return ctor
   } catch (error) {
     runeRendererCtorCache.delete(cacheKey)
     throw error
-  } finally {
-    runeRendererCtorInflight.delete(cacheKey)
   }
+
+  runeRendererCtorCache.set(cacheKey, ctor)
+  return ctor
 }
 
 export function clearCaches () {
   runeRendererCtorCache.clear()
-  runeRendererCtorInflight.clear()
 }
 
 export default {

@@ -3,7 +3,8 @@
 // 锁定的契约（v2026-08-08 起微应用 schema 演进）：
 //   1) buildDefaultMicroApps 包含内置条目 echo-monster-deleter（displayMode=fullscreen, isBuiltIn=true）
 //   2) BUILTIN_APPS 只能由代码注入（不在 export 给用户的 UI 里暴露）
-//   3) normalizeMicroApp 对内置条目强制刷 url / devUrl / displayMode
+//   3) normalizeMicroApp 对内置条目保留用户输入（url / devUrl / displayMode 均可编辑），
+//      仅在 displayMode 缺省时用注册表默认值
 //   4) normalizeMicroApp 对非内置条目保留原值，displayMode 合法化
 //   5) mergeBuiltInApps：现有列表追加缺失的内置条目，已存在的内置条目保留用户修改
 //   6) diffMicroAppsForReload：displayMode 变化也算 dirty
@@ -57,16 +58,21 @@ describe('microAppService — schema 演进契约', () => {
     expect(builtinEntry).not.toBe(getBuiltinApps()[0])
   })
 
-  test('4) normalizeMicroApp 对已注册的内置条目强制 isBuiltIn=true / displayMode=fullscreen', () => {
+  test('4) normalizeMicroApp 对已注册的内置条目：isBuiltIn=true，displayMode 用户优先 / 缺省用注册表', () => {
     registerBuiltinApps([{
       id: 'test-builtin',
       name: '测试内置',
       displayMode: 'fullscreen',
       isBuiltIn: true
     }])
-    const out = normalizeMicroApp({ id: 'test-builtin', displayMode: 'drawer', isBuiltIn: false })
+    // 用户未指定 displayMode → 用注册表默认值（fullscreen）
+    const out = normalizeMicroApp({ id: 'test-builtin', displayMode: undefined, isBuiltIn: false })
     expect(out.isBuiltIn).toBe(true)
     expect(out.displayMode).toBe('fullscreen')
+
+    // 用户指定了 displayMode → 尊重用户输入
+    const out2 = normalizeMicroApp({ id: 'test-builtin', displayMode: 'drawer' })
+    expect(out2.displayMode).toBe('drawer')
   })
 
   test('5) normalizeMicroApp 非内置条目：displayMode 合法化（未知值 → drawer）', () => {
@@ -168,20 +174,24 @@ describe('microAppService — schema 演进契约', () => {
   })
 
   test('15) 完整 normalizeMicroApps + 已注册内置条目场景', () => {
+    // 内置条目与普通条目一样允许编辑：url / devUrl / displayMode 均来自用户输入。
+    // 注册表仅在 isBuiltIn 身份识别和 displayMode 缺省值时使用。
     registerBuiltinApps([{
       id: 'test-builtin',
+      url: '',
+      devUrl: '',
       displayMode: 'fullscreen',
       isBuiltIn: true
     }])
     const list = normalizeMicroApps([
       { id: 'box-im', name: '聊天', displayMode: 'drawer' },
-      { id: 'test-builtin', enabled: true, url: 'http://malicious/' }
+      { id: 'test-builtin', enabled: true, url: 'http://user-custom/' }
     ])
-    // 内置条目的 url 被强制刷为 BUILTIN_APPS 的值（这里为空字符串）
+    // 内置条目 url 保留用户输入
     const builtinEntry = list.find(a => a.id === 'test-builtin')
-    expect(builtinEntry.url).toBe('')
+    expect(builtinEntry.url).toBe('http://user-custom/')
     expect(builtinEntry.isBuiltIn).toBe(true)
-    expect(builtinEntry.enabled).toBe(true) // enabled 是用户可控字段
+    expect(builtinEntry.enabled).toBe(true)
   })
 
   test('16) registerBuiltinApps 同 id 覆盖语义', () => {

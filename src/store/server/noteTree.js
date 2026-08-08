@@ -178,3 +178,40 @@ export function categoryExistsInTree (tree, category) {
   if (!Array.isArray(tree) || !category) return false
   return tree.some(node => !!findCategoryNode(node, category))
 }
+
+/**
+ * 从目录树中就地移除指定节点（含其整个子树）。
+ * 原地修改 children 数组，返回是否成功移除。
+ * 注意：不会移除 OFFLINE_ROOT_CATEGORY 根节点本身。
+ */
+export function removeCategoryNode (tree, category) {
+  if (!Array.isArray(tree) || !category) return false
+
+  // 先检查根级
+  for (let i = 0; i < tree.length; i++) {
+    if (tree[i].key === category) {
+      // 不允许删除根节点本身
+      if (tree[i].key === OFFLINE_ROOT_CATEGORY) return false
+      tree.splice(i, 1)
+      return true
+    }
+  }
+
+  // 递归在子树中查找并移除
+  function removeFromChildren (node) {
+    if (!node.children || node.children.length === 0) return false
+    for (let i = 0; i < node.children.length; i++) {
+      if (node.children[i].key === category) {
+        node.children.splice(i, 1)
+        return true
+      }
+      if (removeFromChildren(node.children[i])) return true
+    }
+    return false
+  }
+
+  for (const root of tree) {
+    if (removeFromChildren(root)) return true
+  }
+  return false
+}
