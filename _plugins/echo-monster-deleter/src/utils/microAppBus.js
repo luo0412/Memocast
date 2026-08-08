@@ -5,8 +5,8 @@
  *   - 子应用通过 window.$wujie.bus（wujie-vue2 注入）收发事件
  *   - emit / on / off 三个最基本方法直接代理到 bus
  *   - request(kind, payload) 走 requestId 配对，主项目回包走同一通道
- *     - 子应用发出 'microapp:monster:request' { requestId, kind, payload }
- *     - 主项目回 'microapp:monster:response' { requestId, ok, result | error }
+ *     - 子应用发出 'microapp:delete-effect:request' { requestId, kind, payload }
+ *     - 主项目回 'microapp:delete-effect:response' { requestId, ok, result | error }
  *
  * 使用：
  *   import microAppBus from './utils/microAppBus.js'
@@ -21,8 +21,8 @@
  *   - request 走本地 fallback：get-cursor-pos 返回窗口中心；其它 kind 抛错
  */
 
-const REQUEST_EVENT = 'microapp:monster:request'
-const RESPONSE_EVENT = 'microapp:monster:response'
+const REQUEST_EVENT = 'microapp:delete-effect:request'
+const RESPONSE_EVENT = 'microapp:delete-effect:response'
 
 function getBus () {
   if (typeof window === 'undefined') return null

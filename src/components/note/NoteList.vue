@@ -41,8 +41,8 @@
     <CategoryDialog ref='categoryDialog' :note-info='rightClickNoteItem' :label='categoryDialogLabel'
                     :handler='categoryDialogHandler' />
     <rankingTierDialog ref="tierRankingDialog" />
-    <!-- 全屏透明怪兽剧场 overlay（wujie 子应用），右键删除文件夹时弹 -->
-    <echoMonsterDeleterOverlay ref='echoMonsterDeleterOverlay' />
+    <!-- 全屏透明删除效果 overlay（wujie 子应用），右键删除文件夹时弹 -->
+    <deleteEffectOverlay ref='deleteEffectOverlay' />
   </div>
 </template>
 
@@ -50,7 +50,7 @@
 import NoteItem from './NoteItem.vue'
 import CategoryDialog from '../category/CategoryDialog.vue'
 import rankingTierDialog from '../ranking/rankingTierDialog.vue'
-import echoMonsterDeleterOverlay from '../microApp/echoMonsterDeleterOverlay.vue'
+import deleteEffectOverlay from '../microApp/deleteEffectOverlay.vue'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import { createNamespacedHelpers } from 'vuex'
 import { Loading, QSpinnerGears } from 'quasar'
@@ -63,7 +63,7 @@ const { mapGetters: mapServerGetters, mapState: mapServerState, mapActions: mapS
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 export default {
   name: 'NoteList',
-    components: { Loading, NoteItem, CategoryDialog, rankingTierDialog, Loading: LoadingComponent, echoMonsterDeleterOverlay },
+    components: { Loading, NoteItem, CategoryDialog, rankingTierDialog, Loading: LoadingComponent, deleteEffectOverlay },
   data () {
     return {
       categoryDialogLabel: '',
@@ -118,33 +118,42 @@ export default {
     ...mapClientState(['rightClickCategoryItem', 'rightClickNoteItem', 'noteListDenseMode', 'sidebarTreeType', 'calendarSelectedDate']),
   },
   methods: {
-    deleteCategoryHandler: async function () {
-      if (helper.isNullOrEmpty(this.rightClickCategoryItem)) return
-      const targetCategory = this.rightClickCategoryItem
+    deleteCategoryHandler: async function (eventData) {
+      // eventData 是 IPC 链路里最新右键的 category（主进程 popContextMenu 不传 contextData，
+      // 链路下这里是空字符串 ''，但保留兼容以备主进程未来支持）。
+      // 优先用本次右键的 category 作为唯一真实来源——避免 Vuex state rightClickCategoryItem
+      // 在异步时序下被上次的值污染（重新右键删除打开 overlay 时显示上次的文件夹信息）。
+      const ipcCategory = (typeof eventData === 'string' && eventData.trim()) || ''
+      const targetCategory = ipcCategory || this.rightClickCategoryItem
+      if (helper.isNullOrEmpty(targetCategory)) return
+      // 用本次右键的 category 作为唯一真实来源——不要 fallback 到 this.category，
+      // 因为 this.category 是 currentCategory 的派生，右键 ≠ 选中，二者不一致时
+      // overlay 上显示的瞄准名就会是错的（看的是 currentCategory 的名字）。
+      const targetName = targetCategory.split('/').filter(Boolean).pop() || targetCategory
 
-      // 优先走怪兽剧场 overlay —— 用户在怪兽对话泡里点"是的"才真正删除。
-      // 版权隔离：这个 overlay 内部跑的是 _plugins/echo-monster-deleter，
+      // 优先走删除效果 overlay —— 用户在对话泡里确认后才真正删除。
+      // 版权隔离：这个 overlay 内部跑的是 _plugins/echo-monster-deleter（子项目目录名待迁移时同步改名），
       // 下架时只要 disable overlay / 删子项目 dist，主项目其它部分完全不动。
-      const overlay = this.$refs.echoMonsterDeleterOverlay
+      const overlay = this.$refs.deleteEffectOverlay
       if (overlay && typeof overlay.summon === 'function') {
         try {
-          // 给怪兽"瞄准"的 target 用 category 路径（人类可读的名字 + icon）
+          // 给删除效果"瞄准"的 target 用 category 路径（人类可读的名字 + icon）
           const target = {
             guid: 'category:' + targetCategory,
-            name: this.category || targetCategory.split('/').filter(Boolean).pop() || targetCategory,
+            name: targetName,
             icon: '📁',
             size: '',
             corrupt: false
           }
           const result = await overlay.summon({ target })
           if (result && result.outcome === 'destroyed') {
-            // 怪兽剧场里点"是的 / 嘤嘤嘤就是这个" → 真删
+            // 对话泡里点"确认" → 真删
             this.deleteCategory(targetCategory)
           }
           // outcome === 'cancelled' 或 'timeout'：什么都不做
           return
         } catch (err) {
-          console.warn('[NoteList] echoMonsterDeleterOverlay.summon 失败，回退到默认确认框：', err)
+          console.warn('[NoteList] deleteEffectOverlay.summon 失败，回退到默认确认框：', err)
         }
       }
 

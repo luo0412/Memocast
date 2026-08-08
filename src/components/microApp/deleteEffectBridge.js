@@ -1,64 +1,67 @@
 /**
- * 怪兽摧毁微应用（EchoMonsterDeleter）专属 bus 桥
+ * 删除效果微应用专属 bus 桥
  *
  * 这个桥做两件事：
  *
  * 1) 子应用 → 主项目：
  *    监听下面这些事件，把子应用的状态透出到主项目：
- *      - 'microapp:monster:ready'       子应用 mount 完成，上报 version / capabilities
- *      - 'microapp:monster:click-at'    子应用把鼠标点击坐标透传回来（overlay 透传用）
- *      - 'microapp:monster:choice'      子应用转发的对话泡选择（"是的" / "不是"）
- *      - 'microapp:monster:completed'   怪兽剧场结束（含 outcome）
- *      - 'microapp:monster:request'     子应用发起的能力请求（get-cursor-pos / get-screen-info）
+ *      - 'microapp:delete-effect:ready'       子应用 mount 完成，上报 version / capabilities
+ *      - 'microapp:delete-effect:click-at'    子应用把鼠标点击坐标透传回来（overlay 透传用）
+ *      - 'microapp:delete-effect:choice'      子应用转发的对话泡选择
+ *      - 'microapp:delete-effect:completed'   效果演出结束（含 outcome）
+ *      - 'microapp:delete-effect:request'     子应用发起的能力请求（get-cursor-pos / get-screen-info）
  *
  * 2) 主项目 → 子应用：
  *    提供 imperative API 让 overlay.vue 直接调：
- *      - summon({ target, mousePos })       召唤怪兽对准目标
- *      - teardown()                         主动销毁 overlay
- *      - onCompleted(handler)               订阅怪兽结束事件（一次性 / 多次性由 handler 内部决定）
- *      - onReady(handler)                   订阅子应用 ready 事件
+ *      - summonDeleteEffect({ target, mousePos })   触发删除效果对准目标
+ *      - teardownDeleteEffect()                     主动销毁 overlay
+ *      - onCompleted(handler)                       订阅效果结束事件
+ *      - onReady(handler)                           订阅子应用 ready 事件
  *
  * 设计原则：
  *   - 通用 IPC（vue-sfc:parse / get-app-path 等）走 genericMicroAppIpcBridge.js
- *   - 怪兽专属业务事件（召唤 / 完成 / 鼠标坐标透传）走这个文件
- *   - 桥的生命周期跟 EchoMonsterDeleterOverlay 绑定：overlay mount 时 install，
+ *   - 删除效果专属业务事件（召唤 / 完成 / 鼠标坐标透传）走这个文件
+ *   - 桥的生命周期跟 deleteEffectOverlay 绑定：overlay mount 时 install，
  *     beforeDestroy 时 uninstall；不在 App 启动时 install，避免无意义监听
+ *
+ * 命名历史：本文件由旧名 bridge 文件改名而来；子项目目录 _plugins/echo-monster-deleter/
+ * 后续迁移时统一改为 delete-effect-* 命名空间。
  */
 
 import WujieVue from 'wujie-vue2'
 import debugLogger from 'src/utils/debugLogger'
 
-export const MONSTER_READY_EVENT = 'microapp:monster:ready'
-export const MONSTER_CLICK_EVENT = 'microapp:monster:click-at'
-export const MONSTER_CHOICE_EVENT = 'microapp:monster:choice'
-export const MONSTER_COMPLETED_EVENT = 'microapp:monster:completed'
-export const MONSTER_REQUEST_EVENT = 'microapp:monster:request'
-export const MONSTER_RESPONSE_EVENT = 'microapp:monster:response'
-export const MONSTER_SUMMON_EVENT = 'microapp:monster:summon'
-export const MONSTER_TEARDOWN_EVENT = 'microapp:monster:teardown'
+export const DELETE_EFFECT_READY_EVENT = 'microapp:delete-effect:ready'
+export const DELETE_EFFECT_CLICK_EVENT = 'microapp:delete-effect:click-at'
+export const DELETE_EFFECT_CHOICE_EVENT = 'microapp:delete-effect:choice'
+export const DELETE_EFFECT_COMPLETED_EVENT = 'microapp:delete-effect:completed'
+export const DELETE_EFFECT_REQUEST_EVENT = 'microapp:delete-effect:request'
+export const DELETE_EFFECT_RESPONSE_EVENT = 'microapp:delete-effect:response'
+export const DELETE_EFFECT_SUMMON_EVENT = 'microapp:delete-effect:summon'
+export const DELETE_EFFECT_TEARDOWN_EVENT = 'microapp:delete-effect:teardown'
 
 let installed = false
 let uninstallRef = null
 
 /**
- * 安装怪兽专属桥（幂等）。
+ * 安装删除效果专属桥（幂等）。
  * @param {Object} [opts]
  * @param {(click:{x:number,y:number,targetGuid?:string})=>void} [opts.onClickAt]
  * @param {(choice:{label:string,targetGuid?:string})=>void} [opts.onChoice]
  * @param {(payload:{outcome:string,targetGuid?:string,targetName?:string,ts?:number})=>void} [opts.onCompleted]
  * @param {(payload:{version:string,capabilities:string[],ts:number})=>void} [opts.onReady]
  * @param {(req:{requestId:string,kind:string,payload:any})=>any|Promise<any>} [opts.resolveRequest]
- *        子应用发起的 microapp:monster:request 由这个回调处理；
+ *        子应用发起的 microapp:delete-effect:request 由这个回调处理；
  *        不传则走默认 fallback（只支持 get-cursor-pos / get-screen-info）。
  * @returns {() => void} uninstall 句柄
  */
-export function installEchoMonsterDeleterBridge (opts = {}) {
+export function installDeleteEffectBridge (opts = {}) {
   if (installed && uninstallRef) {
-    debugLogger.Info('[echoMonsterDeleterBridge] 已安装，跳过重复注册')
+    debugLogger.Info('[deleteEffectBridge] 已安装，跳过重复注册')
     return uninstallRef
   }
   if (!WujieVue || !WujieVue.bus) {
-    debugLogger.Info('[echoMonsterDeleterBridge] WujieVue.bus 不可用，跳过注册')
+    debugLogger.Info('[deleteEffectBridge] WujieVue.bus 不可用，跳过注册')
     return () => {}
   }
 
@@ -81,15 +84,15 @@ export function installEchoMonsterDeleterBridge (opts = {}) {
     if (!requestId) return
     try {
       const result = await resolveRequest({ requestId, kind, payload: payload || {} })
-      bus.$emit(MONSTER_RESPONSE_EVENT, {
+      bus.$emit(DELETE_EFFECT_RESPONSE_EVENT, {
         requestId,
         ok: true,
         result: result === undefined ? null : result
       })
     } catch (err) {
       const message = err && err.message ? err.message : String(err)
-      const code = err && err.code ? err.code : 'MONSTER_REQUEST_FAILED'
-      bus.$emit(MONSTER_RESPONSE_EVENT, {
+      const code = err && err.code ? err.code : 'DELETE_EFFECT_REQUEST_FAILED'
+      bus.$emit(DELETE_EFFECT_RESPONSE_EVENT, {
         requestId,
         ok: false,
         error: { code, message }
@@ -97,27 +100,27 @@ export function installEchoMonsterDeleterBridge (opts = {}) {
     }
   }
 
-  bus.$on(MONSTER_READY_EVENT, readyHandler)
-  bus.$on(MONSTER_CLICK_EVENT, clickHandler)
-  bus.$on(MONSTER_CHOICE_EVENT, choiceHandler)
-  bus.$on(MONSTER_COMPLETED_EVENT, completedHandler)
-  bus.$on(MONSTER_REQUEST_EVENT, requestHandler)
+  bus.$on(DELETE_EFFECT_READY_EVENT, readyHandler)
+  bus.$on(DELETE_EFFECT_CLICK_EVENT, clickHandler)
+  bus.$on(DELETE_EFFECT_CHOICE_EVENT, choiceHandler)
+  bus.$on(DELETE_EFFECT_COMPLETED_EVENT, completedHandler)
+  bus.$on(DELETE_EFFECT_REQUEST_EVENT, requestHandler)
 
   installed = true
   uninstallRef = function uninstall () {
     if (!installed) return
     try {
-      bus.$off(MONSTER_READY_EVENT, readyHandler)
-      bus.$off(MONSTER_CLICK_EVENT, clickHandler)
-      bus.$off(MONSTER_CHOICE_EVENT, choiceHandler)
-      bus.$off(MONSTER_COMPLETED_EVENT, completedHandler)
-      bus.$off(MONSTER_REQUEST_EVENT, requestHandler)
+      bus.$off(DELETE_EFFECT_READY_EVENT, readyHandler)
+      bus.$off(DELETE_EFFECT_CLICK_EVENT, clickHandler)
+      bus.$off(DELETE_EFFECT_CHOICE_EVENT, choiceHandler)
+      bus.$off(DELETE_EFFECT_COMPLETED_EVENT, completedHandler)
+      bus.$off(DELETE_EFFECT_REQUEST_EVENT, requestHandler)
     } catch (_) { /* noop */ }
     installed = false
     uninstallRef = null
-    debugLogger.Info('[echoMonsterDeleterBridge] 已注销')
+    debugLogger.Info('[deleteEffectBridge] 已注销')
   }
-  debugLogger.Info('[echoMonsterDeleterBridge] 已注册')
+  debugLogger.Info('[deleteEffectBridge] 已注册')
 
   return uninstallRef
 }
@@ -125,23 +128,23 @@ export function installEchoMonsterDeleterBridge (opts = {}) {
 /**
  * 调试 / 测试用。
  */
-export function isEchoMonsterDeleterBridgeInstalled () {
+export function isDeleteEffectBridgeInstalled () {
   return installed
 }
 
 /**
- * 主项目侧的 imperative API：主动召唤怪兽。
+ * 主项目侧的 imperative API：主动触发删除效果。
  * @param {Object} payload
  * @param {Object} payload.target    { guid, name, icon?, size?, corrupt? }
  * @param {Object} [payload.mousePos] { x, y }
  */
-export function summonMonster (payload = {}) {
+export function summonDeleteEffect (payload = {}) {
   const bus = WujieVue && WujieVue.bus
   if (!bus) {
-    debugLogger.Info('[echoMonsterDeleterBridge] summonMonster: bus 不可用')
+    debugLogger.Info('[deleteEffectBridge] summonDeleteEffect: bus 不可用')
     return false
   }
-  bus.$emit(MONSTER_SUMMON_EVENT, {
+  bus.$emit(DELETE_EFFECT_SUMMON_EVENT, {
     target: payload.target || null,
     mousePos: payload.mousePos || null,
     ts: Date.now()
@@ -152,10 +155,10 @@ export function summonMonster (payload = {}) {
 /**
  * 主项目侧的 imperative API：主动销毁 overlay。
  */
-export function teardownMonster () {
+export function teardownDeleteEffect () {
   const bus = WujieVue && WujieVue.bus
   if (!bus) return false
-  bus.$emit(MONSTER_TEARDOWN_EVENT, { ts: Date.now() })
+  bus.$emit(DELETE_EFFECT_TEARDOWN_EVENT, { ts: Date.now() })
   return true
 }
 
@@ -163,7 +166,7 @@ export function teardownMonster () {
 function safeCall (fn, arg) {
   if (!fn) return
   try { fn(arg) } catch (e) {
-    debugLogger.Info('[echoMonsterDeleterBridge] handler threw:', e)
+    debugLogger.Info('[deleteEffectBridge] handler threw:', e)
   }
 }
 
@@ -173,7 +176,7 @@ function safeCall (fn, arg) {
  *
  * get-cursor-pos 返回鼠标在屏幕上的坐标（基于 Electron 主窗口 webContents）：
  *   - 这里只能用「最后已知的 mousemove 坐标」缓存，渲染进程内监听 mousemove 后写入缓存
- *   - 由 EchoMonsterDeleterOverlay 在 mounted 时挂 mousemove listener
+ *   - 由 deleteEffectOverlay 在 mounted 时挂 mousemove listener
  *
  * get-screen-info 直接返回当前 webContents 的 innerWidth/innerHeight/dpr。
  */

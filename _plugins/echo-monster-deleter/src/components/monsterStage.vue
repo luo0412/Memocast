@@ -385,6 +385,15 @@ export default {
           this.onFinished()
         }
       }
+    },
+    /**
+     * 公开的强制停止方法：无视 _tornDown 幂等标志，强制 controller.stop() 跑一遍。
+     * 用途：主项目侧主动销毁 overlay（teardown）时调用，保证 BGM / SFX / 爆炸音
+     * 一定被 audio.stopAll() 静默 —— 即使 monsterStage 内部的 _teardown 已经被
+     * onFlyFinished 触发过（_tornDown=true 第二次 _teardown 跳过 controller.stop()）。
+     */
+    forceStop () {
+      this._teardown({ silent: true, force: true })
     }
   }
 }

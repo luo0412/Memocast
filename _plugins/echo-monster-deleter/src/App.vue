@@ -1,16 +1,17 @@
 <!--
   EchoMonsterDeleter 子应用入口（wujie 微应用版）
+  TODO 后续迁移：子项目目录/包名/内部文件名待统一改为 deleteEffect。
 
   - 接 wujie 注入的 props：{ target, mousePos, viewport, appBasePath, mountNonce }
   - 通过 window.$wujie.bus 与主项目通信：
-      · 子 → 主: 'microapp:monster:ready'
-      · 子 → 主: 'microapp:monster:click-at'         （用户在 overlay 上点了鼠标）
-      · 子 → 主: 'microapp:monster:completed'        （怪兽剧场结束，outcome= destroyed|cancelled）
-      · 子 → 主: 'microapp:monster:request'         （请求获取鼠标坐标 / 主进程 IPC 结果）
-      · 主 → 子: 'microapp:monster:summon'          （主项目召唤怪兽，附带最新 target / mousePos）
-      · 主 → 子: 'microapp:monster:teardown'        （主项目主动销毁 overlay）
-      · 主 → 子: 'microapp:monster:response'        （主项目对 microapp:monster:request 的回包）
-  - 版权隔离：所有怪兽 / 雷欧 / 爆炸素材、剧本状态机都留在这个子项目里；
+      · 子 → 主: 'microapp:delete-effect:ready'
+      · 子 → 主: 'microapp:delete-effect:click-at'         （用户在 overlay 上点了鼠标）
+      · 子 → 主: 'microapp:delete-effect:completed'        （效果演出结束，outcome= destroyed|cancelled）
+      · 子 → 主: 'microapp:delete-effect:request'         （请求获取鼠标坐标 / 主进程 IPC 结果）
+      · 主 → 子: 'microapp:delete-effect:summon'          （主项目触发删除效果，附带最新 target / mousePos）
+      · 主 → 子: 'microapp:delete-effect:teardown'        （主项目主动销毁 overlay）
+      · 主 → 子: 'microapp:delete-effect:response'        （主项目对 microapp:delete-effect:request 的回包）
+  - 版权隔离：所有效果素材、剧本状态机都留在这个子项目里；
     主项目只通过 props + bus 调它，**不** import 任何素材或脚本。
     下架时只需要在主项目侧 disable 这个微应用 / 删 dist 目录。
 -->
@@ -122,10 +123,6 @@ export default {
   components: { MonsterStage },
   data () {
     return {
-      // === wujie 注入 ===
-      // 子项目独立运行（无 wujie）时，wujieProps 走默认空对象；
-      // 接入主项目时，主项目会传 props（target / targets / appBasePath / mountNonce / theme / locale）
-      wujieProps: (typeof window !== 'undefined' && window.$wujie && window.$wujie.props) || {},
       // === 业务状态 ===
       targets: [],
       stageVisible: false,
@@ -154,26 +151,28 @@ export default {
     },
     targetGuid () {
       return this.targetFile ? this.targetFile.guid : null
-    }
-  },
-  watch: {
-    wujieProps: {
-      handler (next) {
-        this.applyIncomingProps(next)
-      },
-      deep: true,
-      immediate: true
+    },
+    // === wujie 注入 ===
+    // 必须是 computed 实时读 window.$wujie.props，data() 里只跑一次会缓存旧引用，
+    // 导致主项目后续召唤时的最新 props（target / summon / nonce 等）进不来。
+    wujieProps () {
+      return (typeof window !== 'undefined' && window.$wujie && window.$wujie.props) || {}
     }
   },
   async mounted () {
-    // 1) bus 接入
+    // 1) wujie 注入的 props 立刻应用一次（wujieMountKey++ 强制 remount，每次重 mount 都会重新跑 mounted，
+    //    所以即使没有 watcher 也能拿到最新 props —— Vue 不知道 window.$wujie.props 的外部变更，
+    //    computed 不会自动重算，watcher 也起不到作用，靠 remount 重建触发 mounted 重跑）
+    this.applyIncomingProps(this.wujieProps)
+
+    // 2) bus 接入
     this.busConnected = microAppBus.isAvailable()
     if (this.busConnected) {
-      microAppBus.on('microapp:monster:summon', this.handleSummonCommand)
-      microAppBus.on('microapp:monster:teardown', this.handleTeardownCommand)
-      microAppBus.on('microapp:monster:response', this.handleBusResponse)
+      microAppBus.on('microapp:delete-effect:summon', this.handleSummonCommand)
+      microAppBus.on('microapp:delete-effect:teardown', this.handleTeardownCommand)
+      microAppBus.on('microapp:delete-effect:response', this.handleBusResponse)
       // 上报 ready
-      microAppBus.emit('microapp:monster:ready', {
+      microAppBus.emit('microapp:delete-effect:ready', {
         version: '0.2.0',
         capabilities: ['summon', 'click-at', 'completed', 'cursor-pos', 'screen-info'],
         ts: Date.now()
@@ -193,9 +192,9 @@ export default {
   },
   beforeDestroy () {
     if (this.busConnected) {
-      microAppBus.off('microapp:monster:summon', this.handleSummonCommand)
-      microAppBus.off('microapp:monster:teardown', this.handleTeardownCommand)
-      microAppBus.off('microapp:monster:response', this.handleBusResponse)
+      microAppBus.off('microapp:delete-effect:summon', this.handleSummonCommand)
+      microAppBus.off('microapp:delete-effect:teardown', this.handleTeardownCommand)
+      microAppBus.off('microapp:delete-effect:response', this.handleBusResponse)
     }
   },
   methods: {
@@ -331,7 +330,7 @@ export default {
       this.lastLog = `用户选择：${label}`
       // 上报给主项目（用于主项目同步自己的 UI 状态）
       if (this.busConnected) {
-        microAppBus.emit('microapp:monster:choice', { label, targetGuid: this.targetGuid })
+        microAppBus.emit('microapp:delete-effect:choice', { label, targetGuid: this.targetGuid })
       }
     },
     onStageChange (stage) {
@@ -355,7 +354,7 @@ export default {
       this.lastLog = outcome === 'cancelled' ? '不是这个？怪兽 + 雷欧一起飞走了' : '已摧毁'
       // 关键事件：通知主项目结果
       if (this.busConnected) {
-        microAppBus.emit('microapp:monster:completed', {
+        microAppBus.emit('microapp:delete-effect:completed', {
           outcome,
           targetGuid: completedGuid,
           targetName: completedGuid ? (this.targets.find(t => t.guid === completedGuid) || {}).name : null,
@@ -376,6 +375,15 @@ export default {
     handleTeardownCommand () {
       this.busy = false
       this.targetFile = null
+      // 主动调 forceStop() 强制 controller.stop() 跑一遍（无视 _tornDown 幂等），
+      // 保证 BGM / SFX / 爆炸音被 audio.stopAll() 静默 —— 关闭 overlay 后音效立刻停。
+      try {
+        if (this.$refs.stage && typeof this.$refs.stage.forceStop === 'function') {
+          this.$refs.stage.forceStop()
+        }
+      } catch (e) {
+        console.warn('[echoMonsterDeleter] forceStop failed:', e)
+      }
       this.stageVisible = false
       this.currentStage = STAGE.IDLE
       this.lastLog = '主项目要求销毁 overlay'
