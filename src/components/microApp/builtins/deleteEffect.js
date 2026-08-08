@@ -44,10 +44,8 @@ export const DELETE_EFFECT_APP_ID = 'echo-monster-deleter'
 /**
  * 内置条目定义
  *
- * devUrl 指向 echo-monster-deleter 子项目的 vite dev-server（端口 5175，与
- * _plugins/echo-monster-deleter/vite.config.js 中 server.port 一致）。
- * url 在生产环境由 fullscreenOverlay 的 resolveEntryUrl 自动解析到
- * appBasePath/_plugins/echo-monster-deleter/dist/index.html，这里留空即可。
+ * devUrl 指向 echo-monster-deleter 子项目的 Vite dev server（端口 5175，与
+ * _plugins/echo-monster-deleter/vite.config.js 中 server.port 一致）；url 指向线上部署地址。
  *
  * enabled=false：默认关闭 → 用户删除目录时仍走 $q.dialog 二次确认；用户在「设置 →
  * 微应用」里手动开启后才走怪兽特效 overlay。
@@ -56,7 +54,7 @@ export const deleteEffectBuiltinApp = Object.freeze({
   id: DELETE_EFFECT_APP_ID,
   name: '小怪兽删除特效',
   icon: 'el-icon-magic-stick',
-  url: '',
+  url: 'https://luo0412.github.io/echo-monster-deleter/',
   devUrl: 'http://localhost:5175/',
   isDefault: false,
   enabled: false,
