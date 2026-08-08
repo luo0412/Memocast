@@ -2518,79 +2518,6 @@ function registerDatabaseHandlers() {
     }
   })
 
-  // ====================================================================
-  // v2026-08-08 一次性迁移：把旧 `setting/deleteEffect` 的开关 + URL 合并进
-  // `setting/microApps` 列表的内置条目 echo-monster-deleter，然后删掉旧 key。
-  //
-  // 升级场景：
-  //   - 旧用户的 SQLite 里有 setting/deleteEffect = { enabled, url, devUrl }
-  //   - 首次跑新代码后 microApps 列表里没有 echo-monster-deleter（首次升级还没触发 mergeBuiltInApps）
-  //   - 这里读旧 key → 把 url/devUrl 写进新内置条目（合并入列表）→ 删旧 key
-  //
-  // 注意：本函数运行时机为 app.on('ready') → initDatabase() 后立即调用，
-  //       在 createWindow() 之前同步执行。
-  // ====================================================================
-  const LEGACY_DELETE_EFFECT_KEY = 'setting/delete/deleteEffect'
-  const BUILTIN_ECHO_MONSTER_ID = 'echo-monster-deleter'
-  async function runDeleteEffectMigration () {
-    const legacyRow = execOne('SELECT value FROM app_state WHERE key = ?', [LEGACY_DELETE_EFFECT_KEY])
-    if (!legacyRow) return { migrated: false, reason: 'no-legacy-key' }
-    let legacy = null
-    try { legacy = JSON.parse(legacyRow.value) } catch (_) { legacy = null }
-    if (!legacy || typeof legacy !== 'object') {
-      await db.run('DELETE FROM app_state WHERE key = ?', [LEGACY_DELETE_EFFECT_KEY])
-      saveDatabase()
-      return { migrated: false, reason: 'legacy-corrupted' }
-    }
-    const microAppsRow = execOne('SELECT value FROM app_state WHERE key = ?', [MICRO_APPS_KEY])
-    let list = []
-    try { list = JSON.parse(microAppsRow.value) } catch (_) { list = [] }
-    if (!Array.isArray(list)) list = []
-    const idx = list.findIndex(a => a && a.id === BUILTIN_ECHO_MONSTER_ID)
-    const builtinEntry = {
-      id: BUILTIN_ECHO_MONSTER_ID,
-      name: '小怪兽删除特效',
-      icon: 'el-icon-magic-stick',
-      url: typeof legacy.url === 'string' ? legacy.url : '',
-      devUrl: typeof legacy.devUrl === 'string' ? legacy.devUrl : '',
-      isDefault: false,
-      enabled: Boolean(legacy.enabled),
-      isMobile: false,
-      displayMode: 'fullscreen',
-      isBuiltIn: true
-    }
-    if (idx >= 0) {
-      list[idx] = {
-        ...list[idx],
-        url: builtinEntry.url,
-        devUrl: builtinEntry.devUrl,
-        enabled: builtinEntry.enabled,
-        isBuiltIn: true,
-        displayMode: 'fullscreen'
-      }
-    } else {
-      list.push(builtinEntry)
-    }
-    const now = Date.now()
-    await db.run(
-      `INSERT INTO app_state (key, value, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-      [MICRO_APPS_KEY, JSON.stringify(list), now]
-    )
-    await db.run('DELETE FROM app_state WHERE key = ?', [LEGACY_DELETE_EFFECT_KEY])
-    saveDatabase()
-    log.info('[DB] deleteEffect migration: 已合并旧 setting/deleteEffect → microApps 内置条目')
-    return { migrated: true }
-  }
-  // 给渲染进程留一个 IPC（虽然已用启动钩子同步迁移，但保留 IPC 方便手动调试 / 兜底）
-  ipcMain.handle('db:migrateDeleteEffectToMicroApps', async () => {
-    try { return await runDeleteEffectMigration() }
-    catch (error) {
-      log.error('[DB] migrateDeleteEffectToMicroApps error:', error)
-      return { migrated: false, reason: 'error', error: String(error) }
-    }
-  })
-
   ipcMain.handle('db:getPendingDeleteLogs', async () => {
     try {
       return execToObjects(`
@@ -3923,13 +3850,6 @@ app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors')
 app.on('ready', async () => {
   // 初始化数据库
   await initDatabase()
-  // v2026-08-08：一次性迁移，把旧 setting/deleteEffect 合进 setting/microApps 内置条目。
-  // 在 createWindow() 之前同步执行，避免渲染进程首次读取 microApps 时还是旧结构。
-  try {
-    await runDeleteEffectMigration()
-  } catch (err) {
-    log.warn('[boot] deleteEffect migration failed:', err)
-  }
   // 创建主窗口
   createWindow()
 })

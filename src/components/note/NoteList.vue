@@ -41,10 +41,8 @@
     <CategoryDialog ref='categoryDialog' :note-info='rightClickNoteItem' :label='categoryDialogLabel'
                     :handler='categoryDialogHandler' />
     <rankingTierDialog ref="tierRankingDialog" />
-    <!-- 全屏透明删除效果 overlay（wujie 子应用），右键删除文件夹时弹。
-         v2026-08-08 起：通过 appEntry prop 传入内置微应用条目，url / enabled 来自微应用列表。
-         删除特效 = displayMode=fullscreen 的内置条目 echo-monster-deleter。 -->
-    <deleteEffectOverlay ref='deleteEffectOverlay' :app-entry='echoMonsterEntry' />
+    <!-- 全屏透明删除效果 overlay（wujie 子应用），右键删除文件夹时弹 -->
+    <deleteEffectOverlay ref='deleteEffectOverlay' />
   </div>
 </template>
 
@@ -54,7 +52,6 @@ import CategoryDialog from '../category/CategoryDialog.vue'
 import rankingTierDialog from '../ranking/rankingTierDialog.vue'
 import deleteEffectOverlay from '../microApp/deleteEffectOverlay.vue'
 import DatabaseClient from 'src/utils/DatabaseClient'
-import { normalizeMicroApps, BUILTIN_ECHO_MONSTER_DELETER_ID } from '../microApp/microAppService.js'
 import { createNamespacedHelpers } from 'vuex'
 import { Loading, QSpinnerGears } from 'quasar'
 import LoadingComponent from '../common/Loading.vue'
@@ -71,14 +68,7 @@ export default {
     return {
       categoryDialogLabel: '',
       categoryDialogHandler: () => {},
-      tierRankingNoteDocGuid: '', // 缓存当前右键点击的笔记 docGuid
-      // v2026-08-08：内置小怪兽微应用条目（来自 microApps 列表）。
-      // 由 mounted 时 loadMicroApps() 异步加载，并通过 bus 'microAppsChanged' 实时刷新。
-      // null 表示「还没加载完」或「列表里没有内置条目」，overlay wujieUrl 会回退到空字符串。
-      echoMonsterEntry: null,
-      // 内置条目最近的 microApps 列表快照（用于 diff & reload 决策，NoteList 自身不直接用，
-      // 仅作为 mounted 时给 overlay 提供「最近一次已知 appEntry」）。
-      _microAppsSnapshot: []
+      tierRankingNoteDocGuid: '' // 缓存当前右键点击的笔记 docGuid
     }
   },
   computed: {
@@ -143,42 +133,35 @@ export default {
       // overlay 上显示的瞄准名就会是错的（看的是 currentCategory 的名字）。
       const targetName = targetCategory.split('/').filter(Boolean).pop() || targetCategory
 
-      // 【v2026-08-08】先读怪兽特效总开关：默认关闭 → 走原本的 $q.dialog 二次确认，
-      // 开启后 → 走怪兽特效 overlay。
-      // 注：overlay 内部仍自带 fallback（enabled=false 时 wujieUrl='' 直接不挂载），
-      // 但这里提前判定可以避免无意义的 overlay 实例化和 bus 通信。
-      const overlayEnabled = await this._isDeleteEffectEnabled()
-      if (overlayEnabled) {
-        // 版权隔离：这个 overlay 内部跑的是 _plugins/echo-monster-deleter（子项目目录名待迁移时同步改名），
-        // 下架时只要 disable overlay / 删子项目 dist，主项目其它部分完全不动。
-        const overlay = this.$refs.deleteEffectOverlay
-        if (overlay && typeof overlay.summon === 'function') {
-          try {
-            // 给删除效果"瞄准"的 target 用 category 路径（人类可读的名字 + icon）
-            const target = {
-              guid: 'category:' + targetCategory,
-              name: targetName,
-              icon: '📁',
-              size: '',
-              corrupt: false
-            }
-            const result = await overlay.summon({ target })
-            if (result && result.outcome === 'destroyed') {
-              // 对话泡里点"确认" → 真删
-              // 【v2026-08-08】走怪兽特效路径：怪兽啃+爆本身已是视觉反馈，不再叠加
-              // Quasar Notify "目录删除成功" 弹框（参数 silentNotify=true）。
-              this.deleteCategory(targetCategory, { silentNotify: true })
-            }
-            // outcome === 'cancelled' 或 'timeout'：什么都不做
-            return
-          } catch (err) {
-            console.warn('[NoteList] deleteEffectOverlay.summon 失败，回退到默认确认框：', err)
-            // 失败时直接落到下面的 $q.dialog 二次确认，不要阻断用户删除流程
+      // 优先走删除效果 overlay —— 用户在对话泡里确认后才真正删除。
+      // 版权隔离：这个 overlay 内部跑的是 _plugins/echo-monster-deleter（子项目目录名待迁移时同步改名），
+      // 下架时只要 disable overlay / 删子项目 dist，主项目其它部分完全不动。
+      const overlay = this.$refs.deleteEffectOverlay
+      if (overlay && typeof overlay.summon === 'function') {
+        try {
+          // 给删除效果"瞄准"的 target 用 category 路径（人类可读的名字 + icon）
+          const target = {
+            guid: 'category:' + targetCategory,
+            name: targetName,
+            icon: '📁',
+            size: '',
+            corrupt: false
           }
+          const result = await overlay.summon({ target })
+          if (result && result.outcome === 'destroyed') {
+            // 对话泡里点"确认" → 真删
+            // 【v2026-08-08】走怪兽特效路径：怪兽啃+爆本身已是视觉反馈，不再叠加
+            // Quasar Notify "目录删除成功" 弹框（参数 silentNotify=true）。
+            this.deleteCategory(targetCategory, { silentNotify: true })
+          }
+          // outcome === 'cancelled' 或 'timeout'：什么都不做
+          return
+        } catch (err) {
+          console.warn('[NoteList] deleteEffectOverlay.summon 失败，回退到默认确认框：', err)
         }
       }
 
-      // 回退路径：开关关闭 / overlay 不存在 / 调失败 → 用原本的 $q.dialog 二次确认
+      // 回退路径：overlay 不存在 / 调失败 → 用原本的 $q.dialog 二次确认
       this.$q
         .dialog({
           title: this.$t('deleteCategory'),
@@ -291,48 +274,6 @@ export default {
         noteContent
       })
     },
-    /**
-     * 【v2026-08-08】读取内置小怪兽微应用条目（带 enabled 状态）。
-     * 改走微应用列表（`setting/microApps`），不再读旧的 `setting/deleteEffect`。
-     * 升级场景已由主进程启动钩子完成迁移。
-     */
-    async _isDeleteEffectEnabled () {
-      await this._ensureMicroAppsLoaded()
-      const entry = this.echoMonsterEntry
-      return Boolean(entry && entry.enabled)
-    },
-    /**
-     * 异步加载微应用列表，并把内置小怪兽条目摘出来放到 echoMonsterEntry。
-     * mounted / bus 收到 microAppsChanged 时调用。
-     */
-    async _ensureMicroAppsLoaded () {
-      try {
-        const stored = await DatabaseClient.microApps.getAll()
-        const list = normalizeMicroApps(stored)
-        this._microAppsSnapshot = list
-        const entry = list.find(a => a && a.id === BUILTIN_ECHO_MONSTER_DELETER_ID) || null
-        this.echoMonsterEntry = entry
-      } catch (err) {
-        console.warn('[NoteList] microApps.getAll failed:', err)
-        // 失败时保持上次快照，不让用户进入「永远关不掉 overlay」的死锁
-      }
-    },
-    /**
-     * microAppsChanged 总线回调：刷新 echoMonsterEntry。
-     * 兼容 payload 形态：
-     *   - { list, dirtyIds }    （新格式）
-     *   - Array（兼容旧链路直接传列表）
-     */
-    _onMicroAppsChanged (payload) {
-      const list = Array.isArray(payload)
-        ? payload
-        : (payload && Array.isArray(payload.list) ? payload.list : null)
-      if (!Array.isArray(list)) return
-      const normalized = normalizeMicroApps(list)
-      this._microAppsSnapshot = normalized
-      const entry = normalized.find(a => a && a.id === BUILTIN_ECHO_MONSTER_DELETER_ID) || null
-      this.echoMonsterEntry = entry
-    },
     ...mapServerActions([
       'deleteCategory',
       'updateCurrentCategory',
@@ -359,16 +300,11 @@ export default {
     bus.$on(events.NOTE_ITEM_CONTEXT_MENU.delete, this.deleteNoteHandler)
     // 从夯到拉相关事件
     bus.$on(events.NOTE_ITEM_CONTEXT_MENU.openTierRankingForNote, this.openTierRankingForNoteHandler)
-    // v2026-08-08：订阅微应用列表变更，确保怪兽特效条目的 enabled / url 实时同步给 overlay
-    bus.$on('microAppsChanged', this._onMicroAppsChanged)
-    this._ensureMicroAppsLoaded()
   },
   beforeDestroy () {
     bus.$off(events.NOTE_ITEM_CONTEXT_MENU.copyNote, this.copyNoteHandler)
     bus.$off(events.NOTE_ITEM_CONTEXT_MENU.copyMarkdownContent, this.copyMarkdownContentHandler)
     bus.$off(events.NOTE_ITEM_CONTEXT_MENU.openTierRankingForNote, this.openTierRankingForNoteHandler)
-    // v2026-08-08：取消微应用变更订阅
-    bus.$off('microAppsChanged', this._onMicroAppsChanged)
   }
 }
 </script>

@@ -287,18 +287,6 @@ export default {
   microAppsReloaded: '应用已刷新',
   microAppsIsMobile: '移动端模式',
   microAppsIsMobileHint: '开启后弹框宽度缩至 60vw（最大 480px），适配 H5 页面宽高比',
-  // v2026-08-08 新增：displayMode（drawer / fullscreen）—— 抽屉 vs 全屏展示形态
-  microAppsDisplayMode: '展示形态',
-  microAppsDisplayModeDrawer: '抽屉',
-  microAppsDisplayModeFullscreen: '全屏',
-  microAppsDisplayModeHint: '「抽屉」= 聊天弹框右侧抽屉；「全屏」= 全屏 dialog overlay（用于一次性业务特效）',
-  // v2026-08-08 新增：内置条目（由代码注入、用户不可删）
-  microAppsBuiltin: '内置',
-  microAppsBuiltinHint: '由代码注入的应用，不可删除；name / icon / 开关 等基础信息可调整，URL / 展示形态 / 内置标记不可改',
-  microAppsBuiltinView: '查看（内置不可编辑）',
-  microAppsBuiltinReadonly: '内置条目只读',
-  microAppsBuiltinReadonlyHint: '这是内置应用，由代码注入。其 URL 和展示形态由仓库版本控制，name / 开关 等基础信息可在设置里调整。',
-  microAppsBuiltinCannotDelete: '内置应用不可删除',
   noData: '暂无数据',
   yes: '是',
   no: '否',

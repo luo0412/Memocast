@@ -21,10 +21,6 @@ import { Enum } from 'enum-plus'
 // - CDN 注入：和编辑器渲染/打包有关，是客户端通用基础配置。
 // - 微应用：聊天抽屉内 wujie 子应用列表，是宿主层面的扩展管理。
 // - 个人信息（地区偏好）：和当前账号无关，是终端用户偏好。
-//
-// v2026-08-08 删除「DeleteConfirm」独立 tab：怪兽特效删除 overlay 已纳入微应用列表
-// （内置条目 echo-monster-deleter，displayMode=fullscreen，isBuiltIn=true）。
-// 用户在「设置 → 通用 → 微应用」里直接开关 / 编辑 URL，体验与其它微应用一致。
 const GeneralSubEnum = Enum({
   Language:  { value: 'language',  label: 'generalLanguage', icon: 'language' },
   Theme:     { value: 'theme',     label: 'generalTheme',    icon: 'palette' },
