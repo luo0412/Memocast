@@ -32,7 +32,8 @@ module.exports = function (/* ctx */) {
       'jxgraph',
       'rune-deps',
       'hel-micro-renderer',
-      'cdn-deps'
+      'cdn-deps',
+      'microapp-builtins'
     ],
 
     // https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-css

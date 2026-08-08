@@ -1,0 +1,186 @@
+﻿// ============================================================================
+// src/components/muya/runeSfcRendererFactory.js
+//
+// 鎶?Muya.vue 閲岀殑 createRuneRendererCtor + 缂撳瓨灞傛娊鍑烘垚鐙珛宸ュ粻銆?// 鐩殑锛?//   1) 璁?RunePreviewRenderer 鐨勭紦瀛?/ in-flight 鍘婚噸閫昏緫鍙崟娴?//   2) 璁╁叾瀹冮渶瑕?rune SFC 瀹炴椂缂栬瘧鐨勫脊妗嗭紙濡?RuneFormDialog锛夊鐢ㄥ悓涓€浠?//   3) 璁?Muya.vue 鑷韩鍙壙鎷呫€孷ue 缁勪欢娓叉煋銆嶏紝涓嶅爢涓氬姟閫昏緫
+//
+// === 濂戠害 ===
+//   - 杈撳叆锛歳une 瀵硅薄 { id, name, template }
+//   - 杈撳嚭锛歏ue.extend 鍚庣殑缁勪欢鏋勯€犲櫒锛堝悓姝ワ級| null锛堟棤 template / 缂栬瘧澶辫触 throw锛?//   - 缂撳瓨绛栫暐锛氭寜 `${rune.id || rune.name || 'default'}:${template}` 浣?cacheKey
+//       - 鍚?key 鍛戒腑缂撳瓨锛氱洿鎺ヨ繑鍥?//       - 鍚?key in-flight锛氬叡浜?promise
+//       - 缂栬瘧澶辫触锛氭竻缂撳瓨锛屼笅娆￠噸璇?//
+// === 瀵煎嚭 ===
+//   - createRuneRendererCtor: 涓诲伐鍘?//   - normalizeRuneSfc: normalize 鍏ュ彛锛堜粎鍦ㄦ祴璇曢噷浣跨敤锛屼富椤圭洰閫氳繃 createRuneRendererCtor 璋冪敤锛?//   - clearCaches: 娴嬭瘯 hook锛屾竻绌轰袱涓?Map
+// ============================================================================
+
+import Vue from 'vue'
+import { parseVueSfc } from 'src/ApiInvoker'
+
+const runeRendererCtorCache = new Map()
+const runeRendererCtorInflight = new Map()
+
+export const normalizeRuneSfc = async (template = '', options = {}) => {
+  const source = String(template || '').trim()
+  if (!source) {
+    return {
+      templateCode: '',
+      script: 'export default {}',
+      style: '',
+      hasTemplate: false
+    }
+  }
+
+  const parsed = await parseVueSfc(source, {
+    filename: options.filename || 'rune.vue',
+    scopeId: options.scopeId
+  })
+  if (parsed && parsed.error) {
+    const error = new Error(parsed.error.message || 'Vue SFC parse failed')
+    error.code = parsed.error.code
+    throw error
+  }
+
+  return {
+    templateCode: parsed.template || '',
+    script: parsed.script && parsed.script.content ? parsed.script.content : 'export default {}',
+    style: parsed.style || '',
+    hasTemplate: !!parsed.template
+  }
+}
+
+const evalRuneScript = (scriptContent = '') => {
+  const sanitized = scriptContent.replace(/export\s+default/, 'return ')
+  const factory = new Function(sanitized)
+  const result = factory()
+  return result && typeof result === 'object' ? result : {}
+}
+
+const evalRuneTemplate = (templateCode = '') => {
+  const factory = new Function(`${templateCode}\nreturn { render, staticRenderFns }`)
+  return factory()
+}
+
+const ensureRuneStyle = (styleId, cssText) => {
+  if (!styleId || typeof document === 'undefined') return
+  let styleEl = document.getElementById(styleId)
+  if (!styleEl) {
+    styleEl = document.createElement('style')
+    styleEl.id = styleId
+    document.head.appendChild(styleEl)
+  }
+  if (styleEl.textContent !== cssText) {
+    styleEl.textContent = cssText
+  }
+}
+
+export const createRuneRendererCtor = async (rune = {}) => {
+  if (!rune) return null
+  const templateSource = String(rune.template || '')
+  const cacheKey = `${rune.id || rune.name || 'default'}:${templateSource}`
+  if (runeRendererCtorCache.has(cacheKey)) {
+    return runeRendererCtorCache.get(cacheKey)
+  }
+  if (runeRendererCtorInflight.has(cacheKey)) {
+    return runeRendererCtorInflight.get(cacheKey)
+  }
+
+  const rendererPromise = (async () => {
+    const scopeId = `v-rune-${String(rune.id || 'default').replace(/[^a-zA-Z0-9_-]/g, '-')}`
+    const { templateCode, script, style, hasTemplate } = await normalizeRuneSfc(templateSource, {
+      filename: `rune-${rune.id || 'default'}.vue`,
+      scopeId
+    })
+    if (!hasTemplate) return null
+
+    const componentOptions = evalRuneScript(script)
+    const compiled = evalRuneTemplate(templateCode)
+    const baseData = typeof componentOptions.data === 'function' ? componentOptions.data : () => ({})
+    const declaredPropNames = Array.isArray(componentOptions.props)
+      ? componentOptions.props
+        .map(propName => String(propName || '').trim())
+        .filter(Boolean)
+      : (componentOptions.props && typeof componentOptions.props === 'object'
+        ? Object.keys(componentOptions.props)
+        : [])
+
+    ensureRuneStyle(`rune-style-${rune.id || 'default'}`, style)
+
+    return Vue.extend({
+      ...componentOptions,
+      name: componentOptions.name || 'RunePreviewRenderer',
+      props: {
+        ...(Array.isArray(componentOptions.props)
+          ? declaredPropNames.reduce((props, propName) => {
+            props[propName] = null
+            return props
+          }, {})
+          : (componentOptions.props && typeof componentOptions.props === 'object'
+            ? componentOptions.props
+            : {})),
+        ...(declaredPropNames.includes('runeId') ? {} : {
+          runeId: {
+            type: String,
+            default: ''
+          }
+        }),
+        ...(declaredPropNames.includes('nodeId') ? {} : {
+          nodeId: {
+            type: String,
+            default: ''
+          }
+        }),
+        ...(declaredPropNames.includes('rune') ? {} : {
+          rune: {
+            type: Object,
+            default: null
+          }
+        }),
+        ...(declaredPropNames.includes('value') ? {} : {
+          value: {
+            type: String,
+            default: ''
+          }
+        })
+      },
+      data () {
+        return {
+          ...baseData.call(this)
+        }
+      },
+      render (h) {
+        const vnode = compiled.render.call(this, h)
+        if (vnode && typeof vnode === 'object') {
+          const existingChildren = Array.isArray(vnode.children) ? vnode.children : []
+          if (!existingChildren.length) {
+            vnode.children = [String(this.value == null ? '' : this.value)]
+          }
+        }
+        return vnode
+      },
+      staticRenderFns: compiled.staticRenderFns,
+      _scopeId: scopeId
+    })
+  })()
+
+  runeRendererCtorInflight.set(cacheKey, rendererPromise)
+  try {
+    const ctor = await rendererPromise
+    runeRendererCtorCache.set(cacheKey, ctor)
+    return ctor
+  } catch (error) {
+    runeRendererCtorCache.delete(cacheKey)
+    throw error
+  } finally {
+    runeRendererCtorInflight.delete(cacheKey)
+  }
+}
+
+export function clearCaches () {
+  runeRendererCtorCache.clear()
+  runeRendererCtorInflight.clear()
+}
+
+export default {
+  createRuneRendererCtor,
+  normalizeRuneSfc,
+  clearCaches
+}

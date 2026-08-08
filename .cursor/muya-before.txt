@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class='exclude-header' v-show='!isCurrentNoteLoading && dataLoaded'>
     <div ref='muya' id='muya' class='editor-component' v-close-popup>
     </div>
@@ -10,7 +10,7 @@
 import { createNamespacedHelpers } from 'vuex'
 import helper from 'src/utils/helper'
 import Vue from 'vue'
-import { createRuneRendererCtor } from './runeSfcRendererFactory.js'
+import * as VueTemplateCompiler from 'vue-template-compiler'
 import {
   default as Muya,
   TablePicker,
@@ -25,12 +25,9 @@ import {
   LinkTools,
   TableBarTools,
   Transformer,
-  // v2026-07-31 起：Memocast Settings → 编辑器 → 「语法解析」开关让 Muya parser
-  // 的 inlineRules.echo_anno 可以按 echoRequireParens=true/false 实时切换。
-  // 唯一入口 setEchoAnnoRule：直接 mutate _plugins/coolma-muya/lib/parser/rules.js
-  // 导出的 inlineRules.echo_anno 引用（coolma-muya 是本地软链接，详见插件契约
-  // plugin-vue-version.mdc + rune-echo-cloudfn-experimental.mdc 的「改本地源码实时生效」）。
-  setEchoAnnoRule
+  // v2026-07-31 璧凤細Memocast Settings 鈫?缂栬緫鍣?鈫?銆岃娉曡В鏋愩€嶅紑鍏宠 Muya parser
+  // 鐨?inlineRules.echo_anno 鍙互鎸?echoRequireParens=true/false 瀹炴椂鍒囨崲銆?  // 鍞竴鍏ュ彛 setEchoAnnoRule锛氱洿鎺?mutate _plugins/coolma-muya/lib/parser/rules.js
+  // 瀵煎嚭鐨?inlineRules.echo_anno 寮曠敤锛坈oolma-muya 鏄湰鍦拌蒋閾炬帴锛岃瑙佹彃浠跺绾?  // plugin-vue-version.mdc + rune-echo-cloudfn-experimental.mdc 鐨勩€屾敼鏈湴婧愮爜瀹炴椂鐢熸晥銆嶏級銆?  setEchoAnnoRule
 } from 'coolma-muya/lib'
 import 'coolma-muya/themes/default.css'
 import appBus from '../common/bus.js'
@@ -66,11 +63,10 @@ const {
 } = createNamespacedHelpers('client')
 
 const EMPTY_RUNE_TEMPLATE = '<div></div>'
-// 匹配 <div ...>...</div>，用于按 nodeId 精准定位符文占位符并替换 value/innerText
-// group 1 = 整段属性（不含 <div），group 2 = 占位符内的 innerText
+// 鍖归厤 <div ...>...</div>锛岀敤浜庢寜 nodeId 绮惧噯瀹氫綅绗︽枃鍗犱綅绗﹀苟鏇挎崲 value/innerText
+// group 1 = 鏁存灞炴€э紙涓嶅惈 <div锛夛紝group 2 = 鍗犱綅绗﹀唴鐨?innerText
 const RUNE_PLACEHOLDER_FULL_TAG_RE = /<div(\s+[^>]*?)>([\s\S]*?)<\/div>/gi
-// 把字符串里的不安全字符转成可在 HTML 属性 / 文本中安全出现的形式（与 quickInsert 侧的 escapeHtmlAttribute 对齐）
-const escapeRuneAttrValue = (value = '') => String(value)
+// 鎶婂瓧绗︿覆閲岀殑涓嶅畨鍏ㄥ瓧绗﹁浆鎴愬彲鍦?HTML 灞炴€?/ 鏂囨湰涓畨鍏ㄥ嚭鐜扮殑褰㈠紡锛堜笌 quickInsert 渚х殑 escapeHtmlAttribute 瀵归綈锛?const escapeRuneAttrValue = (value = '') => String(value)
   .replace(/&/g, '&amp;')
   .replace(/"/g, '&quot;')
   .replace(/</g, '&lt;')
@@ -81,8 +77,7 @@ const escapeRuneInnerText = (value = '') => String(value)
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;')
 
-// 从 <div data-rune-name="X" ...> 整段属性里抽取指定 data-* 属性（顺序无关）
-const readRuneDataAttr = (attrsSource = '', attrName = '') => {
+// 浠?<div data-rune-name="X" ...> 鏁存灞炴€ч噷鎶藉彇鎸囧畾 data-* 灞炴€э紙椤哄簭鏃犲叧锛?const readRuneDataAttr = (attrsSource = '', attrName = '') => {
   const needle = String(attrName || '').trim()
   if (!needle) return ''
   const re = new RegExp(`${needle}\\s*=\\s*"([^"]*)"`, 'i')
@@ -90,8 +85,8 @@ const readRuneDataAttr = (attrsSource = '', attrName = '') => {
   return match ? match[1] : ''
 }
 
-// 按 nodeId 找到对应的 <div ...>...</div> 并返回新的 markdown
-// 如果传入 value，则同步更新 data-rune-value 与 innerText（保持与 quickInsert 插入时一致）
+// 鎸?nodeId 鎵惧埌瀵瑰簲鐨?<div ...>...</div> 骞惰繑鍥炴柊鐨?markdown
+// 濡傛灉浼犲叆 value锛屽垯鍚屾鏇存柊 data-rune-value 涓?innerText锛堜繚鎸佷笌 quickInsert 鎻掑叆鏃朵竴鑷达級
 const rewriteRunePlaceholderByNodeId = (markdown = '', nodeId = '', nextValue = null) => {
   const source = String(markdown || '')
   const targetNodeId = String(nodeId || '').trim()
@@ -116,7 +111,70 @@ const rewriteRunePlaceholderByNodeId = (markdown = '', nodeId = '', nextValue = 
 
   return rewritten ? nextMarkdown : source
 }
+const vueSfcCompiler = VueTemplateCompiler && typeof VueTemplateCompiler.parseComponent === 'function'
+  ? VueTemplateCompiler
+  : VueTemplateCompiler?.default && typeof VueTemplateCompiler.default.parseComponent === 'function'
+    ? VueTemplateCompiler.default
+    : null
+const compileTemplateToFunctions = vueSfcCompiler && typeof vueSfcCompiler.compileToFunctions === 'function'
+  ? vueSfcCompiler.compileToFunctions.bind(vueSfcCompiler)
+  : vueSfcCompiler?.default && typeof vueSfcCompiler.default.compileToFunctions === 'function'
+    ? vueSfcCompiler.default.compileToFunctions.bind(vueSfcCompiler.default)
+    : null
 const RUNE_TEXT_SLOT = 'default'
+
+const injectScopedAttribute = (template = '', scopeId = '') => {
+  if (!scopeId || !template) return template
+  return template.replace(/<([a-zA-Z][^\s/>]*)(\s[^<>]*?)?(\/?\s*)>/g, (match, tagName, attrs = '', tail = '') => {
+    if (/^(template|slot)$/i.test(tagName) || attrs.includes(scopeId)) {
+      return match
+    }
+    return `<${tagName}${attrs} ${scopeId}${tail}>`
+  })
+}
+
+const normalizeRuneSfc = (template = '') => {
+  const source = String(template || '').trim()
+  console.log('[Muya.normalizeRuneSfc] received template source', {
+    sourceLen: source.length,
+    sourcePreview: source.substring(0, 160)
+  })
+  if (!source) {
+    return {
+      template: EMPTY_RUNE_TEMPLATE,
+      script: 'export default {}',
+      styles: [],
+      hasTemplate: false
+    }
+  }
+
+  if (!vueSfcCompiler) {
+    console.warn('[Muya.normalizeRuneSfc] vue-template-compiler unavailable, fallback to raw template')
+    return {
+      template: source,
+      script: 'export default {}',
+      styles: [],
+      hasTemplate: true
+    }
+  }
+
+  const parsed = vueSfcCompiler.parseComponent(source)
+  const templateContent = (parsed.template && parsed.template.content && parsed.template.content.trim()) || ''
+  console.log('[Muya.normalizeRuneSfc] parsed template result', {
+    hasTemplateBlock: !!parsed.template,
+    templateContentLen: templateContent.length,
+    templateContentPreview: templateContent.substring(0, 160),
+    scriptLen: ((parsed.script && parsed.script.content) || '').length,
+    stylesCount: Array.isArray(parsed.styles) ? parsed.styles.length : 0
+  })
+
+  return {
+    template: templateContent || EMPTY_RUNE_TEMPLATE,
+    script: (parsed.script && parsed.script.content) || 'export default {}',
+    styles: parsed.styles || [],
+    hasTemplate: !!templateContent
+  }
+}
 
 const createRuneInstanceId = () => uuidv4()
 const createRuneNodeId = () => `rune-${uuidv4()}`
@@ -135,12 +193,9 @@ const escapeEchoAttrValue = (value = '') => String(value)
 
 const buildEchoAttrSource = ({ value = '', echoId = '', definitionId = '' } = {}) => {
   const parts = []
-  // === 字段名约定（v2026-07-30 起固定） ===
-  // 生成的 markdown 用 `echoId: 'uuid'` 而非 `id: 'uuid'`，
-  // 目的：与 rune 端的 `data-rune-id` / `data-rune-node-id` 命名风格一致；
-  // 语义上也更准确——「echo 实例 id」不是「通用 id」。
-  // 兼容性：parser 端同时识别 `id` 和 `echoId`（旧手写 markdown 不会坏）。
-  if (echoId) {
+  // === 瀛楁鍚嶇害瀹氾紙v2026-07-30 璧峰浐瀹氾級 ===
+  // 鐢熸垚鐨?markdown 鐢?`echoId: 'uuid'` 鑰岄潪 `id: 'uuid'`锛?  // 鐩殑锛氫笌 rune 绔殑 `data-rune-id` / `data-rune-node-id` 鍛藉悕椋庢牸涓€鑷达紱
+  // 璇箟涓婁篃鏇村噯纭€斺€斻€宔cho 瀹炰緥 id銆嶄笉鏄€岄€氱敤 id銆嶃€?  // 鍏煎鎬э細parser 绔悓鏃惰瘑鍒?`id` 鍜?`echoId`锛堟棫鎵嬪啓 markdown 涓嶄細鍧忥級銆?  if (echoId) {
     parts.push(`echoId: '${escapeEchoAttrValue(echoId)}'`)
   }
   if (definitionId) {
@@ -150,11 +205,11 @@ const buildEchoAttrSource = ({ value = '', echoId = '', definitionId = '' } = {}
   return parts.join(', ')
 }
 
-const buildEchoAnnotationText = (echoName = '回响', payload = '', options = {}) => {
+const buildEchoAnnotationText = (echoName = '鍥炲搷', payload = '', options = {}) => {
   const decoded = decodeEchoPayload(payload)
   const value = decoded.prompt || decoded?.props?.value || ''
-  // === echoId 优先（v2026-07-30 起固定） ===
-  // 字段名：decodeEchoPayload 出来的 payload 里 props.echoId 也优先于 props.id
+  // === echoId 浼樺厛锛坴2026-07-30 璧峰浐瀹氾級 ===
+  // 瀛楁鍚嶏細decodeEchoPayload 鍑烘潵鐨?payload 閲?props.echoId 涔熶紭鍏堜簬 props.id
   const echoId = String(options.echoId || decoded?.props?.echoId || decoded?.props?.id || '').trim() || createEchoInstanceId()
   const definitionId = String(options.definitionId || decoded?.props?.definitionId || '').trim()
   return `@${echoName}{${buildEchoAttrSource({ value, echoId, definitionId })}}()`
@@ -164,10 +219,9 @@ const createEchoInstanceId = () => uuidv4()
 const createEchoNodeId = () => `echo-${uuidv4()}`
 
 const createEchoPlaceholderMarkup = (echo = {}, options = {}) => {
-  const echoName = String(echo?.name || '回响').trim() || '回响'
-  // 「上一节点 value 继承」：默认不开启；当 echo 名片层（或调用方 options）声明 inheritFromPrevious: true 时，
-  // 从 markdown 中 currentIndex 之前最近的 echo token 提取 value 注入 placeholder。
-  const inheritEnabled = echoInheritFromPrevious(echo) || options.inheritFromPrevious === true
+  const echoName = String(echo?.name || '鍥炲搷').trim() || '鍥炲搷'
+  // 銆屼笂涓€鑺傜偣 value 缁ф壙銆嶏細榛樿涓嶅紑鍚紱褰?echo 鍚嶇墖灞傦紙鎴栬皟鐢ㄦ柟 options锛夊０鏄?inheritFromPrevious: true 鏃讹紝
+  // 浠?markdown 涓?currentIndex 涔嬪墠鏈€杩戠殑 echo token 鎻愬彇 value 娉ㄥ叆 placeholder銆?  const inheritEnabled = echoInheritFromPrevious(echo) || options.inheritFromPrevious === true
   const prevValue = inheritEnabled
     ? extractPrevEchoTokenValue(options.markdown || '', options.currentIndex, { echoName })
     : ''
@@ -178,6 +232,124 @@ const createEchoPlaceholderMarkup = (echo = {}, options = {}) => {
   return buildEchoAnnotationText(echoName, payload, {
     echoId: createEchoInstanceId(),
     definitionId: String(echo?.id || '').trim()
+  })
+}
+
+const evalRuneScript = (scriptContent = '') => {
+  const sanitized = scriptContent.replace(/export\s+default/, 'return ')
+  const factory = new Function(sanitized)
+  const result = factory()
+  return result && typeof result === 'object' ? result : {}
+}
+
+const ensureRuneStyle = (styleId, cssText) => {
+  if (!styleId || typeof document === 'undefined') return
+  let styleEl = document.getElementById(styleId)
+  if (!styleEl) {
+    styleEl = document.createElement('style')
+    styleEl.id = styleId
+    document.head.appendChild(styleEl)
+  }
+  if (styleEl.textContent !== cssText) {
+    styleEl.textContent = cssText
+  }
+}
+
+const createRuneRendererCtor = (rune = {}) => {
+  console.log('[Muya.createRuneRendererCtor] building renderer', {
+    runeId: rune?.id || '',
+    runeName: rune?.name || '',
+    rawTemplateLen: String(rune?.template || '').length,
+    rawTemplatePreview: String(rune?.template || '').substring(0, 160)
+  })
+  const { template, script, styles, hasTemplate } = normalizeRuneSfc(rune.template)
+  console.log('[Muya.createRuneRendererCtor] normalized rune sfc', {
+    runeId: rune?.id || '',
+    runeName: rune?.name || '',
+    hasTemplate,
+    normalizedTemplateLen: String(template || '').length,
+    normalizedTemplatePreview: String(template || '').substring(0, 160),
+    scriptLen: String(script || '').length,
+    stylesCount: Array.isArray(styles) ? styles.length : 0
+  })
+  if (!hasTemplate) return null
+
+  const scopeId = `data-rune-scope-${rune.id || 'default'}`
+  const styleText = styles.map(style => style.content || '').join('\n')
+  const componentOptions = evalRuneScript(script)
+  const baseData = typeof componentOptions.data === 'function' ? componentOptions.data : () => ({})
+  const declaredPropNames = Array.isArray(componentOptions.props)
+    ? componentOptions.props
+      .map(propName => String(propName || '').trim())
+      .filter(Boolean)
+    : (componentOptions.props && typeof componentOptions.props === 'object'
+      ? Object.keys(componentOptions.props)
+      : [])
+  if (!compileTemplateToFunctions) {
+    console.warn('[Muya.createRuneRendererCtor] compileToFunctions unavailable, skip renderer', {
+      runeId: rune?.id || '',
+      runeName: rune?.name || ''
+    })
+    return null
+  }
+  const compiled = compileTemplateToFunctions(injectScopedAttribute(template, scopeId))
+
+  ensureRuneStyle(`rune-style-${rune.id || 'default'}`, styleText)
+
+  return Vue.extend({
+    ...componentOptions,
+    name: componentOptions.name || 'RunePreviewRenderer',
+    props: {
+      ...(Array.isArray(componentOptions.props)
+        ? declaredPropNames.reduce((props, propName) => {
+          props[propName] = null
+          return props
+        }, {})
+        : (componentOptions.props && typeof componentOptions.props === 'object'
+          ? componentOptions.props
+          : {})),
+      ...(declaredPropNames.includes('runeId') ? {} : {
+        runeId: {
+          type: String,
+          default: ''
+        }
+      }),
+      ...(declaredPropNames.includes('nodeId') ? {} : {
+        nodeId: {
+          type: String,
+          default: ''
+        }
+      }),
+      ...(declaredPropNames.includes('rune') ? {} : {
+        rune: {
+          type: Object,
+          default: null
+        }
+      }),
+      ...(declaredPropNames.includes('value') ? {} : {
+        value: {
+          type: String,
+          default: ''
+        }
+      })
+    },
+    data () {
+      return {
+        ...baseData.call(this)
+      }
+    },
+    render (h) {
+      const vnode = compiled.render.call(this, h)
+      if (vnode && typeof vnode === 'object') {
+        const existingChildren = Array.isArray(vnode.children) ? vnode.children : []
+        if (!existingChildren.length) {
+          vnode.children = [String(this.value == null ? '' : this.value)]
+        }
+      }
+      return vnode
+    },
+    staticRenderFns: compiled.staticRenderFns,
+    _scopeId: scopeId
   })
 }
 
@@ -204,35 +376,20 @@ const RunePreviewRenderer = Vue.extend({
       type: Function,
       default: null
     }
-    // 注：SFC 自定义的 props（如 inheritFromPrevious）由 mountRuneVueHosts
-    // 通过三优先级合并写到 host.dataset，再按 Vue props 规则显式传入。
-    // 因此本渲染层不预先声明这些 prop，交给 Vue 自身的 props 解析决定要不要传。
-  },
-  // v2026-08-08 恢复老 Muya 同步形态：rune.template 在视频编辑器启动时已经决断
-  // （DB 里的 rune 卡片字符串就是 SFC），所以这里直接走同步工厂，避开 async +
-  // loading 占位卡片 的竞态。
+    // 娉細SFC 鑷畾涔夌殑 props锛堝 inheritFromPrevious锛夌敱 mountRuneVueHosts
+    // 閫氳繃涓変紭鍏堢骇鍚堝苟鍐欏埌 host.dataset锛屽啀鎸?Vue props 瑙勫垯鏄惧紡浼犲叆銆?    // 鍥犳鏈覆鏌撳眰涓嶉鍏堝０鏄庤繖浜?prop锛屼氦缁?Vue 鑷韩鐨?props 瑙ｆ瀽鍐冲畾瑕佷笉瑕佷紶銆?  },
   computed: {
     rendererCtor () {
       const rune = this.rune || {}
-      if (!String(rune.template || '').trim()) return null
-      try {
-        // createRuneRendererCtor 内部就是同步编译（cache + 首次都在微任务里同步完成）。
-        return createRuneRendererCtor(rune) || null
-      } catch (error) {
-        console.warn('[Muya.RunePreviewRenderer] SFC compile failed:', error)
-        return null
-      }
+      return createRuneRendererCtor(rune)
     }
   },
   render (h) {
     if (!this.rendererCtor) {
-      return h('div', {
-        staticClass: 'rune-renderer-empty',
-        attrs: { contenteditable: 'false' }
-      })
+      return h('div')
     }
 
-    const self = this
+    // 鎶婂唴灞?SFC 鐨?input 浜嬩欢杞彂鍒?onValueChange锛?    // 璁?RuneValue { runeId, nodeId, value } 鍥炴祦鍒?Markdown 婧愩€?    const self = this
     return h(this.rendererCtor, {
       props: {
         runeId: this.runeId,
@@ -287,7 +444,7 @@ const EchoPreviewRenderer = Vue.extend({
   },
   computed: {
     displayTitle () {
-      return this.echo?.name || '回响'
+      return this.echo?.name || '鍥炲搷'
     },
     displaySummary () {
       const raw = this.value || this.echo?.desc || ''
@@ -398,8 +555,7 @@ export default {
       firstTimeLoad: false,
       previousNoteInfo: null,
       previousResources: [],
-      pendingSaveData: null, // 编辑变化时预捕获的数据（备用）
-      echoRegistry: new EchoRegistry([])
+      pendingSaveData: null, // 缂栬緫鍙樺寲鏃堕鎹曡幏鐨勬暟鎹紙澶囩敤锛?      echoRegistry: new EchoRegistry([])
     }
   },
   computed: {
@@ -414,9 +570,7 @@ export default {
       'theme',
       'runeCards',
       'echoCards',
-      // v2026-07-31：监听 vuex 内 echoRequireParens / runeRequireTemplateDiv 变化，
-      // 触发 inlineRules.echo_anno 实时切换（无需重启 Muya）。
-      'echoRequireParens',
+      // v2026-07-31锛氱洃鍚?vuex 鍐?echoRequireParens / runeRequireTemplateDiv 鍙樺寲锛?      // 瑙﹀彂 inlineRules.echo_anno 瀹炴椂鍒囨崲锛堟棤闇€閲嶅惎 Muya锛夈€?      'echoRequireParens',
       'runeRequireTemplateDiv'
     ])
   },
@@ -472,7 +626,7 @@ export default {
         if (!isAnonymous && !normalizedEchoId && echoName && currentName !== echoName) return match
         updated = true
         const resolvedEchoId = normalizedEchoId || matchedId || String(propsFromPayload?.id || '').trim() || createEchoInstanceId()
-        return buildEchoAnnotationText(currentName || '回响', nextPayload, {
+        return buildEchoAnnotationText(currentName || '鍥炲搷', nextPayload, {
           echoId: resolvedEchoId,
           definitionId: String(props.definitionId || normalizedDefinitionId || '').trim()
         })
@@ -485,8 +639,7 @@ export default {
       this.updateNoteState('changed')
       return true
     },
-    // lucky 全局回调：@强运() 点击后真正调 AI 校对。
-    // 入参由 EchoRuntime 在 handler 内传 {node, props}
+    // lucky 鍏ㄥ眬鍥炶皟锛欯寮鸿繍() 鐐瑰嚮鍚庣湡姝ｈ皟 AI 鏍″銆?    // 鍏ュ弬鐢?EchoRuntime 鍦?handler 鍐呬紶 {node, props}
     async handleLuckyChantTrigger ({ node, props = {} } = {}) {
       try {
         if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return
@@ -507,13 +660,13 @@ export default {
             this.$q && this.$q.notify && this.$q.notify({ message: this.$t('aiLuckyNoChange'), type: 'info', position: 'top' })
             return
           }
-          // 替换当前笔记内容
+          // 鏇挎崲褰撳墠绗旇鍐呭
           const cursor = typeof this.contentEditor.getCursor === 'function' ? this.contentEditor.getCursor() : null
           this.contentEditor.setMarkdown(result.corrected, cursor, false)
           this.updateContentsList(this.contentEditor.getTOC())
           this.updateNoteState('changed')
           this.$q && this.$q.notify && this.$q.notify({
-            message: this.$t('aiLuckyDone') + `（model=${result.model}）`,
+            message: this.$t('aiLuckyDone') + `锛坢odel=${result.model}锛塦,
             type: 'positive',
             position: 'top'
           })
@@ -537,7 +690,7 @@ export default {
     },
     refreshEchoDefinitions () {
       this.echoRegistry.refresh(this.echoCards || [])
-      // 让 runtime 实例保持与 registry 一致；新增/删除 echo 后让旧的 compiled definition 缓存失效
+      // 璁?runtime 瀹炰緥淇濇寔涓?registry 涓€鑷达紱鏂板/鍒犻櫎 echo 鍚庤鏃х殑 compiled definition 缂撳瓨澶辨晥
       if (!this._echoRuntime) {
         this._echoRuntime = new EchoRuntime({ registry: this.echoRegistry })
       }
@@ -561,10 +714,7 @@ export default {
       }
     },
     /**
-     * 把符文占位符里的 value 写回 Markdown 源（同步 data-rune-value 与 innerText）。
-     * 取自 TODO「多符文渲染引擎机制」中 RuneValue { runeId, nodeId, value }，
-     * 通过 nodeId 精准定位，只动当前实例的占位符，不影响其他符文或外部段落。
-     */
+     * 鎶婄鏂囧崰浣嶇閲岀殑 value 鍐欏洖 Markdown 婧愶紙鍚屾 data-rune-value 涓?innerText锛夈€?     * 鍙栬嚜 TODO銆屽绗︽枃娓叉煋寮曟搸鏈哄埗銆嶄腑 RuneValue { runeId, nodeId, value }锛?     * 閫氳繃 nodeId 绮惧噯瀹氫綅锛屽彧鍔ㄥ綋鍓嶅疄渚嬬殑鍗犱綅绗︼紝涓嶅奖鍝嶅叾浠栫鏂囨垨澶栭儴娈佃惤銆?     */
     updateRunePlaceholderValue ({ runeId = '', nodeId = '', value = '' } = {}) {
       if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return false
       const markdown = this.contentEditor.getMarkdown()
@@ -577,7 +727,7 @@ export default {
       this.contentEditor.setMarkdown(nextMarkdown, cursor, false)
       this.updateContentsList(this.contentEditor.getTOC())
       this.updateNoteState('changed')
-      // 显式触发 input 事件以让 noteState watcher / 词数统计等下游感知到
+      // 鏄惧紡瑙﹀彂 input 浜嬩欢浠ヨ noteState watcher / 璇嶆暟缁熻绛変笅娓告劅鐭ュ埌
       this.contentEditor.dispatchEvent && this.contentEditor.dispatchEvent('change')
       if (typeof this.contentEditor.dispatchChange === 'function') {
         this.contentEditor.dispatchChange()
@@ -585,9 +735,7 @@ export default {
       return true
     },
     /**
-     * 仅供 updateRunePlaceholderValue 兜底用：根据 runeId 找一个未指定 nodeId 的占位符。
-     * 一般调用方都会带 nodeId，这里仅作防御。
-     */
+     * 浠呬緵 updateRunePlaceholderValue 鍏滃簳鐢細鏍规嵁 runeId 鎵句竴涓湭鎸囧畾 nodeId 鐨勫崰浣嶇銆?     * 涓€鑸皟鐢ㄦ柟閮戒細甯?nodeId锛岃繖閲屼粎浣滈槻寰°€?     */
     findRunePlaceholderNodeIdByRuneInstance (markdown = '', runeId = '') {
       const targetRuneId = String(runeId || '').trim()
       if (!targetRuneId) return ''
@@ -609,7 +757,7 @@ export default {
       }
       return this.contentEditor.getMarkdown()
     },
-    // ✅ 新增：主动捕获当前编辑器内容（供外部调用，如切换笔记前）
+    // 鉁?鏂板锛氫富鍔ㄦ崟鑾峰綋鍓嶇紪杈戝櫒鍐呭锛堜緵澶栭儴璋冪敤锛屽鍒囨崲绗旇鍓嶏級
     captureCurrentContent: function () {
       if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return null
 
@@ -627,8 +775,7 @@ export default {
         noteState: this.noteState
       }
 
-      // 更新待保存数据（供 watcher 使用）
-      this.pendingSaveData = captureData
+      // 鏇存柊寰呬繚瀛樻暟鎹紙渚?watcher 浣跨敤锛?      this.pendingSaveData = captureData
 
       console.log(`[Muya.captureCurrentContent] Captured: docGuid=${captureData.docGuid}, len=${markdown.length}, state=${this.noteState}`)
 
@@ -646,9 +793,7 @@ export default {
       }
     },
     /**
-     * 插入文本到编辑器末尾（用于从夯到拉回填 / AI 助手追加）
-     * 仅在 Muya 是当前激活编辑器时执行，避免 Muya/Monaco 同时挂载时双写。
-     */
+     * 鎻掑叆鏂囨湰鍒扮紪杈戝櫒鏈熬锛堢敤浜庝粠澶埌鎷夊洖濉?/ AI 鍔╂墜杩藉姞锛?     * 浠呭湪 Muya 鏄綋鍓嶆縺娲荤紪杈戝櫒鏃舵墽琛岋紝閬垮厤 Muya/Monaco 鍚屾椂鎸傝浇鏃跺弻鍐欍€?     */
     insertTextHandler: function (text) {
       if (!this.active) return
       if (!text || !this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') return
@@ -766,9 +911,7 @@ export default {
     ...mapServerActions(['updateNote', 'updateNoteWithInfo', 'updateNoteState', 'updateContentsList', 'uploadImage']),
     ...mapClientActions([
       'importImageFromLocal',
-      // v2026-07-31：created() 内会 dispatch loadParsingSettings，
-      // 从 SQLite 真源拉一次 echoRequireParens / runeRequireTemplateDiv 到 vuex。
-      'loadParsingSettings'
+      // v2026-07-31锛歝reated() 鍐呬細 dispatch loadParsingSettings锛?      // 浠?SQLite 鐪熸簮鎷変竴娆?echoRequireParens / runeRequireTemplateDiv 鍒?vuex銆?      'loadParsingSettings'
     ])
   },
   created () {
@@ -790,56 +933,37 @@ export default {
       Muya.use(Transformer)
       Muya.use(TableBarTools)
 
-      // v2026-07-31：启动时从 SQLite 真源拉取「语法解析」开关到 vuex。
-      // 注意：Muya 不再读 options.echoAnnoRule，规则切换由 setEchoAnnoRule 这一
-      // 个口子 mutate inlineRules.echo_anno 实现（coolma-muya 是本地软链接，
-      // 直接改 parser 源码，详见 _plugins/coolma-muya/lib/parser/index.js 的
-      // setEchoAnnoRule 注释）。
-      // 流程：
-      //   1) 同步分支：上方的 setEchoAnnoRule({ requireParens: this.echoRequireParens })
-      //      用 vuex 初始值（默认 true）覆盖一次 inlineRules.echo_anno；
-      //   2) 异步分支：dispatch loadParsingSettings 拉 SQLite 真值并 commit vuex；
-      //      commit 后 echoRequireParens watcher 会再次 setEchoAnnoRule 并触发
-      //      contentState.render(false, true) 全量重 render——首屏 retry 即生效。
-      this.loadParsingSettings().catch(err => {
+      // v2026-07-31锛氬惎鍔ㄦ椂浠?SQLite 鐪熸簮鎷夊彇銆岃娉曡В鏋愩€嶅紑鍏冲埌 vuex銆?      // 娉ㄦ剰锛歁uya 涓嶅啀璇?options.echoAnnoRule锛岃鍒欏垏鎹㈢敱 setEchoAnnoRule 杩欎竴
+      // 涓彛瀛?mutate inlineRules.echo_anno 瀹炵幇锛坈oolma-muya 鏄湰鍦拌蒋閾炬帴锛?      // 鐩存帴鏀?parser 婧愮爜锛岃瑙?_plugins/coolma-muya/lib/parser/index.js 鐨?      // setEchoAnnoRule 娉ㄩ噴锛夈€?      // 娴佺▼锛?      //   1) 鍚屾鍒嗘敮锛氫笂鏂圭殑 setEchoAnnoRule({ requireParens: this.echoRequireParens })
+      //      鐢?vuex 鍒濆鍊硷紙榛樿 true锛夎鐩栦竴娆?inlineRules.echo_anno锛?      //   2) 寮傛鍒嗘敮锛歞ispatch loadParsingSettings 鎷?SQLite 鐪熷€煎苟 commit vuex锛?      //      commit 鍚?echoRequireParens watcher 浼氬啀娆?setEchoAnnoRule 骞惰Е鍙?      //      contentState.render(false, true) 鍏ㄩ噺閲?render鈥斺€旈灞?retry 鍗崇敓鏁堛€?      this.loadParsingSettings().catch(err => {
         console.warn('[Muya] loadParsingSettings dispatch failed:', err)
       })
 
       this.echoRegistry.refresh(this.echoCards || [])
       this._echoRuntime = new EchoRuntime({ registry: this.echoRegistry })
 
-      // 注册全局 lucky 回调：@强运 点击后真正调 AI 校对。
-      if (typeof window !== 'undefined') {
+      // 娉ㄥ唽鍏ㄥ眬 lucky 鍥炶皟锛欯寮鸿繍 鐐瑰嚮鍚庣湡姝ｈ皟 AI 鏍″銆?      if (typeof window !== 'undefined') {
         window.__memocastEchoChantHandlers = Object.assign(window.__memocastEchoChantHandlers || {}, {
           lucky: this.handleLuckyChantTrigger.bind(this)
         })
       }
 
-      // === v2026-07-31 新增：「语法解析 / echoRequireParens」开关同步到 Muya parser ===
-      // 唯一入口：setEchoAnnoRule({ requireParens })，直接 mutate
-      // _plugins/coolma-muya/lib/parser/rules.js 导出的 inlineRules.echo_anno 引用。
-      // 与 plugin-vue-version.mdc + rune-echo-cloudfn-experimental.mdc 的
-      // 「coolma-muya 是本地软链接，直接改源码让规则实时生效」口径一致。
-      //
-      // 数据流：
-      //   SQLite 真源('setting/parsing/echoRequireParens')
-      //     → vuex state.echoRequireParens (响应式 cache)
-      //     → setEchoAnnoRule(...) 替换 inlineRules.echo_anno
-      //     → 后续所有 token 化路径（backspaceCtrl / deleteCtrl / inputCtrl / formatCtrl /
-      //        enterCtrl / renderLeafBlock / importMarkdown / hasEchoInlineToken / ...）
-      //        都会自动拿到新 RE（都闭包引用 inlineRules.echo_anno）
-      //     → 调用方再触发一次 contentState.render(false, true) 把已解析的 block 也重切
-      //
-      // created() 阶段做两件事：
-      //   1) 同步先按 vuex mapState 的 echoRequireParens（初始默认 true）setEchoAnnoRule
-      //      一次，确保 inlineRules.echo_anno 在 new Muya() 之前就已是正确形态；
-      //   2) dispatch loadParsingSettings 异步拉真值 → 回填 vuex → watcher 触发自动刷新
-      //      （窗口内的 race 用 1+2 双层解决：开门先开灶，发现值变了再补开）。
-      const requireParensAtBoot = this.echoRequireParens !== undefined ? this.echoRequireParens : true
+      // === v2026-07-31 鏂板锛氥€岃娉曡В鏋?/ echoRequireParens銆嶅紑鍏冲悓姝ュ埌 Muya parser ===
+      // 鍞竴鍏ュ彛锛歴etEchoAnnoRule({ requireParens })锛岀洿鎺?mutate
+      // _plugins/coolma-muya/lib/parser/rules.js 瀵煎嚭鐨?inlineRules.echo_anno 寮曠敤銆?      // 涓?plugin-vue-version.mdc + rune-echo-cloudfn-experimental.mdc 鐨?      // 銆宑oolma-muya 鏄湰鍦拌蒋閾炬帴锛岀洿鎺ユ敼婧愮爜璁╄鍒欏疄鏃剁敓鏁堛€嶅彛寰勪竴鑷淬€?      //
+      // 鏁版嵁娴侊細
+      //   SQLite 鐪熸簮('setting/parsing/echoRequireParens')
+      //     鈫?vuex state.echoRequireParens (鍝嶅簲寮?cache)
+      //     鈫?setEchoAnnoRule(...) 鏇挎崲 inlineRules.echo_anno
+      //     鈫?鍚庣画鎵€鏈?token 鍖栬矾寰勶紙backspaceCtrl / deleteCtrl / inputCtrl / formatCtrl /
+      //        enterCtrl / renderLeafBlock / importMarkdown / hasEchoInlineToken / ...锛?      //        閮戒細鑷姩鎷垮埌鏂?RE锛堥兘闂寘寮曠敤 inlineRules.echo_anno锛?      //     鈫?璋冪敤鏂瑰啀瑙﹀彂涓€娆?contentState.render(false, true) 鎶婂凡瑙ｆ瀽鐨?block 涔熼噸鍒?      //
+      // created() 闃舵鍋氫袱浠朵簨锛?      //   1) 鍚屾鍏堟寜 vuex mapState 鐨?echoRequireParens锛堝垵濮嬮粯璁?true锛塻etEchoAnnoRule
+      //      涓€娆★紝纭繚 inlineRules.echo_anno 鍦?new Muya() 涔嬪墠灏卞凡鏄纭舰鎬侊紱
+      //   2) dispatch loadParsingSettings 寮傛鎷夌湡鍊?鈫?鍥炲～ vuex 鈫?watcher 瑙﹀彂鑷姩鍒锋柊
+      //      锛堢獥鍙ｅ唴鐨?race 鐢?1+2 鍙屽眰瑙ｅ喅锛氬紑闂ㄥ厛寮€鐏讹紝鍙戠幇鍊煎彉浜嗗啀琛ュ紑锛夈€?      const requireParensAtBoot = this.echoRequireParens !== undefined ? this.echoRequireParens : true
       setEchoAnnoRule({ requireParens: !!requireParensAtBoot })
 
-      // 把 Vue 实例注入 Muya options，让 Muya 内部的 StateRender 能回调到我们的回写方法
-      const muyaSelf = this
+      // 鎶?Vue 瀹炰緥娉ㄥ叆 Muya options锛岃 Muya 鍐呴儴鐨?StateRender 鑳藉洖璋冨埌鎴戜滑鐨勫洖鍐欐柟娉?      const muyaSelf = this
       const { container } = this.contentEditor = new Muya(this.$refs.muya, {
         memoMuya: muyaSelf,
         echoRuntime: this._echoRuntime,
@@ -871,13 +995,13 @@ export default {
               subTitle: () => echo.desc || '',
               label: `echo:${echo.id || echo.name}`,
               shortCut: '',
-              icon: `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="${echo.color || '#26A69A'}"/><text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-size="28" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Arial,PingFang SC,Microsoft YaHei,sans-serif" font-weight="700" fill="#fff">${Array.from(String(echo.name || '回').trim())[0] || '回'}</text></svg>`)))}`,
+              icon: `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="${echo.color || '#26A69A'}"/><text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-size="28" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Arial,PingFang SC,Microsoft YaHei,sans-serif" font-weight="700" fill="#fff">${Array.from(String(echo.name || '鍥?).trim())[0] || '鍥?}</text></svg>`)))}`,
               color: echo.color || '#26A69A',
               searchText: [echo.name, echo.desc, echo.anno_source].filter(Boolean).join(' '),
-              insertContent: `@${echo.name || '回响'}{}()`,
+              insertContent: `@${echo.name || '鍥炲搷'}{}()`,
               meta: {
                 type: 'echo',
-                echoName: (echo.name || '回响').trim(),
+                echoName: (echo.name || '鍥炲搷').trim(),
                 color: echo.color || '#26A69A'
               }
             }))
@@ -899,7 +1023,7 @@ export default {
         runeRendererCtor: RunePreviewRenderer,
         echoRendererCtor: EchoPlaceholderHost,
         enableRuneVueRenderer: true,
-        enableEchoVueRenderer: false, // Echo 默认不使用 Vue 渲染模式
+        enableEchoVueRenderer: false, // Echo 榛樿涓嶄娇鐢?Vue 娓叉煋妯″紡
         onEchoPlaceholderCommit: this.updateEchoPlaceholderPayload,
         imagePathPicker: () => {
           return new Promise((resolve, reject) => {
@@ -921,8 +1045,7 @@ export default {
         if (event?.target?.type === 'checkbox') {
           const curData = this.contentEditor.getMarkdown()
 
-          // ✅ 兼容新格式：提取 currentNote 的真实内容
-          let currentNoteContent = ''
+          // 鉁?鍏煎鏂版牸寮忥細鎻愬彇 currentNote 鐨勭湡瀹炲唴瀹?          let currentNoteContent = ''
           if (typeof this.currentNote === 'string') {
             currentNoteContent = this.currentNote || ''
           } else if (this.currentNote && typeof this.currentNote === 'object') {
@@ -940,16 +1063,11 @@ export default {
       }, 800)
 
       this.contentEditor.on('muya-click', (event) => {
-        // 非 echo 路径（checkbox / 表格 / container 等）继续走 800ms debounce，
-        // 避免连续 click 频繁触发 noteState 切换。
-        // echo 占位符点击走 jQuery 委托（见下面的 $(container).on('click', ...)），
-        // 委托直接挂在 Muya 容器 DOM 上，不依赖 eventCenter 链路，链路更短、更可靠。
-        handleNonEchoClick(event)
+        // 闈?echo 璺緞锛坈heckbox / 琛ㄦ牸 / container 绛夛級缁х画璧?800ms debounce锛?        // 閬垮厤杩炵画 click 棰戠箒瑙﹀彂 noteState 鍒囨崲銆?        // echo 鍗犱綅绗︾偣鍑昏蛋 jQuery 濮旀墭锛堣涓嬮潰鐨?$(container).on('click', ...)锛夛紝
+        // 濮旀墭鐩存帴鎸傚湪 Muya 瀹瑰櫒 DOM 涓婏紝涓嶄緷璧?eventCenter 閾捐矾锛岄摼璺洿鐭€佹洿鍙潬銆?        handleNonEchoClick(event)
       })
 
-      // echo 占位符点击：document 级 capture，最稳的捕获。
-// 不挂 container（会被 Muya 重建），用 closest('[data-echo-inline="true"]') 锁定 echo host。
-const echoCaptureHandler = (event) => {
+      // echo 鍗犱綅绗︾偣鍑伙細document 绾?capture锛屾渶绋崇殑鎹曡幏銆?// 涓嶆寕 container锛堜細琚?Muya 閲嶅缓锛夛紝鐢?closest('[data-echo-inline="true"]') 閿佸畾 echo host銆?const echoCaptureHandler = (event) => {
   const targetEl = event?.target
   if (!targetEl || typeof targetEl.closest !== 'function') return
   const echoTarget = targetEl.closest('[data-echo-inline="true"]')
@@ -997,18 +1115,17 @@ this._echoDelegate = { container: document, handler: echoCaptureHandler }
       })
 
       this.contentEditor.on('change', _.debounce(({ markdown: curData }) => {
-        // ✅ 兼容新格式：currentNote 可能是字符串或对象
-        let currentNoteContent = ''
+        // 鉁?鍏煎鏂版牸寮忥細currentNote 鍙兘鏄瓧绗︿覆鎴栧璞?        let currentNoteContent = ''
 
         if (typeof this.currentNote === 'string') {
-          // 旧格式：直接是字符串
+          // 鏃ф牸寮忥細鐩存帴鏄瓧绗︿覆
           currentNoteContent = this.currentNote || ''
         } else if (this.currentNote && typeof this.currentNote === 'object') {
-          // 新格式：提取 __markdown 字段
+          // 鏂版牸寮忥細鎻愬彇 __markdown 瀛楁
           currentNoteContent = this.currentNote.__markdown || ''
         }
 
-        // ✅ 使用提取后的内容进行比较
+        // 鉁?浣跨敤鎻愬彇鍚庣殑鍐呭杩涜姣旇緝
         if (curData.replace(/\s/g, '') === currentNoteContent.replace(/\s/g, '') || this.noteState === 'none' || this.firstTimeLoad) {
           this.updateNoteState('default')
           this.firstTimeLoad = false
@@ -1016,9 +1133,8 @@ this._echoDelegate = { container: document, handler: echoCaptureHandler }
           this.updateNoteState('changed')
           this.updateContentsList(this.contentEditor.getTOC())
 
-          // ✅ 关键改进：在内容变化时立即预捕获数据
-          // 这样当后续切换笔记时，已经有可靠的数据可以保存
-          const currentNote = this.$store.state.server.currentNote
+          // 鉁?鍏抽敭鏀硅繘锛氬湪鍐呭鍙樺寲鏃剁珛鍗抽鎹曡幏鏁版嵁
+          // 杩欐牱褰撳悗缁垏鎹㈢瑪璁版椂锛屽凡缁忔湁鍙潬鐨勬暟鎹彲浠ヤ繚瀛?          const currentNote = this.$store.state.server.currentNote
           if (currentNote?.info) {
             this.pendingSaveData = {
               markdown: curData,
@@ -1078,33 +1194,28 @@ this._echoDelegate = { container: document, handler: echoCaptureHandler }
     appBus.$off(appEvents.ECHO_EVENTS.openInstanceEditor)
     appBus.$off(appEvents.INSERT_TEXT)
     appBus.$off(appEvents.INSERT_AI_TEXT)
-    // 卸载 document 级 click listener
+    // 鍗歌浇 document 绾?click listener
     if (this._echoDelegate && this._echoDelegate.container) {
       this._echoDelegate.container.removeEventListener('click', this._echoDelegate.handler, true)
       this._echoDelegate = null
     }
   },
   watch: {
-    // v2026-07-31 新增：SettingsDialog 切换 echoRequireParens 后，无需重启编辑器即可让
-    // Muya parser 把回响占位符解析规则切到新的形态：
-    //   - true（默认）→ () 必填，@name{} / @name 不命中 echo_anno
-    //   - false         → () 可选，@name{} / @name 也命中 echo_anno（兼容历史笔记）
-    // 实现：
-    //   - setEchoAnnoRule() mutate 全局 inlineRules.echo_anno，让后续 tokenizer() 走新 RE
-    //     （parser/index.js 的默认合成路径会优先用 options.echoAnnoRule，但有很多
-    //     contentState 子模块直接闭包引用 inlineRules，所以也要 mutate 引用）。
-    //   - contentState.render(false, true) 强制重 render 所有 block，把已解析的 token
-    //     全部按新规则重切。
-    // 守卫：contentEditor 未就绪时跳过（created() 阶段已经处理过初始值）。
-    echoRequireParens (requireParens) {
+    // v2026-07-31 鏂板锛歋ettingsDialog 鍒囨崲 echoRequireParens 鍚庯紝鏃犻渶閲嶅惎缂栬緫鍣ㄥ嵆鍙
+    // Muya parser 鎶婂洖鍝嶅崰浣嶇瑙ｆ瀽瑙勫垯鍒囧埌鏂扮殑褰㈡€侊細
+    //   - true锛堥粯璁わ級鈫?() 蹇呭～锛孈name{} / @name 涓嶅懡涓?echo_anno
+    //   - false         鈫?() 鍙€夛紝@name{} / @name 涔熷懡涓?echo_anno锛堝吋瀹瑰巻鍙茬瑪璁帮級
+    // 瀹炵幇锛?    //   - setEchoAnnoRule() mutate 鍏ㄥ眬 inlineRules.echo_anno锛岃鍚庣画 tokenizer() 璧版柊 RE
+    //     锛坧arser/index.js 鐨勯粯璁ゅ悎鎴愯矾寰勪細浼樺厛鐢?options.echoAnnoRule锛屼絾鏈夊緢澶?    //     contentState 瀛愭ā鍧楃洿鎺ラ棴鍖呭紩鐢?inlineRules锛屾墍浠ヤ篃瑕?mutate 寮曠敤锛夈€?    //   - contentState.render(false, true) 寮哄埗閲?render 鎵€鏈?block锛屾妸宸茶В鏋愮殑 token
+    //     鍏ㄩ儴鎸夋柊瑙勫垯閲嶅垏銆?    // 瀹堝崼锛歝ontentEditor 鏈氨缁椂璺宠繃锛坈reated() 闃舵宸茬粡澶勭悊杩囧垵濮嬪€硷級銆?    echoRequireParens (requireParens) {
       if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') {
         console.log('[Muya watcher] echoRequireParens changed before contentEditor ready, deferring')
         return
       }
       const next = !!requireParens
       const replaced = setEchoAnnoRule({ requireParens: next })
-      console.log(`[Muya watcher] ⚡ echoRequireParens → ${next}, inlineRules.echo_anno replaced:`, String(replaced))
-      // 同步生效到已渲染 block
+      console.log(`[Muya watcher] 鈿?echoRequireParens 鈫?${next}, inlineRules.echo_anno replaced:`, String(replaced))
+      // 鍚屾鐢熸晥鍒板凡娓叉煋 block
       try {
         if (this.contentEditor.contentState && typeof this.contentEditor.contentState.render === 'function') {
           this.contentEditor.contentState.render(false, true)
@@ -1115,72 +1226,68 @@ this._echoDelegate = { container: document, handler: echoCaptureHandler }
     },
     currentNote: function (currentData) {
       if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') {
-        console.warn('[Muya watcher] ⚠️ contentEditor not ready, skipping')
+        console.warn('[Muya watcher] 鈿狅笍 contentEditor not ready, skipping')
         return
       }
 
-      console.log(`\n[Muya watcher] ⚡ FIRED! type: ${typeof currentData}`)
+      console.log(`\n[Muya watcher] 鈿?FIRED! type: ${typeof currentData}`)
       console.log(`[Muya watcher] Previous note: ${this.previousNoteInfo?.docGuid}, New note expected from store`)
 
-      // ✅ 解析新格式：支持字符串和对象两种格式
+      // 鉁?瑙ｆ瀽鏂版牸寮忥細鏀寔瀛楃涓插拰瀵硅薄涓ょ鏍煎紡
       let markdownContent = ''
       let docGuid = null
 
       if (typeof currentData === 'string') {
-        // 旧格式：直接是 markdown 字符串
-        markdownContent = currentData || ''
-        console.log(`[Muya watcher] 📄 String format, len=${markdownContent.length}`)
+        // 鏃ф牸寮忥細鐩存帴鏄?markdown 瀛楃涓?        markdownContent = currentData || ''
+        console.log(`[Muya watcher] 馃搫 String format, len=${markdownContent.length}`)
       } else if (currentData && typeof currentData === 'object') {
-        // 新格式：包含 __markdown 和元数据的对象
-        markdownContent = currentData.__markdown || ''
+        // 鏂版牸寮忥細鍖呭惈 __markdown 鍜屽厓鏁版嵁鐨勫璞?        markdownContent = currentData.__markdown || ''
         docGuid = currentData.__docGuid || null
 
-        console.log(`[Muya watcher] 📦 Object format:`)
+        console.log(`[Muya watcher] 馃摝 Object format:`)
         console.log(`[Muya watcher]   - markdown len=${markdownContent.length}`)
         console.log(`[Muya watcher]   - timestamp=${currentData.__timestamp}`)
         console.log(`[Muya watcher]   - docGuid=${docGuid}`)
         console.log(`[Muya watcher]   - isEmpty=${currentData.isEmpty}`)
 
         if (currentData.isEmpty) {
-          console.log(`[Muya watcher] ℹ️ Content is empty, will show blank editor`)
+          console.log(`[Muya watcher] 鈩癸笍 Content is empty, will show blank editor`)
         }
       } else {
-        // 异常情况：既不是字符串也不是对象
-        console.warn('[Muya watcher] ⚠️ Unexpected data type, clearing editor')
+        // 寮傚父鎯呭喌锛氭棦涓嶆槸瀛楃涓蹭篃涓嶆槸瀵硅薄
+        console.warn('[Muya watcher] 鈿狅笍 Unexpected data type, clearing editor')
         markdownContent = ''
       }
 
       console.log(`[Muya watcher] Preview: ${JSON.stringify((markdownContent || '').substring(0, 120))}`)
 
-      // ✅ 核心逻辑：加载内容到编辑器（即使是空字符串也要更新！）
-      clearEditorHistory(this.contentEditor)
+      // 鉁?鏍稿績閫昏緫锛氬姞杞藉唴瀹瑰埌缂栬緫鍣紙鍗充娇鏄┖瀛楃涓蹭篃瑕佹洿鏂帮紒锛?      clearEditorHistory(this.contentEditor)
       try {
         this.contentEditor.focus()
-        console.log(`[Muya watcher] 📝 Loading into editor: len=${markdownContent.length}`)
+        console.log(`[Muya watcher] 馃摑 Loading into editor: len=${markdownContent.length}`)
 
-        // ✅ 强制设置内容（空字符串也是有效内容，会清空编辑器）
-        this.contentEditor.setMarkdown(markdownContent)
+        // 鉁?寮哄埗璁剧疆鍐呭锛堢┖瀛楃涓蹭篃鏄湁鏁堝唴瀹癸紝浼氭竻绌虹紪杈戝櫒锛?        this.contentEditor.setMarkdown(markdownContent)
 
         this.firstTimeLoad = true
         this.updateContentsList(this.contentEditor.getTOC())
 
-        // 清除旧的待保存数据（新笔记开始编辑）
+        // 娓呴櫎鏃х殑寰呬繚瀛樻暟鎹紙鏂扮瑪璁板紑濮嬬紪杈戯級
         this.pendingSaveData = null
 
-        console.log(`[Muya watcher] ✅ Done! Editor now has content (len=${markdownContent.length})\n`)
+        console.log(`[Muya watcher] 鉁?Done! Editor now has content (len=${markdownContent.length})\n`)
 
       } catch (e) {
         if (e.message.indexOf('Md2V') !== -1) return
         debugLogger.Error(e, e.message)
-        console.error('[Muya watcher] ❌ Error loading content:', e)
+        console.error('[Muya watcher] 鉂?Error loading content:', e)
       }
 
-      // 在下一个 tick 更新 previousNoteInfo
+      // 鍦ㄤ笅涓€涓?tick 鏇存柊 previousNoteInfo
       this.$nextTick(() => {
         const currentNote = this.$store.state.server.currentNote
         this.previousNoteInfo = currentNote?.info || null
         this.previousResources = currentNote?.resources || []
-        console.log(`[Muya watcher] 📌 Updated previousNoteInfo to: ${currentNote?.info?.docGuid}`)
+        console.log(`[Muya watcher] 馃搶 Updated previousNoteInfo to: ${currentNote?.info?.docGuid}`)
       })
     },
     theme: function (t) {
@@ -1419,47 +1526,5 @@ this._echoDelegate = { container: document, handler: echoCaptureHandler }
   line-height: 1.4;
   opacity: 0.72;
   word-break: break-word;
-}
-
-/* 符文 SFC 异步编译过渡态（与 .ag-rune-placeholder-host 形态保持一致，避免抖动） */
-.rune-renderer-loading,
-.rune-renderer-empty,
-.rune-renderer-error {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 56px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  box-sizing: border-box;
-  font-size: 13px;
-  line-height: 1.4;
-  border: 1px dashed rgba(126, 87, 194, 0.28);
-  background: linear-gradient(180deg, rgba(126, 87, 194, 0.06), rgba(126, 87, 194, 0.02));
-  color: rgba(126, 87, 194, 0.78);
-  user-select: none;
-}
-
-.rune-renderer-loading::before {
-  content: '';
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  margin-right: 8px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  animation: rune-renderer-spin 0.8s linear infinite;
-}
-
-@keyframes rune-renderer-spin {
-  to { transform: rotate(360deg); }
-}
-
-.rune-renderer-error {
-  border-color: rgba(229, 57, 53, 0.32);
-  background: linear-gradient(180deg, rgba(229, 57, 53, 0.08), rgba(229, 57, 53, 0.02));
-  color: rgba(229, 57, 53, 0.92);
-  border-style: solid;
 }
 </style>

@@ -41,10 +41,16 @@
     <CategoryDialog ref='categoryDialog' :note-info='rightClickNoteItem' :label='categoryDialogLabel'
                     :handler='categoryDialogHandler' />
     <rankingTierDialog ref="tierRankingDialog" />
-    <!-- 全屏透明删除效果 overlay（wujie 子应用），右键删除文件夹时弹。
-         v2026-08-08 起：通过 appEntry prop 传入内置微应用条目，url / enabled 来自微应用列表。
-         删除特效 = displayMode=fullscreen 的内置条目 echo-monster-deleter。 -->
-    <deleteEffectOverlay ref='deleteEffectOverlay' :app-entry='echoMonsterEntry' />
+    <!--
+      全屏透明 wujie 子应用壳（generic 版）。
+      appEntry 是「当前微应用列表里 displayMode=fullscreen 的某个内置条目」，
+      由 mounted 时 deleteEffectBuiltinHook._findBuiltinEntry() 异步加载，
+      通过 bus 'microAppsChanged' 实时刷新。
+      若列表里没有内置条目 / enabled=false，overlay.wujieUrl 回退到空字符串 → wujie 不挂载。
+      下架任意全屏业务：删除对应子项目目录 + 删除 components/microApp/builtins/<name>.js 的
+      install 调用 + 在 boot/microapp-builtins.js 注释掉对应注册行，主项目其它代码完全不动。
+    -->
+    <fullscreenOverlay ref='fullscreenOverlay' :app-entry='fullscreenAppEntry' />
   </div>
 </template>
 
@@ -52,9 +58,8 @@
 import NoteItem from './NoteItem.vue'
 import CategoryDialog from '../category/CategoryDialog.vue'
 import rankingTierDialog from '../ranking/rankingTierDialog.vue'
-import deleteEffectOverlay from '../microApp/deleteEffectOverlay.vue'
+import fullscreenOverlay from '../microApp/fullscreenOverlay.vue'
 import DatabaseClient from 'src/utils/DatabaseClient'
-import { normalizeMicroApps, BUILTIN_ECHO_MONSTER_DELETER_ID } from '../microApp/microAppService.js'
 import { createNamespacedHelpers } from 'vuex'
 import { Loading, QSpinnerGears } from 'quasar'
 import LoadingComponent from '../common/Loading.vue'
@@ -62,23 +67,30 @@ import helper from 'src/utils/helper'
 import bus from '../common/bus.js'
 import { EVENTS as events } from 'src/utils/const/eventsConst'
 import { showContextMenu as showNoteItemContextMenu } from 'src/components/contextMenu/noteList'
+import {
+  installDeleteEffectConfirmHook,
+  DELETE_EFFECT_APP_ID
+} from '../microApp/builtins/deleteEffect.js'
+
 const { mapGetters: mapServerGetters, mapState: mapServerState, mapActions: mapServerActions } = createNamespacedHelpers('server')
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 export default {
   name: 'NoteList',
-    components: { Loading, NoteItem, CategoryDialog, rankingTierDialog, Loading: LoadingComponent, deleteEffectOverlay },
+  components: { Loading, NoteItem, CategoryDialog, rankingTierDialog, Loading: LoadingComponent, fullscreenOverlay },
+  // 业务「删除确认」hook：从 builtins/deleteEffect.js 注入（默认行为是「关闭就走 $q.dialog 二次确认」）。
+  // 下架怪兽特效：删 builtins/deleteEffect.js + boot 处 install 调用即可，这里会自动 fallback 到 $q.dialog。
+  deleteConfirmHook: installDeleteEffectConfirmHook(),
   data () {
     return {
       categoryDialogLabel: '',
       categoryDialogHandler: () => {},
       tierRankingNoteDocGuid: '', // 缓存当前右键点击的笔记 docGuid
-      // v2026-08-08：内置小怪兽微应用条目（来自 microApps 列表）。
-      // 由 mounted 时 loadMicroApps() 异步加载，并通过 bus 'microAppsChanged' 实时刷新。
-      // null 表示「还没加载完」或「列表里没有内置条目」，overlay wujieUrl 会回退到空字符串。
-      echoMonsterEntry: null,
-      // 内置条目最近的 microApps 列表快照（用于 diff & reload 决策，NoteList 自身不直接用，
-      // 仅作为 mounted 时给 overlay 提供「最近一次已知 appEntry」）。
-      _microAppsSnapshot: []
+      // 【v2026-08-08】displayMode=fullscreen 的微应用条目（来自微应用列表）。
+      // 由 deleteConfirmHook._findBuiltinEntry() 异步加载，并通过 bus 'microAppsChanged' 实时刷新。
+      // null 表示「还没加载完」或「列表里没有对应条目」，overlay.wujieUrl 回退到空字符串 → wujie 不挂载。
+      // 注意：这里**不硬编码 id**，通过 DELETE_EFFECT_APP_ID 注入；
+      // 下架怪兽特效时这个 prop 自然变为 null，overlay 自动 fallback 到空 url。
+      fullscreenAppEntry: null
     }
   },
   computed: {
@@ -143,18 +155,18 @@ export default {
       // overlay 上显示的瞄准名就会是错的（看的是 currentCategory 的名字）。
       const targetName = targetCategory.split('/').filter(Boolean).pop() || targetCategory
 
-      // 【v2026-08-08】先读怪兽特效总开关：默认关闭 → 走原本的 $q.dialog 二次确认，
-      // 开启后 → 走怪兽特效 overlay。
-      // 注：overlay 内部仍自带 fallback（enabled=false 时 wujieUrl='' 直接不挂载），
-      // 但这里提前判定可以避免无意义的 overlay 实例化和 bus 通信。
-      const overlayEnabled = await this._isDeleteEffectEnabled()
+      // 【v2026-08-08】先读业务内置 hook「deleteConfirmHook.isEnabled()」：
+      //   - 默认关闭（builtins/deleteEffect.js installDeleteEffectBuiltin 返回的条目 enabled=false）
+      //   - 走原本的 $q.dialog 二次确认
+      //   - 用户在「设置 → 通用 → 微应用」开启该内置条目后，hook 自动返回 true → 走 fullscreenOverlay
+      const overlayEnabled = await this.deleteConfirmHook.isEnabled()
       if (overlayEnabled) {
-        // 版权隔离：这个 overlay 内部跑的是 _plugins/echo-monster-deleter（子项目目录名待迁移时同步改名），
-        // 下架时只要 disable overlay / 删子项目 dist，主项目其它部分完全不动。
-        const overlay = this.$refs.deleteEffectOverlay
+        // 版权隔离：fullscreenOverlay 内部跑的是某个 wujie 子项目（默认下下架前指向
+        // _plugins/echo-monster-deleter），下架时只要 disable（builtin enabled=false 默认关闭）
+        // + 删子项目目录，主项目其它部分完全不动。
+        const overlay = this.$refs.fullscreenOverlay
         if (overlay && typeof overlay.summon === 'function') {
           try {
-            // 给删除效果"瞄准"的 target 用 category 路径（人类可读的名字 + icon）
             const target = {
               guid: 'category:' + targetCategory,
               name: targetName,
@@ -162,18 +174,13 @@ export default {
               size: '',
               corrupt: false
             }
-            const result = await overlay.summon({ target })
+            const result = await this.deleteConfirmHook.runSummon(overlay, { target })
             if (result && result.outcome === 'destroyed') {
-              // 对话泡里点"确认" → 真删
-              // 【v2026-08-08】走怪兽特效路径：怪兽啃+爆本身已是视觉反馈，不再叠加
-              // Quasar Notify "目录删除成功" 弹框（参数 silentNotify=true）。
               this.deleteCategory(targetCategory, { silentNotify: true })
             }
-            // outcome === 'cancelled' 或 'timeout'：什么都不做
             return
           } catch (err) {
-            console.warn('[NoteList] deleteEffectOverlay.summon 失败，回退到默认确认框：', err)
-            // 失败时直接落到下面的 $q.dialog 二次确认，不要阻断用户删除流程
+            console.warn('[NoteList] fullscreenOverlay.summon 失败，回退到默认确认框：', err)
           }
         }
       }
@@ -292,46 +299,42 @@ export default {
       })
     },
     /**
-     * 【v2026-08-08】读取内置小怪兽微应用条目（带 enabled 状态）。
-     * 改走微应用列表（`setting/microApps`），不再读旧的 `setting/deleteEffect`。
-     * 升级场景已由主进程启动钩子完成迁移。
-     */
-    async _isDeleteEffectEnabled () {
-      await this._ensureMicroAppsLoaded()
-      const entry = this.echoMonsterEntry
-      return Boolean(entry && entry.enabled)
-    },
-    /**
-     * 异步加载微应用列表，并把内置小怪兽条目摘出来放到 echoMonsterEntry。
-     * mounted / bus 收到 microAppsChanged 时调用。
-     */
-    async _ensureMicroAppsLoaded () {
-      try {
-        const stored = await DatabaseClient.microApps.getAll()
-        const list = normalizeMicroApps(stored)
-        this._microAppsSnapshot = list
-        const entry = list.find(a => a && a.id === BUILTIN_ECHO_MONSTER_DELETER_ID) || null
-        this.echoMonsterEntry = entry
-      } catch (err) {
-        console.warn('[NoteList] microApps.getAll failed:', err)
-        // 失败时保持上次快照，不让用户进入「永远关不掉 overlay」的死锁
-      }
-    },
-    /**
-     * microAppsChanged 总线回调：刷新 echoMonsterEntry。
+     * 【v2026-08-08】microAppsChanged 总线回调：刷新 fullscreenAppEntry。
+     * 业务 hook 已经封装好了从 microApps 列表里找内置条目的逻辑；
+     * NoteList 只负责把最新条目通过 props 推给 fullscreenOverlay。
+     *
      * 兼容 payload 形态：
      *   - { list, dirtyIds }    （新格式）
      *   - Array（兼容旧链路直接传列表）
      */
-    _onMicroAppsChanged (payload) {
+    async _onMicroAppsChanged (payload) {
       const list = Array.isArray(payload)
         ? payload
         : (payload && Array.isArray(payload.list) ? payload.list : null)
       if (!Array.isArray(list)) return
-      const normalized = normalizeMicroApps(list)
-      this._microAppsSnapshot = normalized
-      const entry = normalized.find(a => a && a.id === BUILTIN_ECHO_MONSTER_DELETER_ID) || null
-      this.echoMonsterEntry = entry
+      const normalized = list.filter(Boolean).map(a => {
+        // 内联归一化（避免重新 import normalizeMicroApps，保持 NoteList 不依赖 microAppService 内部函数）
+        const id = String(a.id || '').trim()
+        if (!id) return null
+        return {
+          id,
+          name: String(a.name || id),
+          icon: String(a.icon || 'el-icon-chat-dot-round'),
+          url: typeof a.url === 'string' ? a.url : '',
+          devUrl: typeof a.devUrl === 'string' ? a.devUrl : '',
+          isDefault: Boolean(a.isDefault),
+          enabled: a.enabled === undefined ? true : Boolean(a.enabled),
+          isMobile: a.isMobile === true,
+          displayMode: a.displayMode === 'fullscreen' ? 'fullscreen' : 'drawer',
+          isBuiltIn: Boolean(a.isBuiltIn)
+        }
+      }).filter(Boolean)
+      // 业务 hook 不直接维护 NoteList 自身的 state；
+      // 我们重新跑一遍查找逻辑拿最新条目（DELETE_EFFECT_APP_ID 由 builtins/deleteEffect.js 提供）。
+      try {
+        const found = normalized.find(a => a && a.id === DELETE_EFFECT_APP_ID) || null
+        this.fullscreenAppEntry = found
+      } catch (_) { /* noop */ }
     },
     ...mapServerActions([
       'deleteCategory',
@@ -359,9 +362,10 @@ export default {
     bus.$on(events.NOTE_ITEM_CONTEXT_MENU.delete, this.deleteNoteHandler)
     // 从夯到拉相关事件
     bus.$on(events.NOTE_ITEM_CONTEXT_MENU.openTierRankingForNote, this.openTierRankingForNoteHandler)
-    // v2026-08-08：订阅微应用列表变更，确保怪兽特效条目的 enabled / url 实时同步给 overlay
+    // v2026-08-08：订阅微应用列表变更，确保 fullscreenOverlay.appEntry 实时同步
     bus.$on('microAppsChanged', this._onMicroAppsChanged)
-    this._ensureMicroAppsLoaded()
+    // 首次加载：从 SQLite 取一次内置条目（hooks 里内置了 fallback）
+    this._loadFullscreenAppEntry()
   },
   beforeDestroy () {
     bus.$off(events.NOTE_ITEM_CONTEXT_MENU.copyNote, this.copyNoteHandler)
@@ -369,6 +373,21 @@ export default {
     bus.$off(events.NOTE_ITEM_CONTEXT_MENU.openTierRankingForNote, this.openTierRankingForNoteHandler)
     // v2026-08-08：取消微应用变更订阅
     bus.$off('microAppsChanged', this._onMicroAppsChanged)
+  },
+  /**
+   * 私有方法：从 SQLite 读取 microApps 列表，注入 fullscreenAppEntry。
+   * 走业务 hook 的私有 _findBuiltinEntry（内置了 try/catch 兜底）。
+   */
+  async _loadFullscreenAppEntry () {
+    try {
+      // hook 暴露的内部查找函数（实际是 builtins/deleteEffect.js 的 _findBuiltinEntry）。
+      // 下架怪兽特效后这个 import 路径不存在，NoteList 直接 fallback 到 null，overlay 不挂载。
+      const entry = await this.deleteConfirmHook._findBuiltinEntry()
+      this.fullscreenAppEntry = entry
+    } catch (err) {
+      console.warn('[NoteList] loadFullscreenAppEntry failed:', err)
+      this.fullscreenAppEntry = null
+    }
   }
 }
 </script>
