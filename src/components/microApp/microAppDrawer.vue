@@ -57,6 +57,7 @@ import bus from 'components/common/bus'
 import microAppHost from './microAppHost.vue'
 import {
   buildDefaultMicroApps,
+  mergeBuiltInApps,
   normalizeMicroApps,
   pickDefaultApp
 } from './microAppService'
@@ -101,8 +102,21 @@ export default {
       const stored = await DatabaseClient.microApps.getAll()
       let list = normalizeMicroApps(stored)
       if (!list.length) {
+        // v2026-08-08：首次启动 → 用完整默认列表（含内置条目）。
         list = normalizeMicroApps(buildDefaultMicroApps())
         await DatabaseClient.microApps.saveAll(list)
+      } else {
+        // v2026-08-08：对齐 SettingsMicroAppsPanel.load() 的升级场景。
+        // 用户先打开抽屉（而不是 settings 面板）→ list 非空但缺内置条目；
+        // mergeBuiltInApps 把缺失的内置条目补进去（保留用户已有修改），
+        // 真正出现新增条目时才落库，避免重复 IO。
+        const merged = mergeBuiltInApps(list)
+        if (merged.length !== list.length) {
+          list = merged
+          await DatabaseClient.microApps.saveAll(list)
+        } else {
+          list = merged
+        }
       }
       this.apps = list
       const defaultApp = pickDefaultApp(list)

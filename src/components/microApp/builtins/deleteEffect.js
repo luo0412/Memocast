@@ -107,13 +107,25 @@ export function installDeleteEffectBuiltin () {
 export function installDeleteEffectConfirmHook () {
   /**
    * 内部：从 microApps 列表里找内置条目
+   *
+   * 兜底链路（v2026-08-08）：
+   *   1. SQLite 里有这个 id → 直接返回（保留用户已修改的 url / devUrl / enabled ...）
+   *   2. SQLite 里没有（clean install / 用户开设置之前从未打开过 drawer）→
+   *      从 boot 阶段注册表里取默认值返回（不写 SQLite —— 写表是
+   *      microAppDrawer / SettingsMicroAppsPanel 的活）
+   *   3. 两条都失败 → 返回 null（NoteList 就走 native $q.dialog fallback）
    */
   async function _findBuiltinEntry () {
     try {
-      const DatabaseClient = (await import('src/utils/DatabaseClient')).default
+      const [{ default: DatabaseClient }, { getBuiltinApps }] = await Promise.all([
+        import('src/utils/DatabaseClient'),
+        import('components/microApp/microAppService')
+      ])
       const stored = await DatabaseClient.microApps.getAll()
       const list = Array.isArray(stored) ? stored : []
-      return list.find(a => a && a.id === DELETE_EFFECT_APP_ID) || null
+      const found = list.find(a => a && a.id === DELETE_EFFECT_APP_ID)
+      if (found) return found
+      return getBuiltinApps().find(a => a && a.id === DELETE_EFFECT_APP_ID) || null
     } catch (err) {
       console.warn('[deleteEffectConfirmHook] load microApps failed:', err)
       return null

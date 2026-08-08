@@ -161,9 +161,6 @@ export default {
       //   - 用户在「设置 → 通用 → 微应用」开启该内置条目后，hook 自动返回 true → 走 fullscreenOverlay
       const overlayEnabled = await this.deleteConfirmHook.isEnabled()
       if (overlayEnabled) {
-        // 版权隔离：fullscreenOverlay 内部跑的是某个 wujie 子项目（默认下下架前指向
-        // _plugins/echo-monster-deleter），下架时只要 disable（builtin enabled=false 默认关闭）
-        // + 删子项目目录，主项目其它部分完全不动。
         const overlay = this.$refs.fullscreenOverlay
         if (overlay && typeof overlay.summon === 'function') {
           try {
@@ -174,7 +171,7 @@ export default {
               size: '',
               corrupt: false
             }
-            const result = await this.deleteConfirmHook.runSummon(overlay, { target })
+            const result = await this.deleteConfirmHook.runSummon(overlay, target)
             if (result && result.outcome === 'destroyed') {
               this.deleteCategory(targetCategory, { silentNotify: true })
             }
@@ -356,8 +353,6 @@ export default {
      */
     async _loadFullscreenAppEntry () {
       try {
-        // hook 暴露的内部查找函数（实际是 builtins/deleteEffect.js 的 _findBuiltinEntry）。
-        // 下架怪兽特效后这个 import 路径不存在，NoteList 直接 fallback 到 null，overlay 不挂载。
         const entry = await this.deleteConfirmHook._findBuiltinEntry()
         this.fullscreenAppEntry = entry
       } catch (err) {
