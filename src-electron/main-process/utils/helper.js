@@ -85,16 +85,16 @@ export function exportImageOfMarkdown (markdown, kbGuid, docGuid, resources = []
   return markdown
 }
 
-export function injectClickFunction (menuItem, event, callback) {
+export function injectClickFunction (menuItem, event, callback, contextData) {
   if (menuItem.submenu) {
     menuItem.submenu = menuItem.submenu.map(item => {
-      return injectClickFunction(item, event, callback)
+      return injectClickFunction(item, event, callback, contextData)
     })
   }
   if (!menuItem.click) return menuItem
   const click = menuItem.click
   menuItem.click = () => {
-    callback(click.eventName, click.eventData, event)
+    callback(click.eventName, click.eventData, event, contextData)
   }
   return menuItem
 }

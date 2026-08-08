@@ -90,7 +90,7 @@ import { SNIPER_CURSOR_URL_HREF, SNIPER_CURSOR_FALLBACK, SNIPER_CURSOR_HOTSPOT }
 import monsterSprite from './monsterSprite.vue'
 
 const BUBBLE_DEFAULT_TEXT = '喂，是这个吗？'
-const CHOICE_DEFAULT_LABELS = ['不是', '嘤嘤嘤就是这个']
+const CHOICE_DEFAULT_LABELS = ['算了吧', '嘤嘤嘤就是这个']
 const PROMPT_DEFAULT_TEXT = '请选择你要摧毁的文件'
 const FADE_IN_MS = 800
 const FADE_OUT_MS = 500
@@ -113,7 +113,7 @@ export default {
      * 流程结束回调，与 onFinished 二选一；优先级高于 onFinished。
      * 参数: { outcome: 'destroyed' | 'cancelled' }
      *  - outcome='destroyed'   怪兽 + 爆炸摧毁完成，应该把目标文件标记 destroyed
-     *  - outcome='cancelled'   用户在对话泡上点了"不是"（或类似否定），跳过炸毁，
+     *  - outcome='cancelled'   用户在对话泡上点了"算了吧"（或类似否定），跳过炸毁，
      *                          怪兽 + 雷欧一起飞走；目标文件**不应**被标记 destroyed
      */
     onCompleted: {
@@ -136,6 +136,11 @@ export default {
       choicesVisible: false,
       choicesPos: { x: 0, y: 0 },
       controller: null,
+      // 持有当前轮 MonsterAudio 实例（由 performSequence 创建）
+      // 这样 monsterStage 自身能在 beforeDestroy / forceStop / teardown 任何路径
+      // 显式 audio.stopAll()，避免 MonsterStageController 内部的 _tornDown 幂等
+      // 把 audio 引用"埋"在闭包里、外部停不掉的问题。
+      _audio: null,
       backgroundUrl: ASSETS.background,
       stage: STAGE.IDLE,
       statusMessage: '点击文件召唤怪兽',
@@ -196,11 +201,23 @@ export default {
       this.textOpacity = 0
       this.statusMessage = '怪兽正在赶来'
       // 3) 启动怪兽动画
+      // 【防护】如果上一轮还有 audio 残留（race：用户在 _stageExplosion 阶段立刻点 X 关闭，
+      // forceStop 同步停 audio，但 Vue.nextTick 内 monsterStage 还没 termination。下一轮 summon
+      // 进来时旧 audio 还在 JS 堆里持引用，至少 1 个 BGM 暂停 + 1 个 explosion 暂停），必须
+      // 先调 destroy() 释放，再创建新 audio 实例。否则叠加播放时 BGM 会双倍音量。
+      if (this._audio) {
+        try { this._audio.destroy() } catch (e) { console.warn('[monsterStage] prev _audio.destroy failed:', e) }
+        this._audio = null
+      }
       const audio = new MonsterAudio({
         bgmSrc: ASSETS.audio.bgm,
         sfxSrc: ASSETS.audio.sfx,
         explosionSrc: ASSETS.audio.explosion
       })
+      // 把 audio 实例挂到组件 data，让 beforeDestroy / forceStop / teardown
+      // 任何路径都能拿到并显式 stopAll()，避免 _tornDown 幂等导致 controller.stop()
+      // 被跳过、audio 闭包引用停不掉的问题。
+      this._audio = audio
       const controller = new MonsterStageController({
         assetBaseOverride: SPRITE_URLS,
         audio,
@@ -307,12 +324,12 @@ export default {
       this.choicesVisible = false
       this.$emit('choice', label)
       if (!this.controller) return
-      // 第一个按钮（"不是"）= 不摧毁当前文件，跳过 kick/explosion，
+      // 第一个按钮（"算了吧"）= 不摧毁当前文件，跳过 kick/explosion，
       // 走 leo + fly 一起飞走（怪兽 + 雷欧）
       // 第二个按钮（"嘤嘤嘤就是这个"）= 确认摧毁，走 kick + explosion
       const isNegative = label === CHOICE_DEFAULT_LABELS[0]
       if (isNegative) {
-        this.statusMessage = '不是这个？那走吧……'
+        this.statusMessage = '算了吧？那怪兽和雷欧一起飞走了……'
         this.controller.cancel({ fly: true })
       } else {
         const ok = this.controller.confirm()
@@ -345,12 +362,58 @@ export default {
     _wait (ms) {
       return new Promise(resolve => setTimeout(resolve, ms))
     },
-    _stop () {
-      // 兼容性保留：什么都不做，所有清理都走 _teardown
+_stop () {
+    // 兼容性保留：什么都不做，所有清理都走 _teardown
+    },
+    /**
+     * 显式停掉当前轮的 MonsterAudio 实例（防御性，幂等）。
+     * 必须在 _teardown 第一步无条件执行：第二次 _teardown 进来时 _tornDown=true
+     * 早 return，会跳过 controller.stop()；如果不单独再 stop audio，BGM/SFX/爆炸音
+     * 就会一直拖着，停不下来。
+     */
+    /**
+     * 停所有 audio 并立刻断开 JS 引用。
+     * 【关键】必须 destroy() 而非仅 stopAll() —— <audio> 元素 pause 后浏览器不会
+     * 主动 GC，JS 堆里持续占内存。destroy() 在 stopAll() 基础上把 bgm/sfx/explosion
+     * 引用全部置 null，下次 GC sweep 立刻回收。
+     * 调用方：_teardown 路径 / performSequence 入口前 / 主项目 teardown。
+     */
+    _stopAudio () {
+      if (this._audio) {
+        try { this._audio.destroy() } catch (e) { console.warn('[monsterStage] _audio.destroy failed:', e) }
+        // 立刻把 _audio 置 null —— 即使 destroy 抛错也保证不再被误用
+        this._audio = null
+      }
+    },
+    /**
+     * 取消 controller 里所有 rAF（walk / fly / explosion 任何阶段的 rAF）。
+     * 必须在 _teardown 第一步无条件执行：rAF 不 cancel 的话，walk/fly 中途被 teardown
+     * 后 rAF 还会继续推进下一帧、调 onWalkProgress 写 monsterPos，下一轮 summon
+     * 进来的怪兽会"跳"一下视觉残留。
+     */
+    _cancelAllRaf () {
+      if (!this.controller) return
+      try {
+        if (this.controller._walkRafId) {
+          cancelAnimationFrame(this.controller._walkRafId)
+          this.controller._walkRafId = 0
+        }
+        if (this.controller._flyRafId) {
+          cancelAnimationFrame(this.controller._flyRafId)
+          this.controller._flyRafId = 0
+        }
+      } catch (e) { console.warn('[monsterStage] _cancelAllRaf failed:', e) }
     },
     _teardown (opts = {}) {
       const { silent = false, force = false } = opts
-      // 幂等保护：已 teardown 过就不重复（除非 force）
+      // 幂等保护：已 teardown 过就不重复（除非 force）。
+      // 注意：audio.stopAll() 必须在 _tornDown 判断之前无条件执行——
+      // 第二次 _teardown（_tornDown=true）进来时如果只是 return，audio.stopAll()
+      // 就跳过了，主项目主动关 overlay 的音效就停不下来。
+      this._stopAudio()
+      // rAF 也无条件 cancel：walk/fly 中途被 teardown 时，rAF 还在跑，会继续推进下一帧
+      // 调 onWalkProgress 写 monsterPos，下一轮 summon 进来的怪兽就会"跳"一下。
+      this._cancelAllRaf()
       if (this._tornDown && !force) {
         if (!silent && !this._notifiedFinished) {
           this._notifiedFinished = true
@@ -359,6 +422,13 @@ export default {
         return
       }
       this._tornDown = true
+      // 【关键修复】先快照 outcome，再 controller.stop() 把它置 null。
+      // 旧逻辑：const outcome = (this.controller && this.controller.outcome) || 'destroyed'
+      // 会在 controller.stop() 之后才执行 —— controller 已被置 null，
+      // 表达式退化成 null || 'destroyed' = 'destroyed'，把"算了吧"路径的 outcome 错报成 destroyed，
+      // 主项目 NoteList.deleteCategoryHandler 误判为确认删除，触发真正的 deleteCategory。
+      // 缓存完 outcome 再 stop，保证 outcome 不会被 null 兜底污染。
+      const outcome = (this.controller && this.controller.outcome) || 'destroyed'
       if (this.controller) {
         this.controller.stop()
         this.controller = null
@@ -377,7 +447,8 @@ export default {
       this.statusMessage = '点击文件召唤怪兽'
       if (!silent) {
         this._notifiedFinished = true
-        const outcome = (this.controller && this.controller.outcome) || 'destroyed'
+        // outcome 已在 _teardown 开头快照（见上面），这里直接复用，避免再次读 this.controller
+        // —— controller 此时已被置 null，再读会 fallback 到 'destroyed'。
         if (typeof this.onCompleted === 'function') {
           this.onCompleted({ outcome })
         } else {

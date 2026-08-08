@@ -351,7 +351,9 @@ export default {
       this.targetFile = null
       this.stageVisible = false
       this.currentStage = STAGE.IDLE
-      this.lastLog = outcome === 'cancelled' ? '不是这个？怪兽 + 雷欧一起飞走了' : '已摧毁'
+      // 子应用 footer 状态文案：刻意不报"已摧毁 / 删除成功"，避免和主项目 deleteCategory
+      // 自带的 toast / 提示重复显示。这里只给一个简短过渡，1-2 秒后被主项目 toast 接管。
+      this.lastLog = outcome === 'cancelled' ? '算了吧？怪兽 + 雷欧一起飞走了' : '效果结束'
       // 关键事件：通知主项目结果
       if (this.busConnected) {
         microAppBus.emit('microapp:delete-effect:completed', {

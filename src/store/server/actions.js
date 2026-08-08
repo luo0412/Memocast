@@ -1833,10 +1833,32 @@ export default {
       Notify.create({ color: 'red-10', message: '创建文件夹失败', icon: 'error' })
     }
   },
+  /**
+   * 删除分类（目录）。
+   * 【v2026-08-08】增加 silentNotify 选项：走怪兽特效 overlay 路径时，怪兽啃+爆本身已是
+   * 视觉反馈，**不再**叠加 Quasar Notify 弹框（"目录删除成功"）。回退路径（无 overlay / overlay
+   * 调失败 → 走 $q.dialog 二次确认 → 直接 deleteCategory）仍显示 Notify，因为用户没看到
+   * 视觉反馈，需要文字确认。
+   *
+   * payload 兼容两种形态：
+   *   - 旧调用: deleteCategory(category)            → string 当 category
+   *   - 新调用: deleteCategory(category, opts)      → opts.silentNotify=true 时跳过 Notify
+   *   - 也支持: deleteCategory({ category, silentNotify })  → 对象形态直接解构
+   */
   async deleteCategory ({
     commit,
     state
-  }, category) {
+  }, categoryOrPayload, maybeOpts = {}) {
+    let category
+    let opts = maybeOpts
+    if (typeof categoryOrPayload === 'object' && categoryOrPayload !== null) {
+      // 对象形态：{ category, silentNotify? }
+      category = categoryOrPayload.category
+      opts = categoryOrPayload
+    } else {
+      category = categoryOrPayload
+    }
+    const { silentNotify = false } = opts || {}
     const { kbGuid, isLogin } = state
 
     // 在线模式：先删云端
@@ -1859,7 +1881,10 @@ export default {
       console.error('[deleteCategory] local delete failed:', err)
     }
 
-    Notify.create({ color: 'red-6', message: i18n.t('deleteCategorySuccessfully'), icon: 'delete' })
+    // silentNotify=true 时跳过 Notify（怪兽特效路径已给出视觉反馈）。
+    if (!silentNotify) {
+      Notify.create({ color: 'red-6', message: i18n.t('deleteCategorySuccessfully'), icon: 'delete' })
+    }
   },
   async uploadImage ({
     commit,

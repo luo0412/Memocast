@@ -119,11 +119,13 @@ export default {
   },
   methods: {
     deleteCategoryHandler: async function (eventData) {
-      // eventData 是 IPC 链路里最新右键的 category（主进程 popContextMenu 不传 contextData，
-      // 链路下这里是空字符串 ''，但保留兼容以备主进程未来支持）。
-      // 优先用本次右键的 category 作为唯一真实来源——避免 Vuex state rightClickCategoryItem
-      // 在异步时序下被上次的值污染（重新右键删除打开 overlay 时显示上次的文件夹信息）。
-      const ipcCategory = (typeof eventData === 'string' && eventData.trim()) || ''
+      // eventData 由主进程透传过来，形态可能是 { category }（packClickFunction 默认形态）
+      // 或 string（旧链路透传 category 字符串）。两边都要兼容。
+      // contextData（右键的 category）优先级最高 —— 不依赖 vuex state rightClickCategoryItem，
+      // 因为异步时序下它可能被上次的右键污染。
+      const ipcCategory = (typeof eventData === 'string')
+        ? eventData
+        : (eventData && typeof eventData === 'object' ? eventData.category : '') || ''
       const targetCategory = ipcCategory || this.rightClickCategoryItem
       if (helper.isNullOrEmpty(targetCategory)) return
       // 用本次右键的 category 作为唯一真实来源——不要 fallback 到 this.category，
@@ -148,7 +150,9 @@ export default {
           const result = await overlay.summon({ target })
           if (result && result.outcome === 'destroyed') {
             // 对话泡里点"确认" → 真删
-            this.deleteCategory(targetCategory)
+            // 【v2026-08-08】走怪兽特效路径：怪兽啃+爆本身已是视觉反馈，不再叠加
+            // Quasar Notify "目录删除成功" 弹框（参数 silentNotify=true）。
+            this.deleteCategory(targetCategory, { silentNotify: true })
           }
           // outcome === 'cancelled' 或 'timeout'：什么都不做
           return

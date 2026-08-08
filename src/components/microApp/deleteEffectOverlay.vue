@@ -190,6 +190,17 @@ export default {
         this._summonFlag = false
         this.stage = 'IDLE'
         this.lastLog = '已销毁 overlay'
+        // 【兜底】q-dialog 在多种路径下都会把 visible=false：
+        //   1) onCloseClick（X 按钮）→ 已调过 teardown()，pending 已经 resolve，这里幂等无害
+        //   2) q-dialog 默认 Esc 键（no-esc-dismiss=false）
+        //   3) q-dialog 默认点遮罩（no-backdrop-dismiss=false）
+        //   4) onCompleted 自动关闭 overlay
+        // 路径 2/3 不会走 onCloseClick → 不会 resolve pending → 必须这里兜底，
+        // 否则 NoteList.deleteCategoryHandler 拿到的 promise 永远不 resolve，
+        // "右上角 X 关闭 / Esc / 点遮罩" 全部语义模糊成"等 5 分钟 timeout"。
+        if ((this._pendingCompleteds || []).length > 0) {
+          this._resolveAllPendingAsCancelled('overlay-hidden-by-qdialog')
+        }
       }
     }
   },
@@ -231,12 +242,17 @@ export default {
         // 这里防御性 fallback 避免 beforeDestroy 期间的 .slice crash。
         this.busy = false
         this.lastLog = payload && payload.outcome === 'destroyed'
-          ? '删除效果完成'
+          // 子应用 destroyed 路径上不再单独报"删除效果完成"——主项目 deleteCategory 自带
+          // 成功 toast，特效 overlay 这里只给一个中性过渡态即可。
+          ? '效果结束'
           : '已取消'
         this.stage = 'IDLE'
         // 完成（destroyed）或取消（cancelled）后自动关闭 overlay —— 用户不再需要点 X。
         // _currentTarget / _summonFlag 由 watch.visible 异步清空。
         this.visible = false
+        // 用统一兜底方法 resolve pending，避免 watch.visible / onCloseClick / 这里三处
+        // 重复逻辑。注意：这里不能塞 onCloseClick 的 reason 字符串 —— payload 是子应用
+        // 上报的真实 outcome，应原样透传。
         const list = (this._pendingCompleteds || []).slice()
         this._pendingCompleteds = []
         list.forEach(({ resolve }) => {
@@ -296,13 +312,18 @@ export default {
       }
       // ─── 硬重置：每次召唤都从零开始，避免上一轮状态残留 ───
       // 背景：用户每次邮件文件夹删除 → 重开 overlay 都期望「小怪兽重新选中」。
-      // 这里要做三件事：
+      // 这里要做四件事：
       //   1) 通知子应用清内部状态机（targetFile / busy / stageVisible / currentStage）——
       //      走 teardownDeleteEffect() 复用现有 teardown 事件（子应用 handleTeardownCommand
       //      已经在做硬重置），wujie 内部状态机立刻归零。
       //   2) 清空主项目侧上一轮的 pending resolves —— 否则上轮 cancelled 的 late emit
       //      会同时 resolve 本轮的 pending，导致用户期望删除 B 却被 cancelled 跳过。
       //   3) wujieMountKey++ 强制 wujie 重新挂载（保险丝，覆盖任何 bus 事件丢/未到的边界）。
+      //      注意：:alive=true 时 :key 改变**不会**让子应用 Vue remount，但 webcomponent 会
+      //      重新连接，bus listener 一直在，所以这条只在子应用被真卸载的情况下生效。
+      //   4) 【关键】发 'microapp:delete-effect:summon' bus 事件显式驱动子应用
+      //      handleSummonCommand —— 因为 alive=true 下子应用 mounted() 不再重跑，
+      //      props 路径不可靠，必须走 bus 事件路径让怪兽重新走过来。
       try { teardownDeleteEffect() } catch (_) { /* noop */ }
       const staleList = (this._pendingCompleteds || []).slice()
       this._pendingCompleteds = []
@@ -320,6 +341,12 @@ export default {
       this.wujieMountKey = (this.wujieMountKey || 0) + 1
       this.visible = true
       this._summonNonce = (this._summonNonce || 0) + 1
+      // 显式驱动子应用：发 summon bus 事件，让子应用 handleSummonCommand 把怪兽拉过来。
+      // 即使 alive=true 下 wujieProps 不更新、mounted 不重跑，这条 bus 路径永远生效
+      // （bus.$on 在 mounted 注册一次就一直在，直到子应用真正卸载）。
+      try {
+        summonDeleteEffect({ target, mousePos: this._currentMousePos })
+      } catch (e) { console.warn('[deleteEffectOverlay] summonDeleteEffect failed:', e) }
       // 兜底：如果 bus 不可用 / 子应用没起来，5 分钟后强制 resolve 一次 cancelled
       return new Promise((resolve) => {
         this._pendingCompleteds.push({ resolve })
@@ -343,6 +370,25 @@ export default {
       this.busy = false
       this.visible = false
       try { teardownDeleteEffect() } catch (_) { /* noop */ }
+      // 【关键】右上角 X 关闭 = 取消删除。必须立刻把 _pendingCompleteds 里挂着的 promise
+      // 全部 resolve 为 cancelled，否则 NoteList.deleteCategoryHandler 的 await 会一直挂着，
+      // 直到 5 分钟超时 —— 这期间用户期望的"不删除"语义被推迟到 timeout 才生效。
+      // 跟子应用随后可能 emit 的 'microapp:delete-effect:completed' 不会重复 resolve：
+      // resolve 时直接从 _pendingCompleteds 列表里 splice，list 为空时 onCompleted 不做任何事。
+      this._resolveAllPendingAsCancelled('user-closed-overlay')
+    },
+
+    /**
+     * 把 _pendingCompleteds 里所有挂着的 promise 一次性 resolve 为 cancelled。
+     * 用于：右上角 X 关闭、Esc/点遮罩(q-dialog 自动关)、定时器 timeout 等场景。
+     * 调用方应自行决定 reason 文案，方便调试区分触发源。
+     */
+    _resolveAllPendingAsCancelled (reason = 'cancelled') {
+      const staleList = (this._pendingCompleteds || []).slice()
+      this._pendingCompleteds = []
+      staleList.forEach(({ resolve }) => {
+        try { resolve({ outcome: 'cancelled', reason }) } catch (_) { /* noop */ }
+      })
     },
 
     _captureCurrentMousePos () {

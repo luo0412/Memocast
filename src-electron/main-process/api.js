@@ -306,8 +306,10 @@ export default {
     handleApi('pop-context-menu', async (e, menuOptions) => {
       const win = BrowserWindow.fromWebContents(e.sender)
       const menu = new Menu()
-      let { menuItems, x, y } = menuOptions
-      menuItems = menuItems.map(mi => injectClickFunction(mi, e, triggerRendererContextMenu))
+      let { menuItems, x, y, contextData } = menuOptions
+      // 把 contextData 注入到每个 menuItem.click，让 injectClickFunction -> triggerRendererContextMenu
+      // 能拿到当前右键触发的最新 category（之前只有 actions.js 写死的 eventData，category 透不出来）。
+      menuItems = menuItems.map(mi => injectClickFunction(mi, e, triggerRendererContextMenu, contextData))
       menuItems.forEach(item => {
         menu.append(new MenuItem(item))
       })

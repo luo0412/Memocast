@@ -68,13 +68,35 @@ export class MonsterAudio {
   }
 
   playBgm () { if (this.bgm) this.bgm.play().catch(() => {}) }
+  /**
+   * stop BGM：pause + currentTime=0。
+   * 必须重置 currentTime —— 否则下轮 playBgm() 会从断点继续播（loop 模式下问题不明显，
+   * 但单次播放如 SFX 残留 / 爆炸音从 0.8s 处开始会非常突兀）。
+   */
   stopBgm () { if (this.bgm) { this.bgm.pause(); this.bgm.currentTime = 0 } }
   playSfx () { if (this.sfx) { this.sfx.currentTime = 0; this.sfx.play().catch(() => {}) } }
   playExplosion () { if (this.explosion) { this.explosion.currentTime = 0; this.explosion.play().catch(() => {}) } }
+  /**
+   * 停所有音轨：pause + currentTime=0（不仅是 pause）。
+   * 【关键】爆炸音必须在 stopAll 时把 currentTime 也归零，否则下次 playExplosion
+   * 会从上次停止处继续播（如果同一 audio 实例复用的话）。同时 currentTime=0 让浏览器
+   * 立即"释放"对该 media 的解码缓冲，缩短 GC 回收时间。
+   */
   stopAll () {
     this.stopBgm()
-    if (this.sfx) this.sfx.pause()
-    if (this.explosion) this.explosion.pause()
+    if (this.sfx) { this.sfx.pause(); this.sfx.currentTime = 0 }
+    if (this.explosion) { this.explosion.pause(); this.explosion.currentTime = 0 }
+  }
+  /**
+   * 释放 audio 资源：stopAll 后清空引用，让 GC 立刻回收 <audio> 元素。
+   * 调用方应在 destroy / 切下一轮 audio 之前调一次，避免 <audio> 元素在 JS 堆里
+   * 持续占内存（浏览器默认不会主动回收 paused 的 audio 元素）。
+   */
+  destroy () {
+    this.stopAll()
+    this.bgm = null
+    this.sfx = null
+    this.explosion = null
   }
 }
 
@@ -287,7 +309,17 @@ export class MonsterStageController {
     if (this.stage !== STAGE.AWAIT_CONFIRM) {
       return false
     }
-    if (options.fly) this._cancelFly = true
+    if (options.fly) {
+      this._cancelFly = true
+      // 用户说"算了吧" → 怪兽 + 雷欧飞走，所有音轨立即停，避免飞走动画尾巴。
+      // 用 audio.stopAll() 而非单独 stopBgm + sfx.pause：爆炸音轨如果在 cancel 之前
+      // 已经被触发了（理论上 cancel 只在 AWAIT_CONFIRM 阶段调用，但防御性写 stopAll
+      // 不会有问题，且能避免漏掉 explosion 音轨残音）。_stageFly 完成后 audio.stopAll()
+      // 还会再调一次（幂等安全）。
+      if (this.audio) {
+        try { this.audio.stopAll() } catch (_) {}
+      }
+    }
     if (this._confirmReject) {
       const r = this._confirmReject
       this._confirmResolve = null
