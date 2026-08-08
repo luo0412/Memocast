@@ -208,24 +208,71 @@ const RunePreviewRenderer = Vue.extend({
     // 通过三优先级合并写到 host.dataset，再按 Vue props 规则显式传入。
     // 因此本渲染层不预先声明这些 prop，交给 Vue 自身的 props 解析决定要不要传。
   },
-  // v2026-08-08 恢复老 Muya 同步形态：rune.template 在视频编辑器启动时已经决断
-  // （DB 里的 rune 卡片字符串就是 SFC），所以这里直接走同步工厂，避开 async +
-  // loading 占位卡片 的竞态。
-  computed: {
-    rendererCtor () {
-      const rune = this.rune || {}
-      if (!String(rune.template || '').trim()) return null
+  data () {
+    return {
+      rendererCtor: null,
+      loadError: null,
+      isCompiling: false,
+      _refreshToken: 0
+    }
+  },
+  created () {
+    this.refreshRendererCtor()
+  },
+  watch: {
+    rune: {
+      handler () { this.refreshRendererCtor() },
+      deep: true
+    }
+  },
+  methods: {
+    async refreshRendererCtor () {
+      const rune = this.rune
+      if (!rune || !String(rune.template || '').trim()) {
+        this.rendererCtor = null
+        this.loadError = null
+        this.isCompiling = false
+        return
+      }
+      // 用单调递增的 refreshToken 标记本次刷新；
+      // 后续 await 回来时若 token 已变（说明期间又触发了一次 refresh），就放弃写入，
+      // 避免慢响应的 stale 结果覆盖最新一刷的 rendererCtor / loadError。
+      const myToken = ++this._refreshToken
+      this.isCompiling = true
+      this.loadError = null
       try {
-        // createRuneRendererCtor 内部就是同步编译（cache + 首次都在微任务里同步完成）。
-        return createRuneRendererCtor(rune) || null
+        const ctor = await createRuneRendererCtor(rune)
+        if (myToken !== this._refreshToken) return
+        this.rendererCtor = ctor
       } catch (error) {
+        if (myToken !== this._refreshToken) return
+        this.rendererCtor = null
+        this.loadError = error
         console.warn('[Muya.RunePreviewRenderer] SFC compile failed:', error)
-        return null
+      } finally {
+        if (myToken === this._refreshToken) {
+          this.isCompiling = false
+        }
       }
     }
   },
   render (h) {
+    if (this.loadError) {
+      return h('div', {
+        staticClass: 'rune-renderer-error',
+        attrs: {
+          contenteditable: 'false',
+          title: this.loadError && this.loadError.message ? this.loadError.message : 'Rune SFC compile failed'
+        }
+      }, ['⚠ 符文编译失败'])
+    }
     if (!this.rendererCtor) {
+      if (this.isCompiling) {
+        return h('div', {
+          staticClass: 'rune-renderer-loading',
+          attrs: { contenteditable: 'false' }
+        })
+      }
       return h('div', {
         staticClass: 'rune-renderer-empty',
         attrs: { contenteditable: 'false' }

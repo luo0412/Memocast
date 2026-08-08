@@ -16,7 +16,7 @@
  * 为什么不直接复用 microAppIpcBridge.js（vue-sfc:parse）：
  *   - 那是个特例桥：只支持 vue-sfc:parse 一个 channel，业务专用
  *   - 这个通用桥覆盖所有白名单内的 IPC channel，给未来其他子应用共用
- *   - 删除效果专属的"召唤 / 监听 completed / 注入目标"等业务事件放在 fullscreenBridge.js
+ *   - 删除效果专属的"召唤 / 监听 completed / 注入目标"等业务事件放在 deleteEffectBridge.js
  */
 
 import { ipcRenderer } from 'electron'
@@ -48,7 +48,7 @@ let installed = false
 let uninstallRef = null
 
 /**
- * 安装通用 IPC 桥（幂等）。fullscreenOverlay 的 mounted 调用，
+ * 安装通用 IPC 桥（幂等）。deleteEffectOverlay 的 mounted 调用，
  * beforeDestroy 调用返回的 uninstall 句柄。
  *
  * @param {Object} [opts]

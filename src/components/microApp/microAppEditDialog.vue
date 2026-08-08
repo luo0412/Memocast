@@ -153,7 +153,7 @@ function buildInitialForm (source) {
     displayMode: 'drawer',
     // 标记内置：内置条目所有字段只读、不能删除；编辑弹框里看不到这个字段。
     // buildInitialForm 接收 source.isBuiltIn（通常 false，因为用户只能编辑非内置条目），
-    // 如果调用方传入的是内置条目，由调用方自己处理。
+    // 如果调用方传入的是内置条目（id 命中 BUILTIN_APPS），由调用方自己处理。
     isBuiltIn: false
   }
   if (source && typeof source === 'object') {

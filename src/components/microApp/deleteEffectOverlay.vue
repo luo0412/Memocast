@@ -1,38 +1,35 @@
 <!--
-  fullscreenOverlay —— 全屏透明 wujie 子应用壳（通用版）
-  ==========================================================================
+  deleteEffectOverlay —— 全屏透明删除效果弹框（wujie 子应用版）
 
   用途：
-    - 承载「displayMode=fullscreen」类型的 wujie 子应用；
-      业务方（删除特效 / 未来的其它全屏交互）通过 prop 传入「内置微应用条目」，
-      这里只负责壳渲染（q-dialog + 透明背景 + 顶部 / 底部 status bar）。
-    - 与具体业务解耦：本身不读取任何 SQLite 配置、不持有任何业务 id 字符串。
-    - **下架任意全屏业务**：删 _plugins/<name>/ 子项目目录 + 把对应内置条目从
-      builtins/<name>.js 里移除 + 把 boot 处 install 调用删掉；主项目源码其它部分不动。
+    - 版权隔离：所有效果素材 / 剧本状态机都跑在
+      _plugins/echo-monster-deleter 这个独立子项目里（子项目目录名/包名暂时保留，后续迁移时会同步改名）；
+      下架时只需要 disable 这个 overlay（删 dist / 把 enabled 改 false），
+      主项目源码 / 其它弹框完全不动。
 
   形态：
-    - q-dialog maximized=true，遮罩半透明黑（0.35 opacity）让背后内容仍可见
+    - q-dialog maximized=true，遮罩半透明黑（0.35 opacity）让背后的笔记 / 侧栏仍可见
     - WujieVue 子应用全屏铺满，自身 background=transparent（子项目自带 transparent）
     - 顶部一个细 header bar（毛玻璃），放标题 / 关闭按钮 / 当前阶段
     - 底部一个细 status bar（毛玻璃），放当前状态文案
 
-  通信链路（参考 fullscreenBridge.js / genericMicroAppIpcBridge.js）：
+  通信链路（参考 deleteEffectBridge.js / genericMicroAppIpcBridge.js）：
     主项目 ──────┐
-                ├─ props.appEntry / props.summon=true ───► 子应用
-                ├─ bus 'microapp:fullscreen:summon' ──────────► 子应用
-                ├─ bus 'microapp:fullscreen:teardown' ───────► 子应用
-                ├─ bus 'microapp:fullscreen:request' ◄──── 子应用
-                ├─ bus 'microapp:fullscreen:response' ──► 子应用
-                ├─ bus 'microapp:fullscreen:ready' ◄── 子应用
-                ├─ bus 'microapp:fullscreen:click-at' ◄ 子应用
-                ├─ bus 'microapp:fullscreen:choice' ◄── 子应用
-                └─ bus 'microapp:fullscreen:completed' ◄子应用
+                ├─ props.target / props.summon=true ─────► 子应用
+                ├─ bus 'microapp:delete-effect:summon' ────────► 子应用
+                ├─ bus 'microapp:delete-effect:teardown' ─────► 子应用
+                ├─ bus 'microapp:delete-effect:request' ◄──── 子应用
+                ├─ bus 'microapp:delete-effect:response' ────► 子应用
+                ├─ bus 'microapp:delete-effect:ready' ◄────── 子应用
+                ├─ bus 'microapp:delete-effect:click-at' ◄── 子应用
+                ├─ bus 'microapp:delete-effect:choice' ◄──── 子应用
+                └─ bus 'microapp:delete-effect:completed' ◄─ 子应用
 
   调用方：
-    - 业务方 NoteList.vue（或任何需要全屏交互的组件）：
-        1) 调 this.$refs.fullscreenOverlay.summon({ target, mousePos })
+    - NoteList.vue 的 deleteCategoryHandler：
+        1) 调 this.$refs.deleteEffectOverlay.summon({ target, mousePos })
         2) 拿到 Promise<{ outcome }>
-        3) outcome === 'destroyed' 触发具体业务（删除 / 提交等）
+        3) outcome === 'destroyed' 才真的 this.deleteCategory(...)
 -->
 
 <template>
@@ -77,7 +74,7 @@
         <WujieVue
           v-if="wujieUrl && visible"
           :key="wujieMountKey"
-          :name="wujieName"
+          name="echo-monster-deleter"
           :url="wujieUrl"
           :alive="true"
           :sync="false"
@@ -109,12 +106,12 @@ import {
   isGenericMicroAppIpcBridgeInstalled
 } from './genericMicroAppIpcBridge'
 import {
-  installFullscreenBridge,
-  summonFullscreen,
-  teardownFullscreen,
+  installDeleteEffectBridge,
+  summonDeleteEffect,
+  teardownDeleteEffect,
   updateCursorPosCache,
-  isFullscreenBridgeInstalled
-} from './fullscreenBridge'
+  isDeleteEffectBridgeInstalled
+} from './deleteEffectBridge'
 
 /**
  * v2026-08-08 起怪兽特效 overlay 自身不再读 SQLite 配置：
@@ -127,35 +124,19 @@ import {
  *   - overlay 是子组件，配置管理统一收口在父组件（NoteList）
  *   - 父级订阅 microAppsChanged → 解析后的 url 通过 prop 传递 → overlay 自动重挂载
  *   - 避免 overlay mounted 与 NoteList microApps.load() 的异步竞态
- *
- * fallback 路径约定：当 cfg.url / cfg.devUrl 都为空时，按 dev/prod 模式返回空字符串。
- * 主项目本身不再硬编码任何子项目路径；具体的「子项目目录 + dist」由业务方在
- * builtins/<name>.js 的 install 时直接喂到内置条目（cfg.url）里。
- * 如果对应子项目被下架（目录被删除），fullscreenOverlay 自然挂载不到，wujie 不渲染；
- * 此时用户在「设置 → 微应用」里看到的只是 enabled=false 的列表项，不会有功能回归。
- *
- * 下架示例（以删除特效为例）：
- *   - 删 _plugins/echo-monster-deleter/ 子项目目录
- *   - 删 src/components/microApp/builtins/deleteEffect.js
- *   - 注释掉 src/boot/microapp-builtins.js 里的 installDeleteEffectBuiltin() 调用
- *   - 删 src-electron/main-process/service/microApp/deleteEffectBuiltinMigration.js
- *   - 删 electron-main.js 里对应的 register 调用
- *   - 主项目代码本身无需任何其它改动
  */
 function resolveEntryUrl (appBasePath, app) {
   const safeApp = app || {}
   const cfg = safeApp && typeof safeApp === 'object' ? safeApp : null
   if (isDevEnv()) {
-    return cfg && cfg.devUrl ? cfg.devUrl : ''
+    return cfg && cfg.devUrl ? cfg.devUrl : 'http://localhost:5175/'
   }
   if (cfg && cfg.url) return cfg.url
-  // 没有 cfg.url 时返回空字符串，wujie 不挂载（fail-safe）。
-  // 不在这里硬编码任何子项目路径——子项目目录命名是业务的私事。
-  return ''
+  return `file://${appBasePath || ''}_plugins/echo-monster-deleter/dist/index.html`
 }
 
 export default {
-  name: 'fullscreenOverlay',
+  name: 'deleteEffectOverlay',
   components: { WujieVue },
   props: {
     /**
@@ -197,15 +178,6 @@ export default {
     wujieUrl () {
       if (!this.appEntry || !this.appEntry.enabled) return ''
       return resolveEntryUrl(this.appBasePath, this.appEntry)
-    },
-    /**
-     * WujieVue 子应用 name：取自 appEntry.id；没有时给一个固定字符串占位（wujie 要求非空 name）。
-     * 子应用 name 与微应用条目 id 同名，是为了与「设置 → 微应用」面板里的列表一一对应；
-     * destroyApp(name) / keep-alive 缓存都用这个 id 作为 key。
-     */
-    wujieName () {
-      if (this.appEntry && this.appEntry.id) return String(this.appEntry.id)
-      return 'fullscreen-overlay-default'
     },
     /**
      * 透传给子应用的 props。
@@ -259,7 +231,7 @@ export default {
     try {
       this.appBasePath = await getAppPath()
     } catch (err) {
-      console.warn('[fullscreenOverlay] getAppPath failed:', err)
+      console.warn('[deleteEffectOverlay] getAppPath failed:', err)
     }
     // v2026-08-08：监听微应用列表的实时变更（settings 面板保存后触发），
     // 父组件 NoteList 收到后会把新的内置条目通过 prop 传进来，这里无需额外订阅。
@@ -276,7 +248,7 @@ export default {
     }
     // 注册效果专属桥（业务事件透传）—— 必须独立保存 uninstall，
     // 否则会被上面通用桥的 uninstall 赋值给覆盖，导致效果桥永远无法卸载。
-    this._effectBusUninstall = installFullscreenBridge({
+    this._effectBusUninstall = installDeleteEffectBridge({
       onReady: (payload) => {
         this.readyAt = payload.ts || Date.now()
         this.lastLog = `子应用就绪 · v${payload.version || '?'} · ${(payload.capabilities || []).join(',')}`
@@ -316,7 +288,7 @@ export default {
         const list = (this._pendingCompleteds || []).slice()
         this._pendingCompleteds = []
         list.forEach(({ resolve }) => {
-          try { resolve(payload || { outcome: 'cancelled' }) } catch (e) { console.warn('[fullscreenOverlay] onCompleted resolver threw:', e) }
+          try { resolve(payload || { outcome: 'cancelled' }) } catch (e) { console.warn('[deleteEffectOverlay] onCompleted resolver threw:', e) }
         })
       }
     })
@@ -336,7 +308,7 @@ export default {
       this._effectBusUninstall = null
     }
     if (this._cfgBusListener) {
-      try { bus.$off('microAppsChanged', this._cfgBusListener) } catch (_) { /* noop */ }
+      try { bus.$off('deleteEffectConfigChanged', this._cfgBusListener) } catch (_) { /* noop */ }
       this._cfgBusListener = null
     }
     if (this._microAppsBusListener) {
@@ -347,16 +319,16 @@ export default {
       window.removeEventListener('mousemove', this._mouseMoveListener)
       this._mouseMoveListener = null
     }
-    // 主动销毁 wujie 子应用，释放 iframe。
-    // v2026-08-08：name 改为运行时从 appEntry.id 解析，不再硬编码。
+    // 主动销毁 wujie 子应用，释放 iframe
+    // 注意：WujieVue 子应用 name 仍为 'echo-monster-deleter'，待子项目目录迁移时一并改
     if (WujieVue && typeof WujieVue.destroyApp === 'function') {
       try {
-        const ret = WujieVue.destroyApp(this.wujieName)
+        const ret = WujieVue.destroyApp('echo-monster-deleter')
         if (ret && typeof ret.then === 'function') {
-          ret.catch(err => console.warn('[fullscreenOverlay] destroyApp failed:', err))
+          ret.catch(err => console.warn('[deleteEffectOverlay] destroyApp failed:', err))
         }
       } catch (err) {
-        console.warn('[fullscreenOverlay] destroyApp threw:', err)
+        console.warn('[deleteEffectOverlay] destroyApp threw:', err)
       }
     }
     // 释放所有 pending（避免调用方永远 hang）
@@ -392,7 +364,7 @@ export default {
       //   4) 【关键】发 'microapp:delete-effect:summon' bus 事件显式驱动子应用
       //      handleSummonCommand —— 因为 alive=true 下子应用 mounted() 不再重跑，
       //      props 路径不可靠，必须走 bus 事件路径让怪兽重新走过来。
-      try { teardownFullscreen() } catch (_) { /* noop */ }
+      try { teardownDeleteEffect() } catch (_) { /* noop */ }
       const staleList = (this._pendingCompleteds || []).slice()
       this._pendingCompleteds = []
       staleList.forEach(({ resolve }) => {
@@ -413,8 +385,8 @@ export default {
       // 即使 alive=true 下 wujieProps 不更新、mounted 不重跑，这条 bus 路径永远生效
       // （bus.$on 在 mounted 注册一次就一直在，直到子应用真正卸载）。
       try {
-        summonFullscreen({ target, mousePos: this._currentMousePos })
-      } catch (e) { console.warn('[fullscreenOverlay] summonFullscreen failed:', e) }
+        summonDeleteEffect({ target, mousePos: this._currentMousePos })
+      } catch (e) { console.warn('[deleteEffectOverlay] summonDeleteEffect failed:', e) }
       // 兜底：如果 bus 不可用 / 子应用没起来，5 分钟后强制 resolve 一次 cancelled
       return new Promise((resolve) => {
         this._pendingCompleteds.push({ resolve })
@@ -437,7 +409,7 @@ export default {
     teardown () {
       this.busy = false
       this.visible = false
-      try { teardownFullscreen() } catch (_) { /* noop */ }
+      try { teardownDeleteEffect() } catch (_) { /* noop */ }
       // 【关键】右上角 X 关闭 = 取消删除。必须立刻把 _pendingCompleteds 里挂着的 promise
       // 全部 resolve 为 cancelled，否则 NoteList.deleteCategoryHandler 的 await 会一直挂着，
       // 直到 5 分钟超时 —— 这期间用户期望的"不删除"语义被推迟到 timeout 才生效。
