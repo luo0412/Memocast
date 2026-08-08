@@ -333,8 +333,24 @@ module.exports = function (/* ctx */) {
           // ─── 排除 Muya 编辑器的多余图标资源 ───
           // 每个图标有 3 个尺寸 (1.png, 2.png, 3.png)，只保留 @2x 和 @3x
           '!_plugins/coolma-muya/lib/assets/pngicon/**/1.png',
-          // 开发依赖裁剪
-          '!node_modules/@babel/**/*',
+          // 开发依赖裁剪 —— 注意：@vue/compiler-sfc 在 main 进程运行时依赖
+          //   @babel/parser + @babel/types，所以**不能**整个排除 @babel/*，
+          //   只能单独排除 dev-only 工具链：
+          //   - @babel/core      （@babel/preset-env / @babel/plugin-* 都依赖它）
+          //   - @babel/preset-*  （构建期）
+          //   - @babel/plugin-*  （构建期）
+          //   - @babel/register  （dev）
+          //   @babel/parser / @babel/types / @babel/runtime / @babel/helper-* 等
+          //   全部保留（运行时必需）。
+          '!node_modules/@babel/core/**/*',
+          '!node_modules/@babel/preset-env/**/*',
+          '!node_modules/@babel/preset-flow/**/*',
+          '!node_modules/@babel/preset-react/**/*',
+          '!node_modules/@babel/preset-typescript/**/*',
+          '!node_modules/@babel/plugin*/**/*',
+          '!node_modules/@babel/register/**/*',
+          '!node_modules/@babel/eslint-parser/**/*',
+          '!node_modules/@babel/eslint-plugin/**/*',
           '!node_modules/babel*/*',
           '!node_modules/webpack/**/*',
           '!node_modules/terser*/**/*',
