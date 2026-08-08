@@ -36,14 +36,14 @@ yarn-error.log*
 !/_plugins/coolma-muya-demo/**
 !/_plugins/doubao-input/
 !/_plugins/doubao-input/**
-!/_plugins/echo-monster-deleter/
-!/_plugins/echo-monster-deleter/**
+# !/_plugins/echo-monster-deleter/
+# !/_plugins/echo-monster-deleter/**
 !/_plugins/echo-template/
 !/_plugins/echo-template/**
 !/_plugins/rune-template/
 !/_plugins/rune-template/**
-!/_plugins/vue2-sfc-playground/
-!/_plugins/vue2-sfc-playground/**
+# !/_plugins/vue2-sfc-playground/
+# !/_plugins/vue2-sfc-playground/**
 
 # Editor directories and files
 .idea
