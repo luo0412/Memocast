@@ -19,7 +19,7 @@
 
 import WujieVue from 'wujie-vue2'
 import { parseVueSfc } from 'src/ApiInvoker'
-import debugLogger, { Info, Warn } from 'src/utils/debugLogger'
+import debugLogger from 'src/utils/debugLogger'
 
 export const PARSE_REQUEST_EVENT = 'microapp:parse:request'
 export const PARSE_RESPONSE_EVENT = 'microapp:parse:response'
@@ -36,7 +36,7 @@ let uninstallRef = null
 export function installMicroAppParseBridge () {
   if (installed && uninstallRef) return uninstallRef
   if (!WujieVue || !WujieVue.bus) {
-    Warn('[microAppIpcBridge] WujieVue.bus 不可用，跳过注册')
+    debugLogger.Info('[microAppIpcBridge] WujieVue.bus 不可用，跳过注册')
     return () => {}
   }
 
@@ -45,7 +45,7 @@ export function installMicroAppParseBridge () {
   const handler = async (envelope = {}) => {
     const { requestId, payload } = envelope
     if (!requestId) {
-      Warn('[microAppIpcBridge] 收到缺 requestId 的请求，已忽略', envelope)
+      debugLogger.Info('[microAppIpcBridge] 收到缺 requestId 的请求，已忽略', envelope)
       return
     }
 
@@ -80,9 +80,9 @@ export function installMicroAppParseBridge () {
     try { bus.$off(PARSE_REQUEST_EVENT, handler) } catch (_) { /* noop */ }
     installed = false
     uninstallRef = null
-    Info('[microAppIpcBridge] 已注销 vue-sfc:parse 桥')
+    debugLogger.Info('[microAppIpcBridge] 已注销 vue-sfc:parse 桥')
   }
-  Info('[microAppIpcBridge] 已注册 vue-sfc:parse 桥（事件：', PARSE_REQUEST_EVENT, '→', PARSE_RESPONSE_EVENT, '）')
+  debugLogger.Info('[microAppIpcBridge] 已注册 vue-sfc:parse 桥（事件：', PARSE_REQUEST_EVENT, '→', PARSE_RESPONSE_EVENT, '）')
 
   return uninstallRef
 }

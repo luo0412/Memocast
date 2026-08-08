@@ -25,6 +25,26 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Plugin projects
+# `_plugins` 下仅保留当前已纳入仓库的目录；后续新增目录默认忽略
+/_plugins/*
+!/_plugins/box-im-wujie/
+!/_plugins/box-im-wujie/**
+!/_plugins/coolma-muya/
+!/_plugins/coolma-muya/**
+!/_plugins/coolma-muya-demo/
+!/_plugins/coolma-muya-demo/**
+!/_plugins/doubao-input/
+!/_plugins/doubao-input/**
+!/_plugins/echo-monster-deleter/
+!/_plugins/echo-monster-deleter/**
+!/_plugins/echo-template/
+!/_plugins/echo-template/**
+!/_plugins/rune-template/
+!/_plugins/rune-template/**
+!/_plugins/vue2-sfc-playground/
+!/_plugins/vue2-sfc-playground/**
+
 # Editor directories and files
 .idea
 *.suo

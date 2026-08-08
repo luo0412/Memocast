@@ -41,6 +41,8 @@
     <CategoryDialog ref='categoryDialog' :note-info='rightClickNoteItem' :label='categoryDialogLabel'
                     :handler='categoryDialogHandler' />
     <rankingTierDialog ref="tierRankingDialog" />
+    <!-- 全屏透明怪兽剧场 overlay（wujie 子应用），右键删除文件夹时弹 -->
+    <echoMonsterDeleterOverlay ref='echoMonsterDeleterOverlay' />
   </div>
 </template>
 
@@ -48,6 +50,7 @@
 import NoteItem from './NoteItem.vue'
 import CategoryDialog from '../category/CategoryDialog.vue'
 import rankingTierDialog from '../ranking/rankingTierDialog.vue'
+import echoMonsterDeleterOverlay from '../microApp/echoMonsterDeleterOverlay.vue'
 import DatabaseClient from 'src/utils/DatabaseClient'
 import { createNamespacedHelpers } from 'vuex'
 import { Loading, QSpinnerGears } from 'quasar'
@@ -60,7 +63,7 @@ const { mapGetters: mapServerGetters, mapState: mapServerState, mapActions: mapS
 const { mapState: mapClientState, mapActions: mapClientActions } = createNamespacedHelpers('client')
 export default {
   name: 'NoteList',
-  components: { Loading, NoteItem, CategoryDialog, rankingTierDialog, Loading: LoadingComponent },
+    components: { Loading, NoteItem, CategoryDialog, rankingTierDialog, Loading: LoadingComponent, echoMonsterDeleterOverlay },
   data () {
     return {
       categoryDialogLabel: '',
@@ -115,8 +118,37 @@ export default {
     ...mapClientState(['rightClickCategoryItem', 'rightClickNoteItem', 'noteListDenseMode', 'sidebarTreeType', 'calendarSelectedDate']),
   },
   methods: {
-    deleteCategoryHandler: function () {
+    deleteCategoryHandler: async function () {
       if (helper.isNullOrEmpty(this.rightClickCategoryItem)) return
+      const targetCategory = this.rightClickCategoryItem
+
+      // 优先走怪兽剧场 overlay —— 用户在怪兽对话泡里点"是的"才真正删除。
+      // 版权隔离：这个 overlay 内部跑的是 _plugins/echo-monster-deleter，
+      // 下架时只要 disable overlay / 删子项目 dist，主项目其它部分完全不动。
+      const overlay = this.$refs.echoMonsterDeleterOverlay
+      if (overlay && typeof overlay.summon === 'function') {
+        try {
+          // 给怪兽"瞄准"的 target 用 category 路径（人类可读的名字 + icon）
+          const target = {
+            guid: 'category:' + targetCategory,
+            name: this.category || targetCategory.split('/').filter(Boolean).pop() || targetCategory,
+            icon: '📁',
+            size: '',
+            corrupt: false
+          }
+          const result = await overlay.summon({ target })
+          if (result && result.outcome === 'destroyed') {
+            // 怪兽剧场里点"是的 / 嘤嘤嘤就是这个" → 真删
+            this.deleteCategory(targetCategory)
+          }
+          // outcome === 'cancelled' 或 'timeout'：什么都不做
+          return
+        } catch (err) {
+          console.warn('[NoteList] echoMonsterDeleterOverlay.summon 失败，回退到默认确认框：', err)
+        }
+      }
+
+      // 回退路径：overlay 不存在 / 调失败 → 用原本的 $q.dialog 二次确认
       this.$q
         .dialog({
           title: this.$t('deleteCategory'),
@@ -124,7 +156,7 @@ export default {
           cancel: this.$t('cancel')
         })
         .onOk(() => {
-          this.deleteCategory(this.rightClickCategoryItem)
+          this.deleteCategory(targetCategory)
         })
     },
     exportCategoryHandler: async function () {

@@ -1,52 +1,73 @@
 <!--
-  App.vue —— 演示页：
-    - 顶部一行 hero：标题 + 「召唤怪兽」按钮
-    - 模拟"桌面文件"tiles（点击 → 召唤怪兽 → 询问 → 踹爆 → 文件标记为已摧毁）
-    - 底部面板：当前阶段 + 状态字符串
+  EchoMonsterDeleter 子应用入口（wujie 微应用版）
+
+  - 接 wujie 注入的 props：{ target, mousePos, viewport, appBasePath, mountNonce }
+  - 通过 window.$wujie.bus 与主项目通信：
+      · 子 → 主: 'microapp:monster:ready'
+      · 子 → 主: 'microapp:monster:click-at'         （用户在 overlay 上点了鼠标）
+      · 子 → 主: 'microapp:monster:completed'        （怪兽剧场结束，outcome= destroyed|cancelled）
+      · 子 → 主: 'microapp:monster:request'         （请求获取鼠标坐标 / 主进程 IPC 结果）
+      · 主 → 子: 'microapp:monster:summon'          （主项目召唤怪兽，附带最新 target / mousePos）
+      · 主 → 子: 'microapp:monster:teardown'        （主项目主动销毁 overlay）
+      · 主 → 子: 'microapp:monster:response'        （主项目对 microapp:monster:request 的回包）
+  - 版权隔离：所有怪兽 / 雷欧 / 爆炸素材、剧本状态机都留在这个子项目里；
+    主项目只通过 props + bus 调它，**不** import 任何素材或脚本。
+    下架时只需要在主项目侧 disable 这个微应用 / 删 dist 目录。
 -->
 
 <template>
   <div class="app-root">
-    <header class="app-header">
-      <h1>🐲 大将怪兽摧毁 · Web 复刻</h1>
-      <p class="subtitle">从 <a href="https://github.com/531149627/MonsterDeleter" target="_blank">531149627/MonsterDeleter</a> 移植到 Web</p>
-      <div class="header-actions">
+    <!-- 顶部状态条：便于排查版权接入是否生效 -->
+    <header class="app-header" v-if="headerVisible">
+      <div class="app-header-title">
+        🎯 怪兽剧场 · 微应用版
+        <span class="app-header-sub">{{ subtitle }}</span>
+      </div>
+      <div class="app-header-actions">
         <button
           class="trigger-btn"
-          :disabled="!hasAliveFiles"
-          @click="summonOnRandomFile"
-        >🎯 召唤怪兽随机摧毁一个文件</button>
+          :disabled="busy || !hasAliveTarget"
+          @click="summonRandom"
+        >🎯 召唤怪兽</button>
         <button
           class="reset-btn"
-          :disabled="!hasDestroyedFiles"
-          @click="resetAllFiles"
-        >🔄 重置所有文件</button>
-        <span class="stats">
-          已摧毁 <strong>{{ destroyedCount }}</strong> / {{ fakeFiles.length }}
-        </span>
+          :disabled="busy"
+          @click="resetTargets"
+        >� 重置</button>
+        <span class="stats">已摧毁 <strong>{{ destroyedCount }}</strong> / {{ targets.length }}</span>
       </div>
     </header>
 
-    <main class="desktop">
+    <main v-if="targets.length" class="desktop">
       <div
-        v-for="file in fakeFiles"
-        :key="file.name"
+        v-for="file in targets"
+        :key="file.guid"
         class="file-tile"
         :class="{
           'file-tile-evil': file.corrupt && !file.destroyed,
           'file-tile-destroyed': file.destroyed,
           'file-tile-targeted': file === targetFile
         }"
-        @click="summonOnFile(file)"
+        @click="summonOnFile(file, $event)"
       >
-        <div class="file-icon">{{ file.destroyed ? '💥' : file.icon }}</div>
+        <div class="file-icon">{{ file.destroyed ? '💥' : (file.icon || '📄') }}</div>
         <div class="file-name">
           <s v-if="file.destroyed">{{ file.name }}</s>
           <span v-else>{{ file.name }}</span>
         </div>
         <div class="file-meta">
           <span v-if="file.destroyed" class="meta-destroyed">已摧毁</span>
-          <span v-else>{{ file.size }}</span>
+          <span v-else>{{ file.size || '' }}</span>
+        </div>
+      </div>
+    </main>
+
+    <main v-else class="desktop desktop--empty">
+      <div class="empty-hint">
+        <div class="empty-icon">🐲</div>
+        <div class="empty-title">怪兽剧场待命</div>
+        <div class="empty-sub">
+          等待主项目召唤（右键文件夹 → 删除文件夹 → 怪兽摧毁）
         </div>
       </div>
     </main>
@@ -70,6 +91,10 @@
         <span class="stage-log-label">状态：</span>
         <code>{{ lastLog }}</code>
       </div>
+      <div class="stage-log" v-if="busConnected !== null">
+        <span class="stage-log-label">bus：</span>
+        <code :class="{ 'bus-on': busConnected }">{{ busConnected ? 'connected' : 'disconnected' }}</code>
+      </div>
     </footer>
   </div>
 </template>
@@ -77,16 +102,19 @@
 <script>
 import MonsterStage from './components/monsterStage.vue'
 import { STAGE } from './utils/monsterSequence.js'
+import microAppBus from './utils/microAppBus.js'
 
-const FAKE_FILES = [
-  { name: '毕业论文.docx', icon: '📄', size: '2.1 MB', corrupt: false },
-  { name: '需求文档.pdf', icon: '📕', size: '5.8 MB', corrupt: false },
-  { name: 'demo.mp4', icon: '🎬', size: '128 MB', corrupt: false },
-  { name: 'err.log', icon: '🐛', size: '12 KB', corrupt: true },
-  { name: 'intern-report.xlsx', icon: '📊', size: '768 KB', corrupt: false },
-  { name: 'unused-app.exe', icon: '⚙️', size: '44 MB', corrupt: true },
-  { name: 'old-photo.jpg', icon: '🖼️', size: '3.2 MB', corrupt: false },
-  { name: 'tempfile.tmp', icon: '🗑️', size: '128 KB', corrupt: false }
+/**
+ * 默认的 demo targets —— 用于子项目独立运行（npm run dev 单开浏览器访问）。
+ * 接入主项目后，主项目会通过 props.target / props.targets 把真实数据塞进来。
+ */
+const DEFAULT_TARGETS = [
+  { guid: 'demo-1', name: '毕业论文.docx', icon: '📄', size: '2.1 MB', corrupt: false },
+  { guid: 'demo-2', name: '需求文档.pdf', icon: '📕', size: '5.8 MB', corrupt: false },
+  { guid: 'demo-3', name: 'demo.mp4', icon: '🎬', size: '128 MB', corrupt: false },
+  { guid: 'demo-4', name: 'err.log', icon: '🐛', size: '12 KB', corrupt: true },
+  { guid: 'demo-5', name: 'intern-report.xlsx', icon: '📊', size: '768 KB', corrupt: false },
+  { guid: 'demo-6', name: 'unused-app.exe', icon: '⚙️', size: '44 MB', corrupt: true }
 ]
 
 export default {
@@ -94,111 +122,267 @@ export default {
   components: { MonsterStage },
   data () {
     return {
-      fakeFiles: FAKE_FILES.map(f => ({ ...f, destroyed: false })),
+      // === wujie 注入 ===
+      // 子项目独立运行（无 wujie）时，wujieProps 走默认空对象；
+      // 接入主项目时，主项目会传 props（target / targets / appBasePath / mountNonce / theme / locale）
+      wujieProps: (typeof window !== 'undefined' && window.$wujie && window.$wujie.props) || {},
+      // === 业务状态 ===
+      targets: [],
       stageVisible: false,
       targetFile: null,
       targetPos: { x: 0, y: 0 },
       currentStage: STAGE.IDLE,
-      lastLog: '点击文件 → 召唤怪兽'
+      lastLog: '怪兽待命中',
+      subtitle: '',
+      busy: false,
+      busConnected: null
     }
   },
   computed: {
+    isWujieChild () {
+      return typeof window !== 'undefined' && Boolean(window.__POWERED_BY_WUJIE__)
+    },
+    headerVisible () {
+      // wujie 子应用模式下，主项目已经在 overlay 上挂了 header；这里不再重复
+      return !this.isWujieChild
+    },
     destroyedCount () {
-      return this.fakeFiles.filter(f => f.destroyed).length
+      return this.targets.filter(f => f.destroyed).length
     },
-    hasAliveFiles () {
-      return this.fakeFiles.some(f => !f.destroyed)
+    hasAliveTarget () {
+      return this.targets.some(f => !f.destroyed)
     },
-    hasDestroyedFiles () {
-      return this.fakeFiles.some(f => f.destroyed)
+    targetGuid () {
+      return this.targetFile ? this.targetFile.guid : null
+    }
+  },
+  watch: {
+    wujieProps: {
+      handler (next) {
+        this.applyIncomingProps(next)
+      },
+      deep: true,
+      immediate: true
+    }
+  },
+  async mounted () {
+    // 1) bus 接入
+    this.busConnected = microAppBus.isAvailable()
+    if (this.busConnected) {
+      microAppBus.on('microapp:monster:summon', this.handleSummonCommand)
+      microAppBus.on('microapp:monster:teardown', this.handleTeardownCommand)
+      microAppBus.on('microapp:monster:response', this.handleBusResponse)
+      // 上报 ready
+      microAppBus.emit('microapp:monster:ready', {
+        version: '0.2.0',
+        capabilities: ['summon', 'click-at', 'completed', 'cursor-pos', 'screen-info'],
+        ts: Date.now()
+      })
+      this.lastLog = '已连接主项目 bus，待命中'
+    } else {
+      this.lastLog = '独立运行模式（未接入主项目 bus）'
+    }
+
+    // 2) 独立运行 fallback：填入默认 demo targets
+    if (!this.targets.length) {
+      this.targets = DEFAULT_TARGETS.map(f => ({ ...f, destroyed: false }))
+      if (!this.isWujieChild) this.subtitle = '独立 demo 模式'
+    } else {
+      this.subtitle = `主项目注入 · ${this.targets.length} 个目标`
+    }
+  },
+  beforeDestroy () {
+    if (this.busConnected) {
+      microAppBus.off('microapp:monster:summon', this.handleSummonCommand)
+      microAppBus.off('microapp:monster:teardown', this.handleTeardownCommand)
+      microAppBus.off('microapp:monster:response', this.handleBusResponse)
     }
   },
   methods: {
-    summonOnFile (file) {
-      if (this.stageVisible) {
-        this.lastLog = '怪兽正在出没，请等本轮结束'
+    /**
+     * 把 wujie 注入的 props 应用到组件状态。
+     * 主项目每次召唤怪兽时都会重新发一组 props（含最新 target / mousePos / nonce）。
+     */
+    applyIncomingProps (props) {
+      if (!props || typeof props !== 'object') return
+      // 主项目可以传 targets（批量）或单个 target
+      if (Array.isArray(props.targets) && props.targets.length) {
+        // 合并：保留已摧毁状态，仅当 guid 变化时整体替换
+        const destroyedMap = new Map(this.targets.filter(t => t.destroyed).map(t => [t.guid, true]))
+        this.targets = props.targets.map(t => ({
+          ...t,
+          destroyed: t.destroyed === true || destroyedMap.get(t.guid) === true
+        }))
+        this.subtitle = `主项目注入 · ${this.targets.length} 个目标`
+      } else if (props.target && props.target.guid) {
+        // 单个目标：merge 或 append
+        const idx = this.targets.findIndex(t => t.guid === props.target.guid)
+        const merged = { ...props.target, destroyed: false }
+        if (idx >= 0) this.targets.splice(idx, 1, merged)
+        else this.targets.push(merged)
+        this.subtitle = `主项目注入 · 单目标 ${props.target.name || props.target.guid}`
+      }
+      // 若主项目主动召唤：打开 overlay + 启动怪兽
+      if (props.summon === true && props.target && props.target.guid) {
+        this.summonOnFile(this.findOrInsertTarget(props.target), null, props.mousePos)
+      }
+    },
+
+    findOrInsertTarget (t) {
+      const idx = this.targets.findIndex(x => x.guid === t.guid)
+      if (idx >= 0) {
+        this.targets.splice(idx, 1, { ...t, destroyed: this.targets[idx].destroyed })
+        return this.targets[idx]
+      }
+      const next = { ...t, destroyed: false }
+      this.targets.push(next)
+      return next
+    },
+
+    // ============ 召唤怪兽（鼠标坐标可来自主项目 IPC，也可来自事件 e） ============
+    async summonOnFile (file, e, mouseOverride) {
+      if (this.busy) {
+        this.lastLog = '怪兽出没中，请等本轮结束'
         return
       }
-      if (file.destroyed) {
-        this.lastLog = `${file.name} 已被摧毁，换一个吧`
+      if (file && file.destroyed) {
+        this.lastLog = `${file.name} 已被摧毁`
         return
       }
-      // 先把上一轮的残留选定 / 锚点状态清掉（避免重生后还能看到上轮的高亮）
-      this.targetFile = null
-      this.currentStage = STAGE.IDLE
       this.targetFile = file
-      // 找 tile DOM 中心，作为默认瞄准点（PyQt 原版要求用户用红色十字再点）
-      // 这里是 Web 体验优化：自动把瞄准点放在文件中心，等用户再次点击可微调
+      this.currentStage = STAGE.IDLE
+      // 1) 先问主项目要鼠标坐标（走 bus 请求，异步）
+      let pos = null
+      if (mouseOverride && typeof mouseOverride.x === 'number') {
+        pos = mouseOverride
+      } else if (e && typeof e.clientX === 'number') {
+        pos = { x: e.clientX, y: e.clientY }
+      }
+      if (!pos && this.busConnected) {
+        try {
+          pos = await microAppBus.request('get-cursor-pos', { viewportHint: this.viewportHint() })
+          this.lastLog = `主项目返回鼠标坐标 (${pos.x}, ${pos.y})`
+        } catch (err) {
+          console.warn('[echo-monster-deleter] get-cursor-pos 失败：', err)
+        }
+      }
+      // 2) 兜底：取 tile 中心
+      if (!pos) pos = this.tileCenter(file) || { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+      this.targetPos = pos
+      this.busy = true
+      this.stageVisible = true
+      this.lastLog = `瞄准 ${file ? file.name : '未知'}（点击 overlay 微调瞄准点）`
+      // 3) 如果是主项目召唤（mouseOverride 已传），跳过 AWAIT_AIM 阶段直接开演
+      // 这样用户体验：右键删除文件夹 → 怪兽立刻飞过来，不需要再点击 overlay。
+      // 独立运行（无 mouseOverride 且无 bus）时仍走瞄准交互。
       this.$nextTick(() => {
-        const tiles = document.querySelectorAll('.file-tile')
-        let targetTile = null
-        for (const t of tiles) {
-          if (t.textContent.trim().startsWith(file.icon)) {
-            targetTile = t
-            break
-          }
+        const stage = this.$refs && this.$refs.stage
+        if (mouseOverride && stage && typeof stage.performSequence === 'function') {
+          stage.performSequence(pos)
         }
-        const rect = targetTile
-          ? targetTile.getBoundingClientRect()
-          : { left: 0, top: 0, width: 0, height: 0 }
-        const targetPos = {
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2
-        }
-        this.targetPos = targetPos
-        // 只打开 overlay + 狙击光标，怪兽还没召来
-        this.stageVisible = true
-        this.lastLog = `瞄准 ${file.name}（点击 overlay 微调瞄准点，或直接看怪兽走来）`
       })
     },
-    summonOnRandomFile () {
-      const candidates = this.fakeFiles.filter(f => !f.destroyed)
+
+    summonRandom () {
+      const candidates = this.targets.filter(f => !f.destroyed)
       if (!candidates.length) {
-        this.lastLog = '无可摧毁文件，点"重置"恢复'
+        this.lastLog = '无可摧毁目标'
         return
       }
       const pick = candidates[Math.floor(Math.random() * candidates.length)]
-      this.summonOnFile(pick)
+      this.summonOnFile(pick, null)
     },
+
+    resetTargets () {
+      this.targets = this.targets.map(t => ({ ...t, destroyed: false }))
+      this.targetFile = null
+      this.stageVisible = false
+      this.currentStage = STAGE.IDLE
+      this.busy = false
+      this.lastLog = '已重置所有目标'
+    },
+
+    tileCenter (file) {
+      // 优先找 tile DOM 的真实中心
+      if (typeof document === 'undefined') return null
+      const tiles = document.querySelectorAll('.file-tile')
+      for (const t of tiles) {
+        if (file && file.icon && t.textContent && t.textContent.includes(file.icon)) {
+          const rect = t.getBoundingClientRect()
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+        }
+      }
+      return null
+    },
+
+    viewportHint () {
+      return {
+        innerWidth: typeof window !== 'undefined' ? window.innerWidth : 0,
+        innerHeight: typeof window !== 'undefined' ? window.innerHeight : 0,
+        devicePixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio : 1
+      }
+    },
+
+    // ============ MonsterStage 事件回调 → 转发给主项目 ============
     onTargetSelected (target) {
-      // monsterStage 内部已经直接调 performSequence() 启动怪兽走；
-      // 这里只更新文案，让底部状态栏反映瞄准点
       this.lastLog = `狙击定位到 (${Math.round(target.x)}, ${Math.round(target.y)})，怪兽正在赶来`
     },
     onChoice (label) {
       this.lastLog = `用户选择：${label}`
+      // 上报给主项目（用于主项目同步自己的 UI 状态）
+      if (this.busConnected) {
+        microAppBus.emit('microapp:monster:choice', { label, targetGuid: this.targetGuid })
+      }
     },
     onStageChange (stage) {
       this.currentStage = stage
     },
     onCompleted ({ outcome }) {
-      // 整个剧本结束：只有在 outcome='destroyed' 时标记目标文件被摧毁；
-      // outcome='cancelled'（用户点了"不是"）则不摧毁，跟怪兽 + 雷欧一起飞走
+      // outcome = 'destroyed' | 'cancelled'
+      this.busy = false
       if (outcome === 'destroyed' && this.targetFile) {
-        // 按 name 匹配（避免 fakeFiles 整体替换后 targetFile 引用失效）
         const targetName = this.targetFile.name
-        this.fakeFiles = this.fakeFiles.map(f =>
-          f.name === targetName ? { ...f, destroyed: true } : f
+        const targetGuid = this.targetFile.guid
+        this.targets = this.targets.map(f =>
+          f.guid === targetGuid || f.name === targetName ? { ...f, destroyed: true } : f
         )
       }
-      // 彻底重置状态机（避免上轮 AWAIT_AIM / WALK 等残留影响下一轮召唤）
+      // 在通知主项目前快照 guid（destroyed 分支结束后 targetFile 会被清掉）
+      const completedGuid = this.targetGuid
       this.targetFile = null
       this.stageVisible = false
       this.currentStage = STAGE.IDLE
-      if (outcome === 'cancelled') {
-        this.lastLog = '不是这个？怪兽 + 雷欧一起飞走了'
-      } else {
-        this.lastLog = this.destroyedCount === this.fakeFiles.length
-          ? '全部文件都已被摧毁 ✓ 点"重置"恢复'
-          : `本轮结束，已摧毁 ${this.destroyedCount} 个文件`
+      this.lastLog = outcome === 'cancelled' ? '不是这个？怪兽 + 雷欧一起飞走了' : '已摧毁'
+      // 关键事件：通知主项目结果
+      if (this.busConnected) {
+        microAppBus.emit('microapp:monster:completed', {
+          outcome,
+          targetGuid: completedGuid,
+          targetName: completedGuid ? (this.targets.find(t => t.guid === completedGuid) || {}).name : null,
+          ts: Date.now()
+        })
       }
     },
-    resetAllFiles () {
-      this.fakeFiles = FAKE_FILES.map(f => ({ ...f, destroyed: false }))
+
+    // ============ 主项目 → 子项目的命令 ============
+    handleSummonCommand (payload = {}) {
+      if (payload.target && payload.target.guid) {
+        const file = this.findOrInsertTarget(payload.target)
+        this.summonOnFile(file, null, payload.mousePos)
+      } else {
+        this.summonRandom()
+      }
+    },
+    handleTeardownCommand () {
+      this.busy = false
       this.targetFile = null
       this.stageVisible = false
       this.currentStage = STAGE.IDLE
-      this.lastLog = '已重置所有文件'
+      this.lastLog = '主项目要求销毁 overlay'
+    },
+    handleBusResponse (payload = {}) {
+      // 由 microAppBus 内部按 requestId 配对到具体的 pending promise
+      // 这里不用做事，但保留 listener 防漏
     }
   }
 }
@@ -207,42 +391,43 @@ export default {
 <style scoped>
 .app-root {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  background: transparent;
   color: #fff;
   font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
   display: flex;
   flex-direction: column;
 }
 .app-header {
-  padding: 24px 32px 12px;
+  padding: 16px 24px 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
 }
-.app-header h1 {
-  margin: 0 0 4px;
-  font-size: 24px;
+.app-header-title {
+  font-size: 18px;
   font-weight: 700;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
 }
-.subtitle {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.65);
+.app-header-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 400;
 }
-.subtitle a {
-  color: #80d8ff;
-}
-.header-actions {
+.app-header-actions {
+  margin-top: 12px;
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
 }
-.trigger-btn,
-.reset-btn {
+.trigger-btn, .reset-btn {
   color: #fff;
   border: none;
   border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
+  padding: 8px 16px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
@@ -251,25 +436,19 @@ export default {
   background: #ff5252;
   box-shadow: 0 4px 12px rgba(255, 82, 82, 0.4);
 }
-.trigger-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 82, 82, 0.6);
-}
-.trigger-btn:disabled,
-.reset-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 .reset-btn {
   background: #448aff;
   box-shadow: 0 4px 12px rgba(68, 138, 255, 0.4);
 }
-.reset-btn:hover:not(:disabled) {
+.trigger-btn:hover:not(:disabled), .reset-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(68, 138, 255, 0.6);
+}
+.trigger-btn:disabled, .reset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .stats {
-  font-size: 13px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
   margin-left: auto;
 }
@@ -279,12 +458,28 @@ export default {
 }
 .desktop {
   flex: 1;
-  padding: 32px;
+  padding: 24px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 18px;
   align-content: start;
 }
+.desktop--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.empty-hint {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 32px 48px;
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+}
+.empty-icon { font-size: 48px; }
+.empty-title { font-size: 16px; font-weight: 700; margin-top: 8px; }
+.empty-sub { font-size: 12px; margin-top: 4px; opacity: 0.7; }
 .file-tile {
   position: relative;
   background: rgba(255, 255, 255, 0.05);
@@ -293,78 +488,39 @@ export default {
   padding: 16px 12px;
   cursor: pointer;
   text-align: center;
-  transition: transform 0.15s, background 0.15s, border-color 0.15s, opacity 0.3s;
-  user-select: none;
+  transition: transform 0.15s, background 0.15s, border-color 0.15s;
 }
 .file-tile:hover {
   transform: translateY(-2px);
   background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.25);
 }
-.file-tile.file-tile-evil {
-  border-color: rgba(255, 82, 82, 0.4);
-  background: rgba(255, 82, 82, 0.08);
-}
-.file-tile.file-tile-targeted {
+.file-tile-evil { border-color: rgba(255, 82, 82, 0.4); background: rgba(255, 82, 82, 0.08); }
+.file-tile-targeted {
   outline: 2px solid #ffeb3b;
   outline-offset: 2px;
   box-shadow: 0 0 0 6px rgba(255, 235, 59, 0.2);
-  animation: target-pulse 0.8s ease-in-out infinite alternate;
 }
-@keyframes target-pulse {
-  from { box-shadow: 0 0 0 6px rgba(255, 235, 59, 0.2); }
-  to   { box-shadow: 0 0 0 10px rgba(255, 235, 59, 0.05); }
-}
-.file-tile.file-tile-destroyed {
+.file-tile-destroyed {
   opacity: 0.55;
   background: rgba(80, 0, 0, 0.25);
   border-color: rgba(255, 82, 82, 0.5);
   cursor: not-allowed;
   filter: grayscale(0.6);
 }
-.file-tile.file-tile-destroyed:hover {
-  transform: none;
-  background: rgba(80, 0, 0, 0.25);
-}
-.file-tile.file-tile-destroyed::before {
-  content: '💥';
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  font-size: 16px;
-  opacity: 0.8;
-}
-.file-icon {
-  font-size: 36px;
-  margin-bottom: 8px;
-}
-.file-tile-destroyed .file-icon {
-  font-size: 36px;
-  filter: hue-rotate(15deg) brightness(0.8);
-}
-.file-name {
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 4px;
-  word-break: break-all;
-}
-.file-meta {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
-}
-.meta-destroyed {
-  color: #ff8a80;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
+.file-icon { font-size: 36px; margin-bottom: 8px; }
+.file-name { font-size: 12px; font-weight: 600; margin-bottom: 4px; word-break: break-all; }
+.file-meta { font-size: 11px; color: rgba(255, 255, 255, 0.5); }
+.meta-destroyed { color: #ff8a80; font-weight: 700; }
 .app-footer {
-  padding: 16px 32px;
+  padding: 12px 24px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-wrap: wrap;
-  gap: 24px;
+  gap: 16px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
 }
 .stage-log code {
   background: rgba(255, 255, 255, 0.1);
@@ -372,4 +528,5 @@ export default {
   border-radius: 4px;
   color: #80d8ff;
 }
+.bus-on { color: #80ff80 !important; }
 </style>
