@@ -99,6 +99,7 @@
 import { mapState } from 'vuex'
 import WujieVue from 'wujie-vue2'
 import { getAppPath } from 'src/ApiInvoker'
+import bus from 'components/common/bus'
 import { isDevEnv } from './microAppService'
 import {
   installGenericMicroAppIpcBridge,
@@ -113,25 +114,41 @@ import {
 } from './deleteEffectBridge'
 
 /**
- * 子项目入口 URL 解析：
- *   - dev 环境用 http://localhost:5175/（子项目 vite dev server）
- *   - prod 环境用 file://${appBasePath}_plugins/echo-monster-deleter/dist/index.html
- *     （子项目 vite build 出的 singlefile，自带全部素材；子项目目录名后续迁移时同步改名）
+ * v2026-08-08 起怪兽特效 overlay 自身不再读 SQLite 配置：
+ *   - NoteList 通过 props 传入内置微应用条目（已经包含 url / devUrl）
+ *   - settings 面板修改 microApps → bus 'microAppsChanged' → 这里监听 url 变化
+ *   - 不再有单独的「开关」开关字段：内置条目 enabled=false 时父级不调 summon()，
+ *     即便用户强制调到这里，wujieUrl 也直接返回空字符串，wujie 不挂载
  *
- * 为什么要分两套：
- *   - dev 时主项目跑在 webpack-dev-server 上，子项目 vite 单独跑，两个独立 HMR
- *   - prod 时必须 file://（electron renderer 没法跨 file:// 加载远程 url 除非禁 webSecurity）
+ * 为什么要走 props 而不是 overlay 自己读 SQLite：
+ *   - overlay 是子组件，配置管理统一收口在父组件（NoteList）
+ *   - 父级订阅 microAppsChanged → 解析后的 url 通过 prop 传递 → overlay 自动重挂载
+ *   - 避免 overlay mounted 与 NoteList microApps.load() 的异步竞态
  */
-function resolveDeleteEffectUrl (appBasePath) {
+function resolveEntryUrl (appBasePath, app) {
+  const safeApp = app || {}
+  const cfg = safeApp && typeof safeApp === 'object' ? safeApp : null
   if (isDevEnv()) {
-    return 'http://localhost:5175/'
+    return cfg && cfg.devUrl ? cfg.devUrl : 'http://localhost:5175/'
   }
+  if (cfg && cfg.url) return cfg.url
   return `file://${appBasePath || ''}_plugins/echo-monster-deleter/dist/index.html`
 }
 
 export default {
   name: 'deleteEffectOverlay',
   components: { WujieVue },
+  props: {
+    /**
+     * v2026-08-08：从父组件传入的内置微应用条目（含 url / devUrl / enabled）。
+     * 父组件负责订阅 'microAppsChanged' bus 并把对应条目传进来。
+     * enabled=false / null → wujieUrl 返回空字符串，wujie 不挂载。
+     */
+    appEntry: {
+      type: Object,
+      default: null
+    }
+  },
   data () {
     return {
       visible: false,
@@ -153,8 +170,14 @@ export default {
   },
   computed: {
     ...mapState('client', ['currentNote']),
+    /**
+     * 【v2026-08-08】总开关：appEntry.enabled=false 或 appEntry 为 null 时
+     * 直接返回空字符串 → wujie 不挂载（v-if="wujieUrl && visible"）。
+     * 这样即便父级误调了 summon()，子应用也不会偷偷加载。
+     */
     wujieUrl () {
-      return resolveDeleteEffectUrl(this.appBasePath)
+      if (!this.appEntry || !this.appEntry.enabled) return ''
+      return resolveEntryUrl(this.appBasePath, this.appEntry)
     },
     /**
      * 透传给子应用的 props。
@@ -210,6 +233,15 @@ export default {
     } catch (err) {
       console.warn('[deleteEffectOverlay] getAppPath failed:', err)
     }
+    // v2026-08-08：监听微应用列表的实时变更（settings 面板保存后触发），
+    // 父组件 NoteList 收到后会把新的内置条目通过 prop 传进来，这里无需额外订阅。
+    // 但保留一个兜底监听：万一父级没订阅，overlay 也接受「直接 bus 通知自己刷新」，
+    // 通过内部 _lastEntryRev 计数器触发 wujieMountKey++ 让 wujie 重建。
+    this._microAppsBusListener = () => {
+      // 不强自改 _cfg —— 配置由 prop 控制。这里只 bump mountKey 兜底。
+      this.wujieMountKey = (this.wujieMountKey || 0) + 1
+    }
+    bus.$on('microAppsChanged', this._microAppsBusListener)
     // 注册通用 IPC 桥（白名单 channel）
     if (!isGenericMicroAppIpcBridgeInstalled()) {
       this._busUninstall = installGenericMicroAppIpcBridge()
@@ -274,6 +306,14 @@ export default {
     if (this._effectBusUninstall) {
       try { this._effectBusUninstall() } catch (_) { /* noop */ }
       this._effectBusUninstall = null
+    }
+    if (this._cfgBusListener) {
+      try { bus.$off('deleteEffectConfigChanged', this._cfgBusListener) } catch (_) { /* noop */ }
+      this._cfgBusListener = null
+    }
+    if (this._microAppsBusListener) {
+      try { bus.$off('microAppsChanged', this._microAppsBusListener) } catch (_) { /* noop */ }
+      this._microAppsBusListener = null
     }
     if (this._mouseMoveListener) {
       window.removeEventListener('mousemove', this._mouseMoveListener)
