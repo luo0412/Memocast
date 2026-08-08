@@ -2,6 +2,20 @@
 
 基于memocast，加入自己的笔记习惯进行二创，全程鞭策AI实现(基本已失控！！！)。
 
+
+# 新功能
+
+- 2026-08-08 小怪兽删除
+  - https://github.com/531149627/MonsterDeleter
+  - https://github.com/luo0412/echo-monster-deleter
+
+<img width="420" height="468" alt="image" src="https://github.com/user-attachments/assets/4be2024a-199d-4549-a817-69cc596b56b8" />
+
+- 2026-05-01 从夯到拉
+  - https://github.com/dayun-cloud/tools
+
+---
+
 # 文件夹模式
 
 <img width="1123" height="748" alt="image" src="https://github.com/user-attachments/assets/ee1ac04d-3eb0-41fe-a58e-b414bf60e5c0" />
@@ -13,8 +27,6 @@
 # 日历模式
 
 <img width="1123" height="748" alt="image" src="https://github.com/user-attachments/assets/18fd3798-90c6-4205-a20e-5a00b43852d4" />
-
----
 
 # Muya 编辑器 Echo & Rune
 

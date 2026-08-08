@@ -1,3 +1,4 @@
+<!-- 参考来源 https://github.com/dayun-cloud/tools -->
 <template>
   <q-dialog ref='dialog' maximized class='tier-ranking-dialog'>
     <div class='tier-ranking-wrapper' @click.self='closeDialog'>
