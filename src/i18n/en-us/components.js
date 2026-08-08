@@ -288,6 +288,18 @@ export default {
   microAppsReloaded: 'Apps refreshed',
   microAppsIsMobile: 'Mobile Mode',
   microAppsIsMobileHint: 'Narrows drawer to 60vw (max 480px), suitable for H5 page aspect ratios',
+  // v2026-08-08: displayMode (drawer / fullscreen) — drawer vs fullscreen overlay
+  microAppsDisplayMode: 'Display Mode',
+  microAppsDisplayModeDrawer: 'Drawer',
+  microAppsDisplayModeFullscreen: 'Fullscreen',
+  microAppsDisplayModeHint: '"Drawer" = right-side chat drawer; "Fullscreen" = fullscreen dialog overlay (for one-shot business effects)',
+  // v2026-08-08: Built-in entries (injected by code, not deletable by users)
+  microAppsBuiltin: 'Built-in',
+  microAppsBuiltinHint: 'Apps injected by code, cannot be deleted. Name / icon / enabled can be tweaked; URL / display mode / built-in flag are locked.',
+  microAppsBuiltinView: 'View (built-in, read-only)',
+  microAppsBuiltinReadonly: 'Built-in entry is read-only',
+  microAppsBuiltinReadonlyHint: 'This is a built-in app injected by code. URL and display mode are version-controlled by the repo; name / enabled can be tweaked in Settings.',
+  microAppsBuiltinCannotDelete: 'Built-in apps cannot be deleted',
   noData: 'No data',
   yes: 'Yes',
   no: 'No',

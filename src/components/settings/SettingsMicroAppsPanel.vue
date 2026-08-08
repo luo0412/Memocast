@@ -34,7 +34,13 @@
 
             <div class="micro-app-row__name">
               <span :class="{ 'text-grey-5': !app.enabled }">{{ app.name || app.id }}</span>
-              <q-badge v-if="app.isDefault" color="red-7" :label="$t('microAppsDefault')" class="q-ml-sm" />
+              <!-- v2026-08-08 新增：内置徽章（区别于 isDefault 红徽章） -->
+              <q-badge v-if="app.isBuiltIn" outline color="grey-7" :label="$t('microAppsBuiltin')" class="q-ml-sm">
+                <q-tooltip>{{ $t('microAppsBuiltinHint') }}</q-tooltip>
+              </q-badge>
+              <q-badge v-else-if="app.isDefault" color="red-7" :label="$t('microAppsDefault')" class="q-ml-sm" />
+              <!-- v2026-08-08 新增：displayMode 标签（drawer / fullscreen） -->
+              <q-badge v-if="app.displayMode === 'fullscreen'" outline color="purple-7" :label="$t('microAppsDisplayModeFullscreen')" class="q-ml-sm" />
               <q-icon
                 v-if="!app.enabled"
                 name="block"
@@ -66,9 +72,11 @@
               size="sm"
               @click="openEdit(app)"
             >
-              <q-tooltip>{{ $t('edit') }}</q-tooltip>
+              <q-tooltip>{{ app.isBuiltIn ? $t('microAppsBuiltinView') : $t('edit') }}</q-tooltip>
             </q-btn>
+            <!-- v2026-08-08 新增：内置条目不显示删除按钮（不可删） -->
             <q-btn
+              v-if="!app.isBuiltIn"
               flat
               dense
               round
@@ -100,6 +108,7 @@ import {
   buildDefaultMicroApps,
   diffMicroAppsForReload,
   isDevEnv,
+  mergeBuiltInApps,
   normalizeMicroApps
 } from 'components/microApp/microAppService'
 import microAppEditDialog from 'components/microApp/microAppEditDialog.vue'
@@ -116,7 +125,11 @@ function makeBlankApp () {
     url: '',
     devUrl: '',
     isDefault: false,
-    enabled: true
+    enabled: true,
+    isMobile: false,
+    // v2026-08-08：用户新增条目默认抽屉模式、非内置
+    displayMode: 'drawer',
+    isBuiltIn: false
   }
 }
 
@@ -145,9 +158,20 @@ export default {
       if (this.loaded) return
       const stored = await DatabaseClient.microApps.getAll()
       let list = normalizeMicroApps(stored)
+      // v2026-08-08：首次启动 → 用完整默认列表（含内置条目）；
+      // 升级场景 → 把缺失的内置条目合并进现有列表（保留用户修改）。
       if (!list.length) {
         list = normalizeMicroApps(buildDefaultMicroApps())
         await DatabaseClient.microApps.saveAll(list)
+      } else {
+        const merged = mergeBuiltInApps(list)
+        // mergeBuiltInApps 已 normalize；只在列表真的有变化（追加了缺失内置）时落库
+        if (merged.length !== list.length) {
+          list = merged
+          await DatabaseClient.microApps.saveAll(list)
+        } else {
+          list = merged
+        }
       }
       this.apps = list
       this.loaded = true
@@ -165,12 +189,25 @@ export default {
       const idx = this.apps.findIndex(a => a.id === form.id)
       let next
       if (idx === -1) {
-        // 新增
-        next = [...this.apps, { ...form }]
+        // 新增 —— 新增的条目强制 isBuiltIn=false（用户不能新增内置条目）
+        next = [...this.apps, { ...form, isBuiltIn: false }]
       } else {
-        // 更新
+        // 更新：内置条目的 url / devUrl / displayMode / isBuiltIn 字段永远以原值为准，
+        // 用户在只读模式下即便绕过 disabled 也改不掉这些字段（normalizeMicroApp 加载时会再刷一次）。
+        const old = this.apps[idx]
+        const merged = old.isBuiltIn
+          ? {
+            ...old,
+            // 内置条目：保留 url/devUrl/displayMode/isBuiltIn，name/icon/enabled/isDefault 可改
+            name: form.name,
+            icon: form.icon,
+            enabled: form.enabled,
+            isDefault: form.isDefault,
+            isMobile: form.isMobile
+          }
+          : { ...form }
         next = this.apps.slice()
-        next.splice(idx, 1, { ...form })
+        next.splice(idx, 1, merged)
       }
       // isDefault 唯一性
       if (form.isDefault) {
@@ -182,6 +219,11 @@ export default {
       this._persistAndBroadcast(next, this.apps)
     },
     confirmDelete (app) {
+      // v2026-08-08：内置条目不可删（防御性兜底——UI 上删除按钮已隐藏，这里再次保险）。
+      if (app.isBuiltIn) {
+        this.$q.notify({ message: this.$t('microAppsBuiltinCannotDelete'), type: 'warning', position: 'top' })
+        return
+      }
       this.$q.dialog({
         title: this.$t('microAppsDelete'),
         message: this.$t('microAppsDeleteConfirm', { name: app.name || app.id }),
