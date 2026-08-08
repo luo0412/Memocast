@@ -14,6 +14,8 @@
 - 2026-05-01 从夯到拉
   - https://github.com/dayun-cloud/tools
 
+<img width="745" height="498" alt="image" src="https://github.com/user-attachments/assets/56add3c0-5862-4c44-bc6c-fcdc7fd029a3" />
+
 ---
 
 # 文件夹模式
