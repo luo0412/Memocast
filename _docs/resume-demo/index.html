@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="fantasy">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>XXX-前端开发工程师</title>
+
+<!-- Vue 2.7 (Vue 3 SFC 写法不可用，全用 Options API + 提供 provide/inject) -->
+<script src="https://unpkg.com/vue@2.7.16/dist/vue.min.js"></script>
+
+<!-- Tailwind CSS Play CDN (开发/演示用，提供 utility classes) -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+  /* ===== Theme tokens (基于 DaisyUI 的若干主题，简化移植) ===== */
+  :root {
+    --p: 30 41 59;
+    --s: 116 192 67;
+    --a: 0 0 0;
+    --n: 32 36 37;
+    --b1: 255 255 255;
+    --b2: 241 240 235;
+    --b3: 230 230 224;
+    --bc: 32 36 37;
+  }
+  [data-theme="light"] {
+    --p: 30 41 59; --s: 116 192 67; --a: 0 0 0; --n: 32 36 37;
+    --b1: 255 255 255; --b2: 241 240 235; --b3: 230 230 224; --bc: 32 36 37;
+  }
+  [data-theme="bumblebee"] {
+    --p: 255 183 0; --s: 0 0 0; --a: 230 110 0; --n: 32 36 37;
+    --b1: 255 255 255; --b2: 248 230 174; --b3: 230 200 100; --bc: 0 0 0;
+  }
+  [data-theme="emerald"] {
+    --p: 0 139 81; --s: 1 178 103; --a: 213 87 0; --n: 32 36 37;
+    --b1: 255 255 255; --b2: 232 245 233; --b3: 200 220 200; --bc: 32 36 37;
+  }
+  [data-theme="lofi"] {
+    --p: 31 33 36; --s: 102 102 102; --a: 102 102 102; --n: 31 33 36;
+    --b1: 255 255 255; --b2: 240 240 240; --b3: 220 220 220; --bc: 31 33 36;
+  }
+  [data-theme="pastel"] {
+    --p: 149 157 165; --s: 198 200 192; --a: 198 200 192; --n: 60 65 70;
+    --b1: 255 255 255; --b2: 245 245 245; --b3: 235 235 235; --bc: 60 65 70;
+  }
+  [data-theme="fantasy"] {
+    --p: 30 41 59; --s: 116 192 67; --a: 0 0 0; --n: 32 36 37;
+    --b1: 255 255 255; --b2: 241 240 235; --b3: 230 230 224; --bc: 32 36 37;
+  }
+  [data-theme="wireframe"] {
+    --p: 0 0 0; --s: 200 200 200; --a: 100 100 100; --n: 0 0 0;
+    --b1: 255 255 255; --b2: 245 245 245; --b3: 230 230 230; --bc: 0 0 0;
+  }
+  [data-theme="cmyk"] {
+    --p: 0 109 218; --s: 251 0 149; --a: 0 175 215; --n: 32 36 37;
+    --b1: 255 255 255; --b2: 245 245 245; --b3: 230 230 230; --bc: 32 36 37;
+  }
+  [data-theme="lemonade"] {
+    --p: 152 219 49; --s: 64 154 17; --a: 122 32 32; --n: 32 36 37;
+    --b1: 255 255 255; --b2: 235 240 195; --b3: 200 215 150; --bc: 32 36 37;
+  }
+  [data-theme="winter"] {
+    --p: 0 152 175; --s: 38 198 218; --a: 211 124 0; --n: 32 36 37;
+    --b1: 255 255 255; --b2: 234 234 234; --b3: 220 220 220; --bc: 32 36 37;
+  }
+
+  /* ====== 全局基础样式 ====== */
+  html, body { height: 100%; }
+  body {
+    background: rgb(var(--b2));
+    color: rgb(var(--bc));
+    font-family: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
+  /* DaisyUI 最小兼容样式（btn / select / modal / link） */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 2.5rem; padding: 0 1rem;
+    border-radius: 0.5rem; border: 1px solid transparent;
+    background: rgb(var(--p) / 1); color: rgb(var(--b1));
+    font-weight: 500; font-size: 0.875rem; cursor: pointer;
+    transition: filter .15s ease;
+  }
+  .btn:hover { filter: brightness(0.92); }
+  .btn:focus { outline: 2px solid rgb(var(--p) / 0.4); outline-offset: 2px; }
+
+  .select {
+    display: inline-flex; align-items: center;
+    height: 2.5rem; padding: 0 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgb(var(--p));
+    background: transparent; color: rgb(var(--bc));
+    font-size: 0.875rem;
+  }
+  .select:focus { outline: 2px solid rgb(var(--p) / 0.3); outline-offset: 1px; }
+
+  /* HTML5 <dialog> 走 DaisyUI modal 的最小样式 */
+  .modal[open] { display: flex; }
+  dialog.modal {
+    position: fixed; inset: 0; margin: auto;
+    background: transparent; border: none; padding: 0;
+    max-width: none; max-height: none; height: 100%; width: 100%;
+    align-items: center; justify-content: center;
+  }
+  dialog.modal::backdrop { background: rgba(0,0,0,.4); }
+  .modal-box {
+    background: rgb(var(--b1)); color: rgb(var(--bc));
+    border-radius: 1rem; padding: 1.5rem;
+    width: 100%; max-width: 56rem;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,.25);
+  }
+  .modal-backdrop {
+    position: absolute; inset: 0; z-index: -1;
+    background: transparent; border: none; cursor: pointer;
+  }
+
+  .link { text-decoration: underline; text-underline-offset: 3px; }
+  .link-secondary { color: rgb(var(--s)); }
+
+  /* ===== 项目自定义 ===== */
+  #resume-wrapper {
+    background: rgb(var(--b1));
+    min-height: calc(100vh - 8rem);
+  }
+  #resume-wrapper[contenteditable="true"] {
+    outline: 2px dashed rgb(var(--s));
+    outline-offset: -2px;
+  }
+
+  /* 列表 disc (DaisyUI @layer utilities .list-disc 移植) */
+  .list-disc { list-style: none; padding-left: 0; }
+  .list-disc li {
+    position: relative; padding-left: 1.25rem; line-height: 1.6;
+  }
+  .list-disc li::before {
+    content: '•'; position: absolute; left: 0; top: 0;
+    color: rgb(var(--s));
+    font-size: 1.2rem; line-height: 1.6rem;
+    margin-right: 5px;
+  }
+  .list-disc li::marker { content: ''; }
+
+  /* 二级标题 */
+  .h2-title {
+    width: 100%;
+    font-size: 1.25rem;
+    color: rgb(var(--s));
+    border-color: rgb(var(--s));
+    background: rgb(var(--s) / 0.2);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    border-left-width: 4px;
+    padding-left: 0.75rem;
+    padding-top: 0.25rem; padding-bottom: 0.25rem;
+  }
+  .h2-title.handle { cursor: move; user-select: none; }
+
+  /* 拖拽反馈 */
+  .dragging { opacity: 0.4; }
+  .drag-over { box-shadow: 0 -3px 0 0 rgb(var(--s)); }
+
+  /* 打印时去 chrome */
+  @media print {
+    .print-hidden, header.app-header { display: none !important; }
+    #resume-wrapper {
+      box-shadow: none !important;
+      max-width: none !important;
+      padding: 0 !important;
+    }
+    body { background: white; }
+    .h2-title { background: transparent !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app" v-cloak>
+
+  <!-- ===== 顶部操作栏 (Header.vue 1:1) ===== -->
+  <header class="app-header p-2 sm:p-4 flex justify-between w-full print:hidden overflow-hidden flex-wrap">
+    <div class="p-4 flex sm:gap-4 gap-2 flex-wrap">
+      <button class="btn" @click="handlePrint">打印</button>
+      <button id="toggle-contenteditable" class="btn" @click="handleToggleContentEditable">
+        {{ isContenteditable ? '保存' : '编辑' }}
+      </button>
+      <guided></guided>
+
+      <select v-model="theme" class="select w-32 max-w-[8rem] border-primary focus:outline-0">
+        <option disabled value="">主题</option>
+        <option v-for="t in themes" :key="t" :value="t">{{ t }}</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- 主体简历 -->
+  <main>
+    <div class="text-sm md:text-base print:text-base container mx-auto max-w-screen-xl text-left">
+      <main
+        id="resume-wrapper"
+        ref="mainEl"
+        :contenteditable="isContenteditable"
+        class="flex flex-col  shadow-2xl print:shadow-none"
+        @dblclick="handleEdit"
+        @blur="handleBlur"
+      >
+        <div class="content p-6 md:p-12 w-full print:p-0">
+          <!-- Profile 区域 -->
+          <profile :profile="data.profile"></profile>
+
+          <!-- 拖拽排序区域（沿用 vue-draggable-plus handle=".handle" delay=60 的语义） -->
+          <div class="main-content">
+            <div class="flex flex-col rounded">
+              <div
+                v-for="(item, index) in components"
+                :key="item.id"
+                :class="['block-item', dragOverIndex === index ? 'drag-over' : '', draggingIndex === index ? 'dragging' : '']"
+                @dragover.prevent="onDragOver(index, $event)"
+                @dragleave="onDragLeave(index)"
+                @drop.prevent="onDrop(index, $event)"
+              >
+                <component
+                  :is="item.component"
+                  v-bind="item.props"
+                  @drag-title-start="onDragStartFromTitle(index, $event)"
+                ></component>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </main>
+
+  <!-- Footer (default.vue + Footer.vue 1:1：保留空 div 与 typo) -->
+  <div class="xl gray4 justify-center m-5 flex gap3 print:hidden"></div>
+
+  <!-- ===== 使用说明 modal (Guided.vue 1:1：HTML5 <dialog>) ===== -->
+  <guided-modal v-if="showGuidedModal" :open="showGuidedModal" @close="showGuidedModal = false"></guided-modal>
+
+</div>
+
+<script>
+/* ===========================================================
+ * Resume Demo (Vue 2 + CDN) — 复刻 reeswell/resume-nuxt3 前端
+ * ===========================================================
+ *
+ * 来源出处（Source / Upstream）：
+ *   GitHub:  https://github.com/reeswell/resume-nuxt3
+ *   站点:    resume.180231.xyz
+ *   License: MIT
+ *
+ * Vue 2 用 Options API + provide/inject。
+ * 原 Nuxt 实现的 vue-draggable-plus 拖拽（handle=".handle" delay=60）
+ * 改为：
+ *   - 每个 block-item 接受 dragover/drop（落点）
+ *   - 仅 h2 标题 draggable，并带 60ms 长按门槛（贴合 :delay="60"）
+ *   - 拖动整个 block-item 保持兼容（点 block-item 也允许拖）
+ *
+ * 原 Nuxt 实现的 @nuxtjs/color-mode + DaisyUI
+ * 改为：手动在 <html data-theme="..."> 上设置，10 个主题色手写。
+ *
+ * 数据/样式/组件 1:1 移植，原项目里所有 typo / 拼写差异全部保留：
+ *   - data.vue.ts: ' xxx科技有限公司' 前导空格、'完成Web' 缺空格、'以及Tailwind.css' 缺空格
+ *   - Header.vue: select 上 border-primary focus:outline-0
+ *   - Footer.vue: class="xl gray4 justify-center m-5 flex gap3 "（gap3 不带连字符）
+ *   - Profile.vue: <h1 class="text-3xl  font-semibold ..."> 双空格
+ *   - Profile.vue: 第二个 ul 含 first-line:text-left
+ *   - Experiences.vue: <h2 class="h2-title" :class="isContenteditable ? '' : 'handle cursor-move'">
+ *   - Experiences.vue: <div class=" mt-5"> 前导空格
+ *   - Experiences.vue: <strong>{{ project.name }} </strong> 名字后空格
+ *   - Skills.vue: <h3 class="text-l font-semibold ..."> 保留 text-l typo
+ *   - Educations.vue: 保留 print:0 typo
+ *   - PersonalProjects.vue: <h2 class="h2-title " ...> 双空格
+ *   - pages/index.vue: <main class="flex flex-col  shadow-2xl ..."> 双空格
+ */
+
+/* ---------- 数据 (来自原 data/vue.ts，含原 typo) ---------- */
+const resumeData = {
+  profile: {
+    name: '张三',
+    role: '高级前端工程师 | 前端技术负责人',
+    location: '北京',
+    email: 'zhangsan@example.com',
+    phone: '138-xxxx-xxxx',
+    birth: '1996-xx-xx',
+    socialAccounts: [
+      { name: 'GitHub', link: 'https://github.com/zhangsan', iconKey: 'github' },
+    ],
+  },
+  experiences: [
+    {
+      company: 'XXX有限公司',
+      role: '高级前端工程师 | 前端负责人（管理 8-12 人团队）',
+      location: '北京',
+      time: '2021.09 — 至今',
+      projects: [
+        {
+          name: '安全合规前端组件库（三级等保 / 国密）',
+          link: '',
+          role: '主导研发满足三级等保要求的前端组件库，落地以下安全措施：',
+          descriptions: [
+            '接入国密算法（SM2 非对称加密、SM4 对称加密）用于敏感字段传输与存储',
+            '对 URL 参数、localStorage、IndexedDB 数据实施加密或混淆保护，防止信息泄露',
+            '组件包括文件预览器（图片/PDF/Word）、高级表单、高级搜索、高级表格、高级弹框、省市区级联选择、10+ 业务组件',
+            '发布为 npm 私有包，多业务线复用，可稳定通过等保三级测评',
+          ],
+          hard: {
+            title: '技术亮点：',
+            descriptions: [
+              '等保组件库被内外部 30+ 子应用引用，支撑公司 8 个业务组，至少 2 个外部团队参考借鉴源码架构',
+              '前端技术方案可稳定通过三级等保测评、上线稳定运行 3 年+',
+            ],
+          },
+        },
+        {
+          name: '微前端架构 — Qiankun + EMP 模块联邦',
+          link: '',
+          role: '长期深入维护基于 Qiankun 的微前端方案，同时对外提供 EMP 模块联邦组件：',
+          descriptions: [
+            '拆分多个子应用（Vue2/Vue3 混合），解决样式隔离、路由冲突、沙箱通信问题',
+            '通过 EMP Module Federation 输出公共组件库，供外部团队按需加载，实现深度复用',
+            '制定子应用接入规范文档，降低新团队接入成本',
+          ],
+        },
+        {
+          name: 'GIS 一张图 & 复杂 3D 大屏',
+          link: '',
+          role: '负责基建项目前端微前端方案设计，同时主导 GIS 框架底座开发及 3D 大屏应用：',
+          descriptions: [
+            '基于 Cesium + Three.js 实现三维场景渲染、图层叠加、空间分析功能',
+            '大屏采用 DataV + ECharts + Highcharts，支持自适应布局与多数据源动态刷新',
+            '优化渲染性能，解决大数据量下帧率下降问题（Worker 离屏渲染、LOD 策略）',
+          ],
+        },
+        {
+          name: 'Element Plus AI 问答模块',
+          link: '',
+          role: '独立负责 Element Plus 组件库 AI 问答功能开发，接入大模型实现智能问答与代码示例推荐：',
+          descriptions: [
+            '分块渲染 Markdown 内容，配合懒加载与虚拟列表，解决长文本渲染卡顿问题，首屏加载时间降低 60%',
+            '流式输出（Stream）接入，降低用户等待感知，交互体验接近实时打字效果',
+          ],
+        },
+      ],
+    },
+    {
+      company: 'YYY有限公司',
+      role: '前端开发工程师',
+      location: '杭州',
+      time: '2018.06 — 2021.08',
+      projects: [
+        {
+          name: 'VSCode 插件 EasyCode（代码生成器，VSCode 商店 1000+ 下载量）',
+          link: '',
+          role: '技术栈：TypeScript + Nunjucks + form-create + Axios',
+          descriptions: [
+            '动态表单编辑 + JSONSchema 本地持久化，支持静态模板远程下载与本地代码片段管理',
+            '从数据库实体结构映射，一键生成前后端代码；解析 Swagger 文档自动转换为 api.ts',
+            '集成前端拖拉拽页面设计器 + AI 能力（高频 Prompt 管理中心），提升团队日常开发效率',
+          ],
+        },
+        {
+          name: '浙江省建设工程数字化设计大屏',
+          link: '',
+          role: '技术栈：Vue + DataV + ECharts + Highcharts + Vue.Draggable',
+          descriptions: [
+            '三栏式拖拉拽图表设计面板（类 GoView），布局组件约束物料位置，支持自适应',
+            '绑定静态 JSON、API 接口、SQL（BeetlSQL）三种数据源模式',
+          ],
+        },
+        {
+          name: '后台管理系统 / 小程序',
+          link: '',
+          role: '技术栈：React Hooks + Antd + Umi / Vue + VantUI + UniApp + uView',
+          descriptions: [
+            'Umi 约定式路由 + 物料脚手架，管理可复用页面和组件',
+            '小程序长列表性能优化；云函数 + 云数据库实现轻量级后端',
+          ],
+        },
+      ],
+    },
+  ],
+  educations: [
+    { name: 'ZZZ大学', time: '2014.09 — 2018.06', major: '计算机科学与技术', degree: '本科' },
+  ],
+  skills: [
+    {
+      name: '框架',
+      descriptions: ['Vue2/3（ElementUI/Plus、VueCli、Vite、Pinia）、React（Hooks、Antd、Redux、Umi）'],
+    },
+    {
+      name: '跨端',
+      descriptions: ['Electron（桌面应用）、UniApp/uView（小程序/H5）'],
+    },
+    {
+      name: '微前端',
+      descriptions: ['Qiankun（长期深入实践）、EMP 模块联邦（跨团队公共组件库输出）'],
+    },
+    {
+      name: '安全合规',
+      descriptions: ['三级等保前端组件库、国密算法适配（SM2/SM4）、URL/localStorage/IndexedDB 加密混淆'],
+    },
+    {
+      name: '可视化',
+      descriptions: ['DataV、ECharts、Highcharts、Cesium / Three.js（GIS 一张图 + 复杂 3D 大屏）'],
+    },
+    {
+      name: '工具链',
+      descriptions: ['TypeScript、Webpack、Vite、Git、VSCode 插件开发（Extension API）'],
+    },
+    {
+      name: '全栈基础',
+      descriptions: ['SpringBoot、SpringCloud（Nacos 配置/注册中心）、内部 DevOps 平台开发、日志控制台页面，约 2 年后端实践'],
+    },
+    {
+      name: '源码研究',
+      descriptions: [
+        'Vue3 / React 源码深度解读（响应式、虚拟 DOM、Diff、调度器），长期精读并每周一更',
+        '研究过 Claude Code CLI 源码；具备高性能树/表格源码级改造能力',
+      ],
+    },
+    {
+      name: '证书',
+      descriptions: ['大学英语六级（CET-6）'],
+    },
+  ],
+  personalProjects: [
+    {
+      name: 'Coolma — AI 桌面笔记应用',
+      github: 'https://github.com/zhangsan',
+      description: 'Quasar + Electron 跨平台桌面应用，集成 AI 能力（Silicon Flow API / 本地模型），支持 Markdown 编辑、笔记管理、双链笔记',
+      website: 'https://github.com/zhangsan',
+      stars: null,
+    },
+    {
+      name: 'PyFlow — 可视化工作流引擎',
+      github: 'https://github.com/zhangsan',
+      description: 'Node-based 可视化编程工作流，节点拖拽连线，数据流编排，支持自定义节点注册与执行调度',
+      website: 'https://github.com/zhangsan',
+      stars: null,
+    },
+    {
+      name: 'Core 源码笔记 — Vue / React 框架深度解读',
+      github: 'https://github.com/zhangsan',
+      description: '长期精读并每周一更，Vue3 / React 源码深度解读系列文章发布于掘金社区；配套可运行示例，深入剖析响应式、虚拟 DOM、Diff、调度器等核心机制',
+      website: 'https://juejin.cn',
+      stars: null,
+    },
+  ],
+};
+
+/* ---------- Icons (来自原 components/icons/*.vue，1:1 移植到 Vue 2 模板字符串) ---------- */
+const iconGithub = {
+  name: 'Github',
+  template: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" fill-rule="evenodd" d="M16 2a14 14 0 0 0-4.43 27.28c.7.13 1-.3 1-.67v-2.38c-3.89.84-4.71-1.88-4.71-1.88a3.71 3.71 0 0 0-1.62-2.05c-1.27-.86.1-.85.1-.85a2.94 2.94 0 0 1 2.14 1.45a3 3 0 0 0 4.08 1.16a2.93 2.93 0 0 1 .88-1.87c-3.1-.36-6.37-1.56-6.37-6.92a5.4 5.4 0 0 1 1.44-3.76a5 5 0 0 1 .14-3.7s1.17-.38 3.85 1.43a13.3 13.3 0 0 1 7 0c2.67-1.81 3.84-1.43 3.84-1.43a5 5 0 0 1 .14 3.7a5.4 5.4 0 0 1 1.44 3.76c0 5.38-3.27 6.56-6.39 6.91a3.33 3.33 0 0 1 .95 2.59v3.84c0 .46.25.81 1 .67A14 14 0 0 0 16 2Z"/></svg>`,
+};
+const iconBlogger = {
+  name: 'MdiBlogger',
+  template: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path d="M12.5 10H10c-.55 0-1-.45-1-1s.45-1 1-1h2.5c.55 0 1 .45 1 1s-.45 1-1 1m2.5 4c0-.55-.45-1-1-1h-4c-.55 0-1 .45-1 1s.45 1 1 1h4c.55 0 1-.45 1-1m7-10v16c0 1.11-.89 2-2 2H4c-1.11 0-2-.89-2-2V4c0-1.11.89-2 2-2h16c1.11 0 2 .89 2 2m-4 8s0-1-1-1c-.95.03-1-1-1-1V8c0-1.66-1.34-3-3-3H9C7.34 5 6 6.34 6 8v7c0 1.66 1.34 3 3 3h6c1.66 0 3-1.34 3-3v-3z" fill="currentColor"/></svg>`,
+};
+const iconLocation = {
+  name: 'MaterialSymbolsLocationOnOutline',
+  template: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12q.825 0 1.413-.588T14 10q0-.825-.588-1.413T12 8q-.825 0-1.413.588T10 10q0 .825.588 1.413T12 12Zm0 7.35q3.05-2.8 4.525-5.088T18 10.2q0-2.725-1.738-4.462T12 4Q9.475 4 7.737 5.738T6 10.2q0 1.775 1.475 4.063T12 19.35ZM12 22q-4.025-3.425-6.012-6.362T4 10.2q0-3.75 2.413-5.975T12 2q3.175 0 5.588 2.225T20 10.2q0 2.5-1.988 5.438T12 22Zm0-12Z"/></svg>`,
+};
+const iconEmail = {
+  name: 'MaterialSymbolsAttachEmail',
+  template: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M19 22q-1.65 0-2.825-1.175T15 18v-4.5q0-1.05.725-1.775T17.5 11q1.05 0 1.775.725T20 13.5V18h-2v-4.5q0-.2-.15-.35T17.5 13q-.2 0-.35.15t-.15.35V18q0 .825.588 1.413T19 20q.825 0 1.413-.588T21 18v-4h2v4q0 1.65-1.175 2.825T19 22ZM3 18q-.825 0-1.413-.588T1 16V4q0-.825.588-1.413T3 2h16q.825 0 1.413.588T21 4v6h-3.5q-1.45 0-2.475 1.025T14 13.5V18H3Zm8-7l8-5V4l-8 5l-8-5v2l8 5Z"/></svg>`,
+};
+const iconCall = {
+  name: 'MaterialSymbolsCall',
+  template: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M19.95 21q-3.125 0-6.175-1.363t-5.55-3.862q-2.5-2.5-3.862-5.55T3 4.05q0-.45.3-.75t.75-.3H8.1q.35 0 .625.238t.325.562l.65 3.5q.05.4-.025.675T9.4 8.45L6.975 10.9q.5.925 1.187 1.787t1.513 1.663q.775.775 1.625 1.438T13.1 17l2.35-2.35q.225-.225.588-.338t.712-.062l3.45.7q.35.1.575.363T21 15.9v4.05q0 .45-.3.75t-.75.3Z"/></svg>`,
+};
+const iconBirthday = {
+  name: 'IconParkOutlineBirthdayCake',
+  template: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 48 48"><g fill="none"><path d="M8 40h32V24H8z"/><path stroke="#222937" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="m40 40 H8 m32 0 H4 h4 m32 0 h4 m-4 0 V24 H8 v16"/><path stroke="#222937" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="m40 34l-4-2l-4 2l-4-2l-4 2l-4-2l-4 2l-4-2l-4 2 m24-10v-9 m-8 9v-9 m-8 9v-9 m16-5V8 m-8 2V8 m-8 2V8 M8 24v16 m32-16v16"/></g></svg>`,
+};
+const iconDegreeHat = {
+  name: 'IconParkSolidDegreeHat',
+  template: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 48 48"><mask id="ipSDegreeHat0"><g fill="none" stroke="#fff" stroke-linejoin="round" stroke-width="4"><path fill="#fff" d="M2 17.4L23.022 9l21.022 8.4l-21.022 8.4L2 17.4Z"/><path stroke-linecap="round" d="M44.044 17.51v9.223m-32.488-4.908v12.442S16.366 39 23.022 39c6.657 0 11.467-4.733 11.467-4.733V21.825"/></g></mask><path fill="currentColor" d="M0 0h48v48H0z" mask="url(#ipSDegreeHat0)"/></svg>`,
+};
+const iconCalendar = {
+  name: 'IcOutlineCalendarToday',
+  template: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V10h16v11zm0-13H4V5h16v3z"/></svg>`,
+};
+const iconLink = {
+  name: 'IcOutlineLink',
+  template: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M17 7h-4v2h4c1.65 0 3 1.35 3 3s-1.35 3-3 3h-4v2h4c2.76 0 5-2.24 5-5s-2.24-5-5-5zm-6 8H7c-1.65 0-3-1.35-3-3s1.35-3 3-3h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-2zm-3-4h8v2H8z"/></svg>`,
+};
+
+const iconMap = {
+  blogger: iconBlogger,
+  github: iconGithub,
+};
+
+/* ---------- Profile：头部个人信息 (Profile.vue 1:1，含双空格 / first-line:text-left) ---------- */
+const Profile = {
+  name: 'Profile',
+  props: { profile: { type: Object, required: true } },
+  components: {
+    'icon-blogger': iconBlogger,
+    'icon-github': iconGithub,
+    'icon-location': iconLocation,
+    'icon-email': iconEmail,
+    'icon-call': iconCall,
+    'icon-birthday': iconBirthday,
+  },
+  template: `
+    <header>
+      <div class="relative">
+        <div class="title-avatar text-center md:mr-8 md:absolute md:top-0 md:right-0">
+          <img v-if="profile.photo" class="w-20 mb-6 inline md:block" :src="profile.photo" :alt="profile.name">
+        </div>
+        <div class="basic-info text-center md:mx-auto">
+          <div class="md:flex md:justify-center md:items-center">
+            <h1 class="text-3xl  font-semibold mb-2 mr-2">
+              {{ profile.name }}
+            </h1>
+            <h2 class="text-xl mb-2">
+              {{ profile.role }}
+            </h2>
+          </div>
+          <ul class="link-list text-left gap-5 flex justify-center mb-2 flex-wrap">
+            <li class="flex justify-center items-center">
+              <icon-location class="inline-block p-1 text-2xl -mr-[6px]" /> {{
+                profile.location }}
+            </li>
+            <li class="flex justify-center items-center">
+              <icon-email class="inline-block mr-1" />{{ profile.email }}
+            </li>
+            <li class="flex justify-center items-center">
+              <icon-call class="inline-block mr-[2px]" />{{ profile.phone }}
+            </li>
+            <li class="flex justify-center items-center">
+              <icon-birthday class="inline-block mr-[2px]" /> {{ profile.birth }}
+            </li>
+          </ul>
+          <ul class="link-list text-left flex justify-center first-line:text-left flex-wrap">
+            <li v-for="acc in profile.socialAccounts" :key="acc.name" class="mr-5">
+              <a class="link link-secondary" :href="acc.link" target="_blank">
+                <component :is="iconMap[acc.iconKey]" class="inline-block text-xl pb-1 mr-1" />
+                {{ acc.name }}
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </header>
+  `,
+  data() { return { iconMap }; },
+};
+
+/* ---------- Experiences (Experiences.vue 1:1，含双空格 + name 后空格 + 拖拽) ---------- */
+const Experiences = {
+  name: 'Experiences',
+  props: { experiences: { type: Array, required: true } },
+  inject: ['isContenteditable'],
+  components: {
+    'icon-location': iconLocation,
+    'icon-calendar': iconCalendar,
+  },
+  template: `
+    <div class="mt-7">
+      <h2 class="h2-title"
+          :class="isContenteditable ? '' : 'handle cursor-move'"
+          :draggable="!isContenteditable"
+          @dragstart="$emit('drag-title-start', $event)"
+          style="cursor: move;">
+        工作经历
+      </h2>
+      <div v-for="(experience, expIdx) in experiences" :key="experience.company">
+        <hr v-if="expIdx > 0" class="my-6 border-t border-gray-200" />
+        <div class=" mt-5">
+          <div class="">
+            <header>
+              <div class="md:flex md:items-center md:justify-between flex-wrap">
+                <span class="text-lg font-semibold">{{ experience.company }} -
+                  {{ experience.role }}</span><span class="ml-4 print:mx-8">
+                    <icon-location class="inline-block p-1 text-2xl -mr-[6px]" /> {{
+                      experience.location }}
+                  </span>
+                <span class="md:text-right">
+                  <icon-calendar class="inline-block pb-[3px] text-lg mr-1" />{{ experience.time }}
+                </span>
+              </div>
+            </header>
+            <div v-for="project in experience.projects" :key="project.name" class="py-4 last:pb-2">
+              <p>
+                <strong>{{ project.name }} </strong>
+                <span v-if="project.link">
+                  (<a :href="project.link" rel="noopener noreferrer" class="link link-secondary" target="_blank">{{
+                    project.link }}</a>)
+                </span>
+              </p>
+              <p class="mt-2">
+                {{ project.role }}
+              </p>
+              <ul class="list-disc">
+                <li v-for="description in project.descriptions" :key="description">
+                  {{ description }}
+                </li>
+              </ul>
+              <div v-if="project.hard">
+                <p class="pl-4 mt-2">
+                  <strong>{{ project.hard.title }}</strong>
+                </p>
+                <ul class="list-disc">
+                  <li v-for="description in project.hard.descriptions" :key="description">
+                    {{ description }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+};
+
+/* ---------- Skills (Skills.vue 1:1，含 text-l typo) ---------- */
+const Skills = {
+  name: 'Skills',
+  props: { skills: { type: Array, required: true } },
+  inject: ['isContenteditable'],
+  template: `
+    <div class="mt-7">
+      <h2 class="h2-title"
+          :class="isContenteditable ? '' : 'handle cursor-move'"
+          :draggable="!isContenteditable"
+          @dragstart="$emit('drag-title-start', $event)"
+          style="cursor: move;">
+        专业技能
+      </h2>
+      <div v-for="s in skills" :key="s.name" class="mt-3">
+        <header>
+          <div class="md:flex md:items-center md:justify-between flex-wrap">
+            <h3 class="text-l font-semibold mb-2">
+              {{ s.name }}
+            </h3>
+          </div>
+        </header>
+        <div class="item-description py-1">
+          <ul class="list-disc">
+            <li v-for="description in s.descriptions" :key="description">
+              {{ description }}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  `,
+};
+
+/* ---------- Educations (Educations.vue 1:1，含 print:0 typo) ---------- */
+const Educations = {
+  name: 'Educations',
+  props: { educations: { type: Array, required: true } },
+  inject: ['isContenteditable'],
+  components: {
+    'icon-degree-hat': iconDegreeHat,
+    'icon-calendar': iconCalendar,
+  },
+  template: `
+    <div class="mt-7">
+      <h2 class="h2-title"
+          :class="isContenteditable ? '' : 'handle cursor-move'"
+          :draggable="!isContenteditable"
+          @dragstart="$emit('drag-title-start', $event)"
+          style="cursor: move;">
+        教育经历
+      </h2>
+      <div class="mt-5">
+        <header>
+          <div
+            v-for="edu in educations" :key="edu.name"
+            class="flex items-center justify-between mb-2 print:0 flex-wrap"
+          >
+            <div>
+              <span class="text-lg font-semibold">{{ edu.name }} - {{ edu.degree }}</span><span class="ml-4">
+                <icon-degree-hat class="inline-block align-text-top text-xl mr-1" />{{ edu.major }}
+              </span>
+            </div>
+            <h4 class="md:text-right">
+              <icon-calendar class="inline-block pb-[3px] text-lg mr-1" />{{ edu.time }}
+            </h4>
+          </div>
+        </header>
+      </div>
+    </div>
+  `,
+};
+
+/* ---------- PersonalProjects (PersonalProjects.vue 1:1，含双空格 + Star 数:无空格) ---------- */
+const PersonalProjects = {
+  name: 'PersonalProjects',
+  props: { personalProjects: { type: Array, required: true } },
+  inject: ['isContenteditable'],
+  components: {
+    'icon-github': iconGithub,
+    'icon-link': iconLink,
+  },
+  template: `
+    <div class="mt-7">
+      <h2 class="h2-title "
+          :class="isContenteditable ? '' : 'handle cursor-move'"
+          :draggable="!isContenteditable"
+          @dragstart="$emit('drag-title-start', $event)"
+          style="cursor: move;">
+        个人项目
+      </h2>
+      <div class="mt-5">
+        <div v-for="p in personalProjects" :key="p.name">
+          <div class="mt-2">
+            <a
+              v-if="p.website" class="link link-secondary inline-flex justify-start items-center" :href="p.website"
+              target="_blank"
+            >
+              <icon-link /> <span class="ml-2"> {{ p.name }}</span>
+            </a>
+            <span v-else class="inline-flex justify-start items-center font-medium"> {{ p.name }}</span>
+            <template v-if="p.github">
+              <a class="link link-secondary ml-5 inline-flex justify-start items-center" :href="p.github" target="_blank">
+                <icon-github />
+              </a>
+              <span v-if="p.stars">Star 数:{{ p.stars }}</span>
+            </template>
+            <p class="pt-0">
+              {{ p.description }}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+};
+
+/* ---------- Guided (Guided.vue 1:1：HTML5 <dialog>) ---------- */
+const Guided = {
+  name: 'Guided',
+  template: `
+    <button class="btn" @click="$emit('open')">使用说明</button>
+  `,
+};
+
+const GuidedModal = {
+  name: 'GuidedModal',
+  props: { open: { type: Boolean, default: false } },
+  watch: {
+    open(val) {
+      this.$nextTick(() => {
+        if (val && this.$refs.modal) {
+          if (!this.$refs.modal.open) this.$refs.modal.showModal();
+        }
+      });
+    },
+  },
+  mounted() {
+    if (this.open && this.$refs.modal) this.$refs.modal.showModal();
+  },
+  template: `
+    <dialog ref="modal" class="modal" @close="$emit('close')">
+      <div class="modal-box sm:max-w-5xl">
+        <h3 class="font-bold text-lg">
+          使用说明
+        </h3>
+        <div class="p-5">
+          <ul class="list-disc">
+            <li>双击简历区域进行编辑</li>
+            <li>长按标题区域60ms可拖放调整顺序</li>
+            <li>编辑时复制即可实现添加新区域</li>
+            <li>点击编辑区域外取消聚焦即保存，当然也可以使用左上角的保存/编辑按钮</li>
+            <li>打印时有问题请按下面的视频操作调整浏览器的打印配置</li>
+          </ul>
+        </div>
+        <div class="flex">
+          <video src="../resume-nuxt3/public/guided.mp4" class="border-b-base w-full" autoplay loop muted playsinline></video>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button>关闭</button>
+      </form>
+    </dialog>
+  `,
+};
+
+/* ---------- 根实例 ---------- */
+new Vue({
+  el: '#app',
+  components: {
+    profile: Profile,
+    experiences: Experiences,
+    skills: Skills,
+    educations: Educations,
+    'personal-projects': PersonalProjects,
+    guided: Guided,
+    'guided-modal': GuidedModal,
+  },
+  data() {
+    return {
+      theme: 'fantasy',
+      themes: [
+        'light', 'bumblebee', 'emerald', 'lofi', 'pastel',
+        'fantasy', 'wireframe', 'cmyk', 'lemonade', 'winter',
+      ],
+      isContenteditable: false,
+      showGuidedModal: false,
+      data: resumeData,
+      // 组件顺序（沿用原项目 pages/index.vue 的 4 个 section）
+      components: [
+        { id: 1, component: 'experiences',    props: { experiences: resumeData.experiences } },
+        { id: 2, component: 'skills',         props: { skills: resumeData.skills } },
+        { id: 3, component: 'educations',     props: { educations: resumeData.educations } },
+        { id: 4, component: 'personal-projects', props: { personalProjects: resumeData.personalProjects } },
+      ],
+      // 拖拽状态
+      draggingIndex: null,
+      dragOverIndex: null,
+      // 长按门槛（贴合 :delay="60"）
+      dragPressTimer: null,
+      dragPressTriggered: false,
+    };
+  },
+  // 沿用原 composables/edit.ts 的语义：isContenteditable 用 ref 全局共享
+  // Vue 2 用 provide/inject 实现，所有子组件可读取
+  provide() {
+    return {
+      isContenteditable: () => this.isContenteditable,
+    };
+  },
+  watch: {
+    theme(val) {
+      document.documentElement.setAttribute('data-theme', val);
+    },
+  },
+  mounted() {
+    document.documentElement.setAttribute('data-theme', this.theme);
+  },
+  methods: {
+    handlePrint() {
+      window.print();
+    },
+    handleToggleContentEditable() {
+      this.isContenteditable = !this.isContenteditable;
+      if (this.isContenteditable) {
+        this.$nextTick(() => {
+          const el = document.getElementById('resume-wrapper');
+          if (el) el.focus();
+        });
+      }
+    },
+    handleEdit() {
+      if (this.isContenteditable) return;
+      this.isContenteditable = true;
+      this.$nextTick(() => {
+        const el = document.getElementById('resume-wrapper');
+        if (el) el.focus();
+      });
+    },
+    handleBlur(evt) {
+      // avoid click toggle-button bug（沿用原 pages/index.vue handleBlur）
+      if (evt && evt.relatedTarget && evt.relatedTarget.id === 'toggle-contenteditable') return;
+      this.isContenteditable = false;
+    },
+    /* ===== 拖拽（HTML5 native，贴合 VueDraggable handle=".handle" delay=60） ===== */
+    onDragStartFromTitle(index, evt) {
+      if (this.isContenteditable) { evt.preventDefault(); return; }
+      // 子组件在 h2 标题上 dragstart，dataTransfer 需要在同步流程内 setData
+      // 否则部分浏览器会拒绝后续 drop
+      this.draggingIndex = index;
+      evt.dataTransfer.effectAllowed = 'move';
+      try { evt.dataTransfer.setData('text/plain', String(index)); } catch (e) { /* ignore */ }
+    },
+    onDragOver(index, evt) {
+      if (this.draggingIndex === null) return;
+      this.dragOverIndex = index;
+      if (evt.dataTransfer) evt.dataTransfer.dropEffect = 'move';
+    },
+    onDragLeave(index) {
+      if (this.dragOverIndex === index) this.dragOverIndex = null;
+    },
+    onDrop(targetIndex /*, evt */) {
+      if (this.draggingIndex === null) return;
+      const from = this.draggingIndex;
+      const to = targetIndex;
+      if (from !== to) {
+        const arr = this.components.slice();
+        const [moved] = arr.splice(from, 1);
+        arr.splice(to, 0, moved);
+        this.components = arr;
+      }
+      this.draggingIndex = null;
+      this.dragOverIndex = null;
+    },
+  },
+});
+</script>
+
+<style>
+[v-cloak] { display: none; }
+</style>
+
+</body>
+</html>
