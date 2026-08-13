@@ -8,16 +8,15 @@
 - 2026-08-13 ikun历险记
   - https://github.com/Lichtspektrum/liang-intensity-calibrator
   - https://github.com/luo0412/ikun-adventure
-  - https://luo0412.github.io/ikun-adventure/
+  - https://luo0412.github.io/ikun-adventure
+  - https://raw.githubusercontent.com/luo0412/ikun-adventure/refs/heads/master/memocast-runes-2026-08-13.json
 
 ```
-原作 滑动变祖器
-
-但因果太大了，还是我们宗主好
-
-符文导入：
-https://raw.githubusercontent.com/luo0412/ikun-adventure/refs/heads/master/memocast-runes-2026-08-13.json
+@ps 原作是 滑动变祖器，但因果太大了，还是我们伟大的宗主好
 ```
+
+<img width="1282" height="960" alt="image" src="https://github.com/user-attachments/assets/dcad5be3-2338-4ab8-8e2e-494749a17c01" />
+
 
 - 2026-08-08 小怪兽删除
   - https://github.com/531149627/MonsterDeleter
