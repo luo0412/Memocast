@@ -5,6 +5,20 @@
 
 # 新功能
 
+- 2026-08-13 ikun历险记
+  - https://github.com/Lichtspektrum/liang-intensity-calibrator
+  - https://github.com/luo0412/ikun-adventure
+  - https://luo0412.github.io/ikun-adventure/
+
+```
+原作 滑动变祖器
+
+但因果太大了，还是我们宗主好
+
+符文导入：
+https://raw.githubusercontent.com/luo0412/ikun-adventure/refs/heads/master/memocast-runes-2026-08-13.json
+```
+
 - 2026-08-08 小怪兽删除
   - https://github.com/531149627/MonsterDeleter
   - https://github.com/luo0412/echo-monster-deleter

@@ -155,7 +155,17 @@ export const createRuneRendererCtor = (rune = {}) => {
 
   let ctor
   try {
-    const scopeId = `v-rune-${String(rune.id || 'default').replace(/[^a-zA-Z0-9_-]/g, '-')}`
+    // === v2026-08-13 修正 ===
+    // 历史 bug：scopeId 写成 `v-rune-${id}`，Vue 2 编译器会把 `v-rune-xxx`
+    // 当成自定义指令去 resolve，每次 destroy/mount 触发一次
+    // `[Vue warn]: Failed to resolve directive: rune-xxx`，在拖拽场景下
+    // 每秒刷几百条警告，拖拽卡顿。
+    //
+    // Vue 2 的 scopeId 必须是 `data-v-xxx` 形式（HTML data-* 属性），
+    //   - 编译器把它当普通属性写入模板（不会进 directive 解析）
+    //   - 与 Vue.extend({ _scopeId }) 配对，渲染时 setScope 自动写到根节点
+    // 这里沿用 `data-v-rune-${id}` 形式即可，避开 v-* 前缀。
+    const scopeId = `data-v-rune-${String(rune.id || 'default').replace(/[^a-zA-Z0-9_-]/g, '-')}`
     const { templateCode, script, style, hasTemplate } = normalizeRuneSfc(templateSource)
     if (!hasTemplate) {
       runeRendererCtorCache.set(cacheKey, null)

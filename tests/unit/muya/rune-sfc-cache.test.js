@@ -164,4 +164,41 @@ describe('createRuneRendererCtor 缓存契约（同步版）', () => {
     expect(result).toBeDefined()
     expect(result).not.toBeInstanceOf(Promise)
   })
+
+  // === v2026-08-13 新增：scopeId 必须是 data-v-* 形式锁定 ===
+  // 历史 bug：曾经写成 `v-rune-${id}`，Vue 2 编译器会把 `v-rune-xxx`
+  // 当成自定义指令，运行时每个 rune VM destroy 时都会刷
+  // `[Vue warn]: Failed to resolve directive: rune-xxx`，
+  // 拖拽场景下警告打到几百条，拖拽卡顿。
+  // 这里锁定 _scopeId 必须以 `data-v-` 开头，且模板注入的 scopeId
+  // 字段长什么样（避免以后有人改这里又把 v-rune- 写回来）。
+  test('scopeId 必须使用 data-v- 前缀（避免 Vue 把它当 directive 解析）', () => {
+    let capturedTemplate = ''
+    mockParseComponentImpl = () => ({
+      template: { content: '<div class="x">{{ msg }}</div>' },
+      script: { content: 'export default { props: ["msg"] }' },
+      styles: []
+    })
+    mockCompileToFunctionsImpl = (template) => {
+      capturedTemplate = String(template || '')
+      return { render: function () {}, staticRenderFns: [] }
+    }
+
+    const ctor = factory.createRuneRendererCtor({ id: '8adcdcf5-23df-4c3a-ad69-f5a1ef15197f', template: SAMPLE_SFC })
+    expect(ctor).toBeDefined()
+
+    // 1) Vue.extend({ _scopeId }) 写入的 scopeId 必须以 data-v- 开头
+    expect(ctor.options._scopeId).toMatch(/^data-v-/)
+
+    // 2) 注入到模板源码里的 scopeId 字段也必须是 data-v- 开头
+    //    否则 Vue 编译器会把它当 directive 解析。
+    //    （注意：`data-v-rune-` 内含 `v-rune-`，要排除的是
+    //     `v-rune-` 作为独立 token 的旧格式：用 (^|\s) 锚定）
+    expect(capturedTemplate).toMatch(/data-v-rune-/)
+    expect(capturedTemplate).not.toMatch(/(^|\s)v-rune-[0-9a-f-]+/i)
+
+    // 3) 兜底：rune.id 为空时也能拿到一个合法 data-v- scopeId
+    const ctorFallback = factory.createRuneRendererCtor({ id: '', template: SAMPLE_SFC })
+    expect(ctorFallback.options._scopeId).toMatch(/^data-v-/)
+  })
 })
