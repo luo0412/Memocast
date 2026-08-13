@@ -71,6 +71,7 @@ import { normalizeEchoCategory } from 'src/utils/const/runeEchoCategoryLogic'
 import { hasEchoParens } from 'src/utils/parsing/parsingRules'
 import bus from 'src/components/common/bus'
 import { EVENTS } from 'src/utils/const/eventsConst'
+import * as aiHelperDrawerContent from 'components/ai/aiHelperDrawerContent'
 
 import echoFormFields from './echoFormFields.vue'
 import echoFormEditor from './echoFormEditor.vue'
@@ -232,10 +233,11 @@ export default {
 
 只输出最终的代码块，不要输出分析过程。`
 
-      bus.$emit(EVENTS.REQUEST_AI_ECHO_HELP, {
-        prompt,
-        echoName: this.form.name || '新回响',
-        onApply: (code) => {
+      aiHelperDrawerContent.open({
+        codeGenPrompt: prompt,
+        codeGenType: 'echo',
+        codeGenTargetName: this.form.name || '新回响',
+        codeGenCallback: (code) => {
           // 更新 form 数据
           this.form.anno_source = code
           // 直接更新 monaco 编辑器

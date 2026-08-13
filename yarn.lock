@@ -17652,6 +17652,11 @@ vue-i18n@^8.0.0:
   resolved "https://mirrors.cloud.tencent.com/npm/vue-i18n/-/vue-i18n-8.28.2.tgz"
   integrity sha512-C5GZjs1tYlAqjwymaaCPDjCyGo10ajUphiwA922jKt9n7KPpqR7oM1PCwYzhB/E7+nT3wfdG3oRre5raIT1rKA==
 
+vue-layerx@1.2.1:
+  version "1.2.1"
+  resolved "https://mirrors.cloud.tencent.com/npm/vue-layerx/-/vue-layerx-1.2.1.tgz#07c9cf24fe7f5e89e075cf993465bd05a739528b"
+  integrity sha512-D3g5x3Mc9Q4c6ghqTg/Cgvg8SBsWc2TdJDa6klt66+g1KKfZcpb+WU5Yq9htsLUbhkRIwfg6g5SpM1FO0bUFjw==
+
 vue-loader@^15.10.0:
   version "15.11.1"
   resolved "https://mirrors.cloud.tencent.com/npm/vue-loader/-/vue-loader-15.11.1.tgz#dee91169211276ed43c5715caef88a56b1f497b0"

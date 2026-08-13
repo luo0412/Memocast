@@ -24,6 +24,7 @@ import syncOfflinePromptDialog from './components/sync/syncOfflinePromptDialog.v
 import FireEffect from './components/common/FireEffect.vue'
 import HeartEffect from './components/common/HeartEffect.vue'
 import ButterflyEffect from './components/common/ButterflyEffect.vue'
+import * as aiHelperDrawerContent from 'components/ai/aiHelperDrawerContent'
 
 const { RegisterErrorHandler } = ErrorHandler
 const { RegisterScheduleJobs } = ScheduleHandler
@@ -36,6 +37,14 @@ const {
 } = createNamespacedHelpers('server')
 export default {
   name: 'App',
+  // vue-layerx 要求 setup() 同步阶段调 bindHost() 把 layer parent 桥到主 app，
+  // 这样 LayerApp 子树能通过 $root / parent chain 找到主 Vue app 的 $store / $i18n
+  // （vuex / vue-i18n v8 都是 mixin beforeCreate 取 this.$root.$xxx）。
+  // 这是 vue-layerx + Options API 项目里唯一需要的 setup() 钩子；其余代码保持 Options API。
+  setup () {
+    aiHelperDrawerContent.bindHost()
+    return {}
+  },
   components: { syncOfflinePromptDialog, FireEffect, HeartEffect, ButterflyEffect },
   data () {
     return {

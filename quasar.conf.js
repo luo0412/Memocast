@@ -65,7 +65,17 @@ module.exports = function (/* ctx */) {
       // Add dependencies for transpiling with Babel (Array of string/regex)
       // (from node_modules, which are by default not transpiled).
       // Applies only if "transpile" is set to true.
-      transpileDependencies: [/vega.*/, /@quasar.*/, /coolma-muya.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/, 'sql.js', /reveal\.js.*/, /portkey-ai/, /openai/, 'consola', 'enum-plus'],
+      //
+      // 规则：任何发布到 node_modules 的依赖，只要满足以下任一条件就必须加入此列表：
+      //   1. package.json 声明了 "type": "module"（即纯 ESM 包，未提供兼容 CJS 的产物）
+      //   2. 入口产物（dist/*.js / src/*.ts）含 import/export 语法且未做 5 级降级（>= ES2015）
+      //   3. 在 Vue 2.7 + webpack 4 环境下运行时会抛
+      //      "Unexpected token export" / "Cannot use import statement outside a module"
+      //   4. 使用了顶层 await、可选链等 webpack 4 + acorn 默认不支持的语法
+      //   5. 依赖自身需要 polyfill 或运行时代码注入（如 process.env 注入）
+      // 新增依赖时请先 Read node_modules/<pkg>/package.json + 入口文件确认是否满足上述条件，
+      // 不要等到 yarn build 报错再回头补。
+      transpileDependencies: [/vega.*/, /@quasar.*/, /coolma-muya.*/, /quill/, 'htmlparser2', 'parse5', 'cheerio', /monaco.*/, 'sql.js', /reveal\.js.*/, /portkey-ai/, /openai/, 'consola', 'enum-plus', /vue-layerx.*/],
 
       // rtl: false, // https://quasar.dev/options/rtl-support
       // preloadChunks: true,

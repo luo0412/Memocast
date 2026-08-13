@@ -88,7 +88,12 @@
     <TagDialog ref="tagDialog" />
     <microAppDrawer ref="microAppDrawer" />
     <AiDoubaoDrawer ref="doubaoChatDrawer" />
-    <AiHelperDrawer ref="aiDemoDrawer" @request-ai-provider-config="handleAiProviderConfigRequest" />
+    <!--
+      AiHelperDrawer 不再以 ref 形式常驻在这里 —— 改为命令式调起：
+      aiHelperDrawerContent 模块顶层持有 layer instance（vue-layerx module-singleton），
+      右上角图标点击通过 toggleAiHelperDrawer() 命令式打开。
+      详见 aiHelperDrawerContent.js / AiHelperDrawerContent.vue。
+    -->
   </q-bar>
 </template>
 
@@ -105,8 +110,8 @@ import SettingsDialog from '../settings/SettingsDialog.vue'
 import SearchDialog from 'components/search/SearchDialog'
 import microAppDrawer from 'components/microApp/microAppDrawer'
 import AiDoubaoDrawer from 'components/ai/AiDoubaoDrawer'
-import AiHelperDrawer from 'components/ai/AiHelperDrawer'
 import echoInstanceDialog from 'components/echo/echoInstanceDialog.vue'
+import * as aiHelperDrawerContent from 'components/ai/aiHelperDrawerContent'
 import HeaderLeftGroup from './HeaderLeftGroup.vue'
 import HeaderRightGroup from './HeaderRightGroup.vue'
 
@@ -132,7 +137,6 @@ export default {
     LoginDialog,
     microAppDrawer,
     AiDoubaoDrawer,
-    AiHelperDrawer,
     EchoInstanceDialog: echoInstanceDialog,
     HeaderLeftGroup,
     HeaderRightGroup
@@ -225,7 +229,7 @@ export default {
       if (this.aiAssistantProvider === 'doubao') {
         this.$refs.doubaoChatDrawer.toggle()
       } else {
-        this.$refs.aiDemoDrawer.toggle()
+        aiHelperDrawerContent.toggle()
       }
     },
 
@@ -248,6 +252,7 @@ export default {
     handleAiProviderConfigRequest () {
       this.$nextTick(() => {
         this.$refs.settingsDialog?.show({ openAiAdd: true })
+        aiHelperDrawerContent.close()
       })
     },
 
@@ -306,6 +311,9 @@ export default {
         this.$refs.loginDialog.toggle()
       })
     }
+    // AI 助手配置缺失时由内容组件自己 emit REQUEST_AI_PROVIDER_CONFIG，
+    // 这里订阅跳到 Settings + 关闭 AI drawer。
+    bus.$on('REQUEST_AI_PROVIDER_CONFIG', this.handleAiProviderConfigRequest)
     bus.$on(events.VIEW_SHORTCUT_CALL.switchView, this.cyclePaneLayout)
     bus.$on(events.NOTE_SHORTCUT_CALL.searchNote, () => this.$refs.searchDialog.toggle())
     bus.$on(events.ECHO_EVENTS.openManager, this.handleOpenEchoManager)
@@ -317,6 +325,7 @@ export default {
     bus.$off(events.VIEW_SHORTCUT_CALL.switchView, this.cyclePaneLayout)
     bus.$off(events.ECHO_EVENTS.openManager, this.handleOpenEchoManager)
     bus.$off(events.ECHO_EVENTS.openInstanceEditor, this.handleOpenEchoManager)
+    bus.$off('REQUEST_AI_PROVIDER_CONFIG', this.handleAiProviderConfigRequest)
     bus.$off('showLoginDialog')
   },
 

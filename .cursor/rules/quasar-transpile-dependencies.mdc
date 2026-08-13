@@ -1,0 +1,84 @@
+# Quasar `transpileDependencies` 维护规则
+
+> 主项目用 Quasar CLI（webpack 4 + Babel），任何从 `node_modules` 进入打包图的依赖，
+> **默认不会被 Babel 转译**。一旦某个依赖产物体积里含 ES Module 语法或较高 ECMAScript 版本，
+> 就会出现 `Unexpected token export` / `Cannot use import statement outside a module` 等运行/构建报错。
+>
+> 必须把满足条件的依赖显式加入 `quasar.conf.js` 的 `transpileDependencies` 数组。
+
+## 1. 什么时候必须加入 `transpileDependencies`
+
+新增一个依赖（或升级大版本后），**先 `Read node_modules/<pkg>/package.json` + 入口产物**再判断。
+
+以下任一条件成立就**必须**加入：
+
+1. **声明 `"type": "module"`**：纯 ESM 包，只发 `dist/index.js`、没有 CJS 产物（或虽然有 CJS 产物但 `main` 仍指向 ESM）。
+2. **入口产物含 `import` / `export` 语法**且 `package.json` 没指明可被 webpack 直接消费的 `browser` / `module` 兼容入口。
+3. **使用 webpack 4 + acorn 默认不支持的语法**：顶层 `await`、可选链/空值合并外的较新 stage-3、装饰器元数据、私有字段等。
+4. **需要在浏览器环境注入运行时变量**：`process.env.NODE_ENV`、`global`、`Buffer` 等需通过 Babel 插件或 webpack ProvidePlugin 替换的。
+5. **依赖要求参与 Babel 转译链**（如为了 polyfill、为了与 `core-js@3` 配合、或因为它内部用了 Vue 单文件组件需要 SFC 编译）。
+
+> 反过来，下列情况**不需要**加入：
+> - 纯 CJS 产物（`"main"` 指向 `*.cjs.js`，无 `import/export`）。
+> - 仅在主进程（`src-electron/**`，用 webpack 跑 Node target）使用，由 webpack `target: 'electron-main'` 自行处理。
+> - 通过 CDN 加载（`boot/cdn-deps.js` 的 script 注入），不进入打包图。
+> - 仅在 `_plugins/<子项目>/node_modules` 中使用，子项目独立构建。
+
+## 2. 命名约定与写法
+
+- **字符串包名**用精确字符串（与 `package.json` 的 `name` 完全一致）：`'htmlparser2'`、`'parse5'`、`'consola'`、`'enum-plus'`。
+- **有命名空间或子路径的包用 RegExp**：``/^@quasar.*/``、``/^@vue.*/``、``/^vue-layerx.*/``、``/^coolma-muya.*/``。
+  - 用 ``/^pkg.*/`` 还是 ``/pkg.*/`` 取决于原列表风格，本项目当前列表用 **不带 `^`** 的形式（`/vega.*/`、`/monaco.*/`、`/@quasar.*/`、`/vue-layerx.*/`），新条目**保持一致**。
+- **正则锚点**：`pkg.*` 等价于以 `pkg` 开头的包目录，能匹配 `pkg`、`pkg/foo`、`pkg-bar`，但**不会**误匹配 `other-pkg`。
+- **新增条目按字母顺序插入**到现有数组末尾，不要打乱顺序（便于 git diff + review）。
+
+## 3. 修改流程
+
+每次给主项目添加（或升级）依赖时：
+
+1. `yarn add <pkg>` 或 `yarn add -D <pkg>`（按 `package-manager.mdc` 用 yarn）。
+2. `Read node_modules/<pkg>/package.json`，看 `type` / `main` / `module` / `exports`。
+3. `Read node_modules/<pkg>/dist/index.js`（或 `main` 指向的文件）开头 30 行，确认是否有 `import/export`。
+4. 满足 §1 任一条件 → `Edit quasar.conf.js`，在 `transpileDependencies` 数组里追加对应条目。
+5. 跑 `yarn run dev` 确认启动不报错；涉及构建产物大小变更时跑一次 `yarn build` 验证。
+6. **同步**这条新增的依赖信息：在 PR/commit message 里点出"已加入 transpileDependencies"。
+
+## 4. 已知条目速查（截至本次更新）
+
+| 条目 | 类型 | 加入原因 |
+|---|---|---|
+| `/vega.*/` | 正则 | vega / vega-* 子包使用 ESM |
+| `/@quasar.*/` | 正则 | Quasar 组件按需打包需要 Babel 转译 |
+| `/coolma-muya.*/` | 正则 | `_plugins/coolma-muya` 产物为 ESM |
+| `'quill'` | 字符串 | Quill 富文本含 ESM 入口 |
+| `'htmlparser2'` | 字符串 | 解析器源码含较新语法 |
+| `'parse5'` | 字符串 | HTML5 parser 含 ESM |
+| `'cheerio'` | 字符串 | 含可选链 + ESM 入口 |
+| `/monaco.*/` | 正则 | Monaco 编辑器 worker 产物含 ES Module |
+| `'sql.js'` | 字符串 | WebAssembly 包装 + ES Module |
+| `/reveal\.js.*/` | 正则 | reveal.js 演示框架 |
+| `/portkey-ai/` | 正则 | AI 网关 ESM 客户端 |
+| `/openai/` | 正则 | OpenAI SDK 4.x 起纯 ESM |
+| `'consola'` | 字符串 | 内部使用顶层 `await` 友好的 ESM 入口 |
+| `'enum-plus'` | 字符串 | 枚举库含 ESM 入口 |
+| `/vue-layerx.*/` | 正则 | 弹层调度库，`"type": "module"` + ESM 入口 |
+
+> 表中任何条目都不要随便删——删除前必须确认该依赖已彻底从项目移除（`yarn why <pkg>` + `Grep` 验证无 import）。
+
+## 5. 自检清单
+
+每次 `Edit quasar.conf.js` 的 `transpileDependencies` 后：
+
+- [ ] 新条目是否在 §1 列出的"必须加入"场景里？
+- [ ] 字符串 vs RegExp 是否用对了（参考 §2）？
+- [ ] 顺序是否保持字母序？
+- [ ] 旧条目是否有可删的（依赖已彻底移除）？
+- [ ] 跑了一次 `yarn run dev` 没报 `Unexpected token export`？
+- [ ] PR 描述里点出了这次新增的依赖和理由？
+
+## 6. 与其它规则的关系
+
+- **`package-manager.mdc`**：上游，安装/升级依赖一律用 yarn。
+- **`coolma-muya-sdk-guidelines.mdc`**：平行，本规则只管"它是否需要被转译"，SDK 边界另议。
+- **`plugin-vue-version.mdc`**：上游，`_plugins/*` 子项目独立构建，**不在本规则的覆盖范围**——它们的依赖走各自 `transpileDependencies` 或 Vite/esbuild，本规则的 `quasar.conf.js` 只管主项目。
+- **`safe-shell.mdc`**：上游，`yarn build` / `yarn run dev` 失败后回滚前先备份 `quasar.conf.js`。
