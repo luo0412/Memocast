@@ -41,7 +41,10 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     // 与 Quasar 构建别名一致：源码里直接 import 'src/utils/...' 或 'src/components/...' 也能解析
-    '^src/(.*)$': '<rootDir>/src/$1'
+    '^src/(.*)$': '<rootDir>/src/$1',
+    // boot/i18n 在 jest 下 require 成本高（拉 ClientFileStorage / enum-plus / src/i18n），
+    // 任何测试需要 i18n.t 走 stub。详见 tests/fixtures/i18n-stub.js。
+    '^boot/i18n$': '<rootDir>/tests/fixtures/i18n-stub.js'
   },
 
   // 全局注入 jQuery + window 给 jsdom

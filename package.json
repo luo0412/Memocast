@@ -1,6 +1,6 @@
 {
   "name": "cn.coolma.app",
-  "version": "2026.8.8",
+  "version": "2026.8.13",
   "description": "An Awesome Note Desktop Application Based On Memocast and WizNote.",
   "productName": "coolma",
   "author": "luo0412 <1095847440@qq.com>",
@@ -28,6 +28,7 @@
     "verify:boot": "jest --colors=false tests/unit/boot",
     "verify:util": "jest --colors=false tests/unit/util",
     "verify:parsing": "jest --colors=false tests/unit/parsing",
+    "verify:vue-layerx": "jest --colors=false tests/unit/vue-layerx",
     "verify:smoke": "jest --colors=false tests/smoke",
     "plugin:muya:register": "cd _plugins/coolma-muya && yarn link",
     "plugin:muya:install-deps": "cd _plugins/coolma-muya && yarn install --ignore-engines",
