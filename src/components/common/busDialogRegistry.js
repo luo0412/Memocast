@@ -141,6 +141,8 @@ function createSessionId (name) {
 function closeSession (entry, id) {
   const index = entry.sessions.findIndex(session => session.id === id)
   if (index === -1) return false
+  // Mark as invisible so vue-layerx/BusDialogLayerHost unmounts it
+  entry.sessions[index].visible = false
   entry.sessions.splice(index, 1)
   if (entry.sessions.length === 0) entry.layer.close()
   return true
@@ -184,13 +186,15 @@ export async function openBusDialog (name, payload = {}) {
       ...overrideProps.props,
       kind: overrideProps.kind || loaded.defaultDialogProps.kind
     }
-    const session = {
+    const session = Vue.observable({
       id: request.id,
       component: loaded.component,
       contentProps,
-      containerProps,
+      busDialogProps: containerProps,
+      visible: true,
+      kind: containerProps.kind || 'dialog',
       close: () => closeBusDialog(name, request.id)
-    }
+    })
     entry.sessions.push(session)
     if (!entry.layer.visible) entry.layer.open({ props: { sessions: entry.sessions } })
     return result('opened', name, { id: session.id, close: session.close })

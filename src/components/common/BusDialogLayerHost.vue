@@ -1,3 +1,23 @@
+<template>
+  <div class="bus-dialog-layer-host">
+    <busLayerContainer
+      v-for="session in sessions"
+      :key="session.id"
+      :visible="session.visible"
+      :kind="session.kind"
+      :bus-dialog-props="session.busDialogProps"
+      @update:visible="(val) => { if (!val) closeSession(session) }"
+    >
+      <component
+        :is="session.component"
+        :key="session.id"
+        v-bind="session.contentProps"
+        @close="closeSession(session)"
+      />
+    </busLayerContainer>
+  </div>
+</template>
+
 <script>
 import BusLayerContainer from './BusLayerContainer.vue'
 
@@ -5,31 +25,18 @@ import BusLayerContainer from './BusLayerContainer.vue'
 // Every session owns its component, payload and close lifecycle.
 export default {
   name: 'BusDialogLayerHost',
+  components: {
+    busLayerContainer: BusLayerContainer
+  },
   props: {
     sessions: { type: Array, required: true }
   },
   methods: {
     closeSession (session) {
-      session.close()
+      if (typeof session.close === 'function') {
+        session.close()
+      }
     }
-  },
-  render (h) {
-    return h('div', { class: 'bus-dialog-layer-host' }, this.sessions.map(session => {
-      const { kind = 'dialog', ...containerProps } = session.containerProps
-      return h(BusLayerContainer, {
-        key: session.id,
-        props: { ...containerProps, kind, visible: true },
-        on: {
-          'update:visible': visible => {
-            if (!visible) this.closeSession(session)
-          }
-        }
-      }, [h(session.component, {
-        key: session.id,
-        props: session.contentProps,
-        on: { close: () => this.closeSession(session) }
-      })])
-    }))
   }
 }
 </script>
