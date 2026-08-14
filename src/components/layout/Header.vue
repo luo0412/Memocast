@@ -88,12 +88,6 @@
     <TagDialog ref="tagDialog" />
     <microAppDrawer ref="microAppDrawer" />
     <AiDoubaoDrawer ref="doubaoChatDrawer" />
-    <!--
-      AiHelperDrawer 不再以 ref 形式常驻在这里 —— 改为命令式调起：
-      aiHelperDrawerContent 模块顶层持有 layer instance（vue-layerx module-singleton），
-      右上角图标点击通过 toggleAiHelperDrawer() 命令式打开。
-      详见 aiHelperDrawerContent.js / AiHelperDrawerContent.vue。
-    -->
   </q-bar>
 </template>
 
@@ -111,7 +105,6 @@ import SearchDialog from 'components/search/SearchDialog'
 import microAppDrawer from 'components/microApp/microAppDrawer'
 import AiDoubaoDrawer from 'components/ai/AiDoubaoDrawer'
 import echoInstanceDialog from 'components/echo/echoInstanceDialog.vue'
-import * as aiHelperDrawerContent from 'components/ai/aiHelperDrawerContent'
 import HeaderLeftGroup from './HeaderLeftGroup.vue'
 import HeaderRightGroup from './HeaderRightGroup.vue'
 
@@ -229,7 +222,7 @@ export default {
       if (this.aiAssistantProvider === 'doubao') {
         this.$refs.doubaoChatDrawer.toggle()
       } else {
-        aiHelperDrawerContent.toggle()
+        this.$busDialog.$emit('AiHelperBusDialog.open')
       }
     },
 
@@ -252,7 +245,7 @@ export default {
     handleAiProviderConfigRequest () {
       this.$nextTick(() => {
         this.$refs.settingsDialog?.show({ openAiAdd: true })
-        aiHelperDrawerContent.close()
+        this.$busDialog.$emit('AiHelperBusDialog.close')
       })
     },
 

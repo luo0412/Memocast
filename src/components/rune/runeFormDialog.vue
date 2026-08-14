@@ -70,7 +70,6 @@ import runeTemplateService from 'src/services/RuneTemplateService'
 import { hasRuneTemplateDiv } from 'src/utils/parsing/parsingRules'
 import bus from 'src/components/common/bus'
 import { EVENTS } from 'src/utils/const/eventsConst'
-import * as aiHelperDrawerContent from 'components/ai/aiHelperDrawerContent'
 
 import runeFormFields from './runeFormFields.vue'
 import runeFormEditor from './runeFormEditor.vue'
@@ -277,7 +276,7 @@ export default {
         '只输出最终的代码块，不要输出分析过程。'
       ].join('\n')
 
-      aiHelperDrawerContent.open({
+      this.$busDialog.$emit('AiHelperBusDialog.open', {
         codeGenPrompt: prompt,
         codeGenType: 'rune',
         codeGenTargetName: this.form.name || '新符文',
