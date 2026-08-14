@@ -565,3 +565,364 @@ jest.mock('src/components/common/busDialogContext', () => {
 - vue-layerx 的 setup 外 `clone()` 不会继承 host。registry 因而为每种弹框建立一个轻量 portal host；host 内渲染多个独立 session。
 - `BusLayerContainer.vue` 只负责将 `busDialogProps` 透传给 Element UI。不要维护第二份 Dialog/Drawer props 白名单，也不要用 `.sync` 修改 `visible` prop；通过 `update:visible` 回传给 host。
 - 业务组件的销毁必须只释放自身资源。不要在可多开的 `XxxBusDialog` 中调用会影响其他实例的全局 `disposeAll()`；需要时使用引用计数或实例级 dispose。
+
+---
+
+## 附录：核心文件完整代码速查
+
+### A.1 busDialogBus.js
+
+```js
+import Vue from 'vue'
+
+// 专用事件通道，与应用通用 bus 隔离，避免弹框事件与快捷键、网络错误等交叉事件冲突
+const busDialog = new Vue()
+
+export default busDialog
+```
+
+### A.2 busDialogContext.js
+
+```js
+// 必须顶层直接调用：webpack 必须静态识别 require.context 才为每个 *BusDialog.vue 单独生成 chunk
+const busDialogContext = require.context('src', true, /BusDialog\.vue$/, 'lazy')
+
+export default busDialogContext
+```
+
+### A.3 BusLayerContainer.vue
+
+```vue
+<template>
+  <el-drawer
+    v-if="kind === 'drawer'"
+    v-bind="containerProps"
+    :visible="visible"
+    @update:visible="$emit('update:visible', $event)"
+  >
+    <slot></slot>
+  </el-drawer>
+
+  <el-dialog
+    v-else
+    v-bind="containerProps"
+    :visible="visible"
+    @update:visible="$emit('update:visible', $event)"
+  >
+    <slot></slot>
+  </el-dialog>
+</template>
+
+<script>
+export default {
+  name: 'BusLayerContainer',
+  props: {
+    visible: { type: Boolean, default: false },
+    kind: { type: String, default: 'dialog' },
+    busDialogProps: { type: Object, default: () => ({}) }
+  },
+  computed: {
+    containerProps () {
+      // 剔除 registry 内部字段，只透传 Element UI 支持的 props
+      const { container, kind, ...props } = this.busDialogProps
+      return props
+    }
+  }
+}
+</script>
+```
+
+### A.4 BusDialogLayerHost.vue
+
+```vue
+<template>
+  <div class="bus-dialog-layer-host">
+    <busLayerContainer
+      v-for="session in sessions"
+      :key="session.id"
+      :visible="true"
+      :kind="session.busDialogProps.kind"
+      :bus-dialog-props="session.busDialogProps"
+      @update:visible="visible => { if (!visible) closeSession(session) }"
+    >
+      <component
+        :is="session.component"
+        v-bind="session.contentProps"
+        @close="closeSession(session)"
+      />
+    </busLayerContainer>
+  </div>
+</template>
+
+<script>
+import BusLayerContainer from './BusLayerContainer.vue'
+
+export default {
+  name: 'BusDialogLayerHost',
+  components: { busLayerContainer: BusLayerContainer },
+  props: {
+    sessions: { type: Array, required: true }
+  },
+  methods: {
+    closeSession (session) {
+      if (typeof session.close === 'function') {
+        session.close()
+      }
+    }
+  }
+}
+</script>
+```
+
+### A.5 busDialogRegistry.js（核心逻辑）
+
+```js
+import Vue from 'vue'
+import { createLayer, LayerNoContainer } from 'vue-layerx'
+import busDialog from './busDialogBus'
+import BusDialogLayerHost from './BusDialogLayerHost.vue'
+import busDialogContext from './busDialogContext'
+
+const dialogs = new Map()
+const useBusLayer = createLayer(LayerNoContainer)
+let listening = false
+let hostInitialized = false
+let nextSessionId = 0
+
+function dialogNameFromPath (path) {
+  const match = path.match(/([^/]+)\.vue$/)
+  return match ? match[1] : ''
+}
+
+function normalizeDialogProps (config, fallbackKind) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new Error('[BusDialog] busDialogProps must be an object')
+  }
+  const { container = fallbackKind, ...props } = config
+  if (container === undefined) return { kind: undefined, props }
+  if (container !== 'dialog' && container !== 'drawer') {
+    throw new Error('[BusDialog] Unsupported container: ' + container)
+  }
+  return { kind: container, props }
+}
+
+function getDefaultDialogProps (component, name) {
+  const definition = component?.props?.busDialogProps
+  if (!definition || !Object.prototype.hasOwnProperty.call(definition, 'default')) {
+    throw new Error('[BusDialog] ' + name + ' must declare props.busDialogProps.default()')
+  }
+  const config = typeof definition.default === 'function'
+    ? definition.default()
+    : definition.default
+  return normalizeDialogProps(config, 'dialog')
+}
+
+function splitOpenPayload (payload) {
+  const source = payload && typeof payload === 'object' ? payload : {}
+  const { busDialogProps, ...contentProps } = source
+  return { contentProps, override: busDialogProps === undefined ? {} : busDialogProps }
+}
+
+function result (status, name, extra = {}) {
+  return { status, name, ...extra }
+}
+
+// 注册弹框
+export function registerBusDialog (component, path) {
+  const name = dialogNameFromPath(path)
+  if (hostInitialized) {
+    throw new Error('[BusDialog] ' + name + ' registered after App.setup()')
+  }
+  const entry = {
+    name,
+    path,
+    component,
+    layer: null,
+    sessions: Vue.observable([]),
+    pending: new Set(),
+    defaultDialogProps: getDefaultDialogProps(component, name),
+    loading: null,
+    handlers: null
+  }
+  entry.handlers = {
+    open: payload => { void openBusDialog(name, payload).then(r => {
+      if (r.status === 'failed') console.error('[BusDialog] Failed to open:', r.error)
+    })},
+    close: payload => payload && payload.id
+      ? closeBusDialog(name, payload.id)
+      : closeAllBusDialogs(name)
+  }
+  dialogs.set(name, entry)
+  return entry
+}
+
+// 懒加载注册
+export function registerLazyBusDialog (path, loader) {
+  const name = dialogNameFromPath(path)
+  if (hostInitialized) {
+    throw new Error('[BusDialog] ' + name + ' registered after App.setup()')
+  }
+  const entry = {
+    name, path,
+    loader,
+    component: null,
+    layer: null,
+    sessions: Vue.observable([]),
+    pending: new Set(),
+    defaultDialogProps: null,
+    loading: null,
+    handlers: {
+      open: payload => { void openBusDialog(name, payload).then(r => {
+        if (r.status === 'failed') console.error('[BusDialog] Failed:', r.error)
+      })},
+      close: payload => payload && payload.id
+        ? closeBusDialog(name, payload.id)
+        : closeAllBusDialogs(name)
+    }
+  }
+  dialogs.set(name, entry)
+  return entry
+}
+
+// 自动扫描并注册所有 *BusDialog.vue
+busDialogContext.keys().forEach(path => {
+  registerLazyBusDialog(path, () => busDialogContext(path))
+})
+
+// App.setup() 中调用，绑定 vue-layerx portal host
+export function bindBusDialogHost () {
+  hostInitialized = true
+  dialogs.forEach(entry => {
+    if (!entry.layer) entry.layer = useBusLayer(BusDialogLayerHost)
+  })
+}
+
+async function ensureLoaded (entry) {
+  if (entry.component) return entry
+  if (!entry.loading) {
+    entry.loading = Promise.resolve(entry.loader())
+      .then(module => {
+        entry.component = module.default || module
+        entry.defaultDialogProps = getDefaultDialogProps(entry.component, entry.name)
+        entry.loading = null
+        return entry
+      })
+      .catch(error => {
+        entry.loading = null
+        throw error
+      })
+  }
+  return entry.loading
+}
+
+function createSessionId (name) {
+  return name + ':' + (++nextSessionId)
+}
+
+function closeSession (entry, id) {
+  const index = entry.sessions.findIndex(s => s.id === id)
+  if (index === -1) return false
+  entry.sessions.splice(index, 1)
+  if (entry.sessions.length === 0) entry.layer.close()
+  return true
+}
+
+function cancelPendingSession (entry, id) {
+  for (const req of entry.pending) {
+    if (req.id === id) { req.cancelled = true; entry.pending.delete(req); return true }
+  }
+  return false
+}
+
+// Promise API：打开弹框
+export async function openBusDialog (name, payload = {}) {
+  const entry = dialogs.get(name)
+  if (!entry) return result('unknown', name)
+  if (!entry.layer) return result('not-ready', name)
+
+  const { contentProps, override } = splitOpenPayload(payload)
+  const request = { id: createSessionId(name), cancelled: false }
+  entry.pending.add(request)
+
+  let loaded
+  try {
+    loaded = await ensureLoaded(entry)
+  } catch (error) {
+    entry.pending.delete(request)
+    return result('failed', name, { error })
+  }
+  entry.pending.delete(request)
+  if (request.cancelled) return result('cancelled', name, { id: request.id })
+
+  try {
+    const overrideProps = normalizeDialogProps(override)
+    const containerProps = {
+      ...loaded.defaultDialogProps.props,
+      ...overrideProps.props,
+      kind: overrideProps.kind || loaded.defaultDialogProps.kind
+    }
+    const session = Vue.observable({
+      id: request.id,
+      component: loaded.component,
+      contentProps,
+      busDialogProps: containerProps,
+      close: () => closeBusDialog(name, request.id)
+    })
+    entry.sessions.push(session)
+    if (!entry.layer.visible) entry.layer.open({ props: { sessions: entry.sessions } })
+    return result('opened', name, { id: session.id, close: session.close })
+  } catch (error) {
+    return result('failed', name, { error })
+  }
+}
+
+// 关闭指定 session
+export function closeBusDialog (name, id) {
+  const entry = dialogs.get(name)
+  if (!entry) return result('unknown', name)
+  if (id === undefined || id === null) return result('missing-id', name)
+  const closed = closeSession(entry, id) || cancelPendingSession(entry, id)
+  return result(closed ? 'closed' : 'missing', name, { id })
+}
+
+// 关闭同名所有 session
+export function closeAllBusDialogs (name) {
+  const entry = dialogs.get(name)
+  if (!entry) return result('unknown', name)
+  Array.from(entry.pending).forEach(req => { req.cancelled = true; entry.pending.delete(req) })
+  entry.sessions.splice(0)
+  entry.layer?.close()
+  return result('closed', name)
+}
+
+// 监听弹框事件（App.mounted 中调用）
+export function startBusDialogs () {
+  if (listening) return
+  listening = true
+  dialogs.forEach(entry => {
+    busDialog.$on(entry.name + '.open', entry.handlers.open)
+    busDialog.$on(entry.name + '.close', entry.handlers.close)
+  })
+}
+
+// 清理监听（App.beforeDestroy 中调用）
+export function stopBusDialogs () {
+  if (!listening) return
+  dialogs.forEach(entry => {
+    busDialog.$off(entry.name + '.open', entry.handlers.open)
+    busDialog.$off(entry.name + '.close', entry.handlers.close)
+    closeAllBusDialogs(entry.name)
+  })
+  listening = false
+}
+
+// 获取注册信息（调试用）
+export function getBusDialog (name) {
+  return dialogs.get(name)
+}
+
+// 挂载 API 到 busDialog 实例
+busDialog.open = openBusDialog
+busDialog.close = closeBusDialog
+busDialog.closeAll = closeAllBusDialogs
+```
