@@ -22,6 +22,7 @@ jest.mock('../../../src/components/common/busDialogContext', () => {
 import busDialog from '../../../src/components/common/busDialogBus'
 import {
   bindBusDialogHost,
+  closeAllBusDialogs,
   closeBusDialog,
   getBusDialog,
   openBusDialog,
@@ -58,10 +59,10 @@ describe('vue-layerx BusDialog registry', () => {
 
   afterEach(() => {
     stopBusDialogs()
-    closeBusDialog(syncName)
-    closeBusDialog(lazyName)
-    closeBusDialog(cancelledName)
-    closeBusDialog(failedName)
+    closeAllBusDialogs(syncName)
+    closeAllBusDialogs(lazyName)
+    closeAllBusDialogs(cancelledName)
+    closeAllBusDialogs(failedName)
   })
 
   test('creates a host-bound portal during App.setup without redundant bindHost calls', () => {
@@ -81,7 +82,7 @@ describe('vue-layerx BusDialog registry', () => {
       id: opened.id,
       component: entry.component,
       contentProps: { recordId: '42' },
-      containerProps: { size: '360px', appendToBody: true, kind: 'drawer' }
+      busDialogProps: { size: '360px', appendToBody: true, kind: 'drawer' }
     })])
     expect(entry.layer.open).toHaveBeenLastCalledWith({ props: { sessions: entry.sessions } })
   })
@@ -96,7 +97,7 @@ describe('vue-layerx BusDialog registry', () => {
 
     expect(entry.sessions).toContainEqual(expect.objectContaining({
       contentProps: { recordId: '43', title: 'Business title' },
-      containerProps: { size: '480px', appendToBody: true, title: 'Container title', kind: 'drawer' }
+      busDialogProps: { size: '480px', appendToBody: true, title: 'Container title', kind: 'drawer' }
     }))
   })
 
@@ -127,6 +128,7 @@ describe('vue-layerx BusDialog registry', () => {
     expect(cancelledLoader).toHaveBeenCalledTimes(1)
 
     expect(closeBusDialog(cancelledName, pendingId)).toMatchObject({ status: 'closed', id: pendingId })
+    expect(entry.pending.size).toBe(0)
     resolveCancelled({
       default: { props: { busDialogProps: { default: () => ({ title: 'Cancelled' }) } } }
     })
@@ -156,6 +158,18 @@ describe('vue-layerx BusDialog registry', () => {
     expect(entry.layer.close).toHaveBeenCalledTimes(closeCallsBefore + 1)
   })
 
+  test('requires an id for the Promise close API and makes bulk close explicit', async () => {
+    const first = await openBusDialog(syncName, { recordId: 'one' })
+    const second = await openBusDialog(syncName, { recordId: 'two' })
+    const entry = getBusDialog(syncName)
+
+    expect(closeBusDialog(syncName)).toMatchObject({ status: 'missing-id' })
+    expect(entry.sessions).toHaveLength(2)
+    expect(closeAllBusDialogs(syncName)).toMatchObject({ status: 'closed' })
+    expect(entry.sessions).toHaveLength(0)
+    expect(first.id).not.toBe(second.id)
+  })
+
   test('subscribes only to explicit open/close events and removes exact handlers', async () => {
     const on = jest.spyOn(busDialog, '$on')
     const off = jest.spyOn(busDialog, '$off')
@@ -169,6 +183,9 @@ describe('vue-layerx BusDialog registry', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(entry.sessions).toContainEqual(expect.objectContaining({ contentProps: { recordId: 'from-bus' } }))
+
+    busDialog.$emit(syncName + '.close')
+    expect(entry.sessions).toHaveLength(0)
 
     stopBusDialogs()
     expect(off).toHaveBeenCalledWith(syncName + '.open', entry.handlers.open)

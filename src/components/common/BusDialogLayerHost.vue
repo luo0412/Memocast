@@ -3,10 +3,10 @@
     <busLayerContainer
       v-for="session in sessions"
       :key="session.id"
-      :visible="session.visible"
-      :kind="session.kind"
+      :visible="true"
+      :kind="session.busDialogProps.kind"
       :bus-dialog-props="session.busDialogProps"
-      @update:visible="(val) => { if (!val) closeSession(session) }"
+      @update:visible="onVisibleChange(session, $event)"
     >
       <component
         :is="session.component"
@@ -36,6 +36,9 @@ export default {
       if (typeof session.close === 'function') {
         session.close()
       }
+    },
+    onVisibleChange (session, visible) {
+      if (!visible) this.closeSession(session)
     }
   }
 }

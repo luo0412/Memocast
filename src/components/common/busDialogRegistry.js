@@ -88,7 +88,11 @@ function registerEntry (name, path, loader, component = null) {
   }
   entry.handlers = {
     open: payload => { void openBusDialog(name, payload).then(reportOpenResult) },
-    close: payload => closeBusDialog(name, payload && payload.id)
+    // Event close without an id intentionally means close all. The Promise API
+    // stays unambiguous: close(name, id) closes exactly one session.
+    close: payload => payload && payload.id
+      ? closeBusDialog(name, payload.id)
+      : closeAllBusDialogs(name)
   }
   dialogs.set(name, entry)
   return entry
@@ -141,8 +145,6 @@ function createSessionId (name) {
 function closeSession (entry, id) {
   const index = entry.sessions.findIndex(session => session.id === id)
   if (index === -1) return false
-  // Mark as invisible so vue-layerx/BusDialogLayerHost unmounts it
-  entry.sessions[index].visible = false
   entry.sessions.splice(index, 1)
   if (entry.sessions.length === 0) entry.layer.close()
   return true
@@ -152,6 +154,7 @@ function cancelPendingSession (entry, id) {
   for (const request of entry.pending) {
     if (request.id === id) {
       request.cancelled = true
+      entry.pending.delete(request)
       return true
     }
   }
@@ -191,8 +194,6 @@ export async function openBusDialog (name, payload = {}) {
       component: loaded.component,
       contentProps,
       busDialogProps: containerProps,
-      visible: true,
-      kind: containerProps.kind || 'dialog',
       close: () => closeBusDialog(name, request.id)
     })
     entry.sessions.push(session)
@@ -203,25 +204,27 @@ export async function openBusDialog (name, payload = {}) {
   }
 }
 
-// With an id, close one session only. Without one, the legacy event closes all
-// sessions of that name. A dialog body closes itself with this.$emit('close').
+// Close exactly one session. A dialog body closes itself with this.$emit('close').
+// Use closeAllBusDialogs() for deliberate bulk teardown.
 export function closeBusDialog (name, id) {
   const entry = dialogs.get(name)
   if (!entry) return result('unknown', name)
 
-  if (id !== undefined && id !== null) {
-    const closed = closeSession(entry, id) || cancelPendingSession(entry, id)
-    return result(closed ? 'closed' : 'missing', name, { id })
-  }
-
-  entry.pending.forEach(request => { request.cancelled = true })
-  entry.sessions.splice(0)
-  entry.layer?.close()
-  return result('closed', name)
+  if (id === undefined || id === null) return result('missing-id', name)
+  const closed = closeSession(entry, id) || cancelPendingSession(entry, id)
+  return result(closed ? 'closed' : 'missing', name, { id })
 }
 
 export function closeAllBusDialogs (name) {
-  return closeBusDialog(name)
+  const entry = dialogs.get(name)
+  if (!entry) return result('unknown', name)
+  Array.from(entry.pending).forEach(request => {
+    request.cancelled = true
+    entry.pending.delete(request)
+  })
+  entry.sessions.splice(0)
+  entry.layer?.close()
+  return result('closed', name)
 }
 
 export function startBusDialogs () {
@@ -238,7 +241,7 @@ export function stopBusDialogs () {
   dialogs.forEach(entry => {
     busDialog.$off(entry.name + '.open', entry.handlers.open)
     busDialog.$off(entry.name + '.close', entry.handlers.close)
-    closeBusDialog(entry.name)
+    closeAllBusDialogs(entry.name)
   })
   listening = false
 }
@@ -249,6 +252,7 @@ export function getBusDialog (name) {
 
 // Concise event API: this.$busDialog.$emit('XxxBusDialog.open', payload).
 // Session API: const opened = await this.$busDialog.open('XxxBusDialog', payload).
+// Use close(name, id) for one session and closeAll(name) for deliberate teardown.
 busDialog.open = openBusDialog
 busDialog.close = closeBusDialog
 busDialog.closeAll = closeAllBusDialogs
