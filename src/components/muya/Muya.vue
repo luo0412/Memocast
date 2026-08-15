@@ -146,14 +146,15 @@ const rewriteRunePlaceholderSizeByNodeId = (markdown = '', nodeId = '', { width 
     height: nextHeight,
     markdownPreview: source.slice(0, 260)
   })
-  RUNE_PLACEHOLDER_FULL_TAG_RE.lastIndex = 0
-  const nextMarkdown = source.replace(RUNE_PLACEHOLDER_FULL_TAG_RE, (match, attrsSource = '', innerText = '') => {
+  // Only rewrite the Rune opening tag. The content can contain nested divs or newlines.
+  const runeOpeningTagRe = /<div\b([^>]*\bdata-rune-node-id\s*=\s*"[^"]*"[^>]*)>/gi
+  const nextMarkdown = source.replace(runeOpeningTagRe, (match, attrsSource = '') => {
     if (rewritten || readRuneDataAttr(attrsSource, 'data-rune-node-id') !== targetNodeId) return match
     let nextAttrs = attrsSource
     if (nextWidth) nextAttrs = setAttr(nextAttrs, 'data-rune-width', nextWidth)
     if (nextHeight) nextAttrs = setAttr(nextAttrs, 'data-rune-height', nextHeight)
     rewritten = true
-    return `<div${nextAttrs}>${innerText}</div>`
+    return `<div${nextAttrs}>`
   })
 
   console.info('[Muya] rewriteRunePlaceholderSizeByNodeId:result', {
