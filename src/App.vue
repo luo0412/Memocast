@@ -24,7 +24,7 @@ import syncOfflinePromptDialog from './components/sync/syncOfflinePromptDialog.v
 import FireEffect from './components/common/FireEffect.vue'
 import HeartEffect from './components/common/HeartEffect.vue'
 import ButterflyEffect from './components/common/ButterflyEffect.vue'
-import * as aiHelperDrawerContent from 'components/ai/aiHelperDrawerContent'
+import { bindBusDialogHost, startBusDialogs, stopBusDialogs } from './components/common/busDialogRegistry'
 
 const { RegisterErrorHandler } = ErrorHandler
 const { RegisterScheduleJobs } = ScheduleHandler
@@ -42,7 +42,7 @@ export default {
   // （vuex / vue-i18n v8 都是 mixin beforeCreate 取 this.$root.$xxx）。
   // 这是 vue-layerx + Options API 项目里唯一需要的 setup() 钩子；其余代码保持 Options API。
   setup () {
-    aiHelperDrawerContent.bindHost()
+    bindBusDialogHost()
     return {}
   },
   components: { syncOfflinePromptDialog, FireEffect, HeartEffect, ButterflyEffect },
@@ -56,6 +56,7 @@ export default {
     ...mapServerState(['isLogin'])
   },
   async mounted () {
+    startBusDialogs()
     RegisterErrorHandler()
     RegisterScheduleJobs(this)
     RegisterApiHandler()
@@ -130,6 +131,7 @@ export default {
     ...mapServerActions(['initServerStore', 'reLogin', 'getAllCategories', 'getCategoryNotes'])
   },
   beforeDestroy () {
+    stopBusDialogs()
     bus.$off('showOfflineSyncPrompt', this.showOfflineSyncPrompt)
     bus.$off(events.UI_EVENTS.playFireEffect, this.handlePlayFireEffect)
     bus.$off(events.UI_EVENTS.playHeartEffect, this.handlePlayHeartEffect)

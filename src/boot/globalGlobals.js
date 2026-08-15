@@ -10,9 +10,14 @@
 
 import Vue from 'vue'
 import lodash from 'lodash'
+import busDialog from 'src/components/common/busDialogBus'
 
 // ---------- $lodash ----------
 Vue.prototype.$lodash = lodash
+
+// ---------- $busDialog ----------
+// Dedicated event bus for the lazy vue-layerx BusDialog registry.
+Vue.prototype.$busDialog = busDialog
 
 // ---------- $enums ----------
 // enumSetup.js 必须在所有 Enum.create(...) 执行前先跑，所以 import 放在最前面。

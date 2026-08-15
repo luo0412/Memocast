@@ -149,7 +149,7 @@ function createMessage(id, role, content, status = 'done', meta = null) {
 // 标题从 props.titleProp 读。
 
 export default {
-  name: 'AiHelperDrawerContent',
+  name: 'AiHelperBusDialog',
   // props 由 vue-layerx open({ props }) 透传进来：
   //   - codeGenPrompt     符文 / 回响 代码生成模式的预填 prompt
   //   - codeGenTargetName 目标符文 / 回响名（用于界面提示）
@@ -158,6 +158,24 @@ export default {
   // 容器（el-drawer）的 title 由 aiHelperDrawerContent.js factory 的 props.title 直接绑定，
   // 不进内容组件。
   props: {
+    // The registry consumes this default as vue-layerx container props. Callers
+    // normally omit it and only pass the AI business payload below.
+    busDialogProps: {
+      type: Object,
+      default: () => ({
+        container: 'drawer',
+        direction: 'rtl',
+        size: '420px',
+        customClass: 'ai-demo-drawer',
+        modal: false,
+        appendToBody: true,
+        withHeader: true,
+        wrapperClosable: false,
+        closeOnPressEscape: false,
+        zIndex: 9999,
+        title: i18n.t('aiAssistant')
+      })
+    },
     codeGenPrompt: { type: String, default: '' },
     codeGenTargetName: { type: String, default: '' },
     codeGenType: { type: String, default: null },
@@ -258,7 +276,7 @@ export default {
       await MarkdownRenderer.initMarkdownRenderer()
       this.rendererReady = true
     } catch (err) {
-      console.warn('[AiHelperDrawerContent] Failed to initialize MarkdownRenderer:', err)
+      console.warn('[AiHelperBusDialog] Failed to initialize MarkdownRenderer:', err)
     }
     await this.refreshDefaultConfig()
     // 普通入口（非 codeGen）需要 provider 已就绪；codeGen 模式由调用方保证可写。
