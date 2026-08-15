@@ -1,4 +1,4 @@
-import { callFunction, uploadToFunction, CloudFnError } from 'src/utils/cloud-router'
+import { callFunction, uploadToFunction, testConnection, CloudFnError, CLOUDFN_PROVIDER_UNICLOUD } from 'src/utils/cloud-router'
 
 const CONFIG_KEY = 'cloudfn.config'
 const TOKEN_KEY = 'cloudfn.token'
@@ -23,17 +23,19 @@ export function getConfig () {
     appId: cfg.appId || '',
     platform: cfg.platform || 'h5',
     locale: cfg.locale || 'zh-Hans',
+    provider: cfg.provider || CLOUDFN_PROVIDER_UNICLOUD,
     token: localStorage.getItem(TOKEN_KEY) || cfg.token || ''
   }
 }
 
-export function setConfig ({ baseUrl, appId, platform, locale }) {
+export function setConfig ({ baseUrl, appId, platform, locale, provider }) {
   const next = {
     ...readConfig(),
     ...(baseUrl !== undefined ? { baseUrl: (baseUrl || '').replace(/\/+$/, '') } : {}),
     ...(appId !== undefined ? { appId } : {}),
     ...(platform !== undefined ? { platform } : {}),
-    ...(locale !== undefined ? { locale } : {})
+    ...(locale !== undefined ? { locale } : {}),
+    ...(provider !== undefined ? { provider } : {})
   }
   writeConfig(next)
   return getConfig()
@@ -77,6 +79,7 @@ export { CloudFnError }
 export default {
   invoke,
   upload,
+  testConnection,
   getConfig,
   setConfig,
   setToken,

@@ -37,6 +37,11 @@
 import CategoryTabs from 'components/category/CategoryTabs'
 import SettingsSectionContent from 'components/settings/SettingsSectionContent'
 import cloudFunctionConfigDialog from 'components/cloud/cloudFunctionConfigDialog'
+import cloud from 'src/services/cloud/CloudFunctionProvider'
+import { CLOUDFN_PROVIDER_MAGIC_API } from 'src/utils/cloud-router'
+
+const HELP_URL_UNICLOUD = 'https://vkdoc.fsq.pub/client/pages/callFunctionForUrl.html'
+const HELP_URL_MAGIC_API = 'https://ssssssss.org/magic-api/'
 
 export default {
   name: 'SettingsCloudFnPanel',
@@ -58,11 +63,17 @@ export default {
         label: c.label,
         icon: c.icon
       }))
+    },
+    helpUrl () {
+      const cfg = (() => {
+        try { return cloud.getConfig() } catch (e) { return {} }
+      })()
+      return cfg.provider === CLOUDFN_PROVIDER_MAGIC_API ? HELP_URL_MAGIC_API : HELP_URL_UNICLOUD
     }
   },
   methods: {
     openCloudFnHelp: function () {
-      window.open('https://vkdoc.fsq.pub/client/pages/callFunctionForUrl.html', '_blank')
+      window.open(this.helpUrl, '_blank')
     }
   }
 }

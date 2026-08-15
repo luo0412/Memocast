@@ -27,6 +27,7 @@
         debounce='300'
         v-model='form.baseUrl'
         :label="$t('cloudFunctionBaseUrl')"
+        :hint="$t('cloudFunctionBaseUrlHint')"
         :rules="[val => !val || /^https?:\/\//.test(val) || $t('fieldShouldStartWithHTTP')]"
         spellcheck='false'
         class='q-mb-sm'
@@ -42,34 +43,39 @@
         </template>
       </q-input>
 
-      <q-input
-        dense
-        debounce='300'
-        v-model='form.appId'
-        :label="$t('cloudFunctionAppId')"
-        spellcheck='false'
-        class='q-mb-sm'
-        @blur='save'
-      />
+      <template v-if='!isMagicApi'>
+        <q-input
+          dense
+          debounce='300'
+          v-model='form.appId'
+          :label="$t('cloudFunctionAppId')"
+          :hint="$t('cloudFunctionAppIdHint')"
+          spellcheck='false'
+          class='q-mb-sm'
+          @blur='save'
+        />
 
-      <q-select
-        dense
-        options-dense
-        v-model='form.platform'
-        :options='platformOptions'
-        :label="$t('cloudFunctionPlatform')"
-        emit-value
-        map-options
-        class='q-mb-sm'
-        @input='save'
-      />
+        <q-select
+          dense
+          options-dense
+          v-model='form.platform'
+          :options='platformOptions'
+          :label="$t('cloudFunctionPlatform')"
+          :hint="$t('cloudFunctionPlatformHint')"
+          emit-value
+          map-options
+          class='q-mb-sm'
+          @input='save'
+        />
+      </template>
 
       <q-input
         dense
         debounce='300'
         v-model='form.token'
         :type="showToken ? 'text' : 'password'"
-        :label="$t('cloudFunctionToken')"
+        :label="isMagicApi ? $t('cloudFunctionMagicApiToken') : $t('cloudFunctionToken')"
+        :hint="isMagicApi ? $t('cloudFunctionMagicApiTokenHint') : $t('cloudFunctionTokenHint')"
         spellcheck='false'
         class='q-mb-sm'
         @blur='save'
@@ -104,7 +110,7 @@
           color='blue-7'
           icon='science'
           :label="$t('cloudFunctionDemo')"
-          :disable='testing'
+          :disable='testing || isMagicApi'
           @click='openDemo'
         />
         <q-btn
@@ -144,6 +150,7 @@
 
 <script>
 import cloud from 'src/services/cloud/CloudFunctionProvider'
+import { CLOUDFN_PROVIDER_MAGIC_API } from 'src/utils/cloud-router'
 import cloudBspAppDemoDialog from 'components/cloud/cloudBspAppDemoDialog'
 
 export default {
@@ -166,7 +173,8 @@ export default {
       testResult: null,
       providerOptions: [
         { label: 'uniCloud', value: 'uniCloud' },
-        { label: 'sealaf', value: 'sealaf' }
+        { label: 'sealaf', value: 'sealaf' },
+        { label: 'magic-api', value: 'magic-api' }
       ],
       platformOptions: [
         { label: 'h5', value: 'h5' },
@@ -177,8 +185,14 @@ export default {
       demoDialogOpen: false
     }
   },
+  computed: {
+    isMagicApi () {
+      return this.provider === CLOUDFN_PROVIDER_MAGIC_API
+    }
+  },
   created () {
     const cfg = cloud.getConfig()
+    this.provider = cfg.provider || 'uniCloud'
     this.form = {
       baseUrl: cfg.baseUrl,
       appId: cfg.appId,
@@ -189,6 +203,7 @@ export default {
   methods: {
     save () {
       cloud.setConfig({
+        provider: this.provider,
         baseUrl: this.form.baseUrl,
         appId: this.form.appId,
         platform: this.form.platform
@@ -214,15 +229,20 @@ export default {
           this.testResult = { ok: false, message: this.$t('cloudFunctionNoBaseUrl') }
           return
         }
-        await cloud.invoke('system/ping', { ts: Date.now() })
+        await cloud.testConnection()
         this.testResult = { ok: true, message: this.$t('cloudFunctionPingOk') }
       } catch (e) {
+        console.warn('[cloudFunctionConfigDialog] testConnection failed:', e)
         this.testResult = { ok: false, message: `${e.code || ''} ${e.message || ''}` }
       } finally {
         this.testing = false
       }
     },
     openDemo () {
+      if (this.isMagicApi) {
+        this.$message && this.$message.warning(this.$t('cloudFunctionMagicApiDemoDisabled'))
+        return
+      }
       this.demoDialogOpen = true
     }
   }
