@@ -53,6 +53,7 @@ import {
 } from '../echo/echoCore.js'
 import { CURRENT_ECHO_PLACEHOLDER_RE } from '../echo/echoBuiltinsShared.js'
 import AiProofreadService from 'src/services/AiProofreadService'
+import RuneTransformer from './runeTransformer.js'
 
 const {
   mapGetters: mapServerGetters,
@@ -114,6 +115,53 @@ const rewriteRunePlaceholderByNodeId = (markdown = '', nodeId = '', nextValue = 
     return `<div data-rune-name="${escapedName}" data-rune-id="${escapedId}" data-rune-node-id="${escapeRuneAttrValue(targetNodeId)}" data-rune-value="${escapedValue}">${escapedInner}</div>`
   })
 
+  return rewritten ? nextMarkdown : source
+}
+
+const normalizeRuneDimension = value => {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : null
+}
+
+const rewriteRunePlaceholderSizeByNodeId = (markdown = '', nodeId = '', { width = null, height = null } = {}) => {
+  const source = String(markdown || '')
+  const targetNodeId = String(nodeId || '').trim()
+  const nextWidth = normalizeRuneDimension(width)
+  const nextHeight = normalizeRuneDimension(height)
+  if (!source || !targetNodeId || (!nextWidth && !nextHeight)) return source
+
+  const setAttr = (attrsSource, attrName, attrValue) => {
+    const escapedValue = escapeRuneAttrValue(attrValue)
+    const attrRe = new RegExp(`(${attrName}\\s*=\\s*")([^"]*)(")`, 'i')
+    if (attrRe.test(attrsSource)) {
+      return attrsSource.replace(attrRe, `$1${escapedValue}$3`)
+    }
+    return `${attrsSource} ${attrName}="${escapedValue}"`
+  }
+
+  let rewritten = false
+  console.info('[Muya] rewriteRunePlaceholderSizeByNodeId:start', {
+    nodeId: targetNodeId,
+    width: nextWidth,
+    height: nextHeight,
+    markdownPreview: source.slice(0, 260)
+  })
+  RUNE_PLACEHOLDER_FULL_TAG_RE.lastIndex = 0
+  const nextMarkdown = source.replace(RUNE_PLACEHOLDER_FULL_TAG_RE, (match, attrsSource = '', innerText = '') => {
+    if (rewritten || readRuneDataAttr(attrsSource, 'data-rune-node-id') !== targetNodeId) return match
+    let nextAttrs = attrsSource
+    if (nextWidth) nextAttrs = setAttr(nextAttrs, 'data-rune-width', nextWidth)
+    if (nextHeight) nextAttrs = setAttr(nextAttrs, 'data-rune-height', nextHeight)
+    rewritten = true
+    return `<div${nextAttrs}>${innerText}</div>`
+  })
+
+  console.info('[Muya] rewriteRunePlaceholderSizeByNodeId:result', {
+    nodeId: targetNodeId,
+    rewritten,
+    changed: nextMarkdown !== source,
+    resultPreview: nextMarkdown.slice(0, 320)
+  })
   return rewritten ? nextMarkdown : source
 }
 const RUNE_TEXT_SLOT = 'default'
@@ -396,6 +444,7 @@ export default {
   data () {
     return {
       contentEditor: {},
+      runeTransformer: null,
       firstTimeLoad: false,
       previousNoteInfo: null,
       previousResources: [],
@@ -583,6 +632,38 @@ export default {
       if (typeof this.contentEditor.dispatchChange === 'function') {
         this.contentEditor.dispatchChange()
       }
+      return true
+    },
+    updateRunePlaceholderSize ({ nodeId = '', width = null, height = null } = {}) {
+      console.info('[Muya] updateRunePlaceholderSize:called', { nodeId, width, height, hasEditor: !!this.contentEditor })
+      if (!this.contentEditor || typeof this.contentEditor.getMarkdown !== 'function') {
+        console.warn('[Muya] updateRunePlaceholderSize:no editor')
+        return false
+      }
+      const markdown = this.contentEditor.getMarkdown()
+      const targetNodeId = String(nodeId || '').trim()
+      if (!markdown || !targetNodeId) {
+        console.warn('[Muya] updateRunePlaceholderSize:missing markdown/nodeId', { markdownLen: markdown?.length || 0, targetNodeId })
+        return false
+      }
+
+      const nextMarkdown = rewriteRunePlaceholderSizeByNodeId(markdown, targetNodeId, { width, height })
+      if (nextMarkdown === markdown) {
+        console.warn('[Muya] updateRunePlaceholderSize:no markdown change', { nodeId: targetNodeId })
+        return false
+      }
+
+      const cursor = typeof this.contentEditor.getCursor === 'function' ? this.contentEditor.getCursor() : null
+      this.contentEditor.setMarkdown(nextMarkdown, cursor, false)
+      console.info('[Muya] updateRunePlaceholderSize:committed to editor', {
+        nodeId: targetNodeId,
+        width,
+        height,
+        markdownPreview: nextMarkdown.slice(0, 320)
+      })
+      this.updateContentsList(this.contentEditor.getTOC())
+      this.updateNoteState('changed')
+      if (typeof this.contentEditor.dispatchChange === 'function') this.contentEditor.dispatchChange()
       return true
     },
     /**
@@ -843,6 +924,10 @@ export default {
       const muyaSelf = this
       const { container } = this.contentEditor = new Muya(this.$refs.muya, {
         memoMuya: muyaSelf,
+        onRuneResize: payload => {
+          console.info('[Muya] onRuneResize option received', payload)
+          return muyaSelf.updateRunePlaceholderSize(payload)
+        },
         echoRuntime: this._echoRuntime,
         quickInsertProvider: () => {
           const runeItems = (this.runeCards || [])
@@ -914,6 +999,10 @@ export default {
           })
         },
         imageAction: this.uploadImage
+      })
+
+      this.runeTransformer = new RuneTransformer(this.contentEditor, {
+        onCommit: payload => this.contentEditor?.options?.onRuneResize?.(payload)
       })
 
       attachThemeColor(this.theme)
@@ -1055,6 +1144,10 @@ this._echoDelegate = { container: document, handler: echoCaptureHandler }
     })
   },
   beforeDestroy () {
+    if (this.runeTransformer && typeof this.runeTransformer.destroy === 'function') {
+      this.runeTransformer.destroy()
+      this.runeTransformer = null
+    }
     if (this.contentEditor && typeof this.contentEditor.destroy === 'function') {
       this.contentEditor.destroy()
     }
@@ -1230,6 +1323,16 @@ this._echoDelegate = { container: document, handler: echoCaptureHandler }
 .ag-rune-placeholder-host {
   display: block;
   margin: 6px 0;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.ag-rune-placeholder-host[data-rune-width] > *,
+.ag-rune-placeholder-host[data-rune-height] > * {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .ag-echo-placeholder-host,

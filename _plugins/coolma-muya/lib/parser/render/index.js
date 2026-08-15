@@ -16,6 +16,20 @@ const RUNE_CARD_CLASS = 'ag-rune-placeholder-card'
 const ECHO_HOST_CLASS = 'ag-echo-placeholder-host'
 const ECHO_CARD_CLASS = 'ag-echo-placeholder-card'
 
+const normalizeRuneDimension = value => {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : null
+}
+
+const applyRuneHostSize = (host, dataset = {}) => {
+  if (!host || !host.style) return
+  const width = normalizeRuneDimension(dataset.runeWidth)
+  const height = normalizeRuneDimension(dataset.runeHeight)
+  host.style.boxSizing = 'border-box'
+  host.style.width = width ? `${width}px` : ''
+  host.style.height = height ? `${height}px` : ''
+}
+
 // 解析 SFC 字符串里的 props 块，返回 [{ name, default }] 数组。
 // 这里只关心 prop 名和 default：default 是 SFC 开发者写的"无 prop 传入时的兜底值"。
 // 解析方式：从 <script> 块里用正则匹配 props: { ... } 的键值对（够用、避免引入 vue-template-compiler）。
@@ -327,6 +341,9 @@ class StateRender {
       const instanceId = String(dataset.runeId || '')
       const nodeId = String(dataset.runeNodeId || '')
       const rune = runeMap.get(runeName) || null
+      host.classList.add(RUNE_HOST_CLASS)
+      host.setAttribute('contenteditable', 'false')
+      applyRuneHostSize(host, dataset)
       const cacheKey = JSON.stringify({
         runeName,
         instanceId,
@@ -339,8 +356,6 @@ class StateRender {
         return
       }
 
-      host.classList.add(RUNE_HOST_CLASS)
-      host.setAttribute('contenteditable', 'false')
       host.innerHTML = this.createRunePlaceholderMarkup(rune, dataset)
       host.dataset.runeRenderKey = cacheKey
       this.runePlaceholderCache.set(host, cacheKey)
@@ -485,6 +500,9 @@ class StateRender {
       const runeId = String(dataset.runeId || '')
       const nodeId = String(dataset.runeNodeId || '')
       const rune = runeMap.get(runeName) || null
+      host.classList.add(RUNE_HOST_CLASS)
+      host.setAttribute('contenteditable', 'false')
+      applyRuneHostSize(host, dataset)
       const cacheKey = JSON.stringify({
         runeName,
         runeId,
@@ -497,8 +515,6 @@ class StateRender {
         return
       }
 
-      host.classList.add(RUNE_HOST_CLASS)
-      host.setAttribute('contenteditable', 'false')
       host.innerHTML = this.createRunePlaceholderMarkup(rune, dataset)
       host.dataset.runeRenderKey = cacheKey
       this.runePlaceholderCache.set(host, cacheKey)
