@@ -86,6 +86,13 @@
                 />
               </q-tab-panel>
 
+              <!-- 云函数 -->
+              <q-tab-panel name='cloudFn' class='q-pa-none'>
+                <SettingsCloudFnPanel
+                  @open-navigation-dialog='openNavigationDialog'
+                />
+              </q-tab-panel>
+
               <!-- 回响 -->
               <q-tab-panel name='echo' class='q-pa-none'>
                 <SettingsEchoPanel
@@ -98,13 +105,6 @@
                   @batch-delete='confirmBatchDeleteEcho'
                   @export-current-category='openEchoExportCurrentCategory'
                   @batch-import='openEchoBatchImport'
-                />
-              </q-tab-panel>
-
-              <!-- 云函数 -->
-              <q-tab-panel name='cloudFn' class='q-pa-none'>
-                <SettingsCloudFnPanel
-                  @open-navigation-dialog='openNavigationDialog'
                 />
               </q-tab-panel>
 
@@ -575,7 +575,7 @@ export default {
         title: this.$t('resetEchoes'),
         message: this.$t('resetEchoesConfirm'),
         cancel: { label: this.$t('cancel') },
-        ok: { label: this.$t('confirm'), color: 'cyan-7' }
+        ok: { label: this.$t('confirm'), color: 'blue-7' }
       }).onOk(async () => {
         try {
           // 用 renderer 端内置 echo 默认镜像列表覆盖 DB —— 真正把"被编辑过的内置回响"还原回默认值。

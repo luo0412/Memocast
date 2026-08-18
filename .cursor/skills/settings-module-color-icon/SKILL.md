@@ -15,8 +15,8 @@ description: Memocast Settings 模块的 theme color、icon 和功能对应关�
 | **编辑器** | `editor` | `edit_attributes` | `text-orange-8` | `#ef6c00` 橙色 |
 | **AI** | `ai` | `auto_awesome` | `text-yellow-9` | `#f9a825` 黄色 |
 | **云服务** | `server` | `storage` | `text-green-7` | `#43a047` 绿色 |
-| **回响** | `echo` | `graphic_eq` | `text-cyan-7` | `#00acc1` 青色 |
-| **云函数** | `cloudFn` | `cloud_circle` | `text-blue-7` | `#0288d1` 蓝色 |
+| **云函数** | `cloudFn` | `cloud_circle` | `text-cyan-7` | `#00acc1` 青色 |
+| **回响** | `echo` | `graphic_eq` | `text-blue-7` | `#0288d1` 蓝色 |
 | **符文** | `rune` | `star` | `text-purple-7` | `#9c27b0` 紫色 |
 
 ### 图标选择依据
@@ -25,8 +25,8 @@ description: Memocast Settings 模块的 theme color、icon 和功能对应关�
 - **编辑器** → `edit_attributes`（编辑属性）：编辑器是核心功能
 - **AI** → `auto_awesome`（自动/精彩）：AI 的智能感
 - **云服务** → `storage`（存储）：同步即数据存储
-- **回响** → `graphic_eq`（音频均衡）：回响的声波/频率视觉隐喻
 - **云函数** → `cloud_circle`（云圈）：云的明确标识
+- **回响** → `graphic_eq`（音频均衡）：回响的声波/频率视觉隐喻
 - **符文** → `star`（星星）：符文的魔法/特殊感
 
 ## 二级导航（各 Panel 内部 SubTab）

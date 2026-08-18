@@ -51,7 +51,7 @@ export default {
     colorTheme: {
       type: String,
       default: 'purple',
-      validator: v => ['purple', 'cyan', 'primary', 'secondary', 'accent', 'positive', 'negative', 'info', 'warning', 'red', 'orange'].includes(v)
+      validator: v => ['purple', 'cyan', 'blue', 'primary', 'secondary', 'accent', 'positive', 'negative', 'info', 'warning', 'red', 'orange'].includes(v)
     }
   },
   data () {
@@ -64,6 +64,7 @@ export default {
       const map = {
         purple: 'purple-7',
         cyan: 'cyan-7',
+        blue: 'blue-7',
         primary: 'primary',
         secondary: 'secondary',
         accent: 'accent',
@@ -228,6 +229,34 @@ export default {
   width: 3px;
   height: 60%;
   background: linear-gradient(180deg, #00acc1 0%, #00838f 100%);
+  border-radius: 0 3px 3px 0;
+}
+
+/* ====================== 蓝色主题 (回响) ====================== */
+.category-tabs--blue ::v-deep(.q-tab) {
+  background: transparent;
+  color: #0288d1;
+}
+
+.category-tabs--blue ::v-deep(.q-tab:hover:not(.q-tab--active):not(.q-tab--disable)) {
+  background: rgba(2, 136, 209, 0.08);
+}
+
+.category-tabs--blue ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(2, 136, 209, 0.18) 0%, rgba(2, 136, 209, 0.08) 100%);
+  color: #0277bd;
+  box-shadow: 0 2px 8px rgba(2, 136, 209, 0.25);
+}
+
+.category-tabs--blue ::v-deep(.q-tab--active)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, #0288d1 0%, #0277bd 100%);
   border-radius: 0 3px 3px 0;
 }
 
@@ -426,6 +455,20 @@ export default {
 
 .body--dark .category-tabs--cyan ::v-deep(.q-tab--active) .category-tab-label {
   color: #80cbc4;
+}
+
+.body--dark .category-tabs--blue ::v-deep(.q-tab) {
+  color: #81d4fa;
+}
+
+.body--dark .category-tabs--blue ::v-deep(.q-tab--active) {
+  background: linear-gradient(135deg, rgba(41, 182, 246, 0.3) 0%, rgba(41, 182, 246, 0.15) 100%);
+  color: #b3e5fc;
+  box-shadow: 0 2px 8px rgba(41, 182, 246, 0.35);
+}
+
+.body--dark .category-tabs--blue ::v-deep(.q-tab--active) .category-tab-label {
+  color: #b3e5fc;
 }
 
 .body--dark .category-tabs--primary ::v-deep(.q-tab) {

@@ -15,7 +15,7 @@
             v-if="!loading && !loadError && cards.length > 0"
             dense
             color="white"
-            text-color="blue-7"
+            text-color="cyan-7"
             :label="$t('navigationCenterCount', { count: cards.length })"
             class="q-ml-sm"
           />
@@ -37,18 +37,18 @@
       <q-card-section class="nav-dialog-body">
         <q-banner
           v-if="loadError"
-          class="bg-blue-1 text-blue-10 q-mb-md nav-error-banner"
+          class="bg-cyan-1 text-cyan-10 q-mb-md nav-error-banner"
           rounded
         >
           <template v-slot:avatar>
-            <q-icon name="error_outline" color="blue-7" />
+            <q-icon name="error_outline" color="cyan-7" />
           </template>
           <div class="text-body2">{{ loadError.message }}</div>
           <template v-slot:action>
             <q-btn
               flat
               dense
-              color="blue-9"
+              color="cyan-9"
               :label="$t('navigationCenterRetry')"
               @click="load(true)"
             />
@@ -56,7 +56,7 @@
               v-if="loadError.code === 'NO_BASE_URL'"
               flat
               dense
-              color="blue-9"
+              color="cyan-9"
               :label="$t('navigationCenterGoConfig')"
               @click="emitGoConfig"
             />
@@ -64,7 +64,7 @@
         </q-banner>
 
         <div v-if="loading && cards.length === 0" class="nav-loading">
-          <q-spinner-puff color="blue-6" size="3em" />
+          <q-spinner-puff color="cyan-6" size="3em" />
           <div class="text-body2 text-grey-7 q-mt-md">{{ $t('loading') }}</div>
         </div>
 
@@ -72,7 +72,7 @@
           v-else-if="!loadError && cards.length === 0"
           class="nav-empty"
         >
-          <q-icon name="explore_off" size="3.5em" color="blue-4" />
+          <q-icon name="explore_off" size="3.5em" color="cyan-4" />
           <div class="text-subtitle1 text-grey-7 q-mt-md">
             {{ $t('navigationCenterEmpty') }}
           </div>
@@ -98,7 +98,7 @@
                 @error="onImgError($event)"
               />
               <div v-else class="nav-card__placeholder">
-                <q-icon name="image_not_supported" size="2.5em" color="blue-3" />
+                <q-icon name="image_not_supported" size="2.5em" color="cyan-3" />
               </div>
               <div class="nav-card__overlay">
                 <q-icon name="open_in_new" color="white" size="1.2em" />
@@ -163,7 +163,7 @@ export default {
         if (forceReload) {
           this.$q.notify({
             message: this.$t('navigationCenterCount', { count: this.cards.length }),
-            color: 'blue-6',
+            color: 'cyan-6',
             icon: 'check',
             position: 'top',
             timeout: 1500
@@ -188,7 +188,7 @@ export default {
       if (!item || !item.targetUrl) {
         this.$q.notify({
           message: this.$t('navigationCenterLoadFailed', { message: 'targetUrl missing' }),
-          color: 'blue-7',
+          color: 'cyan-7',
           icon: 'error',
           position: 'top'
         })

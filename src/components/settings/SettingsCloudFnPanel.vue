@@ -3,12 +3,12 @@
     <CategoryTabs
       v-model='subTab'
       :tabs='subTabOptions'
-      color-theme='info'
+      color-theme='cyan'
     />
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-cloudfn-panel'>
       <!-- 配置 -->
-      <SettingsSectionContent v-if='subTab === $enums.CloudFnSubEnum.Config' :title="$t('cloudFnConfig')" accent-color='blue-7'>
+      <SettingsSectionContent v-if='subTab === $enums.CloudFnSubEnum.Config' :title="$t('cloudFnConfig')" accent-color='cyan-7'>
         <template v-slot:actions>
           <q-btn flat dense size='sm' icon='help_outline' @click='openCloudFnHelp'>
             <q-tooltip>{{ $t('cloudFunctionDoc') }}</q-tooltip>
@@ -18,15 +18,15 @@
       </SettingsSectionContent>
 
       <!-- 导航中心 -->
-      <SettingsSectionContent v-if='subTab === $enums.CloudFnSubEnum.Navigation' :title="$t('cloudFnNavigation')" accent-color='blue-7'>
-        <q-banner rounded dense class='bg-blue-1 text-blue-10 q-mb-md'>
+      <SettingsSectionContent v-if='subTab === $enums.CloudFnSubEnum.Navigation' :title="$t('cloudFnNavigation')" accent-color='cyan-7'>
+        <q-banner rounded dense class='bg-cyan-1 text-cyan-10 q-mb-md'>
           <template v-slot:avatar>
-            <q-icon name='info_outline' color='blue-7' />
+            <q-icon name='info_outline' color='cyan-7' />
           </template>
           {{ $t('navigationCenterHint') }}
         </q-banner>
         <div class='text-center q-pa-lg'>
-          <q-btn color='blue-7' unelevated icon='explore' :label="$t('openNavigationCenter')" @click='$emit("open-navigation-dialog")' />
+          <q-btn color='cyan-7' unelevated icon='explore' :label="$t('openNavigationCenter')" @click='$emit("open-navigation-dialog")' />
         </div>
       </SettingsSectionContent>
     </div>

@@ -8,7 +8,7 @@
         <q-option-group
           v-model='provider'
           :options='providerOptions'
-          color='blue-7'
+          color='cyan-7'
           type='radio'
           inline
           class='cloudfn-provider-options'
@@ -107,7 +107,7 @@
         />
         <q-btn
           flat
-          color='blue-7'
+          color='cyan-7'
           icon='science'
           :label="$t('cloudFunctionDemo')"
           :disable='testing || isMagicApi'

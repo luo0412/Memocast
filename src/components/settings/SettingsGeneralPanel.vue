@@ -102,7 +102,7 @@
             <span>{{ $t('resetEchoes') }}</span>
             <q-btn
               class='fab-btn'
-              flat no-caps color='cyan-7'
+              flat no-caps color='blue-7'
               icon='graphic_eq'
               :label="$t('resetEchoes')"
               @click='$emit("reset-echoes")'

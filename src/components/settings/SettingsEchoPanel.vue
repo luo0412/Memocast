@@ -3,21 +3,21 @@
     <CategoryTabs
       v-model='category'
       :tabs='categoryOptions'
-      color-theme='cyan'
+      color-theme='blue'
     />
     <q-separator vertical class='settings-dialog-sep' />
     <div class='settings-echo-panel'>
-      <SettingsSectionContent :title='currentCategoryLabel' accent-color='cyan-7'>
+      <SettingsSectionContent :title='currentCategoryLabel' accent-color='blue-7'>
         <template v-slot:actions>
           <div class='settings-section-actions'>
             <template v-if='!isCurrentCategoryBuiltin'>
-              <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("echoCardAdd")' icon='add' color='cyan-7' size='sm' @click='$emit("add-echo")' />
+              <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("echoCardAdd")' icon='add' color='blue-7' size='sm' @click='$emit("add-echo")' />
               <template v-else>
                 <q-btn dense flat no-caps :label='$t("cancelBatchDelete")' icon='close' color='grey-6' size='sm' @click='exitSelectionMode' />
                 <q-btn dense flat no-caps :label="$t('selectedCount', { count: selected.length })" icon='delete_sweep' color='negative' size='sm' :disable='selected.length === 0' @click='$emit("batch-delete", [...selected])' />
               </template>
-              <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("echoBatchImport")' icon='file_upload' color='cyan-7' size='sm' @click='onBatchImport' />
-              <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("echoBatchExport")' icon='file_download' color='cyan-7' size='sm' :disable='localEchoesInCategory.length === 0' @click='onExportCurrentCategory' />
+              <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("echoBatchImport")' icon='file_upload' color='blue-7' size='sm' @click='onBatchImport' />
+              <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("echoBatchExport")' icon='file_download' color='blue-7' size='sm' :disable='localEchoesInCategory.length === 0' @click='onExportCurrentCategory' />
               <q-btn v-if='!selectionMode' dense flat no-caps :label='$t("batchDelete")' icon='delete_sweep' color='negative' size='sm' @click='enterSelectionMode' />
             </template>
           </div>

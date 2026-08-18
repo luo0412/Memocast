@@ -108,23 +108,23 @@ export const SettingsTabEnum = Enum({
     tabClass: 'text-green-7',
     subEnum: ServerSubEnum
   },
-  Echo: {
-    value: 'echo',
-    label: 'echo',
-    icon: 'graphic_eq',
-    accent: 'cyan-7',
-    accentTheme: 'cyan',
-    tabClass: 'text-cyan-7',
-    subEnum: null
-  },
   CloudFn: {
     value: 'cloudFn',
     label: 'cloudFn',
     icon: 'cloud_circle',
+    accent: 'cyan-7',
+    accentTheme: 'cyan',
+    tabClass: 'text-cyan-7',
+    subEnum: CloudFnSubEnum
+  },
+  Echo: {
+    value: 'echo',
+    label: 'echo',
+    icon: 'graphic_eq',
     accent: 'blue-7',
     accentTheme: 'blue',
     tabClass: 'text-blue-7',
-    subEnum: CloudFnSubEnum
+    subEnum: null
   },
   Rune: {
     value: 'rune',

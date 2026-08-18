@@ -156,7 +156,7 @@ export default {
   border-radius: 0 3px 3px 0;
 }
 
-/* 回响 - 青色 */
+/* 云函数 - 青色（原 cyan-7 回响色调位置已与云函数互换） */
 .settings-dialog-tabs ::v-deep(.q-tab--active.text-cyan-7) {
   background: linear-gradient(135deg, rgba(0, 172, 193, 0.15) 0%, rgba(0, 172, 193, 0.05) 100%);
   box-shadow: 0 2px 8px rgba(0, 172, 193, 0.2);
@@ -174,7 +174,7 @@ export default {
   border-radius: 0 3px 3px 0;
 }
 
-/* 云函数 - 蓝色 */
+/* 回响 - 蓝色（原 blue-7 云函数色调位置已与回响互换） */
 .settings-dialog-tabs ::v-deep(.q-tab--active.text-blue-7) {
   background: linear-gradient(135deg, rgba(2, 136, 209, 0.15) 0%, rgba(2, 136, 209, 0.05) 100%);
   box-shadow: 0 2px 8px rgba(2, 136, 209, 0.2);
