@@ -1,5 +1,14 @@
 # TODO
 
+# 2026-08
+
+- [ ] 排版强化
+  - https://github.com/eternityspring/article-tools/blob/main/md-to-wechat.html
+
+```
+主要是图片布局的强化
+```
+
 # 2026-07
 
 
@@ -19,7 +28,7 @@ Marp
 ```
 
 
-- []新建文档模板prompt和挖空模板
+- [ ] 新建文档模板prompt和挖空模板
 
 # 2026-05
 
