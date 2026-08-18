@@ -374,8 +374,20 @@ const runeTemplates = {
     return await invoke('db:deleteRuneTemplate', id)
   },
 
-  async clearAll () {
-    return await invoke('db:clearRuneTemplates')
+  /**
+   * 重置符文模板：删掉所有内置符文模板，再用传入的最新列表重新插入；用户自定义符文模板保留。
+   * @param {Object} [options]
+   * @param {Array} [options.builtins] 由 renderer 端推过来的最新内置符文模板列表（取自
+   *                                   `src/components/rune/runeTemplates/runeTemplates.js` 的
+   *                                   `BUILTIN_RUNE_TEMPLATE_META`）；不传则 main 端因拿不到
+   *                                   兜底镜像而直接返回 `NO_BUILTIN_RUNE_TEMPLATES`。
+   *
+   * 与 `echoes.clearAll` 对称：v2026-07-29 之后主进程已不再维护内置符文模板镜像，
+   * 真相源完全在 renderer 端，因此 IPC 必须把 `builtins` 一并 push 过去。
+   */
+  async clearAll (options = {}) {
+    const builtins = Array.isArray(options && options.builtins) ? options.builtins : null
+    return await invoke('db:clearRuneTemplates', { builtins })
   },
 
   async fetchRemote({ sourceUrl, categoryKey }) {
