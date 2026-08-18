@@ -4,14 +4,22 @@ import { EVENTS as events } from 'src/utils/const/eventsConst'
 import NeetoError from 'app/share/error'
 
 const DEFAULT_TIMEOUT = 30000
-// 已支持的云函数平台列表
+// 云函数 Provider 标识（Supabase 当前仅作为配置选项，适配尚未实现）
 export const CLOUDFN_PROVIDER_UNICLOUD = 'uniCloud'
-export const CLOUDFN_PROVIDER_SEALAF = 'sealaf'
+export const CLOUDFN_PROVIDER_SUPABASE = 'supabase'
 export const CLOUDFN_PROVIDER_MAGIC_API = 'magic-api'
 const MAGIC_API_DEFAULT_TIMEOUT = 15000
 
 function isMagicApi (cfg) {
   return cfg && cfg.provider === CLOUDFN_PROVIDER_MAGIC_API
+}
+
+function isSupabase (cfg) {
+  return cfg && cfg.provider === CLOUDFN_PROVIDER_SUPABASE
+}
+
+function providerNotImplemented (provider) {
+  throw new CloudFnError(`${provider} 适配尚未实现`, 'PROVIDER_NOT_IMPLEMENTED')
 }
 
 export class CloudFnError extends Error {
@@ -87,6 +95,7 @@ function unwrap (data, cfg = readConfig()) {
  */
 export async function callFunction ({ url, data = {}, headers = {}, timeout = DEFAULT_TIMEOUT }) {
   const cfg = readConfig()
+  if (isSupabase(cfg)) providerNotImplemented('Supabase')
   const baseUrl = normalizeBaseUrl(cfg.baseUrl)
   if (!baseUrl) {
     throw new CloudFnError('尚未配置云函数 baseUrl，请在设置中填写', 'NO_BASE_URL')
@@ -125,6 +134,7 @@ export async function callFunction ({ url, data = {}, headers = {}, timeout = DE
  */
 export async function uploadToFunction ({ url, payload, fieldName = 'file', extraFields = {}, headers = {} }) {
   const cfg = readConfig()
+  if (isSupabase(cfg)) providerNotImplemented('Supabase')
   const baseUrl = normalizeBaseUrl(cfg.baseUrl)
   if (!baseUrl) {
     throw new CloudFnError('尚未配置云函数 baseUrl', 'NO_BASE_URL')
@@ -154,7 +164,7 @@ export async function uploadToFunction ({ url, payload, fieldName = 'file', extr
 
 /**
  * 测试连接：给设置面板的"测试连接"按钮用。
- * - uniCloud / sealaf：调用 system/ping（兼容现有后端约定）
+ * - uniCloud / Supabase：当前仍调用 system/ping（Supabase 具体适配后续实现）
  * - magic-api：magic-api 没有 ping 端点约定，仅 GET baseUrl 根路径，
  *   只要服务端返回任意 HTTP 响应（2xx/3xx/4xx）即视为可达；
  *   5xx / 网络异常 / timeout 视为不可达。
@@ -185,7 +195,8 @@ export async function testConnection ({ timeout } = {}) {
       throw new CloudFnError((e && e.message) || 'magic-api 网络异常', code)
     }
   }
-  // uniCloud / sealaf：维持原有 system/ping 约定
+  if (isSupabase(cfg)) providerNotImplemented('Supabase')
+  // uniCloud / Supabase：维持现有 system/ping 约定；Supabase 适配暂未实现
   await callFunction({ url: 'system/ping', data: { ts: Date.now() }, timeout })
   return { provider: cfg.provider || CLOUDFN_PROVIDER_UNICLOUD }
 }

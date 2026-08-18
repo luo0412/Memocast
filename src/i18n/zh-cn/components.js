@@ -444,7 +444,7 @@ export default {
   cloudFunction: '云函数',
   cloudFunctionIntro: '配置云函数调用所需的 baseUrl / appId / 平台标识和登录 token',
   cloudFunctionProvider: '云函数平台',
-  cloudFunctionProviderHint: '切换平台后，下方配置项会按平台自适应：uniCloud / sealaf 走 vk-router url 化形态；magic-api 走 magic-token 头直连',
+  cloudFunctionProviderHint: '当前规划顺序为 uniCloud → Supabase → magic-api；暂时仅保存平台配置，具体功能后续接入',
   cloudFunctionBaseUrl: '云函数 baseUrl',
   cloudFunctionBaseUrlHint: '例如 https://api.bspapp.com/client',
   cloudFunctionAppId: '云函数 appId',

@@ -1,4 +1,12 @@
-import { callFunction, uploadToFunction, testConnection, CloudFnError, CLOUDFN_PROVIDER_UNICLOUD } from 'src/utils/cloud-router'
+import {
+  callFunction,
+  uploadToFunction,
+  testConnection,
+  CloudFnError,
+  CLOUDFN_PROVIDER_UNICLOUD,
+  CLOUDFN_PROVIDER_SUPABASE,
+  CLOUDFN_PROVIDER_MAGIC_API
+} from 'src/utils/cloud-router'
 
 const CONFIG_KEY = 'cloudfn.config'
 const TOKEN_KEY = 'cloudfn.token'
@@ -18,12 +26,19 @@ function writeConfig (cfg) {
 
 export function getConfig () {
   const cfg = readConfig()
+  const supportedProviders = [
+    CLOUDFN_PROVIDER_UNICLOUD,
+    CLOUDFN_PROVIDER_SUPABASE,
+    CLOUDFN_PROVIDER_MAGIC_API
+  ]
   return {
     baseUrl: cfg.baseUrl || '',
     appId: cfg.appId || '',
     platform: cfg.platform || 'h5',
     locale: cfg.locale || 'zh-Hans',
-    provider: cfg.provider || CLOUDFN_PROVIDER_UNICLOUD,
+    provider: supportedProviders.includes(cfg.provider)
+      ? cfg.provider
+      : CLOUDFN_PROVIDER_UNICLOUD,
     token: localStorage.getItem(TOKEN_KEY) || cfg.token || ''
   }
 }

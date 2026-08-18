@@ -445,7 +445,7 @@ export default {
   cloudFunction: 'CloudFn',
   cloudFunctionIntro: 'Configure the cloudFn baseUrl / appId / platform tag and login token.',
   cloudFunctionProvider: 'CloudFn provider',
-  cloudFunctionProviderHint: 'Provider switch adapts the form below: uniCloud / sealaf use the vk-router url form; magic-api uses the magic-token header.',
+  cloudFunctionProviderHint: 'Planned order: uniCloud → Supabase → magic-api. For now, this only saves the provider setting; platform features will be added later.',
   cloudFunctionBaseUrl: 'CloudFn baseUrl',
   cloudFunctionBaseUrlHint: 'e.g. https://api.bspapp.com/client',
   cloudFunctionAppId: 'CloudFn appId',

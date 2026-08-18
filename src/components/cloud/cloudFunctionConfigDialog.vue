@@ -173,7 +173,7 @@ export default {
       testResult: null,
       providerOptions: [
         { label: 'uniCloud', value: 'uniCloud' },
-        { label: 'sealaf', value: 'sealaf' },
+        { label: 'Supabase', value: 'supabase' },
         { label: 'magic-api', value: 'magic-api' }
       ],
       platformOptions: [
